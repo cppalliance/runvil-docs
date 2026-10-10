@@ -33,9 +33,9 @@ return msgs[#msgs].content
 ```
 ````
 
-The block builds a conversation, runs it, and reads the reply back from the list. `messages.new()` creates an empty message list: a plain Lua table indexed by number, with length 0. `msgs:user(prose)` appends a user record, `{ role = "user", content = prose }`, holding the prose above the fence, and that text reaches the model as a user record. `models.loop(msgs)` runs the conversation, and `msgs[#msgs].content` is the model's reply.
+The block builds a conversation, runs it, and reads the reply back from the list. `messages.new()` creates an empty message list, with length 0. The list is a value the Engine owns, not a plain Lua table, and its methods are the only way to change it. `msgs:user(prose)` appends a user record, `{ role = "user", content = prose }`, holding the prose above the fence, and that text reaches the model as a user record. `models.loop(msgs)` runs the conversation, and `msgs[#msgs].content` is the model's reply.
 
-A message list is what `models.loop` takes: a Lua array of records, each with the record's `role` set to `system`, `user`, `assistant`, or `tool`, plus a `content`. The loop runs a whole multi-round conversation over that list. Each round sends the list to the model, and when the model asks for tools, the loop runs them, appends the calls and their results to the list, and sends it again, so you never send single rounds or run the requested tools by hand.
+A message list is what `models.loop` takes: a `messages.new()` list of records, each with the record's `role` set to `system`, `user`, `assistant`, or `tool`, plus a `content`. The loop runs a whole multi-round conversation over that list. Each round sends the list to the model, and when the model asks for tools, the loop runs them, appends the calls and their results to the list, and sends it again, so you never send single rounds or run the requested tools by hand.
 
 When the model gives a text reply, the loop appends `{ role = "assistant", content = reply }` as the terminal record and returns. `models.loop` itself returns `nil`: everything the conversation adds lands in your list, in place, so once the loop returns, the reply is `msgs[#msgs].content`.
 
@@ -49,7 +49,7 @@ models.loop(msgs)
 return msgs[#msgs].content
 ````
 
-The list is an ordinary Lua array: `#msgs` is its length, `msgs[i]` reads a record, `msgs[#msgs]` reads the last one, `ipairs(msgs)` walks it, and each record's fields, such as `role` and `content`, read directly. This block collects each record's `role` after the loop:
+The list reads like a Lua array, though it is not a plain table: `#msgs` is its length, `msgs[i]` reads a record, `msgs[#msgs]` reads the last one, `ipairs(msgs)` walks it, and each record's fields, such as `role` and `content`, read directly. This block collects each record's `role` after the loop:
 
 ````lua
 local msgs = messages.new()
@@ -71,7 +71,7 @@ The prompt gives the model no tools, so the loop takes a single round, and the l
 
 ## Building message lists
 
-The `messages` global exists in every Lua block of the prompt, the blocks in the H1 body included, and in the [shared library](03-blocks-and-prose.md#the-shared-library), because it is installed before the shared library is replayed. Its only member is `new`, and every list that `messages.new()` returns has five builder methods, each called with a colon:
+The `messages` global exists in every Lua block of the prompt, the blocks in the H1 body included, and in the [shared library](03-blocks-and-prose.md#the-shared-library), because it is installed before the shared library is replayed. Its only member is `new`, and every list that `messages.new()` returns has five builder methods, plus [`replace`](#editing-a-list), each called with a colon:
 
 | Method | Appends |
 |---|---|
@@ -79,9 +79,9 @@ The `messages` global exists in every Lua block of the prompt, the blocks in the
 | `list:user(content)` | `{ role = "user", content = content }` |
 | `list:assistant(content, tool_calls)` | `{ role = "assistant", content = content }`, with `tool_calls` set only when it is passed |
 | `list:tool(content, tool_call_id)` | `{ role = "tool", content = content, tool_call_id = tool_call_id }` |
-| `list:append(record)` | `record` itself, unchanged |
+| `list:append(record)` | `record`, checked, with only its `role`, `content`, `tool_calls`, and `tool_call_id` kept |
 
-Every builder method, `append` included, changes the list and returns that same list, so builder calls chain to any length. This block puts a worked example, one user record and one assistant record, ahead of the real request:
+Every builder method, `append` included, changes the list and returns that same list, so builder calls chain to any length. Each one [checks the record](#checking-the-list) it adds, so a record that breaks a rule fails at that call and never enters the list. This block puts a worked example, one user record and one assistant record, ahead of the real request:
 
 ````lua
 local msgs = messages.new()
@@ -115,18 +115,55 @@ local msgs = messages.new()
   :user('And in Lyon?')
 ````
 
-`list:append(record)` appends a record you built yourself, unchanged and with any extra fields; fields the loop does not read are ignored. Builder calls and hand-written records mix freely, and the builders are optional: a hand-written array of records passed to `models.loop` is checked exactly the same way.
+`list:append(record)` appends a record you built yourself. It checks the record as the other builders do and keeps only the four fields a record holds, `role`, `content`, `tool_calls`, and `tool_call_id`, dropping any others. Builder calls and hand-written records mix freely, but the list itself always comes from `messages.new()`, so records you wrote as a Lua array go in one `append` at a time:
 
 ````lua
-local msgs = {
+local records = {
   { role = 'system', content = 'Answer in one sentence.' },
   { role = 'user', content = prose },
 }
+local msgs = messages.new()
+for _, record in ipairs(records) do
+  msgs:append(record)
+end
 models.loop(msgs)
 return msgs[#msgs].content
 ````
 
-A built list stays plain data: its length, its numeric indexes, and its conversion to JSON contain only the records, because the builder methods live on the list's metatable, never as fields. Message lists are also the only values the Engine provides that have colon-call methods. [Model handles](10-models.md#model-handles) have read-only fields and no methods, and no other handle the Engine provides has methods either, so you pass handles to functions instead, as in `models.infer(handle, prompt)`.
+`models.loop` refuses the array itself, or any other value in the list's place, with a `lua`-kind error: `models.loop needs a messages.new() list; build one with messages.new() and :user, :append, or :replace`.
+
+A list is userdata, so `type(msgs)` is `'userdata'`, and its methods are never fields: its length and its numeric indexes hold only the records. `pairs(msgs)` and `ipairs(msgs)` both visit the records in order, as an index and a record. A `pairs` loop stops at the record count it started with, so a loop that appends to the list still ends, while `ipairs` reads the live list, so the two visit different records when the loop edits the list.
+
+Message lists and [model handles](10-models.md#model-handles) are the only values the Engine provides that have colon-call methods. A model handle's methods run rounds on its model, as in `h:infer(prompt)` and `h:loop(messages)`, and no other handle the Engine provides has methods.
+
+### Editing a list
+
+`list:replace(first, last, records...)` replaces the records at positions `first` through `last`, inclusive, with the records that follow, which may be none, and returns the list. Fewer records than the range shrink the list, and an empty range, where `last` is `first - 1`, inserts the records before `first`. This block drops the last record, puts a system record in front, and then merges the two user records into one:
+
+````lua
+local msgs = messages.new():user('one'):user('two'):user('scratch')
+msgs:replace(#msgs, #msgs)
+msgs:replace(1, 0, { role = 'system', content = 'Be brief.' })
+msgs:replace(2, 3, { role = 'user', content = 'one and two' })
+return #msgs .. ': ' .. msgs[2].content
+````
+
+````text
+2: one and two
+````
+
+The bounds are whole numbers with `1 <= first <= last + 1 <= #list + 1`, so `first` can be one past the end, where `replace` appends. A float with no fractional part works as its integer. Any other bound fails with `replace first must be an integer, got {type}` or `replace last must be an integer, got {type}`, where a float with a fraction shows its value, as in `got 1.5`. A range outside the bounds fails with `replace({first}, {last}) is out of bounds on a list of {n} records: it needs 1 <= first <= last + 1 <= {n + 1}`, where `{n + 1}` is written out as a number.
+
+Each new record is checked at the position it takes, as `append` checks one, and the edited list must keep every system record in its leading block. A refused edit raises a `lua`-kind error at the `replace` call and leaves the list unchanged.
+
+A record read from a list, with `msgs[i]` or while iterating, is a read-only view of that record. Its `type()` is `'userdata'`, its four fields read like the fields of the record table, and a field it does not hold reads `nil`. Assigning to any field fails with `records read from a messages.new() list are read-only; change the list with replace(first, last, records...)`, and a table read from `content` or `tool_calls` is a fresh copy each time, so changing it leaves the record as it was. Assigning into the list itself, as in `msgs[#msgs] = nil`, fails with `a messages.new() list cannot be assigned to; add records with append(record) and change them with replace(first, last, records...)`. Changes go through `replace`:
+
+````lua
+local last = msgs[#msgs]
+msgs:replace(#msgs, #msgs, { role = last.role, content = last.content .. ' (edited)' })
+````
+
+A view also works as the record argument of `append` and `replace`, so `other:append(msgs[1])` copies the first record into another list.
 
 ## Message records
 
@@ -170,7 +207,7 @@ msgs:tool('14:05', 'call_2')
 
 The second call sets no `arguments`, so it gets `{}`.
 
-Extra fields on records, content parts, or tool calls are accepted and dropped before the model sees the list. Every value in them must still be JSON-representable: strings, numbers, booleans, and nested tables.
+Extra fields on records, content parts, or tool calls are accepted and dropped when the record is added, so they cannot be read back from the list and never reach the model. Every value in them must still be JSON-representable: strings, numbers, booleans, and nested tables.
 
 ## What the loop appends
 
@@ -214,11 +251,11 @@ models.loop(msgs)
 return msgs[#msgs].content
 ````
 
-With no tool rounds, the list ends with four records: user, assistant, user, assistant. The loop always leaves its terminal record in the list; when you do not want it kept, remove it with `msgs[#msgs] = nil`.
+With no tool rounds, the list ends with four records: user, assistant, user, assistant. The loop always leaves its terminal record in the list; when you do not want it kept, remove it with `msgs:replace(#msgs, #msgs)`.
 
 ## Model and tool scope
 
-The full form of the call is `models.loop(handle?, messages, compactor?)`: an optional model handle first, then the message list, and last an optional compactor, which decides what happens when a round overflows the model's context window. A handle passed first, from [`models.get`](10-models.md#model-handles), pins the loop to that handle's model: every round of such a call, at any point in the section, runs on the handle's model instead of the section's current model. This prompt drafts on the default role and reviews on a second one:
+The full form of the call is `models.loop(messages, compactor?)`: the message list, then an optional compactor, which decides what happens when a round overflows the model's context window. To run a conversation on another model, call the `loop` method of that model's handle, from [`models.get`](10-models.md#model-handles), as `h:loop(messages, compactor?)`. It pins the loop to the handle's model: every round of such a call, at any point in the section, runs on the handle's model instead of the section's current model. This prompt drafts on the default role and reviews on a second one:
 
 ````markdown
 ---
@@ -247,12 +284,12 @@ models.loop(draft)
 
 local review = messages.new()
 review:user('List any factual or grammar errors in this text: ' .. draft[#draft].content)
-models.loop(models.get('reviewer'), review)
+models.get('reviewer'):loop(review)
 return review[#review].content
 ```
 ````
 
-`models.loop` tells the forms apart by type: a userdata first argument is taken as the handle, and any other first argument as the message list. The handle is checked before the list, so a bad handle is reported first: a userdata that is not a model handle fails with a `lua`-kind error, `models.loop handle must be a model handle`.
+The two forms never guess from the types of their arguments. `models.loop` refuses a model handle in the list's place with a `lua`-kind error, `models.loop takes (messages, compactor?); call handle:loop(messages, compactor?) to run on a model handle`. A handle's `loop` called with a dot, or taken off the handle and called bare, has no model handle as its first argument and fails with `call loop on a model handle with a colon: handle:loop(messages, compactor?)`. Both are raised before any round is sent.
 
 Each round offers the model the tools [in scope](12-tools.md#advertising-tools-to-the-model) for the section at the moment that round is sent, [local tools](12-tools.md#local-tools) included: a loop with no tools in scope takes a single round and offers the model no tools, and a tool added with `tools.add` between two loops is offered only to the later loop.
 
@@ -304,47 +341,53 @@ Because user records merge, you never merge them yourself to satisfy a provider'
 
 Merging stays clean. When both merged records are plain text, an empty one adds nothing, so no stray blank line appears. When either uses content parts, the result is a parts array in arrival order, with the separator (a blank line between user records, nothing between assistant records) inserted as its own text part, even when the other side is empty text.
 
-System records, when present, open the list, and they belong only in that leading block; a system record after any other record fails the call with `messages[{n}] is a system message outside the leading system block`, naming the misplaced record. A lone leading system record may use plain text or content parts, but when the list opens with two or more system records, each of them is plain text; otherwise the call fails with `messages[{n}] is a system message with content parts; only plain text system messages can be composed`, naming the first such record. That check runs before every other rule that spans records, so it is the error reported even when later records also break one of those rules.
+System records, when present, open the list, and they belong only in that leading block. The edit itself enforces this: a builder, `append`, or `replace` call that would leave a system record after any other record fails with `messages[{n}] is a system message after a non-system message; system messages lead the list, so change the leading block with replace(first, last, records...)`, naming the first such record's position, and leaves the list unchanged. A lone leading system record may use plain text or content parts, but when the list opens with two or more system records, each of them is plain text; otherwise the call fails with `messages[{n}] is a system message with content parts; only plain text system messages can be composed`, naming the first such record. That check runs before every other rule that spans records, so it is the error reported even when later records also break one of those rules.
 
 Text and images go in one record as a content array of text parts and image parts; the model receives each part in order, as text or as an image referenced by its URL.
 
 Earlier tool use replays: assistant records whose calls carry `id`, `name`, and structured `arguments` reach the model as its own earlier function calls, with the arguments sent as JSON text. The loop records calls in the same shape you write them, so its records and yours replay the same way.
 
-Only a record's `role`, `content`, `tool_call_id`, and `tool_calls` are sent to the model. Nothing else a record holds, such as a copied credential, reaches the provider.
+Only a record's `role`, `content`, `tool_call_id`, and `tool_calls` are kept in the list and sent to the model. Nothing else a record held when you added it, such as a copied credential, reaches the provider.
 
 ## Checking the list
 
-Mistakes in the message list are caught where `models.loop` is called. Each raises a `lua`-kind error value at that call, catchable with `pcall`, whose message gives the 1-based position of the bad record, content part, or tool call. The builder methods check nothing, so a malformed record fails at the `models.loop` call, not at the builder call, with the same error a hand-written array gives:
+Mistakes in the message list are caught as early as they can be. Each raises a `lua`-kind error value, catchable with `pcall`, whose message gives the 1-based position of the bad record, content part, or tool call. A record is checked when it is added, so a malformed record fails at the builder, `append`, or `replace` call that adds it and never enters the list:
 
 ````lua
-local msgs = messages.new():user()
-local ok, err = pcall(models.loop, msgs)
-return tostring(err)
+local msgs = messages.new()
+local ok, err = pcall(msgs.user, msgs)
+return tostring(err) .. ' (' .. #msgs .. ' records)'
 ````
 
 ````text
-messages[1] content must be a string or a non-empty array of content parts
+messages[1] content must be a string or a non-empty array of content parts (0 records)
 ````
 
-The whole list is checked at the `models.loop` call and again on every round, right before that round is sent, so records you or the loop appended between rounds meet the same rules. Each check has two layers: first each record's own fields and their types, then the rules that span records, covering system placement, where `tool_calls` and `tool_call_id` may appear, unique call ids, and the pairing of every call with its result. Both layers raise at the `models.loop` call.
+The checks come in two layers. Each record's own fields and their types are checked at the edit that adds the record, together with system placement, so the list never holds a record that breaks them. The rules that span records, covering where `tool_calls` and `tool_call_id` may appear, unique call ids, the pairing of every call with its result, and plain text in a leading block of two or more system records, run at the `models.loop` call on every round, right before that round is sent, so records you or the loop appended between rounds meet the same rules.
 
 Pairing works by batch. Right after an assistant record with `tool_calls` come its tool records, one per call, each with a `tool_call_id` matching one call's `id`. They may come in any order within the batch, and nothing else comes between the assistant record and its last tool record. The loop itself always appends a complete batch.
 
-In a record error, `messages[{index}]` is the 1-based Lua position of the offending record, and the first bad record in list order is the one reported. In a part error, `content part {part_index}` is the 1-based position of the part within that record's content array, and the first bad part is the one reported. In a call error, `tool_calls[{call_index}]` is the call's 1-based position.
+In a record error, `messages[{index}]` is the 1-based position the offending record takes in the list, and the first bad record is the one reported, in argument order for a `replace` that adds several records and in list order at the `models.loop` call. In a part error, `content part {part_index}` is the 1-based position of the part within that record's content array, and the first bad part is the one reported. In a call error, `tool_calls[{call_index}]` is the call's 1-based position.
 
 ### The list as a whole
 
+These run at the `models.loop` call.
+
 | Rule | Message when it breaks |
 |---|---|
-| The message list is a Lua table | `messages must be a table of message tables, got {type}`, naming the Lua type received, which is `nil` when the list is missing |
-| Every value is a string, number, boolean, or nested table, even in fields the check otherwise ignores | `messages must be a JSON-representable table` |
+| The list is a `messages.new()` list | `models.loop needs a messages.new() list; build one with messages.new() and :user, :append, or :replace`, for a plain table, a missing list, or any other value |
 | The list holds at least one record | `messages must not be empty` |
-| The list is a sequence of records | `messages must be an array of message tables` |
+
+A plain table is refused outright, so its records are never checked, and a list from `messages.new()` is always a sequence of records. The list check runs before any round. The empty check runs on every round, after that round's [task notices](15-tasks.md#task-notices-to-the-model) are added, so pending notices can fill an empty list: `models.loop(messages.new())` runs one round over them when there are any, and fails with `messages must not be empty` when there are none.
 
 ### Each record
 
+These run at the builder, `append`, or `replace` call that adds the record, and a refused record leaves the list unchanged.
+
 | Rule | Message when it breaks |
 |---|---|
+| Every value `append` or `replace` gets is a string, number, boolean, or nested table, even in fields the list drops | `messages[{index}] must be a JSON-representable message table: {reason}`, where `{reason}` says what could not convert |
+| Every value a builder gets is a string, number, boolean, or nested table | `messages[{index}] {field} must be JSON-representable: {reason}`, where `{field}` is `content`, `tool_calls`, or `tool_call_id` |
 | Each record is a table | `messages[{index}] must be a message table` |
 | The record sets its `role` as a string | `messages[{index}] role must be a string, one of: system, user, assistant, tool` |
 | The record's `role` is one of the four | `messages[{index}] role "{role}" is unknown; known roles: system, user, assistant, tool`, quoting the string |
@@ -360,26 +403,28 @@ In a record error, `messages[{index}]` is the 1-based Lua position of the offend
 | Each tool call sets a string `id` | `messages[{index}] tool_calls[{call_index}] must set a string id` |
 | Each tool call sets a string `name` | `messages[{index}] tool_calls[{call_index}] must set a string name` |
 | A tool call's `arguments` is a keyed table | `messages[{index}] tool_calls[{call_index}] arguments must be a table` |
+| A system record comes only in the leading block of system records | `messages[{index}] is a system message after a non-system message; system messages lead the list, so change the leading block with replace(first, last, records...)`, naming the first system record the edit would leave after a non-system one |
 
-The type check on `tool_call_id` comes first, so a tool record whose `tool_call_id` is not a string reports `messages[{index}] tool_call_id must be a string`. A tool call's `id` is checked before its `name`, so a call missing both reports the `id` message. For `arguments`, any value other than a keyed table, a non-empty sequence included, breaks the rule.
+The JSON check comes first, so a record holding a function anywhere fails with it, whatever else is wrong. The type check on `tool_call_id` comes before the check that a tool record sets one, so a tool record whose `tool_call_id` is not a string reports `messages[{index}] tool_call_id must be a string`. A tool call's `id` is checked before its `name`, so a call missing both reports the `id` message. For `arguments`, any value other than a keyed table, a non-empty sequence included, breaks the rule.
 
 ### Rules across records
+
+These run at the `models.loop` call, on every round.
 
 | Rule | Message when it breaks |
 |---|---|
 | A leading block of two or more system records is plain text | `messages[{n}] is a system message with content parts; only plain text system messages can be composed`, naming the first such record |
 | `tool_calls` appears on assistant records only | `messages[{n}] sets tool_calls but is not an assistant message`, naming that record |
 | `tool_call_id` appears on tool records only | `messages[{n}] sets a tool_call_id but is not a tool message`, naming that record |
-| System records appear only in the leading block | `messages[{n}] is a system message outside the leading system block`, naming the misplaced record |
 | Every tool call `id` is unique across the whole list | `messages[{n}] tool call id "{id}" duplicates an earlier tool call`, naming the assistant record that repeats it |
 | Every call in a batch gets its tool record before any other record arrives or the list ends | `messages[{n}] tool call "{id}" has no tool result`, naming the assistant record and its first unanswered call in call order |
 | Each tool record answers a still-pending call from the batch just before it, exactly once | `messages[{n}] is an orphan tool record: no pending assistant tool call with id "{id}"`, naming the tool record and its id |
 
 Ids are unique across the whole list, not only within one assistant record: reusing an id from any earlier record, or twice in one record, breaks the rule. That covers the ids the loop appends for the model too, so a model that repeats an id from an earlier round makes the next round fail this way.
 
-The rules across records run in this order: first the plain-text check on a leading block of two or more system records; then each record in list order, with the `tool_calls` placement rule, then the `tool_call_id` placement rule, then the rules for its own `role`; and last the check for a batch still open at the end of the list. The checks on each record's own fields run before all of them.
+The rules across records run in this order: first the plain-text check on a leading block of two or more system records; then each record in list order, with the `tool_calls` placement rule, then the `tool_call_id` placement rule, then the rules for its own `role`; and last the check for a batch still open at the end of the list. The checks on each record's own fields already ran when the record was added.
 
-All of these are `lua`-kind error values raised at the `models.loop` call and catchable with `pcall`. Each message is exactly the text shown, with no prefix, and only the first broken rule is reported.
+All of these are `lua`-kind error values catchable with `pcall`, raised at the edit for the record rules and at the `models.loop` call for the others. Each message is exactly the text shown, with no prefix, and only the first broken rule is reported.
 
 ## Empty and truncated replies
 
@@ -413,7 +458,7 @@ An empty reply still completes its round: it advances the round count, and the l
 
 ## Compactors and context exhaustion
 
-A compactor is the policy for a round that overflows the model's context window. It is the optional last argument of `models.loop`: second without a handle, as in `models.loop(msgs, compactor)`, and third with one, as in `models.loop(handle, msgs, compactor)`. The `compactors` global, available in all of a prompt's Lua code and installed alongside `messages`, is a table of the shipped policies. Leaving the argument out selects `compactors.fail`, the only shipped policy, so `models.loop(msgs)` and `models.loop(msgs, compactors.fail)` behave the same.
+A compactor is the policy for a round that overflows the model's context window. It is the optional argument after the list, as in `models.loop(msgs, compactor)` or `h:loop(msgs, compactor)`. The `compactors` global, available in all of a prompt's Lua code and installed alongside `messages`, is a table of the shipped policies. Leaving the argument out selects `compactors.fail`, the only shipped policy, so `models.loop(msgs)` and `models.loop(msgs, compactors.fail)` behave the same.
 
 `compactors.fail` never compacts: an overflowing round raises `context_exhausted`. A round overflows for one of two reasons:
 
@@ -469,7 +514,7 @@ A compactor that returns at all, with or without a value, makes `models.loop` ra
 
 `compactors.fail(tag)` takes one reason string and raises a `context_exhausted` error value whose `reason` is that string; it never returns. The tag is exactly `"precheck"` or `"provider"`; any other string raises a `lua`-kind error, `unknown overflow reason "{tag}"; expected "precheck" or "provider"`, which is an authoring error rather than context exhaustion.
 
-The compactor is a function value. Any other value makes `models.loop` raise a `lua`-kind error, `compactor must be a function, got {type}`, before any request is sent, where `{type}` is `integer` for an integer, `number` for a float, and otherwise the Lua type name.
+The compactor is a function value, used as given. Leaving it out, or passing `nil`, selects the `fail` field of the `compactors` table installed with the VM, read when the call begins and not checked, so assigning another table to the `compactors` global does not change the default. Any other value makes `models.loop` or `h:loop` raise a `lua`-kind error, `compactor must be a function, got {type}`, before any request is sent, where `{type}` is `integer` for an integer and otherwise Lua's `type()` name, so a float reads `number` and any userdata, a message list included, reads `userdata`.
 
 A refused round appends nothing. A bad compactor argument is refused before any round, so the list is untouched; a round refused for overflow, or for a compactor that returns, adds no records; and records from rounds that already completed stay in the list.
 
@@ -561,7 +606,7 @@ The loop raises these error kinds:
 
 An `out_of_scope_tool` message begins `tool "{name}" is not in this section's scope; in-scope aliases: [{aliases}]`, where `{aliases}` lists the aliases in scope, each in double quotes, as in `["echo"]`, and none of that round's calls run, so the round appends nothing. An error raised inside a [local tool](12-tools.md#local-tools) handler during the loop reaches the call with its own kind.
 
-`models.loop` takes at most three arguments with a handle and at most two without one; more raise a `lua`-kind error, `models.loop takes (handle?, messages, compactor?)`.
+`models.loop` takes at most two arguments, and more raise a `lua`-kind error, `models.loop takes (messages, compactor?)`. A handle's `loop` takes at most three, the handle included, and more raise `handle:loop takes (messages, compactor?)`. A trailing `nil` counts as an argument, so `models.loop(msgs, nil, nil)` fails. Each form checks its first argument for a model handle, then its argument count, then the compactor, and last the list, all before any round is sent, so a call that breaks several of these rules reports the first.
 
 Any failure while preparing a round, whether in choosing the model, reading the section's tools, checking the list, or reaching the provider, is raised at the `models.loop` call like any other call error, so `pcall` catches it. Any other failed round, such as a backend error that is not a context-window rejection, is raised as the call's error, with kind `internal` for backend and transport failures.
 

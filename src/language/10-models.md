@@ -229,32 +229,34 @@ These errors, like the `models.default is already` error, are error values of ki
 
 A model handle is a Lua value that stands for one bound role. `models.use`, `models.default`, and `models.get` each return one, and all three return the same kind of value, whose fields describe the role. `models.get(label)` returns a role's handle without changing the section's selection, and the handle describes the role's own settings whatever the section has selected.
 
-A handle is userdata with readable fields and no methods, so `type(h)` is `'userdata'`. To run a model with a handle, pass it as the first argument to a `models` function:
+A handle is userdata with readable fields and two methods, `infer` and `loop`, so `type(h)` is `'userdata'`. To run a model with a handle, call one of its methods with a colon:
 
 ````lua
 local analyst = models.get('analyst')
-return models.infer(analyst, prose)
+return analyst:infer(prose)
 ````
 
-This round runs on the `analyst` role even when the section has selected another role or has no model of its own.
+This round runs on the `analyst` role even when the section has selected another role or has no model of its own. `h:infer(prompt)` runs one round on the handle's frozen settings, and `h:loop(messages, compactor?)` runs a whole [conversation](11-conversations.md#model-and-tool-scope) with every round on them. `models.infer` and `models.loop` always run on the section's model, and each refuses a model handle as its first argument with an error that names the method to call instead.
+
+Only model handles have these methods. A [Tool object](12-tools.md#tool-slots-and-tool-objects) has fields alone, and a [message list](11-conversations.md#building-message-lists) is the only other value the Engine provides with colon-call methods.
 
 ### Role globals
 
 Each bound role is also a role global: a bare Lua global named after the role's label that holds the role's handle. The block above works without `models.get`:
 
 ````lua
-return models.infer(analyst, prose)
+return analyst:infer(prose)
 ````
 
 Role globals are set after the shared library loads, so a declared label wins over a same-named global that shared code defines. For the same reason, top-level code in the shared library cannot read role globals yet, while a function it defines can read them when a section calls it. No role global ever replaces an Engine global, a sandbox library global, or a tool alias's global, because the parse refuses a label that would.
 
 ### Keeping the default's handle
 
-`models.default` returns the default role's handle, so you can keep it to inspect the role or to pass it to `models.infer`:
+`models.default` returns the default role's handle, so you can keep it to inspect the role or to run rounds on it:
 
 ````lua
 local writer = models.default('writer')
-var.capital = models.infer(writer, 'Reply with one word: the capital of Peru.')
+var.capital = writer:infer('Reply with one word: the capital of Peru.')
 ````
 
 The shared library can keep the handle in a global the same way. Called as a statement, `models.default('writer')` only sets the default.
@@ -270,12 +272,12 @@ When the Host runs the prompt with a Host-state snapshot, the one [`ui()`](05-lu
 ````lua
 local id = ui and ui().selected_model
 if id then
-  return models.infer(models.get(id), prose)
+  return models.get(id):infer(prose)
 end
 return models.infer(prose)
 ````
 
-This is the only way a prompt reaches a model other than the Host's current model. A declared role whose label matches the id still wins. The handle's `name`, `label`, `model_id`, and `description` are all the id, its `capabilities` is empty, its `context` is 8192, and it has no sampling or thinking settings. It passes to `models.infer` like any other handle. Only `models.get` has this fallback, and `models.use` and `models.default` always need a bound role.
+This is the only way a prompt reaches a model other than the Host's current model. A declared role whose label matches the id still wins. The handle's `name`, `label`, `model_id`, and `description` are all the id, its `capabilities` is empty, its `context` is 8192, and it has no sampling or thinking settings. Its `infer` and `loop` methods work like any other handle's. Only `models.get` has this fallback, and `models.use` and `models.default` always need a bound role.
 
 A model id is any non-empty text with no control characters, and it may contain `/`, `.`, `:`, and non-ASCII letters, as in `qwen/qwen3-8b`. An empty id, or one with a control character, fails with `models.get model id "{id}" is invalid: {reason}`, which names the id and the reason.
 
@@ -294,7 +296,7 @@ local ok, h = pcall(models.get, args)
 if not ok then
   return 'unknown role: ' .. tostring(h)
 end
-return models.infer(h, prose)
+return h:infer(prose)
 ````
 
 ## Sampling options
@@ -353,7 +355,7 @@ A rejected call leaves the section's selection unchanged, because the label and 
 
 ## Handle fields
 
-A handle has exactly nine fields, all read-only:
+Besides its `infer` and `loop` methods, a handle has exactly nine fields, all read-only:
 
 | Field | Value |
 |---|---|
@@ -398,22 +400,22 @@ analyst|claude-sonnet-4-6|frontier,thinking
 
 `model_id` is the model's id, distinct from the role label. Every declared role is bound to the Host's one current model, so `model_id` reads the same on every role's handle, while fields such as `description`, `capabilities`, and `thinking` show how the roles differ.
 
-Each read of `capabilities` builds a fresh table, so changing the table you get back leaves the handle unchanged. `temperature` and `max_tokens` read `nil` on every handle for a declared role, except a handle that `models.use` returned with options, because a role declares no sampling settings of its own. Reading any key other than the nine raises a Lua runtime error that names the key: `attempt to get an unknown field '{key}'`.
+Each read of `capabilities` builds a fresh table, so changing the table you get back leaves the handle unchanged. `temperature` and `max_tokens` read `nil` on every handle for a declared role, except a handle that `models.use` returned with options, because a role declares no sampling settings of its own. Reading any key other than the nine fields and the two methods raises a Lua runtime error that names the key: `attempt to get an unknown field '{key}'`.
 
 ## Running a round with models.infer
 
-`models.infer` takes the prompt text, with an optional model handle in front:
+`models.infer` takes the prompt text, and a model handle's `infer` method takes the same prompt:
 
 ````lua
 models.infer(prompt)
-models.infer(handle, prompt)
+h:infer(prompt)
 ````
 
-Without a handle, the round runs on the section's model: the role `models.use` selected, or else the prompt-wide default. With a handle first, the round is pinned to that role and runs on the handle's frozen settings instead of the section's model, which works even when the section has no selection and there is no prompt-wide default:
+`models.infer(prompt)` runs the round on the section's model: the role `models.use` selected, or else the prompt-wide default. `h:infer(prompt)` pins the round to the handle's role and runs it on the handle's frozen settings instead of the section's model, which works even when the section has no selection and there is no prompt-wide default:
 
 ````lua
 local summary = models.infer(prose)
-return models.infer(models.get('analyst'), 'Name the weakest claim in this summary: ' .. summary)
+return models.get('analyst'):infer('Name the weakest claim in this summary: ' .. summary)
 ````
 
 The first round runs on the section's model and the second on `analyst`.
@@ -424,13 +426,14 @@ The reply comes back whole as the call's return value, and none of it appears in
 
 ### Bad arguments
 
-Bad arguments fail the call with an error value of kind `lua`:
+Bad arguments fail the call with an error value of kind `lua`, before any request is sent. Each form checks its first argument, then how many arguments it got, counting a trailing `nil`, then the prompt:
 
-- `models.infer takes (handle?, prompt)` for a call with more than two arguments.
+- `models.infer takes (prompt); call handle:infer(prompt) to run on a model handle` for a `models.infer` call whose first argument is a model handle.
+- `models.infer takes (prompt)` for a `models.infer` call with more than one argument.
+- `call infer on a model handle with a colon: handle:infer(prompt)` for a handle's `infer` called without a model handle as its first argument, as a call written with a dot, `h.infer(prompt)`, or the method taken off the handle and called bare does.
+- `handle:infer takes (prompt)` for a handle's `infer` called with more than two arguments, the handle included, as in `h:infer(prompt, extra)`.
 - `prompt must be a string, got {type}` for a prompt that is not a string, with `got nil` when the prompt is missing.
 - `prompt must be a valid UTF-8 string` for a prompt string with invalid bytes.
-- `models.infer handle must be a model handle, got {type}` when two arguments are given and the first is not userdata.
-- `models.infer handle must be a model handle`, with no type named, when two arguments are given and the first is some other kind of userdata.
 
 ### When a round goes wrong
 

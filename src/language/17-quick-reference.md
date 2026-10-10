@@ -66,14 +66,14 @@ Every global, function, field, and record shape a prompt's Lua code can use, wit
 | `handle.name` | `h.name` | The role label | [Models](10-models.md#handle-fields) |
 | `handle.temperature` | `h.temperature` | The `temperature` option from `models.use`, or `nil` | [Models](10-models.md#handle-fields) |
 | `handle.thinking` | `h.thinking` | `true` for `thinking`, `false` for `no-thinking`, `nil` for neither | [Models](10-models.md#handle-fields) |
-| model handle | `local h = models.get('writer')` | Frozen userdata with nine read-only fields and no methods | [Models](10-models.md#model-handles) |
+| `handle:infer` | `h:infer(prompt)` | The reply as a string, from one round on the handle's model | [Models](10-models.md#running-a-round-with-modelsinfer) |
+| `handle:loop` | `h:loop(messages, compactor?)` | `nil`; every round runs on the handle's model | [Conversations](11-conversations.md#model-and-tool-scope) |
+| model handle | `local h = models.get('writer')` | Frozen userdata with nine read-only fields and the methods `infer` and `loop` | [Models](10-models.md#model-handles) |
 | `models.default` | `models.default(label)` | The default role's model handle; sets the prompt-wide default | [Models](10-models.md#choosing-a-sections-model) |
 | `models.get` | `models.get(label)` | The role's model handle; the selection is unchanged | [Models](10-models.md#model-handles) |
 | `models.get` | `models.get(ui().selected_model)` | A model handle for a Host catalog model id, with a Host-state snapshot only | [Models](10-models.md#model-handles) |
 | `models.infer` | `models.infer(prompt)` | The reply as a string, from one round on the section's model | [Models](10-models.md#running-a-round-with-modelsinfer) |
-| `models.infer` | `models.infer(handle, prompt)` | The reply as a string, from one round on the handle's model | [Models](10-models.md#running-a-round-with-modelsinfer) |
-| `models.loop` | `models.loop(messages, compactor?)` | `nil`; appends every record to `messages` | [Conversations](11-conversations.md#a-first-conversation) |
-| `models.loop` | `models.loop(handle, messages, compactor?)` | `nil`; every round runs on the handle's model | [Conversations](11-conversations.md#model-and-tool-scope) |
+| `models.loop` | `models.loop(messages, compactor?)` | `nil`; appends every record to `messages`, every round on the section's model | [Conversations](11-conversations.md#a-first-conversation) |
 | `models.loop` compactor argument | `models.loop(msgs, function(reason) ... end)` | Called with `"precheck"` or `"provider"` on overflow | [Conversations](11-conversations.md#compactors-and-context-exhaustion) |
 | `models.use` | `models.use(label)` | The role's model handle; selects the role for the section | [Models](10-models.md#choosing-a-sections-model) |
 | `models.use` option `max_tokens` | `{ max_tokens = n }` | Whole number from 1 to 4294967295; read back as `h.max_tokens` | [Models](10-models.md#sampling-options) |
@@ -84,19 +84,22 @@ Every global, function, field, and record shape a prompt's Lua code can use, wit
 
 | Name | Form | Returns | Taught in |
 |---|---|---|---|
+| `#list` | `#msgs` | The number of records in the list | [Conversations](11-conversations.md#building-message-lists) |
 | builder chaining | `messages.new():system(s):user(u)` | The same list, one record appended per call in call order | [Conversations](11-conversations.md#building-message-lists) |
 | content part `image_url` | `{ type = "image_url", image_url = { url = "data:image/png;base64,..." } }` | An image part in a record's `content` array | [Conversations](11-conversations.md#message-records) |
 | content part `text` | `{ type = "text", text = "..." }` | A text part in a record's `content` array | [Conversations](11-conversations.md#message-records) |
-| `list:append` | `list:append(record)` | The same list, with `record` appended unchanged | [Conversations](11-conversations.md#building-message-lists) |
+| `list:append` | `list:append(record)` | The same list, with `record` checked and appended without fields beyond `role`, `content`, `tool_calls`, and `tool_call_id` | [Conversations](11-conversations.md#building-message-lists) |
 | `list:assistant` | `list:assistant(content, tool_calls?)` | The same list, with an `assistant` record appended | [Conversations](11-conversations.md#building-message-lists) |
+| `list:replace` | `list:replace(first, last, records...)` | The same list, with records `first` through `last` replaced by `records`, which may be none | [Conversations](11-conversations.md#editing-a-list) |
 | `list:system` | `list:system(content)` | The same list, with `{ role = "system", content = content }` appended | [Conversations](11-conversations.md#building-message-lists) |
 | `list:tool` | `list:tool(content, tool_call_id)` | The same list, with a `tool` record appended | [Conversations](11-conversations.md#building-message-lists) |
 | `list:user` | `list:user(content)` | The same list, with `{ role = "user", content = content }` appended | [Conversations](11-conversations.md#building-message-lists) |
+| `list[i]` | `msgs[i]` | A read-only view of record `i`, or `nil` past the end | [Conversations](11-conversations.md#editing-a-list) |
 | `messages.new` | `messages.new()` | An empty message list, length 0 | [Conversations](11-conversations.md#building-message-lists) |
-| `record.content` | `record.content` | A string, or a non-empty array of content parts | [Conversations](11-conversations.md#message-records) |
-| `record.role` | `record.role` | `system`, `user`, `assistant`, or `tool` | [Conversations](11-conversations.md#message-records) |
-| `record.tool_call_id` | `record.tool_call_id` | On a `tool` record, the string `id` of the call it answers | [Conversations](11-conversations.md#message-records) |
-| `record.tool_calls` | `record.tool_calls` | On an `assistant` record, an array of `{ id, name, arguments? }` | [Conversations](11-conversations.md#message-records) |
+| `record.content` | `record.content` | Read from a read-only view: a string, or a non-empty array of content parts | [Conversations](11-conversations.md#message-records) |
+| `record.role` | `record.role` | Read from a read-only view: `system`, `user`, `assistant`, or `tool` | [Conversations](11-conversations.md#message-records) |
+| `record.tool_call_id` | `record.tool_call_id` | Read from a read-only view: on a `tool` record, the string `id` of the call it answers | [Conversations](11-conversations.md#message-records) |
+| `record.tool_calls` | `record.tool_calls` | Read from a read-only view: on an `assistant` record, an array of `{ id, name, arguments? }` | [Conversations](11-conversations.md#message-records) |
 | tool call entry | `call.id`, `call.name`, `call.arguments` | The call id, the alias the model called, and the parsed arguments table | [Conversations](11-conversations.md#what-the-loop-appends) |
 
 ### compactors
