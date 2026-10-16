@@ -10,7 +10,7 @@ Every run starts with exactly one argument string. When the caller passes nothin
 ---
 name: greet
 description: Greets whoever the caller names
-promptforge: 0
+runvil: 0
 ---
 
 # Greet
@@ -40,7 +40,7 @@ assert(args == '  spaced { not json ', 'args is the exact passed string')
 ---
 name: shared-echo
 description: Returns the argument string through a shared helper
-promptforge: 0
+runvil: 0
 ---
 
 # Shared Echo
@@ -85,7 +85,7 @@ A prompt with no `args:` key still has a declaration. It gets the implicit defau
 ---
 name: echo-prose
 description: Echo the caller's text
-promptforge: 0
+runvil: 0
 ---
 
 # Echo Prose
@@ -121,7 +121,7 @@ Under a structured declaration, the argument string is parsed as JSON into `argv
 ---
 name: search-query
 description: Returns the query from structured input
-promptforge: 0
+runvil: 0
 args:
   query:
     type: string
@@ -153,7 +153,7 @@ The argument string also reaches prose through placeholders, `{{ }}` forms that 
 ---
 name: show-input
 description: Shows the parsed input in prose
-promptforge: 0
+runvil: 0
 args:
   query:
     type: string
@@ -284,7 +284,7 @@ Under an explicit `args:` declaration, test `if argv then` (or `argv == nil`) to
 ---
 name: safe-query
 description: Returns the query or a note about unusable input
-promptforge: 0
+runvil: 0
 args:
   query:
     type: string
@@ -316,7 +316,7 @@ You can tell an omitted optional arg apart from one passed as an empty string. A
 ---
 name: absent-or-empty
 description: Tells an omitted arg from an empty one
-promptforge: 0
+runvil: 0
 args:
   prose:
     type: string
@@ -342,7 +342,7 @@ To enforce a required field, check it in the H1 body. The [H1 pass](04-how-a-pro
 ---
 name: strict-query
 description: Requires a query before any section runs
-promptforge: 0
+runvil: 0
 args:
   query:
     type: string
@@ -373,7 +373,7 @@ Inside the H1 body, `argv` is an ordinary writable global with no guard in the w
 ---
 name: repaired-query
 description: Treats plain text as the query
-promptforge: 0
+runvil: 0
 args:
   query:
     type: string
@@ -434,7 +434,7 @@ Read an array with `ipairs` or numeric indexing. Because the declaration is neve
 ---
 name: list-items
 description: Joins the items that arrive with the query
-promptforge: 0
+runvil: 0
 args:
   query:
     type: string

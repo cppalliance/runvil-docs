@@ -4,13 +4,13 @@ The gateway serves a browser UI for configuration: you reach it over HTTP, sign 
 
 ## Reach the UI
 
-The gateway serves the configuration UI at /config on its own port; there is no second listener. The UI is an optional feature you compile in with `config-ui`, which is on by default. GET /config redirects permanently to /config/. Five asset endpoints live under /config: the index page at /, the bundled script at /app.js, the stylesheet at /app.css, and the program icon at /icons/promptforge-icon.png with its high-DPI render at /icons/promptforge-icon@2x.png.
+The gateway serves the configuration UI at /config on its own port; there is no second listener. The UI is an optional feature you compile in with `config-ui`, which is on by default. GET /config redirects permanently to /config/. Five asset endpoints live under /config: the index page at /, the bundled script at /app.js, the stylesheet at /app.css, and the program icon at /icons/runvil-icon.png with its high-DPI render at /icons/runvil-icon@2x.png.
 
 The UI pages need no bearer token, but every asset route answers 403 Forbidden to any peer that is not loopback. The UI is reachable only from the gateway machine itself, and the check fails closed.
 
 ## Sign in
 
-With the default `trust_loopback = true`, the UI opens straight into the shell: it runs on the gateway's own machine, and the gateway admits a loopback caller that presents no key. On a shared machine that same trust admits every other OS account, so an operator there sets `trust_loopback = false`; the UI then asks for the key. On first load without a stored key, you see a "PromptForge Gateway" sign-in card with a labeled API key password field and a Connect button. A wrong key shows "Invalid API key". An unreachable gateway shows "Gateway unreachable". The verified key is stored for the browser session. Any later 401 from the gateway clears the stored key and returns you to the key prompt.
+With the default `trust_loopback = true`, the UI opens straight into the shell: it runs on the gateway's own machine, and the gateway admits a loopback caller that presents no key. On a shared machine that same trust admits every other OS account, so an operator there sets `trust_loopback = false`; the UI then asks for the key. On first load without a stored key, you see a "Runvil Gateway" sign-in card with a labeled API key password field and a Connect button. A wrong key shows "Invalid API key". An unreachable gateway shows "Gateway unreachable". The verified key is stored for the browser session. Any later 401 from the gateway clears the stored key and returns you to the key prompt.
 
 ## Get oriented
 

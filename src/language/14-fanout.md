@@ -10,7 +10,7 @@
 ---
 name: tagger
 description: Runs one worker section per member
-promptforge: 0
+runvil: 0
 ---
 
 # Tagger
@@ -47,7 +47,7 @@ The members usually come from a [list section](03-blocks-and-prose.md#list-secti
 ---
 name: topics
 description: Two-member fanout over a list section
-promptforge: 0
+runvil: 0
 ---
 
 # Topics
@@ -102,7 +102,7 @@ Each array member reaches its arm as `item` exactly as itself: a string stays a 
 ---
 name: kinds
 description: Shows each member arriving as itself
-promptforge: 0
+runvil: 0
 ---
 
 # Kinds
@@ -201,7 +201,7 @@ All of these are ordinary error values of kind `lua`, so `pcall` catches them an
 ---
 name: guarded
 description: Catches a fanout collection error
-promptforge: 0
+runvil: 0
 ---
 
 # Guarded
@@ -237,7 +237,7 @@ Any section in the caller's [visible set](08-jump-and-call.md#reachable-sections
 ---
 name: shared
 description: Two sibling sections fan out to one worker section
-promptforge: 0
+runvil: 0
 ---
 
 # Shared
@@ -277,7 +277,7 @@ That is why the usual worker section is a child section, such as `### Worker` un
 ---
 name: early
 description: Fans out from the H1 pass
-promptforge: 0
+runvil: 0
 ---
 
 # Early
@@ -306,7 +306,7 @@ The H1 pass returns a result, which ends the run, so the walk never reaches `## 
 ---
 name: late
 description: Fanout invoked from the epilog with empty prose
-promptforge: 0
+runvil: 0
 ---
 
 # Late
@@ -366,7 +366,7 @@ On top of that, each arm gets two values of its own:
 ---
 name: notes
 description: Asks the model about each member
-promptforge: 0
+runvil: 0
 models:
   writer: {}
 ---
@@ -497,7 +497,7 @@ A collection far larger than the limit runs in full as the limit refills:
 ---
 name: many
 description: Fans out over 1025 members
-promptforge: 0
+runvil: 0
 ---
 
 # Many
@@ -534,7 +534,7 @@ Arm isolation means each arm keeps its own `var`. Every arm starts from its own 
 ---
 name: isolated
 description: Each arm works on its own copy of var
-promptforge: 0
+runvil: 0
 ---
 
 # Isolated
@@ -578,7 +578,7 @@ So the safe pattern gives each arm its own store path, for example one built fro
 ---
 name: perarm
 description: Each arm writes its own store file and the caller merges
-promptforge: 0
+runvil: 0
 ---
 
 # Per arm
@@ -627,7 +627,7 @@ Two arms writing the same path end the whole run:
 ---
 name: clash
 description: Two arms write one store path
-promptforge: 0
+runvil: 0
 ---
 
 # Clash
@@ -674,7 +674,7 @@ Calling `error('message')` in an arm ([failure and cancellation](04-how-a-prompt
 ---
 name: broken
 description: One worker section fails on purpose
-promptforge: 0
+runvil: 0
 ---
 
 # Broken
@@ -750,7 +750,7 @@ Inside an arm, heading references resolve over the worker section's own visible 
 ---
 name: reach
 description: An arm reads a sibling list section
-promptforge: 0
+runvil: 0
 ---
 
 # Reach
@@ -870,7 +870,7 @@ Fanouts nest: an arm's section can call `fanout` again over a collection it buil
 ---
 name: nested
 description: Each outer arm fans out again
-promptforge: 0
+runvil: 0
 ---
 
 # Nested
@@ -926,7 +926,7 @@ This prompt shows the ids of a nested fanout:
 ---
 name: tree
 description: Shows arm ids in a nested fanout
-promptforge: 0
+runvil: 0
 ---
 
 # Tree

@@ -1,6 +1,6 @@
 # Introduction
 
-PromptForge starts from one premise: human intent is the source code, and everything downstream of it - plans, prompts, reports - is a build artifact. Source is versioned; artifacts are regenerated. Regeneration costs a run, not a reconstruction.
+Runvil starts from one premise: human intent is the source code, and everything downstream of it - plans, prompts, reports - is a build artifact. Source is versioned; artifacts are regenerated. Regeneration costs a run, not a reconstruction.
 
 This ordering follows from scarcity. Human judgment is the scarce resource; model output is abundant. So models advise and compare, and humans decide. Every design decision in the product traces back to that ordering.
 

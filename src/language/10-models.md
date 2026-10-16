@@ -10,7 +10,7 @@ The smallest prompt that talks to a model declares one role, makes it the defaul
 ---
 name: haiku
 description: Writes a haiku about autumn leaves
-promptforge: 0
+runvil: 0
 models:
   writer: {}
 ---
@@ -46,7 +46,7 @@ You can reach the `models` table from the Lua of every section, from the blocks 
 ---
 name: tagline
 description: Drafts a bakery tagline and critiques it
-promptforge: 0
+runvil: 0
 models:
   writer: {}
   critic: {}
@@ -83,7 +83,7 @@ A role that sets nothing is an empty map, as `writer: {}` shows. It has no keywo
 ````yaml
 name: market-report
 description: Writes a short market report
-promptforge: 0
+runvil: 0
 models:
   analyst:
     keywords: [frontier, thinking]
@@ -122,7 +122,7 @@ Soft keywords record what you intend the role for. They are accepted, but prepar
 ---
 name: boiling-point
 description: States a fact without extended thinking
-promptforge: 0
+runvil: 0
 models:
   responder:
     keywords: [no-thinking, fast]
@@ -307,7 +307,7 @@ Pass an options table as the second argument of `models.use` to set sampling for
 ---
 name: slogan
 description: Writes a slogan at a low temperature
-promptforge: 0
+runvil: 0
 models:
   writer: {}
 ---
@@ -375,7 +375,7 @@ Read the fields to inspect a role without running a round:
 ---
 name: inspect
 description: Reports the settings of the analyst role
-promptforge: 0
+runvil: 0
 models:
   analyst:
     keywords: [frontier, thinking]
@@ -451,7 +451,7 @@ A round cut off at the generation cap, such as a `max_tokens` option, still retu
 ---
 name: model-report
 description: Reports the model a section runs on
-promptforge: 0
+runvil: 0
 models:
   writer: {}
 ---

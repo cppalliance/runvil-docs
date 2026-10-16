@@ -25,7 +25,7 @@ From inside a prompt, only the round cap can change. The frontmatter key `max_to
 ---
 name: researcher
 description: Researches a topic with tools
-promptforge: 0
+runvil: 0
 max_tool_iterations: 50
 ---
 ````
@@ -86,7 +86,7 @@ A Lua block has no instruction-count limit, so long loops are legal. A block run
 ---
 name: counter
 description: Counts to eight million
-promptforge: 0
+runvil: 0
 ---
 
 # Counter
@@ -155,7 +155,7 @@ This prompt logs more than the default log event quota allows and catches the re
 ---
 name: chatty
 description: Logs past the log event quota and catches the refusal
-promptforge: 0
+runvil: 0
 ---
 
 # Chatty
@@ -214,7 +214,7 @@ A parse failure stops the prompt before any section runs, and every parse failur
 | Parse error kind | Raised when |
 |---|---|
 | `Frontmatter` | the frontmatter block at the top of the file is missing, unclosed, or not valid YAML, or the prompt contract rejects a value in it |
-| `Structure` | the H1 title or the heading tree is invalid, or the file has no `promptforge:` key when it is run |
+| `Structure` | the H1 title or the heading tree is invalid, or the file has no `runvil:` key when it is run |
 | `Fence` | a `lua shared` fence is repeated or outside the H1 body, or a fence is left unclosed |
 | `List` | a list section holds something other than list items, an empty item, or no items |
 | `Lua` | a Lua block does not compile |
@@ -246,10 +246,10 @@ duplicate sibling section name `{name}`: first declared at line {first_line}, ag
 
 The first three mean the H1 title is missing, appears more than once, or is empty. The orphan message means a heading has no parent one level up, the next means a heading is empty, and the last means two sibling sections share a name.
 
-A file whose frontmatter has no `promptforge:` key parses, but its run is refused on the first step with this `Structure` message ([The promptforge version](02-file-structure.md#the-promptforge-version)):
+A file whose frontmatter has no `runvil:` key parses, but its run is refused on the first step with this `Structure` message ([The runvil version](02-file-structure.md#the-runvil-version)):
 
 ````text
-not a promptforge prompt: no promptforge version
+not a runvil prompt: no runvil version
 ````
 
 A prompt with an H1 title and no `##` sections is valid and runs.
@@ -299,7 +299,7 @@ This file names two sibling sections `S`:
 ---
 name: dup
 description: Two sibling sections share a name
-promptforge: 0
+runvil: 0
 ---
 
 # T
@@ -403,8 +403,8 @@ A failed run reports exactly one run error kind. The kind names what failed, and
 
 | Run error kind | The run failed because | Message |
 |---|---|---|
-| `Parse` | the file failed to parse, or has no `promptforge:` key | the parse failure's own message |
-| `Version` | `promptforge:` declares a major version other than `0` | `unsupported promptforge version: {n} (this build supports major 0)` |
+| `Parse` | the file failed to parse, or has no `runvil:` key | the parse failure's own message |
+| `Version` | `runvil:` declares a major version other than `0` | `unsupported runvil version: {n} (this build supports major 0)` |
 | `Binding` | a model round had no model selected | `model binding required for section {section}` |
 | `Completion` | a model call failed, or an empty reply went uncaught | the call's own message, such as `the model backend is overloaded (status 503)` |
 | `Tool` | a tool call failed, was out of scope, or named an unbound tool, or a `models.loop` call reached the round cap | `tool call failure: {message}`, or one of the other tool messages below |
@@ -420,8 +420,8 @@ Nothing reruns a failed run automatically. [Model call and environment failures]
 
 ### Before the run starts
 
-- `Parse`: every parse failure, a Lua syntax error included, is reported as a failed run with run error kind `Parse`, while its parse error kind says which part of the file failed ([Parse error kinds](#parse-error-kinds)). A file with no `promptforge:` key also ends its run on the first step with `Parse`.
-- `Version`: the `promptforge:` key declares a major version other than `0`, and the run ends on its first step ([The promptforge version](02-file-structure.md#the-promptforge-version)).
+- `Parse`: every parse failure, a Lua syntax error included, is reported as a failed run with run error kind `Parse`, while its parse error kind says which part of the file failed ([Parse error kinds](#parse-error-kinds)). A file with no `runvil:` key also ends its run on the first step with `Parse`.
+- `Version`: the `runvil:` key declares a major version other than `0`, and the run ends on its first step ([The runvil version](02-file-structure.md#the-runvil-version)).
 - `RequirementsUnmet` at prepare: a required Plugin is missing or fails to activate, two declared Plugins conflict, a tool slot names a Plugin that contributed no tools, or a filled model fails a hard requirement, so prepare refuses the run before it starts, and the message is the requirements notice ([When a run cannot start](04-how-a-prompt-runs.md#when-a-run-cannot-start)).
 
 ### Model, tool, and input failures
@@ -462,7 +462,7 @@ The [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) is a hard gate. An uncaught f
 ---
 name: gated
 description: Stops before the walk when its gate fails
-promptforge: 0
+runvil: 0
 ---
 
 # Gated
@@ -535,8 +535,8 @@ A backend answering with status 503 makes this block return `skipped: the model 
 
 A Host can build the Harness's model connection from two environment variables. A prompt never reads them, and a missing or invalid value is a setup error that the Host sees before any run starts, so no prompt catches it.
 
-- `PROMPTFORGE_GATEWAY_URL` is always required.
-- `PROMPTFORGE_GATEWAY_API_KEY` is required unless the URL's host is loopback: `127.0.0.1`, `::1`, or `localhost`. An empty key counts as unset.
+- `RUNVIL_GATEWAY_URL` is always required.
+- `RUNVIL_GATEWAY_API_KEY` is required unless the URL's host is loopback: `127.0.0.1`, `::1`, or `localhost`. An empty key counts as unset.
 
 An unset variable fails the setup with `missing environment variable: {name}`, and one set to a value that is not valid Unicode fails it with `environment variable is set but not valid Unicode: {name}`.
 
@@ -561,7 +561,7 @@ A cancel reaches running Lua promptly, even a tight endless loop:
 ---
 name: spinner
 description: Loops until the host cancels the run
-promptforge: 0
+runvil: 0
 ---
 
 # Spinner

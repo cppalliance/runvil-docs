@@ -10,7 +10,7 @@ Every run has a store: a set of virtual files, each addressed by a logical strin
 ---
 name: notebook
 description: Writes a store file and reads it back
-promptforge: 0
+runvil: 0
 ---
 
 # Notebook
@@ -50,7 +50,7 @@ Every section of a run shares the one store, so a file written or appended in on
 ---
 name: handoff
 description: Passes text from one section to the next through the store
-promptforge: 0
+runvil: 0
 ---
 
 # Handoff
@@ -86,7 +86,7 @@ Appends from successive sections accumulate in order. Everything a prompt writes
 ---
 name: journal
 description: Builds a store file with appends across sections
-promptforge: 0
+runvil: 0
 ---
 
 # Journal
@@ -155,7 +155,7 @@ Paths that pass include `a.txt`, `src/a.rs`, `secret/path.txt`, `console.txt`, a
 ---
 name: drafts
 description: Writes a file under a directory that does not exist yet
-promptforge: 0
+runvil: 0
 ---
 
 # Drafts
@@ -230,7 +230,7 @@ A rejected path changes nothing: the path is checked before the call touches any
 ---
 name: slices
 description: Reads part of a store file by line number
-promptforge: 0
+runvil: 0
 ---
 
 # Slices
@@ -335,7 +335,7 @@ The padding depends on the largest number shown, not on the length of the file, 
 ---
 name: editor
 description: Edits a store file by anchor text
-promptforge: 0
+runvil: 0
 ---
 
 # Editor
@@ -388,7 +388,7 @@ if store.exists('state.txt') then log('state is present') end
 ---
 name: cleanup
 description: Deletes a file and then its directory
-promptforge: 0
+runvil: 0
 ---
 
 # Cleanup
@@ -420,7 +420,7 @@ The second `store.delete('notes/a.txt')` succeeds because the file is already go
 ---
 name: sources
 description: Lists store files by glob pattern
-promptforge: 0
+runvil: 0
 ---
 
 # Sources
@@ -510,7 +510,7 @@ A run has one store, and every chain in the run uses it. A [called chain](08-jum
 ---
 name: research
 description: A called section leaves a file for its caller
-promptforge: 0
+runvil: 0
 ---
 
 # Research
@@ -599,7 +599,7 @@ A failed store call can be caught with [`pcall`](05-lua-environment.md#catching-
 ---
 name: careful
 description: Catches a failed store read
-promptforge: 0
+runvil: 0
 ---
 
 # Careful
@@ -682,7 +682,7 @@ The `untrusted(s)` global takes one string and returns it inside an untrusted en
 ---
 name: wrapped
 description: Wraps store text in an untrusted envelope
-promptforge: 0
+runvil: 0
 ---
 
 # Wrapped
@@ -710,7 +710,7 @@ Store text is never wrapped automatically. It reaches a model only when your Lua
 ---
 name: briefing
 description: Puts wrapped store text into a section's prose
-promptforge: 0
+runvil: 0
 ---
 
 # Briefing
@@ -772,7 +772,7 @@ Content inside the envelope is encoded rather than copied byte for byte, so it c
 ---
 name: encoding
 description: Shows how untrusted encodes markup
-promptforge: 0
+runvil: 0
 ---
 
 # Encoding

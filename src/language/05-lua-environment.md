@@ -14,7 +14,7 @@ Each section's Lua runs in a sandbox whose standard libraries are `string`, `tab
 - `tonumber`, `tostring`, and `type`
 - `_G` and `_VERSION`
 
-That list is the whole toolkit. File access, the operating system, loading modules, and loading code from strings are outside it. Six of the base functions behave in a PromptForge way: `pairs` and `next` visit keys in a fixed order ([Deterministic table iteration](#deterministic-table-iteration)), `pcall` and `xpcall` hand back error values ([Catching and inspecting errors](#catching-and-inspecting-errors)), and `setmetatable` and `getmetatable` give `_G` a metatable of your own that never replaces the guard on `argv` and `prose` ([Your own metatable on _G](#your-own-metatable-on-_g)). On every other value, `setmetatable` and `getmetatable` are standard Lua 5.5.
+That list is the whole toolkit. File access, the operating system, loading modules, and loading code from strings are outside it. Six of the base functions behave in a Runvil way: `pairs` and `next` visit keys in a fixed order ([Deterministic table iteration](#deterministic-table-iteration)), `pcall` and `xpcall` hand back error values ([Catching and inspecting errors](#catching-and-inspecting-errors)), and `setmetatable` and `getmetatable` give `_G` a metatable of your own that never replaces the guard on `argv` and `prose` ([Your own metatable on _G](#your-own-metatable-on-_g)). On every other value, `setmetatable` and `getmetatable` are standard Lua 5.5.
 
 The smallest block that uses the sandbox calls a library function and returns the result:
 
@@ -22,7 +22,7 @@ The smallest block that uses the sandbox calls a library function and returns th
 ---
 name: shout
 description: Returns a word in capitals
-promptforge: 0
+runvil: 0
 ---
 
 # Shout
@@ -51,7 +51,7 @@ On top of the sandbox, the runtime installs Engine globals in every section VM, 
 - `call`, `jump`, `fanout`, and `list_from_section`
 - `tasks`
 
-Four more appear only when they apply. `ui` is present when the Host supplies a Host-state snapshot. `item` is present inside a fanout arm, one of the concurrent runs that `fanout` starts ([Inside an arm](14-fanout.md#inside-an-arm)). A declared Plugin can define globals of its own, such as the `input` table that `promptforge/user-input` defines ([Asking the operator with input.ask](#asking-the-operator-with-inputask)). And every declared model role label and every tool slot alias becomes a bare global of its own. None of those ever replaces an Engine global or a sandbox library global: a label or alias that names one fails the parse ([Reserved names for aliases and role labels](02-file-structure.md#reserved-names-for-aliases-and-role-labels)), and a Plugin global that names one fails the run before it does anything. This chapter teaches `var`, `sys`, `ui`, `log`, and `input`; each of the others is taught in its own chapter.
+Four more appear only when they apply. `ui` is present when the Host supplies a Host-state snapshot. `item` is present inside a fanout arm, one of the concurrent runs that `fanout` starts ([Inside an arm](14-fanout.md#inside-an-arm)). A declared Plugin can define globals of its own, such as the `input` table that `runvil/user-input` defines ([Asking the operator with input.ask](#asking-the-operator-with-inputask)). And every declared model role label and every tool slot alias becomes a bare global of its own. None of those ever replaces an Engine global or a sandbox library global: a label or alias that names one fails the parse ([Reserved names for aliases and role labels](02-file-structure.md#reserved-names-for-aliases-and-role-labels)), and a Plugin global that names one fails the run before it does anything. This chapter teaches `var`, `sys`, `ui`, `log`, and `input`; each of the others is taught in its own chapter.
 
 ### Blocks, sections, and section VMs
 
@@ -68,7 +68,7 @@ This prompt shows both rules. The two blocks of `## First` share a plain global,
 ---
 name: carry
 description: Shows what survives between blocks and sections
-promptforge: 0
+runvil: 0
 ---
 
 # Carry
@@ -130,7 +130,7 @@ A block fails on purpose, and with it the run, through `error(message)` or throu
 ---
 name: checked
 description: Stops the run when a check fails
-promptforge: 0
+runvil: 0
 ---
 
 # Checked
@@ -254,7 +254,7 @@ return table.concat(seen, ' ')
 
 That block always returns `1 2 true 10 z`.
 
-The order depends only on the keys, never on the order you inserted them. The same order applies wherever PromptForge reads a table's keys in order, including the member list `fanout` builds from a collection ([Collections and member order](14-fanout.md#collections-and-member-order)).
+The order depends only on the keys, never on the order you inserted them. The same order applies wherever Runvil reads a table's keys in order, including the member list `fanout` builds from a collection ([Collections and member order](14-fanout.md#collections-and-member-order)).
 
 ### The order in detail
 
@@ -338,7 +338,7 @@ Clearing keys while stepping with `next`, in `for k in next, t` or in a manual `
 ---
 name: relay
 description: Passes values along the walk in var
-promptforge: 0
+runvil: 0
 ---
 
 # Relay
@@ -467,7 +467,7 @@ The read-back runs at the end of a section, when prose renders, and when `call`,
 ---
 name: where-am-i
 description: Reports its own section and entry id
-promptforge: 0
+runvil: 0
 ---
 
 # Where Am I
@@ -520,7 +520,7 @@ The main walk is chain `0`, and its numbering is stable. The H1 pass always take
 ---
 name: numbered
 description: Checks the entry ids on the main walk
-promptforge: 0
+runvil: 0
 ---
 
 # Numbered
@@ -590,7 +590,7 @@ The `ui` global exists only when the Host supplies a snapshot. A run without one
 ---
 name: host-model
 description: Reports the host's selected model when there is one
-promptforge: 0
+runvil: 0
 ---
 
 # Host Model
@@ -625,7 +625,7 @@ When the Host supplies a snapshot, `models.get` also accepts a model id taken fr
 ---
 name: progress
 description: Leaves checkpoints as it runs
-promptforge: 0
+runvil: 0
 ---
 
 # Progress
@@ -693,15 +693,15 @@ lua log cumulative byte budget exceeded
 
 ## Asking the operator with input.ask
 
-The operator is the person the Host puts in front of the run, answering its questions. A prompt asks the operator for text through the `promptforge/user-input` Plugin. Declare it in the frontmatter, and every section can call `input.ask()`, which waits for the operator's next message:
+The operator is the person the Host puts in front of the run, answering its questions. A prompt asks the operator for text through the `runvil/user-input` Plugin. Declare it in the frontmatter, and every section can call `input.ask()`, which waits for the operator's next message:
 
 ````markdown
 ---
 name: ask-operator
 description: Asks the operator for a topic
-promptforge: 0
+runvil: 0
 plugins:
-  - promptforge/user-input
+  - runvil/user-input
 ---
 
 # Ask Operator
@@ -722,22 +722,22 @@ Topic: lighthouses
 
 ### Declaring the Plugin
 
-The `input` table exists only in a prompt that declares `promptforge/user-input` ([Declaring Plugins](12-tools.md#declaring-plugins)). Without the declaration there is no `input` global, and calling `input.ask()` fails with Lua's own error `attempt to index a nil value (global 'input')`.
+The `input` table exists only in a prompt that declares `runvil/user-input` ([Declaring Plugins](12-tools.md#declaring-plugins)). Without the declaration there is no `input` global, and calling `input.ask()` fails with Lua's own error `attempt to index a nil value (global 'input')`.
 
-Asking needs an input broker: the part of the Host that carries a question to a person and brings the reply back. The Plugin reads it as the service `promptforge/input-broker`. A chat window has one. A batch or evaluation Host, with nobody to ask, has none. How the prompt declares the Plugin decides what happens on a Host without one.
+Asking needs an input broker: the part of the Host that carries a question to a person and brings the reply back. The Plugin reads it as the service `runvil/input-broker`. A chat window has one. A batch or evaluation Host, with nobody to ask, has none. How the prompt declares the Plugin decides what happens on a Host without one.
 
 A plain entry, as in the prompt above, declares the Plugin required. On a Host with no input broker, prepare refuses the run before it starts, with run error kind `RequirementsUnmet` ([When a run cannot start](04-how-a-prompt-runs.md#when-a-run-cannot-start)) and this requirements notice, which names the missing service by its id:
 
 ````text
 the environment cannot satisfy this prompt:
-- promptforge/user-input needs promptforge/input-broker, and this host provides none
+- runvil/user-input needs runvil/input-broker, and this host provides none
 ````
 
 An entry with `optional: true` always runs. On a Host with no input broker the prompt still gets `input`, and each ask answers with a fixed sentence instead of the operator's text:
 
 ````yaml
 plugins:
-  - ref: promptforge/user-input
+  - ref: runvil/user-input
     optional: true
 ````
 
@@ -749,9 +749,9 @@ plugins:
 ---
 name: topic-or-default
 description: Asks for a topic when someone is there to answer
-promptforge: 0
+runvil: 0
 plugins:
-  - ref: promptforge/user-input
+  - ref: runvil/user-input
     optional: true
 ---
 
@@ -783,7 +783,7 @@ That is a normal return, not an error: the section keeps running. `available` is
 - The section VM's state survives the wait. A local set before the call, such as `local before = 41`, still holds `41` after it, however long the operator takes.
 - The wait pauses only the calling chain. The rest of the run keeps going while it waits.
 - A task started with `tasks.spawn` that waits in `input.ask()` stays live while other chains keep running, and its status reads `blocked` `tool_call` until its answer arrives ([Checking on tasks](15-tasks.md#checking-on-tasks)). It ends only after its own answer arrives or the chain that started it ends or cancels it.
-- Each `input.ask()` is one call to the Plugin's ask tool, whose tool path is `promptforge/user-input/ask`. It reports like any script tool call, with a trusted `tool_result` whose `alias` is that tool path and whose `content` is the operator's text. The Host decides where the question goes: a terminal, a chat window, a web form, or nowhere.
+- Each `input.ask()` is one call to the Plugin's ask tool, whose tool path is `runvil/user-input/ask`. It reports like any script tool call, with a trusted `tool_result` whose `alias` is that tool path and whose `content` is the operator's text. The Host decides where the question goes: a terminal, a chat window, a web form, or nowhere.
 
 ### Letting the model ask
 
@@ -791,17 +791,17 @@ Declaring the Plugin advertises nothing to the model. A `models.loop` conversati
 
 ````yaml
 plugins:
-  - promptforge/user-input
+  - runvil/user-input
 tools:
-  ask: promptforge/user-input/ask
+  ask: runvil/user-input/ask
 ````
 
-Then put the alias in scope with `tools.add('ask')` for one section, or `tools.always('ask')` for every section ([Advertising tools to the model](12-tools.md#advertising-tools-to-the-model)). The model calls `ask` with no arguments and reads the operator's next message as the tool's result, in plain text. A tool slot requires its Plugin, so the slot needs the required declaration shown above: declaring `promptforge/user-input` with `optional: true` beside the slot fails the parse ([Tool slots and Tool objects](12-tools.md#tool-slots-and-tool-objects)). When the Host has no broker, the Harness refuses the required declaration before the run starts.
+Then put the alias in scope with `tools.add('ask')` for one section, or `tools.always('ask')` for every section ([Advertising tools to the model](12-tools.md#advertising-tools-to-the-model)). The model calls `ask` with no arguments and reads the operator's next message as the tool's result, in plain text. A tool slot requires its Plugin, so the slot needs the required declaration shown above: declaring `runvil/user-input` with `optional: true` beside the slot fails the parse ([Tool slots and Tool objects](12-tools.md#tool-slots-and-tool-objects)). When the Host has no broker, the Harness refuses the required declaration before the run starts.
 
 Choose any alias except `input`. A tool alias or model role label named `input` collides with the Plugin's `input` global, and the run fails before it does anything, with run error kind `Lua` and this message:
 
 ````text
-Plugin `promptforge/user-input`: its prelude defines the global `input`, which the prompt's frontmatter binds as a tool or model alias
+Plugin `runvil/user-input`: its prelude defines the global `input`, which the prompt's frontmatter binds as a tool or model alias
 ````
 
 ### When an ask fails or is cancelled
@@ -853,7 +853,7 @@ Line numbers count every line of the file, the frontmatter included. Take this p
 ---
 name: checker
 description: Shows how error lines map
-promptforge: 0
+runvil: 0
 ---
 # Checker
 
@@ -887,7 +887,7 @@ Runtime errors and tracebacks always show region names and real line numbers, ne
 
 - A failed block's traceback is taken where the error was raised, so it shows your own frames, mapped to prompt lines, rather than the Engine's wrapper around the block.
 - An error raised in a fanout arm or a called section traces back through its caller, and each frame's line points at its own region's prompt line, because only the current region's own markers are rewritten. A caller's frame such as ``[string "section `Main` prologue"]:3: in main chunk`` maps to the caller's own file line, and the arm's already-mapped line is left intact.
-- Some Engine functions, such as `fanout` and the `tasks` functions, are written in Lua inside PromptForge. A failure that unwinds through them shows frames naming a built-in helper file and an exact line in it. Those frames are never rewritten, while your own frames still map to absolute prompt lines.
+- Some Engine functions, such as `fanout` and the `tasks` functions, are written in Lua inside Runvil. A failure that unwinds through them shows frames naming a built-in helper file and an exact line in it. Those frames are never rewritten, while your own frames still map to absolute prompt lines.
 
 ## Catching and inspecting errors
 
@@ -897,7 +897,7 @@ Runtime errors and tracebacks always show region names and real line numbers, ne
 ---
 name: careful
 description: Tells an arm from an ordinary section by catching an error
-promptforge: 0
+runvil: 0
 ---
 
 # Careful
@@ -942,7 +942,7 @@ not an arm: runtime error: unknown sys field 'index'
 | `lua` | none | This chapter |
 | `internal` | none | [Errors caught in Lua](16-limits-and-errors.md#errors-caught-in-lua) |
 
-`err.kind == 'lua'` marks an authoring or runtime failure: a compile error, a runtime error in your own code, an argument or misuse error from a PromptForge function, or an exhausted log quota. A placeholder in prose that fails to render and running out of Lua memory are `lua` too. An Engine function failure caught by `pcall` is kind `lua` when it is an authoring or argument problem and `internal` when the Lua runtime's own machinery failed. A typed error from Harness work, such as a model round that ran out of context or a failed `store` operation, keeps its own kind and fields.
+`err.kind == 'lua'` marks an authoring or runtime failure: a compile error, a runtime error in your own code, an argument or misuse error from a Runvil function, or an exhausted log quota. A placeholder in prose that fails to render and running out of Lua memory are `lua` too. An Engine function failure caught by `pcall` is kind `lua` when it is an authoring or argument problem and `internal` when the Lua runtime's own machinery failed. A typed error from Harness work, such as a model round that ran out of context or a failed `store` operation, keeps its own kind and fields.
 
 ### Message, fields, and tostring
 
@@ -1006,7 +1006,7 @@ return tostring(count)
 
 That block returns `4`: a successful `pcall` returns `true` and then every value the function returned, nils included.
 
-Only error values the Engine builds take a kind out of a block. A table you build and raise, even one whose `kind` matches a PromptForge kind, ends the block as an ordinary Lua runtime error.
+Only error values the Engine builds take a kind out of a block. A table you build and raise, even one whose `kind` matches a Runvil kind, ends the block as an ordinary Lua runtime error.
 
 ### Raising a caught error again
 

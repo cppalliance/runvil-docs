@@ -12,7 +12,7 @@ Here is the smallest prompt that uses both prose and Lua. As in [The smallest co
 ---
 name: echo-prose
 description: Returns the prose written above its block
-promptforge: 0
+runvil: 0
 ---
 
 # Echo Prose
@@ -44,7 +44,7 @@ The classic section shape is Lua, then prose, then Lua. A `lua` fence that opens
 ---
 name: three-blocks
 description: A prologue, prose, and an epilog in one section
-promptforge: 0
+runvil: 0
 ---
 
 # Three Blocks
@@ -98,7 +98,7 @@ Only that exact opening line starts a Lua block. Every other fenced code block, 
 ---
 name: code-in-prose
 description: A python fence stays part of the prose
-promptforge: 0
+runvil: 0
 ---
 
 # Code in Prose
@@ -188,7 +188,7 @@ A single `lua` fence is only a prologue, because an epilog needs prose before it
 ---
 name: two-fences
 description: A prologue and an epilog with no prose between them
-promptforge: 0
+runvil: 0
 ---
 
 # Two Fences
@@ -216,7 +216,7 @@ A section can hold several `lua` fences with prose between them. They run top to
 ---
 name: greeting
 description: Two blocks in one section share a global
-promptforge: 0
+runvil: 0
 ---
 
 # Greeting
@@ -246,7 +246,7 @@ The epilog is where a section acts on its prose: it can read `prose`, call the m
 ---
 name: save-reply
 description: The epilog asks the model, saves the reply, and returns
-promptforge: 0
+runvil: 0
 models:
   writer: {}
 ---
@@ -306,7 +306,7 @@ Prose that no Lua block reads is commentary. It is dropped at the end of its sec
 ---
 name: commentary
 description: Prose that no block reads never renders
-promptforge: 0
+runvil: 0
 ---
 
 # Commentary
@@ -340,7 +340,7 @@ Inside a Lua block, the global `prose` holds that block's pending prose as a pla
 ---
 name: word
 description: Returns its prose after setting the value it names
-promptforge: 0
+runvil: 0
 ---
 
 # Word
@@ -371,7 +371,7 @@ Each prose-then-fence pair in a section gets its own fresh `prose`, rendered fro
 ---
 name: two-pairs
 description: Each block reads the prose written just above it
-promptforge: 0
+runvil: 0
 ---
 
 # Two Pairs
@@ -417,7 +417,7 @@ Put derived text in `var` or in another global. A metatable of your own on `_G` 
 ---
 name: speaker
 description: Sends a section's prose to the model
-promptforge: 0
+runvil: 0
 models:
   writer: {}
 ---
@@ -465,7 +465,7 @@ A thematic break keeps notes out of a block's prose. A `---` line resets pending
 ---
 name: notes
 description: Keeps working notes out of a block's prose
-promptforge: 0
+runvil: 0
 ---
 
 # Notes
@@ -518,7 +518,7 @@ Plain prose under the H1 title describes what the prompt does, and a `---` line 
 ---
 name: summary
 description: Describes itself under the title
-promptforge: 0
+runvil: 0
 ---
 
 # Summary
@@ -548,7 +548,7 @@ The H1 body and each section collect their own pending prose, so each part's pro
 ---
 name: two-turns
 description: The H1 body and a section each send their own prose
-promptforge: 0
+runvil: 0
 models:
   writer: {}
 ---
@@ -586,7 +586,7 @@ One exact `lua shared` fence in the H1 body defines the prompt's shared library.
 ---
 name: decorate
 description: A shared helper used before and after the prose
-promptforge: 0
+runvil: 0
 ---
 
 # Decorate
@@ -680,7 +680,7 @@ This library writes to the store and records a checkpoint with `log` as it loads
 ---
 name: load-time
 description: The shared library writes to the store as it loads
-promptforge: 0
+runvil: 0
 ---
 
 # Load Time
@@ -797,7 +797,7 @@ For a `### Items` list with an empty middle item, the message is `` empty bullet
 ---
 name: topics
 description: Reads a sibling list section from Lua
-promptforge: 0
+runvil: 0
 ---
 
 # Topics
@@ -829,7 +829,7 @@ In a section or a fanout arm, `list_from_section` reaches the list sections in t
 ---
 name: items-first
 description: Reads a list section from the H1 body
-promptforge: 0
+runvil: 0
 ---
 
 # Items First

@@ -57,7 +57,7 @@ You can distinguish admission failures by status code. A full waiting queue answ
 
 ## Schedule fairly
 
-Turn on fair scheduling so waiting callers are served in per-client round-robin order, keyed by the `X-PromptForge-Client` request header:
+Turn on fair scheduling so waiting callers are served in per-client round-robin order, keyed by the `X-Runvil-Client` request header:
 
 ````
 fair_scheduling = true

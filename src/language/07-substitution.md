@@ -12,7 +12,7 @@ The smallest example puts the argument string, which Lua reads as [`args`](06-ar
 ---
 name: hello-args
 description: Greets the argument string through a placeholder
-promptforge: 0
+runvil: 0
 ---
 
 # Hello Args
@@ -49,7 +49,7 @@ This prompt uses a Lua global, one field of a table global, and a whole table in
 ---
 name: answer
 description: Fills three placeholders from Lua globals
-promptforge: 0
+runvil: 0
 ---
 
 # Answer
@@ -94,7 +94,7 @@ Placeholders work in any prose that a Lua block reads. A common shape is a [prol
 ---
 name: subject
 description: Writes about the argument string
-promptforge: 0
+runvil: 0
 ---
 
 # Subject
@@ -164,7 +164,7 @@ Args:   spaced { not json
 ---
 name: show-argv
 description: Shows the parsed arguments whole and by field
-promptforge: 0
+runvil: 0
 args:
   query:
     type: string
@@ -199,7 +199,7 @@ A table or array renders as compact JSON with no spaces and its keys in sorted o
 ---
 name: chain-input
 description: Shows which input a nested chain sees
-promptforge: 0
+runvil: 0
 ---
 
 # Chain Input
@@ -241,7 +241,7 @@ Args: chain-args
 ---
 name: safe-show
 description: Shows the parsed input only when it parsed
-promptforge: 0
+runvil: 0
 args:
   query:
     type: string
@@ -286,7 +286,7 @@ A repair made with the [H1 repair pattern](06-arguments.md#the-h1-repair-pattern
 ---
 name: repaired-show
 description: Shows a repaired query in a walked section
-promptforge: 0
+runvil: 0
 args:
   query:
     type: string
@@ -323,7 +323,7 @@ Query: repaired
 ---
 name: catalog
 description: Fills placeholders from var
-promptforge: 0
+runvil: 0
 ---
 
 # Catalog
@@ -361,7 +361,7 @@ A section-local Lua global, meaning a name assigned without `local` such as `ans
 ---
 name: globals
 description: Fills placeholders from a shared global and a block global
-promptforge: 0
+runvil: 0
 ---
 
 # Globals
@@ -420,7 +420,7 @@ A placeholder is a plain lookup, with no arithmetic and no expressions. To show 
 ---
 name: full-name
 description: Shows a value computed in Lua
-promptforge: 0
+runvil: 0
 ---
 
 # Full Name
@@ -586,7 +586,7 @@ Substitution happens at the first read of `prose`, not when the block starts. Th
 ---
 name: word
 description: Sets a value before reading the prose that names it
-promptforge: 0
+runvil: 0
 ---
 
 # Word
@@ -633,7 +633,7 @@ Markdown that no block reads through `prose` is never rendered. That covers pros
 ---
 name: unread
 description: Prose that is never read never fails
-promptforge: 0
+runvil: 0
 ---
 
 # Unread
@@ -669,7 +669,7 @@ A failed substitution is an ordinary Lua error, raised inside the section's Lua 
 ---
 name: catch-missing
 description: Catches a failed substitution and returns something else
-promptforge: 0
+runvil: 0
 ---
 
 # Catch Missing

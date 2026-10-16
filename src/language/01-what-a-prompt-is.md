@@ -1,6 +1,6 @@
 # What a Prompt Is
 
-A PromptForge prompt is a single Markdown file that is also a program: the prose you want a model to see sits right next to the Lua that decides what happens to it, and the Harness runs the whole file for you. This chapter shows you the shape of that file, the smallest prompt that runs, how prose and Lua meet, how sections work together, and what the Harness does before and during a run, so you can write and run a first prompt today and know which chapter to open next for each part.
+A Runvil prompt is a single Markdown file that is also a program: the prose you want a model to see sits right next to the Lua that decides what happens to it, and the Harness runs the whole file for you. This chapter shows you the shape of that file, the smallest prompt that runs, how prose and Lua meet, how sections work together, and what the Harness does before and during a run, so you can write and run a first prompt today and know which chapter to open next for each part.
 
 ## What a prompt file is
 
@@ -8,7 +8,7 @@ A prompt file is one Markdown file (`.md`) that the Engine parses and the Harnes
 
 A prompt file has three parts, in this order:
 
-- Frontmatter: a YAML block between two `---` lines at the top of the file, holding at least `name`, `description`, and `promptforge: 0`.
+- Frontmatter: a YAML block between two `---` lines at the top of the file, holding at least `name`, `description`, and `runvil: 0`.
 - One H1 title: a `# ` line with non-empty text.
 - Sections: the headings after the H1 at level two or deeper, starting with `##`. Each section holds Markdown prose, `lua` fences with the prompt's logic, or both.
 
@@ -18,7 +18,7 @@ Here is a complete prompt file:
 ---
 name: greeter
 description: says hi
-promptforge: 0
+runvil: 0
 ---
 
 # Greeter
@@ -36,12 +36,12 @@ The title is exactly one H1 with non-empty text: a file with no H1 fails with th
 
 Sections nest by heading level, so a `###` heading under a `##` section starts a child section, as [sections and nesting](02-file-structure.md#sections-and-nesting) describes. Inside a section, prose and `lua` fences alternate into prose blocks and Lua blocks, which [Lua blocks and prose blocks](03-blocks-and-prose.md#lua-blocks-and-prose-blocks) teaches.
 
-The `promptforge: 0` line is what marks a Markdown file as a PromptForge prompt. `0` is the version this build runs, and the run checks it before any section runs. Two cases stop a run at that check:
+The `runvil: 0` line is what marks a Markdown file as a Runvil prompt. `0` is the version this build runs, and the run checks it before any section runs. Two cases stop a run at that check:
 
-- Any other version number fails the run with the run error kind `Version` and `unsupported promptforge version: {n} (this build supports major 0)`, where `{n}` is the declared number.
-- A file with no `promptforge:` key still parses, but the run declines it with the parse error kind `Structure` and `not a promptforge prompt: no promptforge version`, an error that names the prompt's `name`.
+- Any other version number fails the run with the run error kind `Version` and `unsupported runvil version: {n} (this build supports major 0)`, where `{n}` is the declared number.
+- A file with no `runvil:` key still parses, but the run declines it with the parse error kind `Structure` and `not a runvil prompt: no runvil version`, an error that names the prompt's `name`.
 
-So a file with the right layout but no `promptforge: 0` parses and never runs, and every prompt that runs declares `promptforge: 0`. [The promptforge version](02-file-structure.md#the-promptforge-version) covers the key in full, [parse error kinds](16-limits-and-errors.md#parse-error-kinds) lists `Structure`, and [how a failed run is classified](16-limits-and-errors.md#how-a-failed-run-is-classified) lists `Version` with the other run error kinds.
+So a file with the right layout but no `runvil: 0` parses and never runs, and every prompt that runs declares `runvil: 0`. [The runvil version](02-file-structure.md#the-runvil-version) covers the key in full, [parse error kinds](16-limits-and-errors.md#parse-error-kinds) lists `Structure`, and [how a failed run is classified](16-limits-and-errors.md#how-a-failed-run-is-classified) lists `Version` with the other run error kinds.
 
 The part between the H1 title and the first section is the H1 body, and it can hold prose and `lua` fences too ([the H1 title and its content](02-file-structure.md#the-h1-title-and-its-content)). Because the H1 body can do all the work, a prompt needs no minimum number of sections. This prompt has none, and its run ends with the result `hello`:
 
@@ -49,7 +49,7 @@ The part between the H1 title and the first section is the H1 body, and it can h
 ---
 name: h1-only
 description: Does all its work in the H1 body
-promptforge: 0
+runvil: 0
 ---
 
 # H1 Only
@@ -81,7 +81,7 @@ To compute a result instead, add one `lua` fence to the section:
 ---
 name: greeter
 description: Returns a greeting
-promptforge: 0
+runvil: 0
 ---
 
 # Greeter
@@ -105,7 +105,7 @@ A prompt can also return the argument string the run received, which Lua reads a
 ---
 name: echo
 description: Return the input argument unchanged
-promptforge: 0
+runvil: 0
 ---
 
 # Echo
@@ -125,7 +125,7 @@ Prose becomes useful when a Lua block reads it. Write a line of prose, then a `l
 ---
 name: read-prose
 description: Returns the prose written above its block
-promptforge: 0
+runvil: 0
 ---
 
 # Read Prose
@@ -151,7 +151,7 @@ A `{{ var.word }}` placeholder fills in a value the first time a block reads the
 ---
 name: late-render
 description: Renders its prose at the first read
-promptforge: 0
+runvil: 0
 ---
 
 # Late Render
@@ -176,7 +176,7 @@ Prose alone never calls a model, and nothing reaches a model until Lua sends it.
 ---
 name: hello
 description: Say hello
-promptforge: 0
+runvil: 0
 models:
   writer: {}
 ---
@@ -210,7 +210,7 @@ For a conversation instead of a single round, build a message list and run it wi
 ---
 name: first-chat
 description: Holds a one-message conversation
-promptforge: 0
+runvil: 0
 models:
   writer: {}
 ---
@@ -236,7 +236,7 @@ A model call needs a selected model role. This prompt sends its prose to a model
 ---
 name: no-role
 description: Calls a model without selecting a role
-promptforge: 0
+runvil: 0
 ---
 
 # No Role
@@ -266,7 +266,7 @@ A prompt can hold several `##` sections, each with its own `lua` fence. They run
 ---
 name: handoff
 description: Passes a note from one section to the next
-promptforge: 0
+runvil: 0
 ---
 
 # Handoff
@@ -296,7 +296,7 @@ The `var` table passes values along the walk the same way:
 ---
 name: three-steps
 description: Builds a value across three sections
-promptforge: 0
+runvil: 0
 ---
 
 # Three Steps
@@ -337,7 +337,7 @@ Sections can also run only when another section starts them. Here the entry sect
 ---
 name: two-tasks
 description: Starts two sections as tasks and joins their results
-promptforge: 0
+runvil: 0
 ---
 
 # Two Tasks
@@ -378,7 +378,7 @@ Sections nest too. A `###` section under a `##` section is a child section with 
 ---
 name: each-member
 description: Runs a nested worker once per member
-promptforge: 0
+runvil: 0
 ---
 
 # Each Member
@@ -409,7 +409,7 @@ Without such a call, the walk goes from one `##` section straight to the next an
 ---
 name: nested-child
 description: Shows that the walk never enters a child section
-promptforge: 0
+runvil: 0
 ---
 
 # Nested Child
@@ -445,7 +445,7 @@ One prompt can combine all of these parts: a shared library, prose in the H1 bod
 ---
 name: tidy-subject
 description: Lowercases a subject with a shared helper
-promptforge: 0
+runvil: 0
 ---
 
 # Tidy Subject
@@ -500,7 +500,7 @@ A prompt that declares no Plugins, tools, or model roles has no requirements for
 ---
 name: no-requirements
 description: Runs on Lua alone
-promptforge: 0
+runvil: 0
 ---
 
 # No Requirements
@@ -523,7 +523,7 @@ Lua only ever selects labels that are already bound:
 - `models.use` selects only a role label that the frontmatter declared and the Harness filled, and raises `models.use label "{label}" is not a bound model role` for any other label.
 - `tools.add` puts a slot's tool in scope for the model in the current section ([advertising tools to the model](12-tools.md#advertising-tools-to-the-model)), accepts only an alias whose slot is filled, and fails with `tools.add alias "{alias}" is not a bound tool slot` for any other alias.
 
-The model calls a bound tool by its alias from `tools:`, such as `search`, never by its tool path, such as `promptforge/web/search`.
+The model calls a bound tool by its alias from `tools:`, such as `search`, never by its tool path, such as `runvil/web/search`.
 
 The language itself performs no I/O and reads no clock. A prompt reaches the outside world only through Harness work: requests the Harness performs for the run and answers. There are exactly four kinds of Harness work:
 
@@ -540,7 +540,7 @@ This section asks for two store operations, a write and then a read:
 ---
 name: notes
 description: keeps a note
-promptforge: 0
+runvil: 0
 ---
 
 # Notes
@@ -557,21 +557,21 @@ return store.read('todo.md')
 ship it
 ````
 
-All four contract keys can sit together in one frontmatter block, alongside `name`, `description`, and `promptforge: 0`:
+All four contract keys can sit together in one frontmatter block, alongside `name`, `description`, and `runvil: 0`:
 
 ````yaml
 ---
 name: research
 description: Searches public and private sources
-promptforge: 0
+runvil: 0
 plugins:
-  - promptforge/web
+  - runvil/web
   - ref: io.github.corp/mcp
     optional: true
     config: { servers: [alpha] }
 tools:
-  search: promptforge/web/search
-  fetch: promptforge/web/fetch
+  search: runvil/web/search
+  fetch: runvil/web/fetch
 args:
   use_mcp: { type: boolean, default: true, description: Search MCP-connected private sources }
 models:
@@ -580,7 +580,7 @@ models:
 ---
 ````
 
-- `plugins:` lists `promptforge/web` as a required Plugin id ([the web Plugin](13-web-fetch-and-search.md#the-web-plugin)), then a mapping that names `io.github.corp/mcp` with `ref:`, marks it `optional: true`, and gives it its own `config:`.
+- `plugins:` lists `runvil/web` as a required Plugin id ([the web Plugin](13-web-fetch-and-search.md#the-web-plugin)), then a mapping that names `io.github.corp/mcp` with `ref:`, marks it `optional: true`, and gives it its own `config:`.
 - `tools:` maps two aliases, `search` and `fetch`, to tool paths, and the model calls the tools as `search` and `fetch`.
 - `args:` declares `use_mcp`, a `boolean` argument with a default of `true` and a description.
 - `models:` declares two roles, `analyst` and `triage`, each with `keywords` and a `description`, and `analyst` also sets `min_context`.

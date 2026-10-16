@@ -4,17 +4,17 @@ Tools let a prompt reach past the model's own text: in the middle of a conversat
 
 ## Tools at a glance
 
-Every tool comes from the Harness. The Host registers Plugins with the Harness, each supplying a set of tools under an id such as `promptforge/web`, and a prompt declares the Plugins it uses and binds the tools it wants from them. The smallest tool prompt declares one Plugin, binds one tool, and calls it from Lua:
+Every tool comes from the Harness. The Host registers Plugins with the Harness, each supplying a set of tools under an id such as `runvil/web`, and a prompt declares the Plugins it uses and binds the tools it wants from them. The smallest tool prompt declares one Plugin, binds one tool, and calls it from Lua:
 
 ````markdown
 ---
 name: page-fetcher
 description: Fetches the page named in the argument string
-promptforge: 0
+runvil: 0
 plugins:
-  - promptforge/web
+  - runvil/web
 tools:
-  fetch: promptforge/web/fetch
+  fetch: runvil/web/fetch
 ---
 
 # Page fetcher
@@ -26,9 +26,9 @@ return tools.call('fetch', { url = args })
 ```
 ````
 
-`plugins:` lists the Plugins the prompt uses, here `promptforge/web`, the first-party Plugin that supplies the tools `promptforge/web/fetch` and `promptforge/web/search`. Each declared Plugin is activated at [prepare](04-how-a-prompt-runs.md#plugin-activation), before any Lua runs, and the run's tool catalog, the set of tools the prompt can bind, is built from exactly the declared Plugins. A Harness tool reaches a run only this way.
+`plugins:` lists the Plugins the prompt uses, here `runvil/web`, the first-party Plugin that supplies the tools `runvil/web/fetch` and `runvil/web/search`. Each declared Plugin is activated at [prepare](04-how-a-prompt-runs.md#plugin-activation), before any Lua runs, and the run's tool catalog, the set of tools the prompt can bind, is built from exactly the declared Plugins. A Harness tool reaches a run only this way.
 
-`tools:` binds tool slots. Each entry is written `alias: namespace/plugin/name`, a prompt-local alias mapped to one exact tool path, so `fetch` here is an alias for `promptforge/web/fetch`. Each alias then exists as a Lua global and as a name `tools.call` accepts. A prompt without a `tools:` key has no tool slots.
+`tools:` binds tool slots. Each entry is written `alias: namespace/plugin/name`, a prompt-local alias mapped to one exact tool path, so `fetch` here is an alias for `runvil/web/fetch`. Each alias then exists as a Lua global and as a name `tools.call` accepts. A prompt without a `tools:` key has no tool slots.
 
 `tools.call(alias, args)` calls a bound tool from Lua: the alias names the tool, the Lua table becomes the tool's JSON arguments, and the call returns the tool's result. Here the table's `url` field is the run's argument string, [`args`](06-arguments.md#input-basics), and the section returns the tool's result as the run result.
 
@@ -38,12 +38,12 @@ Binding a tool does not show it to the model. A bound tool stays out of the mode
 ---
 name: researcher
 description: Answers a question from web sources
-promptforge: 0
+runvil: 0
 plugins:
-  - promptforge/web
+  - runvil/web
 tools:
-  search: promptforge/web/search
-  fetch: promptforge/web/fetch
+  search: runvil/web/search
+  fetch: runvil/web/fetch
 models:
   writer: {}
 ---
@@ -88,16 +88,16 @@ Everything about tools lives in the prompt file. There are no command-line flags
 
 ````yaml
 plugins:
-  - promptforge/web
+  - runvil/web
   - ref: io.github.corp/mcp
     optional: true
 ````
 
-A plain string entry, such as `- promptforge/web`, declares a required Plugin with no config. When the Harness lacks a required Plugin, or the Plugin fails to activate, prepare refuses the run before it starts with run error kind [`RequirementsUnmet`](16-limits-and-errors.md#how-a-failed-run-is-classified), and the [requirements notice](04-how-a-prompt-runs.md#when-a-run-cannot-start) names each missing Plugin:
+A plain string entry, such as `- runvil/web`, declares a required Plugin with no config. When the Harness lacks a required Plugin, or the Plugin fails to activate, prepare refuses the run before it starts with run error kind [`RequirementsUnmet`](16-limits-and-errors.md#how-a-failed-run-is-classified), and the [requirements notice](04-how-a-prompt-runs.md#when-a-run-cannot-start) names each missing Plugin:
 
 ````text
 the environment cannot satisfy this prompt:
-- missing required Plugin: promptforge/web
+- missing required Plugin: runvil/web
 ````
 
 The map form has three keys, and plain and map entries mix freely in one list:
@@ -110,7 +110,7 @@ The map form has three keys, and plain and map entries mix freely in one list:
 
 With `optional: true`, a Plugin the Harness lacks, or one that fails to activate, is skipped at prepare with a log line naming it, and the run goes ahead. The second entry above is optional, so a Harness without `io.github.corp/mcp` still runs the prompt. A tool slot requires its Plugin, so an optional Plugin cannot back one: a slot that names a tool of a Plugin declared `optional: true` fails the parse, as [Tool slots and Tool objects](#tool-slots-and-tool-objects) shows.
 
-`config` accepts any YAML value without a shape check. When it activates, a Plugin receives only the run's filesystem, its cancel signal, and the services the Host provides, each named by an id such as `promptforge/input-broker`, the input broker that waits for the operator's next message on a Host with someone to ask. No shipped Plugin reads `config`. Credentials, server lists, and similar settings always come from the Host, never from the prompt.
+`config` accepts any YAML value without a shape check. When it activates, a Plugin receives only the run's filesystem, its cancel signal, and the services the Host provides, each named by an id such as `runvil/input-broker`, the input broker that waits for the operator's next message on a Host with someone to ask. No shipped Plugin reads `config`. Credentials, server lists, and similar settings always come from the Host, never from the prompt.
 
 Each Plugin is declared once. A list that names one Plugin id twice fails the parse with parse error kind [`Frontmatter`](16-limits-and-errors.md#parse-error-kinds), whatever form each entry takes, and even when the two entries differ only in `optional` or `config`. The message names the id and reports no line or column:
 
@@ -151,27 +151,27 @@ tool path     = segment "/" segment "/" segment
 segment       = one or more characters, each one of a-z 0-9 - _ .
 ````
 
-A Plugin id is written `namespace/plugin`, such as `promptforge/web`, `io.github.corp/mcp`, or `acme/web-search`. The first segment is the namespace: a reverse-DNS name such as `org.rustalliance`, or the first-party `promptforge`. A dotted namespace is still one segment.
+A Plugin id is written `namespace/plugin`, such as `runvil/web`, `io.github.corp/mcp`, or `acme/web-search`. The first segment is the namespace: a reverse-DNS name such as `org.rustalliance`, or the first-party `runvil`. A dotted namespace is still one segment.
 
-A tool path is written `namespace/plugin/name`, such as `promptforge/web/fetch`, and every `tools:` value is a tool path. The last segment is the tool's short name, `fetch` here. Dropping it always gives the id of the Plugin that supplies the tool, so `promptforge/web/fetch` comes from `promptforge/web`:
+A tool path is written `namespace/plugin/name`, such as `runvil/web/fetch`, and every `tools:` value is a tool path. The last segment is the tool's short name, `fetch` here. Dropping it always gives the id of the Plugin that supplies the tool, so `runvil/web/fetch` comes from `runvil/web`:
 
 | Tool path | Short name | Supplied by |
 |---|---|---|
-| `promptforge/web/fetch` | `fetch` | `promptforge/web` |
-| `promptforge/web/search` | `search` | `promptforge/web` |
+| `runvil/web/fetch` | `fetch` | `runvil/web` |
+| `runvil/web/search` | `search` | `runvil/web` |
 | `org.rustalliance/core/search` | `search` | `org.rustalliance/core` |
 | `org.rustalliance/my-pack/v1_2.tool` | `v1_2.tool` | `org.rustalliance/my-pack` |
 
-A Plugin supplies only tools whose path is its own id plus one name segment, compared by whole segments: `promptforge/web` supplies `promptforge/web/fetch` but never `promptforge/other/fetch`, and `promptforge/web2/fetch` belongs to `promptforge/web2`, not to `promptforge/web`. The Harness admits a contributed tool only when its path sits under the contributing Plugin's id, so every tool a prompt can bind has this shape.
+A Plugin supplies only tools whose path is its own id plus one name segment, compared by whole segments: `runvil/web` supplies `runvil/web/fetch` but never `runvil/other/fetch`, and `runvil/web2/fetch` belongs to `runvil/web2`, not to `runvil/web`. The Harness admits a contributed tool only when its path sits under the contributing Plugin's id, so every tool a prompt can bind has this shape.
 
 ### Segment rules
 
 - Every segment has at least one character, and each character is a lowercase ASCII letter `a` to `z`, a digit `0` to `9`, `-`, `_`, or `.`. Tool path segments follow the same rules as Plugin id segments.
 - A segment or a whole name has no length limit and no rule about its first or last character, so a segment may start or end with `-`, `_`, `.`, or a digit.
-- Names are kept exactly as written, with no case folding, trimming, or other normalizing, and compare byte for byte. Write every id and path in lowercase; `promptforge/web` is the only spelling of that Plugin.
+- Names are kept exactly as written, with no case folding, trimming, or other normalizing, and compare byte for byte. Write every id and path in lowercase; `runvil/web` is the only spelling of that Plugin.
 - `-`, `_`, and `.` are not interchangeable. The Harness looks ids up exactly, so `acme/web-search`, `acme/web_search`, and `acme/web.search` are three different Plugins.
 - A Plugin id has no version part. It names the one Plugin the Harness installed under that id.
-- By convention an organization's own Plugins live under a reverse-DNS namespace such as `org.rustalliance` or `io.github.corp`, and `promptforge` is the first-party namespace. The parser checks neither convention.
+- By convention an organization's own Plugins live under a reverse-DNS namespace such as `org.rustalliance` or `io.github.corp`, and `runvil` is the first-party namespace. The parser checks neither convention.
 
 A Plugin id or tool path prints as its segments joined with `/`, and that text reads back as the same name, so run reports and error messages show it exactly as written, the missing-Plugin line of the requirements notice included.
 
@@ -211,7 +211,7 @@ Each `tools:` entry declares a tool slot: an alias, which follows the prompt's [
 
 Prepare [fills each slot](04-how-a-prompt-runs.md#filling-tool-slots-and-model-roles) by exact match of its tool path against the run's tool catalog, which holds the activated Plugins' tools in declaration order. A slot whose path matches becomes a bound tool slot, and it stays bound to that same tool for the whole run. Slots are bound before any Lua runs, so Lua only chooses which bound slots the model sees, and scoping an alias that is not bound is an error.
 
-Every Plugin named by a slot's first two segments belongs in `plugins:`. If that Plugin contributed no tools to the catalog, prepare refuses the run with `RequirementsUnmet` and the line `- missing required Plugin: {id}`, listed once however many slots name it. So `fetch: promptforge/web/fetch` needs `promptforge/web` to have contributed tools, and when it contributed none, the slot is reported under `promptforge/web`.
+Every Plugin named by a slot's first two segments belongs in `plugins:`. If that Plugin contributed no tools to the catalog, prepare refuses the run with `RequirementsUnmet` and the line `- missing required Plugin: {id}`, listed once however many slots name it. So `fetch: runvil/web/fetch` needs `runvil/web` to have contributed tools, and when it contributed none, the slot is reported under `runvil/web`.
 
 A tool slot requires its Plugin, so an optional Plugin cannot back one. A slot whose Plugin is declared `optional: true` fails the parse with parse error kind `Frontmatter` and this message, which reports no line or column. When several slots do, the one whose alias sorts first is named:
 
@@ -227,8 +227,8 @@ Two aliases can name the same tool path, and both call that one tool:
 
 ````yaml
 tools:
-  fetch: promptforge/web/fetch
-  getter: promptforge/web/fetch
+  fetch: runvil/web/fetch
+  getter: runvil/web/fetch
 ````
 
 A `tools.call` to an alias that is not bound fails with an error that lists the bound aliases.
@@ -241,11 +241,11 @@ Each bound slot is also a bare Lua global named by its alias, holding a Tool obj
 ---
 name: tool-inspector
 description: Reads the fields of a Tool object
-promptforge: 0
+runvil: 0
 plugins:
-  - promptforge/web
+  - runvil/web
 tools:
-  page: promptforge/web/fetch
+  page: runvil/web/fetch
 ---
 
 # Tool inspector
@@ -273,7 +273,7 @@ A Tool object has five fields:
 | `wire_name` | the last segment of the tool path |
 | `untrusted` | a boolean, always `false` |
 
-`.name` is the prompt-local alias, the same way `.name` on a [model handle](10-models.md#handle-fields) is its role label. `.description` is the tool's own catalog description, never an override passed to `tools.always` or `tools.add`. `.parameters` is always an empty table, so a tool's real argument schema is not readable from Lua. `.wire_name` is the last segment of the tool path, `fetch` for `promptforge/web/fetch`, whatever alias the prompt chose. `.untrusted` is always `false`, and it does not report whether the tool's output is untrusted.
+`.name` is the prompt-local alias, the same way `.name` on a [model handle](10-models.md#handle-fields) is its role label. `.description` is the tool's own catalog description, never an override passed to `tools.always` or `tools.add`. `.parameters` is always an empty table, so a tool's real argument schema is not readable from Lua. `.wire_name` is the last segment of the tool path, `fetch` for `runvil/web/fetch`, whatever alias the prompt chose. `.untrusted` is always `false`, and it does not report whether the tool's output is untrusted.
 
 A Tool object is frozen. Assigning any field, existing or new, raises an error naming the field:
 
@@ -289,11 +289,11 @@ The same `tools` table is present in every section VM, the H1 body and shared co
 ---
 name: shared-helper
 description: Uses an alias global from a shared function
-promptforge: 0
+runvil: 0
 plugins:
-  - promptforge/web
+  - runvil/web
 tools:
-  page: promptforge/web/fetch
+  page: runvil/web/fetch
 ---
 
 # Shared helper
@@ -321,12 +321,12 @@ A section's scope is the set of tools the model is offered in that section. Two 
 ---
 name: two-step-research
 description: Finds sources in one section and writes in the next
-promptforge: 0
+runvil: 0
 plugins:
-  - promptforge/web
+  - runvil/web
 tools:
-  search: promptforge/web/search
-  fetch: promptforge/web/fetch
+  search: runvil/web/search
+  fetch: runvil/web/fetch
 models:
   writer: {}
 ---
@@ -594,12 +594,12 @@ Uncaught, these failures end the run with run error kind [`Tool`](16-limits-and-
 ---
 name: sourced-answer
 description: Answers only when the model read at least one page
-promptforge: 0
+runvil: 0
 plugins:
-  - promptforge/web
+  - runvil/web
 tools:
-  search: promptforge/web/search
-  fetch: promptforge/web/fetch
+  search: runvil/web/search
+  fetch: runvil/web/fetch
 models:
   writer: {}
 ---
@@ -649,7 +649,7 @@ The end of the message tells a real tool from a typo:
 ---
 name: note-taker
 description: Lets the model save notes while it reads
-promptforge: 0
+runvil: 0
 models:
   writer: {}
 ---
@@ -733,7 +733,7 @@ A local tool works as a decision channel in [the H1 pass](04-how-a-prompt-runs.m
 ---
 name: router
 description: Lets the model choose a route before the walk
-promptforge: 0
+runvil: 0
 models:
   writer: {}
 ---

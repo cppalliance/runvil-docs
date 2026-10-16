@@ -17,7 +17,7 @@ Here is a prompt with two sections. The first section's Lua returns nothing, so 
 ---
 name: two-sections
 description: The first section falls through and the second returns
-promptforge: 0
+runvil: 0
 ---
 
 # Title
@@ -51,7 +51,7 @@ A return from a section on the walk ends the whole run at once. The returned val
 ---
 name: first-wins
 description: The first section's return ends the run
-promptforge: 0
+runvil: 0
 ---
 
 # Title
@@ -81,7 +81,7 @@ When a run finishes without any block returning a value, for example when the wa
 ---
 name: no-return
 description: One section that returns nothing
-promptforge: 0
+runvil: 0
 ---
 
 # Title
@@ -134,7 +134,7 @@ Fall-through never goes down into child sections. The walk moves only between si
 ---
 name: children-wait
 description: The walk moves from sibling to sibling and skips the child
-promptforge: 0
+runvil: 0
 ---
 
 # Title
@@ -201,7 +201,7 @@ Returning `prose` makes the block's rendered [pending prose](03-blocks-and-prose
 ---
 name: echo-prose
 description: Returns the prose written above its block
-promptforge: 0
+runvil: 0
 ---
 
 # Echo Prose
@@ -227,7 +227,7 @@ A value returned from a section's prologue, its leading `lua` block ([Lua blocks
 ---
 name: stop-early
 description: A prologue return skips the prose and the epilog
-promptforge: 0
+runvil: 0
 ---
 
 # Title
@@ -263,7 +263,7 @@ To stop a run on purpose, call `error('message')` in a section's Lua block. The 
 ---
 name: second-fails
 description: The second section fails the run on purpose
-promptforge: 0
+runvil: 0
 ---
 
 # Title
@@ -299,7 +299,7 @@ The H1 pass hands state to the walk through `var`, the table that keeps values f
 ---
 name: seed-the-walk
 description: The H1 pass seeds var for the first section
-promptforge: 0
+runvil: 0
 ---
 
 # Seed the Walk
@@ -327,7 +327,7 @@ A `lua` fence in the H1 body is the usual place for prompt-wide setup. What setu
 ---
 name: greet
 description: Greets the reader through the default model
-promptforge: 0
+runvil: 0
 models:
   writer: {}
 ---
@@ -357,7 +357,7 @@ The H1 body can hold several `lua` blocks separated by prose. They run in file o
 ---
 name: count-blocks
 description: Two blocks in the H1 body each run exactly once
-promptforge: 0
+runvil: 0
 ---
 
 # Count Blocks
@@ -391,7 +391,7 @@ A scalar returned from a block in the H1 body ends the whole run at once with th
 ---
 name: early-exit
 description: An H1 return ends the run before any section
-promptforge: 0
+runvil: 0
 ---
 
 # Early Exit
@@ -423,7 +423,7 @@ A prompt with Lua in its H1 body but no `##` sections ends when the H1 pass ends
 ---
 name: h1-only
 description: An H1 pass with no sections
-promptforge: 0
+runvil: 0
 ---
 
 # Title
@@ -443,7 +443,7 @@ The H1 pass is the prompt's hard gate. When a block in the H1 body raises an ord
 ---
 name: gate
 description: A failed H1 assertion stops the run before the walk
-promptforge: 0
+runvil: 0
 ---
 
 # Gate
@@ -471,16 +471,16 @@ Every part of a run follows the same fixed order. The H1 pass runs first: its se
 
 ## Plugin activation
 
-Prepare begins with Plugin activation. A prompt's `plugins:` key lists the Plugins it needs, each a set of tools the Harness provides, named by a Plugin id such as `promptforge/web`; a plain entry is required, and an entry written with `optional: true` is optional ([Declaring Plugins](12-tools.md#declaring-plugins)):
+Prepare begins with Plugin activation. A prompt's `plugins:` key lists the Plugins it needs, each a set of tools the Harness provides, named by a Plugin id such as `runvil/web`; a plain entry is required, and an entry written with `optional: true` is optional ([Declaring Plugins](12-tools.md#declaring-plugins)):
 
 ````yaml
 plugins:
-  - promptforge/web
+  - runvil/web
 ````
 
 ````yaml
 plugins:
-  - ref: promptforge/web
+  - ref: runvil/web
     optional: true
 ````
 
@@ -490,14 +490,14 @@ A required Plugin must be present in the Harness and must actually start. When o
 
 ````text
 the environment cannot satisfy this prompt:
-- missing required Plugin: promptforge/web
+- missing required Plugin: runvil/web
 ````
 
 When a required Plugin fails to start, the Harness also logs a line naming it. That line is the Harness's own log, not a checkpoint from the prompt.
 
 An optional Plugin is one the prompt can run without. When the Harness lacks it, the Harness logs a line naming it, skips it, and the run continues. When it is present but fails to start, it contributes no tools, the run continues, and the failure shows up only in the Harness's log line.
 
-Declare only Plugins that can activate together. The Plugins themselves declare which others they conflict with, so which pairs conflict depends on the Plugins your Harness provides; the `promptforge/web` Plugin conflicts with none. When two declared Plugins conflict, the run is refused with run error kind `RequirementsUnmet` and the notice line `- conflicting Plugins: {first} and {second} cannot be activated together; declare one or the other`, where `{first}` is the one declared earlier. For a Harness whose `acme/bashkit` and `acme/terminal` Plugins conflict, a prompt that declares `acme/bashkit` first gets this notice:
+Declare only Plugins that can activate together. The Plugins themselves declare which others they conflict with, so which pairs conflict depends on the Plugins your Harness provides; the `runvil/web` Plugin conflicts with none. When two declared Plugins conflict, the run is refused with run error kind `RequirementsUnmet` and the notice line `- conflicting Plugins: {first} and {second} cannot be activated together; declare one or the other`, where `{first}` is the one declared earlier. For a Harness whose `acme/bashkit` and `acme/terminal` Plugins conflict, a prompt that declares `acme/bashkit` first gets this notice:
 
 ````text
 the environment cannot satisfy this prompt:
@@ -508,21 +508,21 @@ Conflict detection works both ways and applies to the whole pair. The conflict i
 
 ## Filling tool slots and model roles
 
-After activation, prepare fills the prompt's tool slots and model roles with what the Harness has, and checks each one. A `tools:` entry is a tool slot: an alias the prompt uses, mapped to a tool path such as `promptforge/web/fetch`, whose first two segments name the Plugin that contributes it ([Tool slots and Tool objects](12-tools.md#tool-slots-and-tool-objects)). A `models:` entry is a model role, and its `keywords` and `min_context` state what the role needs from its model ([Keywords and the thinking switch](10-models.md#keywords-and-the-thinking-switch)). Once filled, a slot or role is bound.
+After activation, prepare fills the prompt's tool slots and model roles with what the Harness has, and checks each one. A `tools:` entry is a tool slot: an alias the prompt uses, mapped to a tool path such as `runvil/web/fetch`, whose first two segments name the Plugin that contributes it ([Tool slots and Tool objects](12-tools.md#tool-slots-and-tool-objects)). A `models:` entry is a model role, and its `keywords` and `min_context` state what the role needs from its model ([Keywords and the thinking switch](10-models.md#keywords-and-the-thinking-switch)). Once filled, a slot or role is bound.
 
 The bindings come only from the frontmatter, never from Lua. They are made once, before the run starts, and stay fixed for the whole run. Every section, the H1 pass included, sees the same bound tools and models, and Lua only chooses among them.
 
 ### Tool slots
 
-A tool slot whose tool path names a Plugin that contributed no tools refuses the run before it starts, with run error kind `RequirementsUnmet`. The notice line `- missing required Plugin: {id}` names the Plugin part of the tool path, so the slot `fetch: promptforge/web/fetch` names `promptforge/web`. Here the slot's Plugin is not declared at all:
+A tool slot whose tool path names a Plugin that contributed no tools refuses the run before it starts, with run error kind `RequirementsUnmet`. The notice line `- missing required Plugin: {id}` names the Plugin part of the tool path, so the slot `fetch: runvil/web/fetch` names `runvil/web`. Here the slot's Plugin is not declared at all:
 
 ````markdown
 ---
 name: orphan-slot
 description: Binds a tool whose Plugin is not declared
-promptforge: 0
+runvil: 0
 tools:
-  fetch: promptforge/web/fetch
+  fetch: runvil/web/fetch
 ---
 
 # Orphan Slot
@@ -538,7 +538,7 @@ Its outcome is failed, with run error kind `RequirementsUnmet` and exactly this 
 
 ````text
 the environment cannot satisfy this prompt:
-- missing required Plugin: promptforge/web
+- missing required Plugin: runvil/web
 ````
 
 When several slots share one missing Plugin, the notice names it only once. Slots are checked in sorted alias order, so each missing Plugin appears where its first slot falls in that order.
@@ -564,7 +564,7 @@ Prepare does not stop at the first failure. Every unmet requirement across all r
 ---
 name: deep-analysis
 description: Needs a large context and a thinking model
-promptforge: 0
+runvil: 0
 models:
   analyst:
     keywords: [frontier, thinking]
@@ -603,7 +603,7 @@ A prompt that declares no Plugins, tool slots, or model roles, and never calls a
 ---
 name: no-requirements
 description: Declares nothing and calls no model
-promptforge: 0
+runvil: 0
 ---
 
 # Test prompt
@@ -633,13 +633,13 @@ the environment cannot satisfy this prompt:
 - role '{label}': requires '{keyword}'; the current model's thinking capability is {capability}
 ````
 
-One refusal names every gap at once. The gaps found during Plugin activation and the gaps found while filling tool slots and model roles merge into one notice, and a Plugin that both steps report missing is listed only once. With no Plugins in the Harness, the `fetch: promptforge/web/fetch` slot from [Filling tool slots and model roles](#filling-tool-slots-and-model-roles) gives a one-line notice, even though both steps find `promptforge/web` missing.
+One refusal names every gap at once. The gaps found during Plugin activation and the gaps found while filling tool slots and model roles merge into one notice, and a Plugin that both steps report missing is listed only once. With no Plugins in the Harness, the `fetch: runvil/web/fetch` slot from [Filling tool slots and model roles](#filling-tool-slots-and-model-roles) gives a one-line notice, even though both steps find `runvil/web` missing.
 
 A prompt runs normally when every required Plugin is present, no two declared Plugins conflict, and every model role's requirements are met. The refusal happens only when at least one of those fails. The `analyst` prompt above runs to `done` on a 200000-token model whose thinking capability is `Always`.
 
 The run error kind `RequirementsUnmet` covers both ways a prompt's preconditions can fail: a requirement the Harness cannot satisfy, found at prepare, and an uncaught Lua error in the H1 pass, the [hard gate](#the-h1-pass). The message tells them apart: a refusal at prepare is the requirements notice, and a failed gate is the Lua error text. [How a failed run is classified](16-limits-and-errors.md#how-a-failed-run-is-classified) lists the other run error kinds.
 
-A prompt can also fail to start for reasons outside the notice: its `promptforge` version is missing or unsupported ([The promptforge version](02-file-structure.md#the-promptforge-version)), or its store cannot be set up ([Store errors](09-the-store.md#store-errors)). Such a prompt runs none of its sections and reports nothing; that failure is the run's whole outcome. A file without the `promptforge:` key parses but never runs.
+A prompt can also fail to start for reasons outside the notice: its `runvil` version is missing or unsupported ([The runvil version](02-file-structure.md#the-runvil-version)), or its store cannot be set up ([Store errors](09-the-store.md#store-errors)). Such a prompt runs none of its sections and reports nothing; that failure is the run's whole outcome. A file without the `runvil:` key parses but never runs.
 
 ## Waiting and reproducibility
 

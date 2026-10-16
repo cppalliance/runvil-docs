@@ -10,7 +10,7 @@ Every task runs beside the [chain](04-how-a-prompt-runs.md#the-section-walk) tha
 ---
 name: two-tasks
 description: Runs two sections as tasks and joins their results
-promptforge: 0
+runvil: 0
 ---
 
 # Two tasks
@@ -90,7 +90,7 @@ The `target` of `tasks.spawn` is a heading reference such as `'## Child'` or `'#
 ---
 name: pros-and-cons
 description: Drafts the pros and the cons of a plan at the same time
-promptforge: 0
+runvil: 0
 ---
 
 # Pros and cons
@@ -142,7 +142,7 @@ A task that raises an error fails as a task, not as a run: its owner keeps runni
 ---
 name: seeded-task
 description: Starts a task with its own argument string, item, and index
-promptforge: 0
+runvil: 0
 ---
 
 # Seeded task
@@ -221,7 +221,7 @@ Because a handle is plain data, it survives a trip through [`var`](05-lua-enviro
 ---
 name: early-start
 description: Starts a task in one section and collects it in a later one
-promptforge: 0
+runvil: 0
 ---
 
 # Early start
@@ -307,7 +307,7 @@ The other members of the set keep running after `tasks.join_any` returns, and th
 ---
 name: checked-join
 description: Joins two tasks and reports how each one ended
-promptforge: 0
+runvil: 0
 ---
 
 # Checked join
@@ -442,7 +442,7 @@ Tasks generalize beyond `fanout`: spawn a set of worker tasks, join them all, an
 ---
 name: freeform
 description: Runs one task per topic and merges their files by index
-promptforge: 0
+runvil: 0
 ---
 
 # Freeform
@@ -502,7 +502,7 @@ Besides the waits, the `tasks` namespace checks on tasks and controls them witho
 ---
 name: progress-check
 description: Reads a task's status while the task is working
-promptforge: 0
+runvil: 0
 models:
   writer: {}
 ---
@@ -627,7 +627,7 @@ An argument that is not a positive whole number raises an error value of kind `l
 ---
 name: race
 description: Returns whichever of two answers finishes first
-promptforge: 0
+runvil: 0
 models:
   writer: {}
 ---
@@ -695,7 +695,7 @@ Tasks belong to the chain, not the section. A task spawned in one section stays 
 ---
 name: leaky-walk
 description: Leaves a task running past the section that spawned it
-promptforge: 0
+runvil: 0
 ---
 
 # Leaky walk
@@ -737,7 +737,7 @@ At the main walk, `tasks_live` is the run's failure. Inside a called chain it is
 ---
 name: leak-check
 description: Catches a called section that leaves a task running
-promptforge: 0
+runvil: 0
 ---
 
 # Leak check
@@ -859,7 +859,7 @@ A section lets its model start tasks by calling `tools.allow_tasks`. This prompt
 ---
 name: delegator
 description: Lets the model hand research to a background task
-promptforge: 0
+runvil: 0
 models:
   writer: {}
 ---

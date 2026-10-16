@@ -32,9 +32,9 @@ active_profile = "work"
 
 The selection survives restarts. An absent state file is the persisted form of "no profile": the gateway boots, serves every remote model, and loads no local or speech models. "No profile" is a selectable state, not an error.
 
-At startup the profile is chosen by precedence: the `--profile` command-line flag, then the `PROMPTFORGE_PROFILE` environment variable, then the sibling state file. The flag and the variable are ephemeral; they never write the state file. With none set, the gateway boots with no profile.
+At startup the profile is chosen by precedence: the `--profile` command-line flag, then the `RUNVIL_PROFILE` environment variable, then the sibling state file. The flag and the variable are ephemeral; they never write the state file. With none set, the gateway boots with no profile.
 
-A state file naming a profile the config no longer defines does not stop the boot. The gateway logs a warning naming the stale value and the defined profiles, then boots with no profile. The stale name stays in the state file until you select something else, and the configuration UI shows it as a stale selection. A `--profile` flag or `PROMPTFORGE_PROFILE` value naming an undefined profile is still a startup error, because an operator typed it for this run.
+A state file naming a profile the config no longer defines does not stop the boot. The gateway logs a warning naming the stale value and the defined profiles, then boots with no profile. The stale name stays in the state file until you select something else, and the configuration UI shows it as a stale selection. A `--profile` flag or `RUNVIL_PROFILE` value naming an undefined profile is still a startup error, because an operator typed it for this run.
 
 ## The local model set is fixed at boot
 

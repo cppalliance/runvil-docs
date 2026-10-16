@@ -10,7 +10,7 @@ This prompt asks the model for an explanation and returns its reply:
 ---
 name: explainer
 description: Explains what a compiler does
-promptforge: 0
+runvil: 0
 models:
   writer: {}
 ---
@@ -261,7 +261,7 @@ The full form of the call is `models.loop(messages, compactor?)`: the message li
 ---
 name: second_opinion
 description: Drafts a text, then has a second role review it
-promptforge: 0
+runvil: 0
 models:
   writer: {}
   reviewer: {}
@@ -547,7 +547,7 @@ The round cap is the most rounds a single `models.loop` call may make. `max_tool
 ````yaml
 name: researcher
 description: Answers a question with a small round cap
-promptforge: 0
+runvil: 0
 max_tool_iterations: 5
 ````
 

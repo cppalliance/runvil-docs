@@ -12,7 +12,7 @@ Here a section skips the one after it:
 ---
 name: triage
 description: Jumps past a section it does not need
-promptforge: 0
+runvil: 0
 ---
 
 # Triage
@@ -52,7 +52,7 @@ Here a section calls another one and uses its result:
 ---
 name: research
 description: Runs a helper section and uses its result
-promptforge: 0
+runvil: 0
 ---
 
 # Research
@@ -138,7 +138,7 @@ The run succeeds, and its result starts with `caught: ` and contains `not found`
 ---
 name: skip-ahead
 description: Jumps over one section and carries var along
-promptforge: 0
+runvil: 0
 ---
 
 # Skip Ahead
@@ -186,7 +186,7 @@ The target can come before or after the jumping section, and it runs whatever it
 ---
 name: redraft
 description: Loops back to an earlier section three times
-promptforge: 0
+runvil: 0
 ---
 
 # Redraft
@@ -251,7 +251,7 @@ Child sections never run by plain fall-through. A walk moves only across sibling
 ---
 name: descend
 description: Jumps into child sections and comes back out
-promptforge: 0
+runvil: 0
 ---
 
 # Descend
@@ -337,7 +337,7 @@ A running child section has a visible set of its own: its siblings and its own c
 ---
 name: child-reach
 description: A child section calls its child and jumps to its sibling
-promptforge: 0
+runvil: 0
 ---
 
 # Child Reach
@@ -397,7 +397,7 @@ A called chain runs like a walk. It starts at the target and falls through the t
 ---
 name: fall-through-call
 description: A called chain falls through to the next sibling
-promptforge: 0
+runvil: 0
 ---
 
 # Fall Through Call
@@ -451,7 +451,7 @@ Put the targets of `call` as siblings after the section whose `return` ends the 
 ---
 name: call-child
 description: Calls child sections and uses their result
-promptforge: 0
+runvil: 0
 ---
 
 # Call Child
@@ -506,7 +506,7 @@ A called section can make its own suspending calls, such as [`models.infer`](10-
 ---
 name: call-input
 description: Hands a called section its own input
-promptforge: 0
+runvil: 0
 args:
   query:
     type: string
@@ -560,7 +560,7 @@ input must be a valid UTF-8 string
 ---
 name: var-snapshot
 description: A called section reads the caller's var but cannot change it
-promptforge: 0
+runvil: 0
 ---
 
 # Var Snapshot
@@ -611,7 +611,7 @@ A section cannot target itself, so recursion goes through two sections that targ
 ---
 name: ping-pong
 description: Two sections that call each other until the cap
-promptforge: 0
+runvil: 0
 ---
 
 # Ping Pong
@@ -663,7 +663,7 @@ The [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) runs the H1 body's Lua blocks
 ---
 name: h1-jump
 description: Starts the walk at a later section
-promptforge: 0
+runvil: 0
 ---
 
 # H1 Jump
@@ -697,7 +697,7 @@ jumped
 ---
 name: h1-call
 description: Computes an answer in the H1 pass and returns it later
-promptforge: 0
+runvil: 0
 ---
 
 # H1 Call
@@ -750,7 +750,7 @@ Left uncaught, a heading error from `call`, `fanout`, or `list_from_section` is 
 ---
 name: chain-ids
 description: Shows sys.id in the walk and in a called chain
-promptforge: 0
+runvil: 0
 ---
 
 # Chain Ids

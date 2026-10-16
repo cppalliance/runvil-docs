@@ -12,7 +12,7 @@ Here is the smallest prompt that runs:
 ---
 name: greeter
 description: Returns a greeting
-promptforge: 0
+runvil: 0
 ---
 
 # Greeter
@@ -30,7 +30,7 @@ Its run result:
 hello
 ````
 
-The frontmatter keys `name` and `description` are all a file needs to parse, and `promptforge: 0` is what lets it run, as [The promptforge version](#the-promptforge-version) explains, so every example in this book carries all three.
+The frontmatter keys `name` and `description` are all a file needs to parse, and `runvil: 0` is what lets it run, as [The runvil version](#the-runvil-version) explains, so every example in this book carries all three.
 
 This prompt uses every part in order, with a line of prose in the H1 body and a section that holds both prose and a `lua` fence:
 
@@ -38,7 +38,7 @@ This prompt uses every part in order, with a line of prose in the H1 body and a 
 ---
 name: layout
 description: Shows every part of a prompt file in order
-promptforge: 0
+runvil: 0
 ---
 
 # Layout
@@ -76,13 +76,13 @@ H2 headings placed after the H1 divide the body into named sections. Only headin
 
 Every prompt file opens with frontmatter: a `---` line as the very first line of the file, the YAML keys, then a closing `---` line, with the Markdown body after it. Each delimiter line is compared after trimming surrounding whitespace.
 
-The usual header holds three keys, `name`, `description`, and `promptforge: 0`, and a header with just these three parses and runs:
+The usual header holds three keys, `name`, `description`, and `runvil: 0`, and a header with just these three parses and runs:
 
 ````markdown
 ---
 name: header-only
 description: Shows the usual three-key header
-promptforge: 0
+runvil: 0
 ---
 
 # Header Only
@@ -94,7 +94,7 @@ Further keys sit alongside the three when a prompt needs them. A prompt that cal
 ---
 name: live-h1
 description: d
-promptforge: 0
+runvil: 0
 models:
   writer: {}
 ---
@@ -118,7 +118,7 @@ Every prompt has two required frontmatter strings: `name:` identifies the prompt
 ````yaml
 name: greet
 description: Greet the named input using a Lua-computed value
-promptforge: 0
+runvil: 0
 ````
 
 The `name:` string need not match the file name. A file saved as `research-person.md` can declare `name: research_person`, and one saved as `echo.md` can declare `name: echo`. Common values are lowercase identifiers such as `echo`, `greet`, `analyst_example`, and `vfs-end-to-end`. Every parse error found after the frontmatter reports this name, so you can tell which prompt failed.
@@ -132,15 +132,15 @@ missing field `name`
 missing field `description`
 ````
 
-## The promptforge version
+## The runvil version
 
-The `promptforge:` key declares which major version of the Engine the file targets, written `promptforge: 0`. Its value is a non-negative integer, and its presence marks the file as a PromptForge prompt. `0` is the only major this build runs.
+The `runvil:` key declares which major version of the Engine the file targets, written `runvil: 0`. Its value is a non-negative integer, and its presence marks the file as a Runvil prompt. `0` is the only major this build runs.
 
 ````markdown
 ---
 name: version-zero
 description: Runs because it declares major 0
-promptforge: 0
+runvil: 0
 ---
 
 # Version Zero
@@ -158,18 +158,18 @@ Its run result:
 ran
 ````
 
-Parsing accepts a file with or without the key, but the version is checked when the run starts, before anything executes. A file that declares `promptforge: 0` runs. A file that declares any other major still parses, but its run fails on its first step with run error kind `Version`, where `{N}` is the declared major:
+Parsing accepts a file with or without the key, but the version is checked when the run starts, before anything executes. A file that declares `runvil: 0` runs. A file that declares any other major still parses, but its run fails on its first step with run error kind `Version`, where `{N}` is the declared major:
 
 ````text
-unsupported promptforge version: {N} (this build supports major 0)
+unsupported runvil version: {N} (this build supports major 0)
 ````
 
 That failure comes before any section executes, so nothing runs and nothing is reported, and the prompt's own `return` never runs. It is not retryable, and the prompt never falls back to running as major 0. Run error kinds and retrying are explained in [How a failed run is classified](16-limits-and-errors.md#how-a-failed-run-is-classified).
 
-Every prompt needs the `promptforge:` key. A file whose frontmatter holds only `name` and `description` still parses, even with a plain prose section, but its run fails on the first step, before anything executes, with parse error kind `Structure` and this message:
+Every prompt needs the `runvil:` key. A file whose frontmatter holds only `name` and `description` still parses, even with a plain prose section, but its run fails on the first step, before anything executes, with parse error kind `Structure` and this message:
 
 ````text
-not a promptforge prompt: no promptforge version
+not a runvil prompt: no runvil version
 ````
 
 The run error kind for this failure is `Parse`, and the error carries the prompt's frontmatter `name`.
@@ -189,7 +189,7 @@ output:
   description: The output report
 ````
 
-Both keys are optional and stay out of prompts that do not work on files, so a frontmatter with only `name`, `description`, and `promptforge: 0` declares neither. The declarations stay with the parsed prompt for the Harness to read: `input:` with `path: paper.md` and `description: The input paper` reads back as exactly that path and description. Together they tell the Harness which store file to put in place before the run and which one to collect after it.
+Both keys are optional and stay out of prompts that do not work on files, so a frontmatter with only `name`, `description`, and `runvil: 0` declares neither. The declarations stay with the parsed prompt for the Harness to read: `input:` with `path: paper.md` and `description: The input paper` reads back as exactly that path and description. Together they tell the Harness which store file to put in place before the run and which one to collect after it.
 
 The run itself never acts on either declaration, so the prompt writes its declared output file itself:
 
@@ -197,7 +197,7 @@ The run itself never acts on either declaration, so the prompt writes its declar
 ---
 name: copy-paper
 description: Copies the input paper into the output report
-promptforge: 0
+runvil: 0
 input:
   path: paper.md
   description: The input paper
@@ -232,7 +232,7 @@ The frontmatter recognizes exactly ten top-level keys. Only `name` and `descript
 |---|---|---|---|
 | `name` | required | the parse fails | [Name and description](#name-and-description) |
 | `description` | required | the parse fails | [Name and description](#name-and-description) |
-| `promptforge` | optional, needed to run | absent, and the run refuses | [The promptforge version](#the-promptforge-version) |
+| `runvil` | optional, needed to run | absent, and the run refuses | [The runvil version](#the-runvil-version) |
 | `max_tool_iterations` | optional | the default round cap | [The round cap](11-conversations.md#the-round-cap) |
 | `input` | optional | absent | [Input and output files](#input-and-output-files) |
 | `output` | optional | absent | [Input and output files](#input-and-output-files) |
@@ -274,10 +274,10 @@ Three of the contract keys are maps from a name to a declaration, and all three 
 
 ````yaml
 plugins:
-  - promptforge/web
+  - runvil/web
 tools:
-  search: promptforge/web/search
-  fetch: promptforge/web/fetch
+  search: runvil/web/search
+  fetch: runvil/web/fetch
 models:
   writer: {}
   analyst:
@@ -290,7 +290,7 @@ args:
 
 The names here are `search` and `fetch`, `writer` and `analyst`, and `use_mcp`. The values on the right belong to their own chapters:
 
-- Under `tools:`, each key is a tool alias and each value is a tool path such as `promptforge/web/search`; the model calls a tool by its alias, never by its tool path, as [Tool slots and Tool objects](12-tools.md#tool-slots-and-tool-objects) explains.
+- Under `tools:`, each key is a tool alias and each value is a tool path such as `runvil/web/search`; the model calls a tool by its alias, never by its tool path, as [Tool slots and Tool objects](12-tools.md#tool-slots-and-tool-objects) explains.
 - Under `models:`, each key is a model role label with its role declaration, covered in [Declaring roles](10-models.md#declaring-roles).
 - Under `args:`, each key is an arg name with its declaration, covered in [Arg declarations](06-arguments.md#arg-declarations).
 
@@ -315,7 +315,7 @@ models.default('writer')
 tools.add('search')
 ````
 
-An alias is a plain name from the grammar, and a tool path such as `promptforge/web/search` is the value the slot holds. When a call gets an alias outside the grammar (empty, longer than 64 characters, not starting with a letter, or holding any other character), it raises a Lua error at the call. The message quotes the alias in double quotes and states the pattern:
+An alias is a plain name from the grammar, and a tool path such as `runvil/web/search` is the value the slot holds. When a call gets an alias outside the grammar (empty, longer than 64 characters, not starting with a letter, or holding any other character), it raises a Lua error at the call. The message quotes the alias in double quotes and states the pattern:
 
 ````text
 invalid alias "{alias}": expected [A-Za-z][A-Za-z0-9_-]{0,63}
@@ -337,7 +337,7 @@ These are exactly the globals of a section VM before any Plugin adds its own, to
 {kind} `{key}` in `{map}` is reserved ({category}): tool aliases and model role labels install as section VM globals, so none may take a reserved name
 ````
 
-Here `{kind}` is `tool alias` or `model role label`, `{map}` is `tools` or `models`, and `{category}` is `an Engine global`, `a Lua standard-library global`, or `a Lua keyword`. So `store: promptforge/web/fetch` under `tools:` fails with ``tool alias `store` in `tools` is reserved (an Engine global): ...``. Arg names are not checked against this list, because they name fields of `argv` rather than globals: `args:` may declare `prose` or `store`.
+Here `{kind}` is `tool alias` or `model role label`, `{map}` is `tools` or `models`, and `{category}` is `an Engine global`, `a Lua standard-library global`, or `a Lua keyword`. So `store: runvil/web/fetch` under `tools:` fails with ``tool alias `store` in `tools` is reserved (an Engine global): ...``. Arg names are not checked against this list, because they name fields of `argv` rather than globals: `args:` may declare `prose` or `store`.
 
 One name also cannot be both a tool alias and a model role label, because both would install the same global. Such a pair fails the parse with parse error kind `Frontmatter` and this message, which names the first shared name in sorted order. Unlike the errors above, it reports no line or column:
 
@@ -345,7 +345,7 @@ One name also cannot be both a tool alias and a model role label, because both w
 invalid frontmatter: `{name}` is both a tool alias in `tools` and a model role label in `models`; each installs as a section VM global of its own name, so the two must differ
 ````
 
-A declared Plugin can define globals of its own, such as the `input` table of `promptforge/user-input`. Those globals are known only once the Plugin's code runs, so an alias or label with the same name fails the run when its first section VM is set up, before the run does anything, as [Letting the model ask](05-lua-environment.md#letting-the-model-ask) shows.
+A declared Plugin can define globals of its own, such as the `input` table of `runvil/user-input`. Those globals are known only once the Plugin's code runs, so an alias or label with the same name fails the run when its first section VM is set up, before the run does anything, as [Letting the model ask](05-lua-environment.md#letting-the-model-ask) shows.
 
 ## The H1 title and its content
 
@@ -357,7 +357,7 @@ Lua in the H1 body runs under the title, so `sys.section_name` there reads it:
 ---
 name: title-demo
 description: Returns its own title
-promptforge: 0
+runvil: 0
 ---
 
 # Title Demo
@@ -379,7 +379,7 @@ The H1 body is everything between the H1 heading and the first section heading, 
 ---
 name: decorated
 description: Wraps a word in angle brackets
-promptforge: 0
+runvil: 0
 ---
 
 # Decorated
@@ -411,7 +411,7 @@ Free notes, prose or fenced code blocks, can sit between the frontmatter and the
 ---
 name: with-notes
 description: Keeps editing notes above the title
-promptforge: 0
+runvil: 0
 ---
 
 Editing notes for this prompt live here and change nothing.
@@ -443,7 +443,7 @@ A prompt needs no minimum number of sections. A prompt with an H1 and no `##` se
 ---
 name: only-a-title
 description: A complete prompt with no sections
-promptforge: 0
+runvil: 0
 ---
 
 # Only a title
@@ -461,7 +461,7 @@ A section's content ends at the next heading of any level, so a parent's own pro
 ---
 name: nesting
 description: Shows a section with a child section
-promptforge: 0
+runvil: 0
 ---
 
 # Nesting
@@ -552,7 +552,7 @@ This prompt reads a list section by its heading reference from Lua in the H1 bod
 ---
 name: items
 description: Reads a list section by its heading reference
-promptforge: 0
+runvil: 0
 ---
 
 # Items
