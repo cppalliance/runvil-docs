@@ -77,6 +77,13 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `io` | not loaded | Never loaded; no file or stream I/O | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `ipairs` | function | Walks an array table in order | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `item` | global | The member a fanout arm runs for, or a task's `item` seed | [What an arm sees](14-fanout.md#what-an-arm-sees) |
+| `json` | global | Table of JSON helpers: `encode`, `encode_lines`, `decode`, `decode_lines`, `null`, `array` | [Encoding and decoding JSON with `json`](05-lua-environment.md#encoding-and-decoding-json-with-json) |
+| `json.array` | function | Marks a table as a list, or returns a new empty one, so an empty list encodes as `[]` | [Keeping empty lists with `json.array`](05-lua-environment.md#keeping-empty-lists-with-jsonarray) |
+| `json.decode` | function | Returns the Lua value of one JSON document; lists come back marked, nulls as `json.null` | [Decoding JSON text with `json.decode`](05-lua-environment.md#decoding-json-text-with-jsondecode) |
+| `json.decode_lines` | function | Returns a marked list of every JSON value in a text, such as a JSON Lines file | [JSON Lines with `json.encode_lines` and `json.decode_lines`](05-lua-environment.md#json-lines-with-jsonencode_lines-and-jsondecode_lines) |
+| `json.encode` | function | Returns compact one-line JSON with sorted keys; `{ debug = true }` never fails on the value | [Encoding values with `json.encode`](05-lua-environment.md#encoding-values-with-jsonencode) |
+| `json.encode_lines` | function | Encodes each list item as one line, each followed by a newline | [JSON Lines with `json.encode_lines` and `json.decode_lines`](05-lua-environment.md#json-lines-with-jsonencode_lines-and-jsondecode_lines) |
+| `json.null` | field | Truthy userdata standing for JSON null; test with `v == json.null` | [Null values and `json.null`](05-lua-environment.md#null-values-and-jsonnull) |
 | `jump` | function | Ends the block and moves the walk to another section | [Jumping to a section](08-jump-and-call.md#jumping-to-a-section) |
 | `kind = "cancelled"` | error kind | Cancelled task delivered by a wait, or a stopped run or call | [Cancelling and listing tasks](15-tasks.md#cancelling-and-listing-tasks) |
 | `kind = "context_exhausted"` | error kind | Request overflows the context window and the compactor does not compact | [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion) |
@@ -256,6 +263,8 @@ Each row gives a limit, its default, and who can change it, and the Plugin tools
 | Limit | Default | Set by | Taught in |
 |---|---|---|---|
 | `concurrency` | 8 tasks at once | Harness | [Run limits and their defaults](16-limits-and-errors.md#run-limits-and-their-defaults) |
+| `json` nesting limit | 127 levels of nested tables, arrays, and objects, on encode and decode | fixed | [Size and nesting limits](05-lua-environment.md#size-and-nesting-limits) |
+| `json.decode` input cap | 8,388,608 bytes per `json.decode` or `json.decode_lines` call | fixed | [Size and nesting limits](05-lua-environment.md#size-and-nesting-limits) |
 | log byte quota | 256 bytes per allowed `log` event, 262,144 bytes by default | Harness | [Logging and lifecycle reports](05-lua-environment.md#logging-and-lifecycle-reports) |
 | log message limit | 256 Unicode characters | fixed | [Logging and lifecycle reports](05-lua-environment.md#logging-and-lifecycle-reports) |
 | `lua_log_events` | 1024 `log` events per section VM | Harness | [Lua memory and log quotas](16-limits-and-errors.md#lua-memory-and-log-quotas) |

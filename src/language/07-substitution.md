@@ -846,7 +846,7 @@ Any placeholder whose first segment is not one of the built-in sources `args`, `
 
 ### Which values a bare global can hold
 
-A bare global that holds data, meaning a string, number, boolean, or table, is converted to its JSON form when a placeholder names it, and a global holding a function, userdata, or coroutine thread is refused. A `local` variable is not a global, so no placeholder reaches it, and a name held only in a `local` reads as unset. A global that holds nil counts as unset rather than as a value. The five built-in roots `args`, `argv`, `item`, `var`, and `sys` are matched before any global lookup and always win over a Lua global of the same name, so a global with one of those names is never reached by bare name.
+A bare global that holds data, meaning a string, number, boolean, or table, is converted to its JSON form when a placeholder names it, and a global holding a function, userdata, or coroutine thread is refused. The one userdata that converts is [`json.null`](05-lua-environment.md#encoding-and-decoding-json-with-json), which becomes JSON null, so after `nothing = json.null` the placeholder `{{ nothing }}` fails with substitution kind `NullValue` and the message `missing {{ nothing }}`, the same failure as a `var` path that lands on JSON null. A `local` variable is not a global, so no placeholder reaches it, and a name held only in a `local` reads as unset. A global that holds nil counts as unset rather than as a value. The five built-in roots `args`, `argv`, `item`, `var`, and `sys` are matched before any global lookup and always win over a Lua global of the same name, so a global with one of those names is never reached by bare name.
 
 ### When the global is set
 
@@ -897,7 +897,7 @@ A bare name with no global of its own resolves through your `_G` metatable (see 
 
 A bare name whose global reads as nil at the `prose` read, whether it was never assigned or was assigned nil, fails with substitution kind `UnknownNamespace`, and the message names the global, so the prose `{{ ghost }} here.` read by `return prose` fails with a message containing `unknown namespace or global 'ghost'`.
 
-A bare name whose global cannot become JSON data fails with substitution kind `Serialize` and the message `global '{name}' in {{ {path} }} is not JSON data`. That covers a global holding a function, userdata, or coroutine thread, and a table that contains one of those or refers to itself:
+A bare name whose global cannot become JSON data fails with substitution kind `Serialize` and the message `global '{name}' in {{ {path} }} is not JSON data`. That covers a global holding a function, userdata other than `json.null`, or coroutine thread, and a table that contains one of those or refers to itself:
 
 ````markdown
 ---
@@ -923,7 +923,7 @@ return prose
 
 The run fails with an error containing `global 'f' in {{ f }} is not JSON data`. The message does not name the Lua type, so when you see it, check what the global holds. The error text holds only the message, the substitution kind, and the byte offset, in the form `{message} [Serialize at byte {offset}]`.
 
-Values built with `messages.new()`, and each [message record](11-conversations.md#message-records) read from one, are userdata, so a bare name whose global holds one fails under the same rule. With `msgs = messages.new():user('u')` and `record = msgs[1]`, both `{{ msgs }}` and `{{ record }}` fail with substitution kind `Serialize`. Under a strict `_G` metatable whose `__index` raises an error for unknown names, a bare name with no global fails at the `prose` read with substitution kind `Serialize` and the `is not JSON data` message, not `UnknownNamespace`, because the raised error comes back as a failed lookup.
+Values built with `messages.new()`, and each [message record](11-conversations.md#message-records) read from one, are userdata, so a bare name whose global holds one fails under the same rule. With `msgs = messages.new():user('u')` and `record = msgs[1]`, both `{{ msgs }}` and `{{ record }}` fail with substitution kind `Serialize`. A global holding `json.null` fails with substitution kind `NullValue` instead, as [Which values a bare global can hold](#which-values-a-bare-global-can-hold) describes. Under a strict `_G` metatable whose `__index` raises an error for unknown names, a bare name with no global fails at the `prose` read with substitution kind `Serialize` and the `is not JSON data` message, not `UnknownNamespace`, because the raised error comes back as a failed lookup.
 
 Both bare-global failures, substitution kinds `UnknownNamespace` and `Serialize`, are raised at the `prose` read inside the section's Lua as ordinary Lua errors that [`pcall`](05-lua-environment.md#raising-and-catching-errors) can catch. Uncaught, they fail the run with run error kind `Lua`, as the prose `{{ ghost }} here.` does.
 
@@ -974,8 +974,12 @@ A placeholder that resolves renders its value by type:
 | Boolean | `true` or `false` | `true` renders `true` |
 | Table with keys | Compact JSON, keys sorted | `{ a = 1 }` renders `{"a":1}` |
 | Array | Compact JSON | `{ 1, 2, 3 }` renders `[1,2,3]` |
+| Empty list | `[]` | `json.array()` renders `[]` |
+| Empty table | `{}` | `{}` renders `{}` |
 
 Scalars render as strings, and tables and arrays render as compact JSON: JSON text with no spaces and no pretty printing, with keys in sorted order whatever order the author or the argument string wrote them in. So the argument string `{"query":"papers","n":2}` renders through `{{ argv }}` as `{"n":2,"query":"papers"}`. A placeholder that names a table, an array, or a table-valued global without indexing any further renders the whole value this way, so `{{ var.row }}` renders `{"a":1}` when `var.row = { a = 1 }`, `{{ var.arr }}` renders `[1,2,3]` when `var.arr = { 1, 2, 3 }`, `{{ row }}` renders `{"a":1}` for the global `row = { a = 1 }`, and `raw {{ data }}` renders `raw {"score":9}` for the global `data = { score = 9 }`.
+
+An empty list and an empty table look the same in Lua, so the list marker that [`json.array`](05-lua-environment.md#encoding-and-decoding-json-with-json) adds tells them apart. After `var.items = json.array()`, `{{ var.items }}` renders `[]`, and after `var.items = {}` it renders `{}`. An empty list decoded with `json.decode` carries the same marker, so it renders `[]` too.
 
 An integer renders as its plain digits wherever it comes from, so after `var.n = 2` the rendered prose reads `Second fence 2.`, and the globals `answer = 42` and `score = 9` render `42` and `9`. A number with a fractional part renders in decimal form, and `{{ item }}` uses the same rendering, so an item `1.5` renders `1.5`.
 

@@ -575,6 +575,8 @@ The `args` global always holds the exact argument string, never parsed as JSON a
 assert(args == '  spaced { not json ', 'args is the exact passed string')
 ````
 
+To parse the argument string yourself, call [`json.decode`](05-lua-environment.md#encoding-and-decoding-json-with-json) on it, as in `json.decode(args)`, inside [`pcall`](05-lua-environment.md#raising-and-catching-errors) when it may not be valid JSON, because malformed text raises an error. A JSON `null` decodes to `json.null`, not nil.
+
 ### `args` is an ordinary Lua string
 
 `args` is an ordinary Lua string, so you can return it, join it with other text using `..`, pass it to a function, and keep it in a [`var`](05-lua-environment.md#keeping-state-in-var) field. The echo prompt above returns it, and this prompt does the other three:
@@ -1173,11 +1175,13 @@ In the H1 body, you clear the arguments with `argv = nil`, after which `argv == 
 
 ### Keeping `argv` as JSON data
 
-In the H1 body, keep `argv` as [JSON data](05-lua-environment.md#keeping-state-in-var) or nil, meaning strings, numbers, booleans, and tables of them. The assignment itself accepts any value, so `argv = function() end` raises no error at that line, but a value that is not JSON data, such as a function, userdata, or thread, fails the run once the H1 body finishes, with this message naming its Lua type in place of `{type}`:
+In the H1 body, keep `argv` as [JSON data](05-lua-environment.md#keeping-state-in-var) or nil, meaning strings, numbers, booleans, and tables of them. The assignment itself accepts any value, so `argv = function() end` raises no error at that line, but a value that is not JSON data, such as a function, userdata other than `json.null`, or thread, fails the run once the H1 body finishes, with this message naming its Lua type in place of `{type}`:
 
 ````text
 argv must be JSON data, got {type}
 ````
+
+The one userdata the freeze accepts is `json.null`, which freezes as JSON null, and later sections read it as nil like any other JSON `null`. So after an H1 body runs `argv = { a = json.null }`, a later section reads `argv.a` as nil.
 
 ### Your own `_G` metatable in the H1 pass
 
@@ -1258,9 +1262,9 @@ Writable `argv` is the H1 body's one privilege. Every other section gets `argv` 
 
 ### Non-JSON values at the freeze
 
-Leave `argv` as JSON data, meaning strings, numbers, booleans, and tables of them, or as nil, when the H1 body finishes, because a function, userdata, or thread is refused at the freeze. The run fails with a `Lua` error when the H1 pass leaves `argv` holding data that is not JSON.
+Leave `argv` as JSON data, meaning strings, numbers, booleans, and tables of them, or as nil, when the H1 body finishes, because a function, userdata other than `json.null`, or thread is refused at the freeze. The run fails with a `Lua` error when the H1 pass leaves `argv` holding data that is not JSON.
 
-Leaving `argv` as a function, userdata, or thread when the H1 pass ends, as after `argv = function() end`, fails the freeze read-back with a run error of [run error kind](16-limits-and-errors.md#run-error-kinds) `Lua`, whose message names the Lua type `function`, `userdata`, or `thread` in place of `{type}`:
+Leaving `argv` as a function, userdata other than `json.null`, or thread when the H1 pass ends, as after `argv = function() end`, fails the freeze read-back with a run error of [run error kind](16-limits-and-errors.md#run-error-kinds) `Lua`, whose message names the Lua type `function`, `userdata`, or `thread` in place of `{type}`:
 
 ````text
 argv must be JSON data, got {type}

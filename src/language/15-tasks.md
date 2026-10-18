@@ -300,7 +300,7 @@ An `input` of another type fails with `input must be a string, got {type}`, and 
 
 ### Seeding `item`
 
-`item` takes any JSON data value, a string, number, boolean, or table such as a table of named fields, and that value becomes the task's [`item`](14-fanout.md#what-an-arm-sees) global. A table value keeps its fields, so `item = { name = 'alpha' }` makes `item.name` read `alpha` above. The value is converted to plain data when `tasks.spawn` runs, so the task receives a converted copy instead of a live reference to your Lua value. `item` is also the source of the `{{ item }}` placeholder inside the task, where a table renders as compact JSON (see [Inserting the fanout or task `item`](07-substitution.md#inserting-the-fanout-or-task-item)). Without `item`, the task has no `item` global.
+`item` takes any JSON data value, a string, number, boolean, or table such as a table of named fields, and that value becomes the task's [`item`](14-fanout.md#what-an-arm-sees) global. A table value keeps its fields, so `item = { name = 'alpha' }` makes `item.name` read `alpha` above. An empty table is sent as the empty object `{}`, so seed an empty list with `json.array()`, as in `item = { rows = json.array() }`, to have it arrive as `[]` (see [Encoding and decoding JSON with `json`](05-lua-environment.md#encoding-and-decoding-json-with-json)). The value is converted to plain data when `tasks.spawn` runs, so the task receives a converted copy instead of a live reference to your Lua value. `item` is also the source of the `{{ item }}` placeholder inside the task, where a table renders as compact JSON (see [Inserting the fanout or task `item`](07-substitution.md#inserting-the-fanout-or-task-item)). Without `item`, the task has no `item` global.
 
 Spawning the same section several times with different `item` values gives each spawn its own task:
 
@@ -336,7 +336,7 @@ sub one, sub two
 
 Each `### Sub` task writes its own store path, `sub-one.md` holding `sub one` and `sub-two.md` holding `sub two`, and `## Main` reads both once the join has delivered the tasks.
 
-An `item` whose Lua type is `function`, `userdata`, or `thread` fails at the call site with a `lua` error naming the Lua type, `item must be JSON data, got {type}`, such as `item must be JSON data, got function`. That check runs first, on the value itself. Any other value that cannot convert, such as a table holding a function deeper inside, fails at the call site with a `lua` error whose message starts `item must be a JSON-representable value: ` and ends with the conversion failure.
+An `item` whose Lua type is `function`, `userdata`, or `thread` fails at the call site with a `lua` error naming the Lua type, `item must be JSON data, got {type}`, such as `item must be JSON data, got function`. That check runs first, on the value itself. `json.null` is the one userdata it accepts, as `item` itself or inside a table, and it is sent as JSON null, so `item = { a = json.null }` reaches the task as `{"a":null}`. Any other value that cannot convert, such as a table holding a function deeper inside, fails at the call site with a `lua` error whose message starts `item must be a JSON-representable value: ` and ends with the conversion failure.
 
 ### Seeding `sys.index` with `index`
 

@@ -1127,7 +1127,7 @@ local kinds = { 'alpha', 'beta' }
 return table.concat(kinds, ',')
 ````
 
-This block returns `alpha,beta`.
+This block returns `alpha,beta`. For a result that should be JSON text, build the string with [`json.encode`](05-lua-environment.md#encoding-and-decoding-json-with-json) instead, so `return json.encode(kinds)` returns `["alpha","beta"]`.
 
 Returning any other first value fails the block with `cannot return a {type} as a result`, where `{type}` is the Lua type name: `table` for a table, `function` for a function, and `userdata` for an Engine object. So a table return fails with a message that contains `cannot return a table as a result`. This is an ordinary Lua error, so in a walked section it fails the run with run error kind `Lua`. In the H1 pass the same error fails the [hard gate](#the-h1-hard-gate) instead.
 

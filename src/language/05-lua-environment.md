@@ -165,17 +165,17 @@ first_saw_store = store.read('seed.txt')
 Every section VM, in the H1 pass and in walked sections alike, starts with these Engine globals:
 
 - `args`, `argv`, `sys`, `var`, and `prose`
-- `log`, `store`, and `untrusted`
+- `log`, `store`, `untrusted`, and `json`
 - `models`, `tools`, `messages`, and `compactors`
 - `call`, `jump`, `prompt`, and `require`
 - `tasks`
 - `plugins`, a read-only table with one object per Plugin the run knows
 
-Two more Engine globals are installed only in some section VMs. `ui` is installed when the run has an application-state snapshot (see [Run facts in `sys` and `ui`](#run-facts-in-sys-and-ui)), and `item` is installed in a spawned chain, such as a fanout arm (see [What an arm sees](14-fanout.md#what-an-arm-sees)). That makes 20 Engine globals in all.
+Two more Engine globals are installed only in some section VMs. `ui` is installed when the run has an application-state snapshot (see [Run facts in `sys` and `ui`](#run-facts-in-sys-and-ui)), and `item` is installed in a spawned chain, such as a fanout arm (see [What an arm sees](14-fanout.md#what-an-arm-sees)). That makes 21 Engine globals in all.
 
-Together they give every section's Lua logging through `log` (see [Logging and lifecycle reports](#logging-and-lifecycle-reports)), tool scoping through `tools`, store operations through `store`, and the `var` and `argv` globals, all inside the sandboxed section VM. `prose` is the global that reads pending prose (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)), `prompt` holds the section reads (see [Reading sections with `prompt.section` and `prompt.list`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptlist)), and `models` holds [`models.infer`](10-models.md#running-a-round-with-modelsinfer). The rest are taught where they are used: `args` in [The argument string in `args`](06-arguments.md#the-argument-string-in-args), `argv` in [Reading parsed input from `argv`](06-arguments.md#reading-parsed-input-from-argv), `store` in [What the store is](09-the-store.md#what-the-store-is), `untrusted` in [Handing store text to a model with `untrusted`](09-the-store.md#handing-store-text-to-a-model-with-untrusted), `messages` in [Building a message list](11-conversations.md#building-a-message-list), `compactors` in [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion), `tools` in [Tool scope and the task built-ins](12-tools.md#tool-scope-and-the-task-built-ins), `plugins` in [Tool objects and Plugin objects](12-tools.md#tool-objects-and-plugin-objects), and `tasks` in [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn).
+Together they give every section's Lua logging through `log` (see [Logging and lifecycle reports](#logging-and-lifecycle-reports)), tool scoping through `tools`, store operations through `store`, and the `var` and `argv` globals, all inside the sandboxed section VM. `prose` is the global that reads pending prose (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)), `prompt` holds the section reads (see [Reading sections with `prompt.section` and `prompt.list`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptlist)), and `models` holds [`models.infer`](10-models.md#running-a-round-with-modelsinfer). The rest are taught where they are used: `args` in [The argument string in `args`](06-arguments.md#the-argument-string-in-args), `argv` in [Reading parsed input from `argv`](06-arguments.md#reading-parsed-input-from-argv), `store` in [What the store is](09-the-store.md#what-the-store-is), `untrusted` in [Handing store text to a model with `untrusted`](09-the-store.md#handing-store-text-to-a-model-with-untrusted), `json` in [Encoding and decoding JSON with `json`](#encoding-and-decoding-json-with-json), `messages` in [Building a message list](11-conversations.md#building-a-message-list), `compactors` in [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion), `tools` in [Tool scope and the task built-ins](12-tools.md#tool-scope-and-the-task-built-ins), `plugins` in [Tool objects and Plugin objects](12-tools.md#tool-objects-and-plugin-objects), and `tasks` in [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn).
 
-The Engine installs no global beyond these 20. Fanout is `tasks.fanout`, a function on the `tasks` table (see [Fanout in one call](14-fanout.md#fanout-in-one-call)), and reading a list section goes through `prompt.list`.
+The Engine installs no global beyond these 21. Fanout is `tasks.fanout`, a function on the `tasks` table (see [Fanout in one call](14-fanout.md#fanout-in-one-call)), and reading a list section goes through `prompt.list`.
 
 The H1 pass and every walked section see the same set of globals. The one difference is `argv`: it is writable in the H1 pass, so H1 code can assign it (see [Checking and repairing `argv` in the H1 pass](06-arguments.md#checking-and-repairing-argv-in-the-h1-pass)), and frozen in every other section.
 
@@ -184,7 +184,7 @@ The role label of a declared [model role](10-models.md#model-roles-instead-of-mo
 Every section VM is set up in one fixed order. The same order applies to every section, the H1 pass, every fanout arm, and every spawned task chain:
 
 1. `args`, `argv`, `sys`, and `var`
-2. `log` and `store`
+2. `log`, `store`, and `json`
 3. `ui`
 4. `item`
 5. `jump` and the `prompt` reads
@@ -196,7 +196,7 @@ Every section VM is set up in one fixed order. The same order applies to every s
 
 ### Reserved names
 
-The Engine reserves the name of every global it installs in a section VM, and its reserved-name list matches that set exactly. The list holds 61 names: the 20 Engine globals, the 18 Lua globals the sandbox keeps (listed in [The sandbox](#the-sandbox)), and the 23 Lua 5.5 keywords. It classes each name as an Engine global, a Lua global, or a Lua keyword.
+The Engine reserves the name of every global it installs in a section VM, and its reserved-name list matches that set exactly. The list holds 62 names: the 21 Engine globals, the 18 Lua globals the sandbox keeps (listed in [The sandbox](#the-sandbox)), and the 23 Lua 5.5 keywords. It classes each name as an Engine global, a Lua global, or a Lua keyword.
 
 The 23 Lua 5.5 keywords in prompt Lua are `and`, `break`, `do`, `else`, `elseif`, `end`, `false`, `for`, `function`, `global`, `goto`, `if`, `in`, `local`, `nil`, `not`, `or`, `repeat`, `return`, `then`, `true`, `until`, and `while`. A Lua keyword never reads as a global. Every Engine global and Lua global on the list reads non-nil in a section once its conditional bindings apply, such as `ui` with a snapshot and `item` in a spawned chain.
 
@@ -1068,6 +1068,8 @@ The run reads this `var` back as the JSON data:
 
 Lua integers, strings, and booleans stored in `var` read back as the matching JSON values, a Lua sequence such as `{ 1, 2 }` reads back as a JSON array, and a table with named keys such as `{ a = ... }` reads back as a JSON object. In the other direction, a JSON array held in `var` reads as a Lua sequence indexed from 1.
 
+An empty list reads back as `[]` when it is a marked list, one made with [`json.array`](#keeping-empty-lists-with-jsonarray), decoded by `json.decode`, or taken from a tool result, and as `{}` when it is a plain empty table. So `var.items = json.array()` reads back as `{ "items": [] }`, while `var.items = {}` reads back as `{ "items": {} }`. A [`json.null`](#null-values-and-jsonnull) stored in `var` reads back as `null`.
+
 ### Building nested tables
 
 Every table inside `var` is guarded the same way as `var` itself, so you can build nested `var` tables step by step:
@@ -1128,6 +1130,8 @@ Because a table read from `var` holds no entries of its own, a few Lua operation
 - `pairs` over a `var` table yields nothing.
 - `next(var)`, or `next` on any nested `var` table, returns `nil` even when the table holds entries, so `next` cannot test whether a `var` table is empty.
 
+`json.encode` does not see a `var` table as empty. It reads through it to the stored data, so in the block above, `json.encode(var.items)` gives `["a","b","c"]`, and `json.encode(var)` gives everything `var` holds as one JSON object (see [Encoding values with `json.encode`](#encoding-values-with-jsonencode)).
+
 `getmetatable` on `var`, or on any table nested inside it, returns the string `var is guarded`, and your code cannot replace that guard, `setmetatable` included: `setmetatable(var, {})` raises the Lua error `cannot change a protected metatable` at your line.
 
 ### When the run reads `var` back
@@ -1174,7 +1178,7 @@ yes lua
 {path} must be JSON data, got {type}
 ````
 
-Here the write raises `var.handler must be JSON data, got function`. The path is the field's full path, dotted for string keys of object fields and bracketed for any other key, with array elements counted from 1, as in `var.t.f` or `var.list[2]`. A message list or a message record such as `msgs[1]` (see [Building a message list](11-conversations.md#building-a-message-list)) is userdata, so assigning one to a `var` field raises the same error ending in `got userdata`.
+Here the write raises `var.handler must be JSON data, got function`. The path is the field's full path, dotted for string keys of object fields and bracketed for any other key, with array elements counted from 1, as in `var.t.f` or `var.list[2]`. A message list or a message record such as `msgs[1]` (see [Building a message list](11-conversations.md#building-a-message-list)) is userdata, so assigning one to a `var` field raises the same error ending in `got userdata`. [`json.null`](#null-values-and-jsonnull) is the one userdata the guard accepts, and it stores JSON null: after `var.x = json.null`, `var` reads back as `{ "x": null }`, and `var.x == json.null` holds in Lua.
 
 `var` checks an assigned table deeply, so a table holding a function at any depth, such as `{ f = function() end }`, fails at the assigning line too. That error comes from the conversion to JSON, and its message names the offending type, such as `function`.
 
@@ -1193,6 +1197,398 @@ the `var` global was reassigned; write `var.<field>` instead
 ````
 
 The run error kind is `Lua`. When a section has reassigned the `var` global, the read-back at the section's end or at its `jump` fails the run, and the section does not count as completed. In the H1 pass the run error kind stays `Lua` rather than `RequirementsUnmet` (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)), even when the H1 pass returns a scalar, because the read-back still runs before the scalar becomes the run result.
+
+## Encoding and decoding JSON with `json`
+
+After this section you can turn JSON text into Lua values and back, write and read JSON Lines, keep an empty list as a list, and dump any table to look at it.
+
+````markdown
+---
+name: json-round-trip
+description: Decodes JSON text, edits it, and encodes it again.
+runvil: 0
+---
+
+# JSON round trip
+
+```lua
+local data = json.decode('{"name":"tides","tags":["sea"],"note":null}')
+table.insert(data.tags, 'moon')
+data.count = #data.tags
+return json.encode(data)
+```
+````
+
+The run result is:
+
+````text
+{"count":2,"name":"tides","note":null,"tags":["sea","moon"]}
+````
+
+`json.decode` turns the JSON text into a Lua table you can edit, and `json.encode` turns the edited table back into JSON text. The JSON `null` survives the trip, and the object keys come out sorted, whatever order the text or your code put them in.
+
+`json` is an Engine global, a plain table like `string`, with six members:
+
+- `json.decode` and `json.decode_lines` turn JSON text into Lua values.
+- `json.encode` and `json.encode_lines` turn Lua values into JSON text.
+- `json.null` stands for JSON null.
+- `json.array` marks a table as a list, so it stays a list when it is empty.
+
+`json` is in every section VM, the H1 pass, fanout arms, spawned tasks, and libraries loaded with `require` included, and a Plugin prelude's functions can call it too, so you never import it. Encoding is strict: a value that is not JSON data raises an error that names exactly where the value sits, unless you ask for a [debug dump](#dumping-any-value-in-debug-mode). Output and error text are identical on every run, because object keys are written sorted and table keys are always checked in one fixed order. Nulls and lists are recognized by the values themselves, never by looking anything up in the `json` table, so reassigning one of its fields changes nothing about how a value encodes.
+
+Every error a `json` function raises is an [error value](#error-values) of kind `lua`, so `pcall` catches it, and `tostring(err)` gives its message with no prefix. Left uncaught, it ends the block like any other `lua` failure (see [What an uncaught error ends](#what-an-uncaught-error-ends)).
+
+### Decoding JSON text with `json.decode`
+
+`json.decode(text)` returns the Lua value of the one JSON document in `text`:
+
+````markdown
+---
+name: decoded-types
+description: Shows the Lua values JSON text decodes to.
+runvil: 0
+---
+
+# Decoded types
+
+```lua
+local v = json.decode('{"n":2,"x":1.5,"big":9223372036854775808,"list":[1,null,3]}')
+return math.type(v.n) .. ' ' .. math.type(v.x) .. ' ' .. math.type(v.big) .. ' ' .. #v.list .. ' ' .. tostring(v.list[2] == json.null)
+```
+````
+
+The run result is:
+
+````text
+integer float float 3 true
+````
+
+Each JSON value becomes the matching Lua value:
+
+- An object becomes a plain table whose fields you index directly.
+- An array becomes a marked list (see [Keeping empty lists with `json.array`](#keeping-empty-lists-with-jsonarray)), a table indexed from 1 that `#`, `ipairs`, `table.insert`, and `table.remove` work on. A `null` item keeps its place, which is why `#v.list` is `3`.
+- `null` becomes [`json.null`](#null-values-and-jsonnull), never `nil`.
+- A string becomes a Lua string, and `true` and `false` become booleans.
+- An integer in the 64-bit integer range becomes a Lua integer. Every other number becomes a float, including `1.0` and an integer past that range, such as `9223372036854775808`.
+
+Every call builds fresh tables, and you can write to them freely: add fields to a decoded object, or append to and remove from a decoded list.
+
+`json.decode` takes a string of at most 8,388,608 bytes (see [Size and nesting limits](#size-and-nesting-limits)) and checks its argument before it parses anything. It raises three errors:
+
+| When | Message |
+| --- | --- |
+| The argument is not a string | `json.decode expects a string, got {type}` |
+| The string is longer than the cap | `json.decode: input exceeds the 8388608-byte limit` |
+| The text is not one valid JSON document | `json.decode: {parser message}` |
+
+The parser message says what went wrong and where, by line and column. `json.decode('x')` raises `json.decode: expected value at line 1 column 1`, and `json.decode('1 2')`, which holds two documents, raises `json.decode: trailing characters at line 1 column 3`. To decode text that may be malformed, call `json.decode` under `pcall`:
+
+````lua
+local ok, data = pcall(json.decode, text)
+if not ok then
+  return 'bad JSON: ' .. tostring(data)
+end
+````
+
+With `text` holding `x`, this block returns `bad JSON: json.decode: expected value at line 1 column 1`.
+
+You decode only JSON that arrives as text, such as a plain tool's output, a store file, the argument string, or a model reply. A [structured tool](12-tools.md#structured-output) already hands your Lua a parsed table built the same way, with marked lists and `json.null`. A web tool's text arrives inside the untrusted envelope, so you cut the JSON out with `string.match` before decoding it, as [Decoding a fetched JSON body](13-web-fetch-and-search.md#decoding-a-fetched-json-body) shows.
+
+Decoded strings are plain Lua strings, never wrapped in the run's untrusted envelope, even when the JSON came from the web or a model. Before such text reaches a model, wrap it with [`untrusted`](09-the-store.md#handing-store-text-to-a-model-with-untrusted).
+
+### Null values and `json.null`
+
+`json.null` is the Lua value for JSON null:
+
+````markdown
+---
+name: null-check
+description: Tells a JSON null apart from a missing field.
+runvil: 0
+---
+
+# Null check
+
+```lua
+local row = json.decode('{"id":7,"note":null}')
+local seen = {}
+if row.note then seen[#seen + 1] = 'truthy' end
+if row.note == json.null then seen[#seen + 1] = 'null' end
+if row.missing == nil then seen[#seen + 1] = 'absent' end
+seen[#seen + 1] = json.encode({ id = row.id, note = json.null, gone = nil })
+return table.concat(seen, ' ')
+```
+````
+
+The run result is:
+
+````text
+truthy null absent {"id":7,"note":null}
+````
+
+Every JSON `null` decodes to `json.null`, and `json.null` is what you put in a table to encode `null`. A field set to `nil` is no field at all, so `gone` is left out of the encoded object, while `note = json.null` keeps its key. In a list, `json.null` holds its position, so `json.encode({ json.null, 1 })` gives `[null,1]`.
+
+`json.null` is a light userdata, so `type(json.null)` is `userdata`, and error messages name its type `lightuserdata`. Like every userdata it is truthy, so `if row.note then` passes for a null, as the `truthy` in the result shows. Test for null with `v == json.null`, and for an absent field with `v == nil`.
+
+Outside `json.encode`, `json.null` passes the Engine's other conversions to JSON too. The `var` guard accepts it and stores JSON null (see [When a value is not JSON data](#when-a-value-is-not-json-data)), a `tools.call` argument table or a task's `item` can hold it, and a fanout member that is `json.null` runs its arm with `item == json.null`. A prose placeholder still refuses it: naming a bare global that holds `json.null`, as in `{{ nothing }}` after `nothing = json.null`, fails with `missing {{ nothing }}` and substitution kind `NullValue`, the same failure a `var` field holding null gives (see [Substitution error kinds](07-substitution.md#substitution-error-kinds)).
+
+### Keeping empty lists with `json.array`
+
+An empty Lua table could be an empty list or an empty object, and `json.array` says which one you mean:
+
+````markdown
+---
+name: empty-list
+description: Keeps a filtered list as a list when nothing passes the filter.
+runvil: 0
+---
+
+# Empty list
+
+```lua
+local long, plain = json.array(), {}
+for _, word in ipairs({ 'alpha', 'beta', 'gamma' }) do
+  if #word > 5 then
+    long[#long + 1] = word
+    plain[#plain + 1] = word
+  end
+end
+return json.encode({ long = long, plain = plain })
+```
+````
+
+The run result is:
+
+````text
+{"long":[],"plain":{}}
+````
+
+No word is longer than five letters, so both tables stay empty, yet they encode differently. An unmarked empty table encodes as an object, `{}`, because nothing in it says it is a list. `long` is a marked list, so it encodes as an array, `[]`, however many items it ends up with. Wrap any list that may end up empty with `json.array` before it leaves your code. There is no `json.object`, because a plain `{}` already encodes as an object.
+
+`json.array()` returns a new empty marked list, and so does `json.array(nil)`. `json.array(t)` marks the table `t` as a list in place and returns `t` itself, so `json.array(t) == t` holds. A table that is already a marked list, such as a decoded list, comes back unchanged.
+
+A marked list carries a metatable whose only field is `__metatable = false`. So `getmetatable` on a marked list returns `false`, and `setmetatable` on one raises `cannot change a protected metatable` (see [`setmetatable` and `getmetatable` on other values](#setmetatable-and-getmetatable-on-other-values)). Every list that `json.decode` returns is marked, and so is every list in a [structured tool result](12-tools.md#structured-output). Otherwise a marked list is an ordinary writable table: `#`, `ipairs`, `table.insert`, and `table.remove` work on it, and a decoded list emptied with `table.remove` still encodes as `[]`.
+
+`json.array` raises two errors:
+
+- `json.array expects a table or no argument, got {type}`, for any value other than a table or nil, so `json.array(5)` reports `got integer`.
+- `json.array: the table already has a metatable`, for a table whose metatable is anything other than the list marker. That covers `var` and every table read from it, frozen `argv`, sealed Plugin globals, fanout results, `_G`, and any table you gave a metatable yourself.
+
+The marker works beyond `json.encode`. Every place the Engine turns a Lua table into JSON honors it, so a marked list goes out as `[]` in a `tools.call` argument table, a task's `item`, a message record, and `var`, where a plain empty table goes out as `{}`. An empty list stored in `var` or in frozen `argv` keeps its marker, so after `var.items = json.array()`, `var` reads back as `{ "items": [] }`, and a `{{ var.items }}` placeholder renders `[]` (see [When the run reads `var` back](#when-the-run-reads-var-back)). `var.items = {}` still reads back as `{ "items": {} }`.
+
+### Encoding values with `json.encode`
+
+`json.encode(value [, options])` returns `value` as compact JSON text, with no spaces and with object keys sorted bytewise:
+
+````markdown
+---
+name: encode-var
+description: Encodes what var holds.
+runvil: 0
+---
+
+# Encode var
+
+## Main
+
+```lua
+var.cfg = { mode = 'fast', sizes = { 2.0, 1.5 } }
+var.empty = json.array()
+return json.encode(var) .. ' ' .. #var.cfg.sizes .. ' ' .. json.encode(var.cfg.sizes)
+```
+````
+
+The run result is:
+
+````text
+{"cfg":{"mode":"fast","sizes":[2,1.5]},"empty":[]} 0 [2,1.5]
+````
+
+`json.encode` reads `var` and its nested tables through to the data they store, even though `#var.cfg.sizes` sees an empty table, and the float `2.0` comes out as `2`. The only option is `debug`, which [Dumping any value in debug mode](#dumping-any-value-in-debug-mode) covers.
+
+Scalars encode this way:
+
+- `json.null` encodes as `null`, and so does `nil` passed as the whole value, so `json.encode()` gives `null`. Inside a table, a `nil` value is simply no key.
+- Booleans encode as `true` and `false`.
+- Integers encode as integers. A float with no fractional part, from -2^63 up to but not including 2^63, encodes as an integer too, so `2.0` gives `2`, `-0.0` gives `0`, and `-2^63` gives `-9223372036854775808`, while `2^63` stays a float.
+- Every other finite float is written as the shortest text that reads back as exactly the same number, so `1.5` gives `1.5`, and `1e300` gives `1e+300`.
+- NaN and the infinities, such as `0/0` and `math.huge`, raise an error.
+- Strings must be valid UTF-8. A newline inside a string is written as `\n`, so every encoded value is one line of text.
+
+Tables encode this way:
+
+- A marked list encodes as an array, and its keys must be exactly 1 to n, where n may be 0.
+- An unmarked table with no keys encodes as `{}`.
+- An unmarked table whose keys are exactly 1 to n encodes as an array.
+- An unmarked table whose keys are all strings encodes as an object, and every key must be valid UTF-8.
+- Any other table raises an error, such as a table that mixes list items and named keys, a list with a gap, or a table with a boolean or float key.
+- A table's keys are checked before any of its values are encoded.
+- A table that contains itself raises an error, while the same table in two places is fine: after `local s = { 1 }`, `json.encode({ a = s, b = { s } })` gives `{"a":[1],"b":[[1]]}`.
+- A table nested more than 127 levels deep raises an error (see [Size and nesting limits](#size-and-nesting-limits)).
+- Any metatable other than the list marker or a sealed view's is ignored, and the table's own entries are encoded, so a `__pairs` or `__tostring` metamethod never changes the output.
+
+Functions, threads, and every userdata other than `json.null` are not JSON data, so they raise an error. That includes Engine objects such as tool objects, message lists, and the record views that `msgs[i]` returns. To encode a message record, encode `msgs[i].content` or a plain table you build from its fields.
+
+A sealed view is a table that holds no entries of its own and whose metatable has both `__index` and `__metatable`. `var` and every table read from it, frozen `argv`, sealed Plugin globals, and [fanout results](14-fanout.md#reading-the-results) are sealed views. When a view's `__index` is a table, `json.encode` encodes that table in the view's place, so `json.encode(var)` gives everything `var` holds. For a fanout arm over the member `alpha` whose worker returns `item .. '-' .. sys.index`, `json.encode(r[1])` gives `{"exhausted":false,"item":"alpha","ok":true,"text":"alpha-1"}`. When a view's `__index` is a function, as in `sys`, the view cannot be read, and `json.encode(sys)` raises this error:
+
+````text
+json.encode: value cannot be read (sys is sealed); copy the fields you need into a plain table
+````
+
+The parenthesis holds the view's `__metatable` text and is left out when that is not a string. Inside a Plugin prelude's function, `var` is a read-only view of this kind, so `json.encode(var)` there raises the same error with `(var is read-only)`. A table whose `__index` is neither a table nor a function is not a sealed view, and it encodes as its own entries.
+
+### When `json.encode` refuses a value
+
+A strict encode raises at the first value that is not JSON data:
+
+````markdown
+---
+name: encode-refused
+description: Catches a value that json.encode refuses.
+runvil: 0
+---
+
+# Encode refused
+
+```lua
+local ok, err = pcall(json.encode, { items = { 'a', function() end } })
+return err.kind .. '|' .. tostring(err)
+```
+````
+
+The run result is:
+
+````text
+lua|json.encode: value.items[2] must be JSON data, got function
+````
+
+Every message names the failing value by its path. The path starts at `value`, the value you passed, and adds `.name` for each string key and `[k]` for any other key, so `value.items[2]` is the second item of the `items` field. A string key that is not valid UTF-8 appears in the path with replacement characters. These are the messages:
+
+| Problem | Message |
+| --- | --- |
+| A function, thread, or userdata other than `json.null` | `json.encode: {path} must be JSON data, got {type}` |
+| NaN or an infinity | `json.encode: {path} is not a finite number` |
+| A string or object key that is not valid UTF-8 | `json.encode: {path} is not valid UTF-8` |
+| An unmarked table with both integer and string keys | `json.encode: {path} mixes list items and named keys` |
+| Integer keys that are not exactly 1 to n | `json.encode: {path} is missing list item [{n}]` |
+| An unmarked table with a key that is neither an integer nor a string | `json.encode: {path} has a {type} key; object keys must be strings` |
+| A marked list with a key that is not an integer | `json.encode: {path} is marked as a list but has a {type} key` |
+| A table that contains itself | `json.encode: {path} contains itself` |
+| A table more than 127 levels deep | `json.encode: {path} is nested more than 127 levels deep` |
+| A sealed view whose `__index` is a function | `json.encode: {path} cannot be read ({label}); copy the fields you need into a plain table` |
+
+`{type}` is the type name every Engine argument error uses, which is not always what Lua's `type` returns: an integer reads `integer`, a float reads `number`, and `json.null` or any other light userdata reads `lightuserdata`. So `json.decode(5)` raises `json.decode expects a string, got integer`, `json.decode(1.5)` raises `json.decode expects a string, got number`, and `json.array(json.null)` raises `json.array expects a table or no argument, got lightuserdata`.
+
+A table that breaks more than one rule reports the same error on every run. An unmarked table reports a key that is neither an integer nor a string first, then a mix of integer and string keys, then a missing list item. Because keys are checked before values, `{ [1] = function() end, a = 1 }` reports `mixes list items and named keys`, not the function. For a missing item, `{n}` is the first of 1 to n that is absent, where n is the table's count of integer keys: `{ [1] = 'a', [3] = 'c' }` reports `[2]`, `{ [0] = 'a' }` reports `[1]`, and `{ [-1] = 'a', [1] = 'b' }` reports `[2]`.
+
+Within a table, `json.encode` visits keys in one fixed order: booleans, then numbers by value, then strings bytewise, as [Then booleans, numbers, and strings](#then-booleans-numbers-and-strings) describes. Unlike `pairs`, it also gives a fixed place to the two kinds of scalar key that [Keys with no fixed order](#keys-with-no-fixed-order) leaves unordered: a string key that is not valid UTF-8 sorts bytewise among the strings, and an infinite number key sorts by value among the numbers, so `-math.huge` comes first and `math.huge` last. Table, function, userdata, and thread keys come last, ranked by type name, so a table with both a table key and a function key always reports `has a function key`.
+
+The options argument is checked before the value, so `json.encode(function() end, 5)` raises the options error, not the function's. Options must be nil or a table whose only key is `debug`:
+
+- A value that is not a table raises `json.encode: options must be a table, got {type}`.
+- Any other key raises `json.encode: unknown option {key}`, as in `json.encode: unknown option pretty`. A key that is neither a string nor an integer is named by its type, as in `unknown option boolean`, so a float key reads `unknown option number`.
+- A `debug` value that is not a boolean raises `json.encode: option debug must be a boolean, got {type}`.
+
+In every `json` function, a Lua memory-limit error raised while a result is being built passes through unchanged, with no `json.` prefix, like any other memory refusal.
+
+### Dumping any value in debug mode
+
+`log` takes at most 256 characters on one line (see [Message rules](#message-rules)), so it cannot show you a whole table. To look at a table while you work on a prompt, encode it with `json.encode(t, { debug = true })` and write the text to the store or return it:
+
+````markdown
+---
+name: debug-dump
+description: Dumps a table that is not JSON data into the store.
+runvil: 0
+---
+
+# Debug dump
+
+```lua
+local state = { step = 2, retry = function() end, ratio = 0/0 }
+state.self = state
+store.write('dump.json', json.encode(state, { debug = true }))
+return store.read('dump.json')
+```
+````
+
+The run result is:
+
+````text
+{"ratio":"NaN","retry":"[function]","self":"[cycle]","step":2}
+````
+
+Debug mode never fails on the value. It follows the same rules as a strict encode, but writes a string in place of each failure:
+
+- A function becomes `"[function]"`, a thread becomes `"[thread]"`, and every userdata other than `json.null` becomes `"[userdata]"`, whether or not it defines `__tostring`.
+- A table that contains itself becomes `"[cycle]"`, and a table more than 127 levels deep becomes `"[too deep]"`.
+- NaN becomes `"NaN"`, infinity becomes `"Infinity"`, and negative infinity becomes `"-Infinity"`.
+- Bytes that are not valid UTF-8, in strings and in keys, are replaced with replacement characters.
+- A sealed view that cannot be read becomes `"[cannot read: <label>]"`, as in `"[cannot read: sys is sealed]"`, or `"[cannot read]"` when its `__metatable` is not a string.
+- A table that breaks the key rules, marked or not, becomes an object, so `{ [1] = 'a', [3] = 'c' }` becomes `{"1":"a","3":"c"}`. A number key becomes the text it would encode as, such as `2`, `2.5`, or `1e+300`, an infinite key becomes `Infinity` or `-Infinity`, and a boolean key becomes `true` or `false`. When two keys give the same text, the later one in visiting order wins, so with both `t[1]` and `t['1']` set, the string key's value is kept. Table, function, userdata, and thread keys are left out, because their order is not fixed between runs.
+
+Option errors still raise in debug mode, and the output never contains a memory address. Use debug mode only to look at values. A placeholder such as `"[function]"` is ordinary text to `json.decode`, a tool, or a model, so encode data you send anywhere without `debug`, where a value that is not JSON data fails at the line that encodes it.
+
+### JSON Lines with `json.encode_lines` and `json.decode_lines`
+
+JSON Lines is text with one JSON value per line, which suits a store file you add records to over time:
+
+````markdown
+---
+name: rows
+description: Appends records as JSON Lines and reads them back.
+runvil: 0
+---
+
+# Rows
+
+## First
+
+```lua
+store.append('rows.jsonl', json.encode_lines({ { n = 1, tag = 'a' } }))
+```
+
+## Second
+
+```lua
+store.append('rows.jsonl', json.encode_lines({ { n = 2, tag = 'b' }, { n = 3, tag = json.null } }))
+local rows = json.decode_lines(store.read('rows.jsonl'))
+return json.encode(rows)
+```
+````
+
+When the store holds no `rows.jsonl` yet, the run result is:
+
+````text
+[{"n":1,"tag":"a"},{"n":2,"tag":"b"},{"n":3,"tag":null}]
+````
+
+`json.encode_lines(list [, options])` encodes each item of `list` by the `json.encode` rules and ends each one with a newline, so an empty list gives `""`. Because the last record ends in a newline too, the result can go straight onto the end of a file that already ends in a record. [`store.append`](09-the-store.md#appending-to-a-file) adds no separator of its own, so `store.append('rows.jsonl', json.encode_lines(rows))` appends whole records. The list can be a marked list, an empty table, a table with keys 1 to n, or a sealed view of one, such as `var.rows`, and `json.encode_lines` takes the same `debug` option as `json.encode`.
+
+`json.decode_lines(text)` returns a marked list of every JSON value in `text`, in order. Any whitespace separates values, so blank lines and `\r\n` line endings are fine, several values can share a line, and one value can span several lines. Empty or blank text gives an empty marked list. It takes at most 8,388,608 bytes, like `json.decode`.
+
+`json.decode_lines` raises the same three errors as `json.decode`, with `json.decode_lines` in place of `json.decode`. A parser message counts lines and columns across the whole text, so a bad third record reports `at line 3`, as in `json.decode_lines: expected value at line 3 column 6`.
+
+`json.encode_lines` checks its list argument before it encodes any item, and it raises these errors:
+
+- `json.encode_lines expects a list, got {type}`, for a value that is not a table.
+- `json.encode_lines expects a list, got a table with a {type} key`, for an unmarked table that has keys but no list items, naming the first key in visiting order. An object such as `{ a = 1 }` reports `got a table with a string key`.
+- The table rules of `json.encode` with the `json.encode_lines:` prefix, for a table that has list items but is still not a list, as in `json.encode_lines: value mixes list items and named keys` or `json.encode_lines: value is missing list item [2]`.
+- `json.encode_lines: value cannot be read (sys is sealed); copy the fields you need into a plain table`, for a sealed view that cannot be read, such as `sys`.
+- The three options errors, with the `json.encode_lines:` prefix, as in `json.encode_lines: unknown option pretty`.
+
+An error inside an item names the item by its path under the list, as in `json.encode_lines: value[2].name must be JSON data, got function`. The list stays on the cycle path while its items are encoded, so a list that contains itself raises `json.encode_lines: value[1] contains itself`. In debug mode the argument errors above still raise, and only failures inside items become placeholders.
+
+### Size and nesting limits
+
+`json.decode` and `json.decode_lines` each take at most 8,388,608 bytes of text, the same cap [`web/fetch`](13-web-fetch-and-search.md#fetching-a-page) applies to a JSON body. A longer string raises `json.decode: input exceeds the 8388608-byte limit`, or the same message with the `json.decode_lines:` prefix, before any parsing starts.
+
+Nesting is limited to 127 levels in both directions, so `json.encode` never writes text that `json.decode` would refuse:
+
+- `json.decode` accepts 127 arrays and objects nested inside each other and rejects the 128th with the parser's own message, as in `json.decode: recursion limit exceeded at line 1 column 128` for text that opens with 128 brackets.
+- `json.encode` counts the value you pass as level 1 and raises `json.encode: {path} is nested more than 127 levels deep` for a table at level 128. The path names that table, such as `value` followed by 127 steps of `[1]` for lists nested in lists. In debug mode the table becomes `"[too deep]"` instead.
+
+Reading through a sealed view to its data adds no level, so a `var` value nested 127 levels deep still encodes. At each table, `json.encode` checks for a cycle before it checks the depth, so a loop of 127 tables or fewer reports `contains itself`, even when the repeated table falls at level 128. A longer loop reaches the depth limit before it repeats, so it reports the depth.
 
 ## Run facts in `sys` and `ui`
 
@@ -1506,7 +1902,7 @@ The `ui` snapshot is the application state the Host hands to the run at run star
 
 In a run started without a snapshot, the `ui` global is absent from every section rather than stubbed. `type(ui)` is `"nil"`, an unguarded `ui()` call fails as a call to a nil value, and so a block tests for `ui` before calling it, as in `if ui then` above or `ui and ui().selected_model`.
 
-`ui()` returns the snapshot as a Lua table whose fields are the snapshot's JSON fields as Lua values, so for the snapshot above, `ui().selected_model` reads `m-1`. A JSON null field reads as Lua `nil`, the same as an absent field, and never as a NULL sentinel userdata, which is why `ui().selected_model .. '/' .. tostring(ui().workspace_root)` gives `m-1/nil`.
+`ui()` returns the snapshot as a Lua table whose fields are the snapshot's JSON fields as Lua values, so for the snapshot above, `ui().selected_model` reads `m-1`. A JSON null field reads as Lua `nil`, the same as an absent field, and never as a NULL sentinel userdata, which is why `ui().selected_model .. '/' .. tostring(ui().workspace_root)` gives `m-1/nil`. `json.decode` and structured tool results do give that sentinel, [`json.null`](#null-values-and-jsonnull), so their null fields are tested with `v == json.null` rather than `v == nil`.
 
 Each `ui()` call builds a fresh table, so changes you make to one returned table never show up in the next call. The snapshot is taken once at run start and stays fixed for the run, so every call in every section returns the same Host state, and a change to application state shows up in `ui()` only on the next run. Which fields the snapshot holds is up to the Host. `ui` is installed before any library loads, so library code can call it too.
 
@@ -2758,7 +3154,7 @@ On every value other than `_G`, `setmetatable` and `getmetatable` behave exactly
 - `setmetatable(t, mt)` returns `t`, and `getmetatable(t)` then returns `mt`. An `__index` function on an ordinary table supplies values for missing keys, so `setmetatable({}, { __index = function(_, k) return k .. '!' end }).x` is `x!`.
 - `setmetatable` takes a table and a metatable that is a table or `nil`, and other arguments raise Lua's stock bad-argument error. Argument errors from either function name it, as in `bad argument #1 to 'setmetatable'` or `bad argument #1 to 'getmetatable'`, and carry the position of your calling line, as the standard functions' own errors do.
 - `setmetatable` returns exactly one value, and `getmetatable` on a table without a metatable returns exactly one value, `nil`. `getmetatable` on a number returns `nil`.
-- A metatable with a `__metatable` field is protected: `getmetatable` on its table returns that field's value instead of the metatable, even when the value is `false`, and `setmetatable` on that table raises the Lua error `cannot change a protected metatable`, whether the new metatable is a table or `nil`.
+- A metatable with a `__metatable` field is protected: `getmetatable` on its table returns that field's value instead of the metatable, even when the value is `false`, and `setmetatable` on that table raises the Lua error `cannot change a protected metatable`, whether the new metatable is a table or `nil`. Lists from `json.decode`, `json.array`, and structured tool results are a case of this: their metatable's `__metatable` field is `false`, so `getmetatable` on one returns `false` (see [Keeping empty lists with `json.array`](#keeping-empty-lists-with-jsonarray)).
 - `getmetatable(var)` gives the guard string `var is guarded`, and `getmetatable(sys)` gives `sys is sealed`.
 
 `getmetatable` in a prompt is the sandbox's replacement for the base function, and `table.concat` uses that same replacement when it checks an element for `__tostring`.

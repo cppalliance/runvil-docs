@@ -322,6 +322,8 @@ Results appear in the order the search returns them. No field beyond `query`, `r
 
 `web/search` output is marked untrusted because it is external content that embeds third-party titles, URLs, and descriptions. It is wrapped with a nonce before it reaches model input, and the results reach the model as untrusted tool output.
 
+To read the results as data in Lua, use the same cut-and-decode as [Decoding a fetched JSON body](#decoding-a-fetched-json-body), but since search results have no header block, cut everything between the tags with `string.match` and the pattern `'<untrusted_input_%x+>\n(.*)\n</untrusted_input_%x+>$'` before passing it to `json.decode`.
+
 ### The search arguments
 
 The search argument object accepts exactly eight fields, each with its own JSON type, and refuses any other field. A call can combine any of the optional arguments with `query` in one object, and the search runs with exactly the values the call passed. A model sends a combined search like this:
@@ -365,7 +367,7 @@ The optional `safesearch` argument sets the SafeSearch filtering level and accep
 
 The optional `include_domains` argument is a list of hostnames, and the search keeps only results from those sites, such as `"include_domains": ["example.com"]`. The optional `exclude_domains` argument is a list of hostnames whose results the search drops, such as `"exclude_domains": ["example.com"]`.
 
-Each list holds at most 20 bare hostnames, and a longer list is refused. Each entry must be non-blank, at most 128 characters, and free of `/`, whitespace, and control characters, and both lists get the same checks. Omitting either list is the same as passing an empty list, and an empty list is valid, because the lists have a maximum length but no minimum. A list the call omits applies no filter on that side and reaches the search provider as an empty list.
+Each list holds at most 20 bare hostnames, and a longer list is refused. Each entry must be non-blank, at most 128 characters, and free of `/`, whitespace, and control characters, and both lists get the same checks. Omitting either list is the same as passing an empty list, and an empty list is valid, because the lists have a maximum length but no minimum. From Lua, write an empty list as `json.array()`, as in `include_domains = json.array()`, because a bare `{}` is sent as the empty object `{}`, which is the wrong JSON type for a domain list (see [Encoding and decoding JSON with `json`](05-lua-environment.md#encoding-and-decoding-json-with-json)). A list the call omits applies no filter on that side and reaches the search provider as an empty list.
 
 ### What the model sees for search
 
@@ -725,6 +727,43 @@ extraction: plain
 ````
 
 `web/fetch` returns the JSON body verbatim, and the header reads `extraction: plain`.
+
+### Decoding a fetched JSON body
+
+To work with a fetched JSON document as data, cut the body out of the envelope and decode it with `json.decode` (see [Encoding and decoding JSON with `json`](05-lua-environment.md#encoding-and-decoding-json-with-json)):
+
+````markdown
+---
+name: fetch-field
+description: Fetches a JSON document and returns one of its fields.
+runvil: 0
+plugins: [web]
+---
+
+# Fetch field
+
+## Fetch
+
+```lua
+local page = tools.call('web/fetch', { url = 'https://example.com/data.json' })
+local data = json.decode(page:match('\n\n(.*)\n</untrusted_input_%x+>$'))
+return data.key
+```
+````
+
+When the server answers with the same body as in `fetch-data`, the run result is:
+
+````text
+value
+````
+
+The pattern relies on the envelope's fixed layout (see [The envelope shape](09-the-store.md#the-envelope-shape)). The first blank line in the string ends the provenance header, the close tag is the last line with no newline after it, and the capture is everything between the two, which is the body. `json.decode` turns that body into a table, so `data.key` reads `value`, `#data.numbers` is `3`, and `data.nested.ok` is `true`.
+
+The text you cut out is the envelope's escaped copy of the body. The envelope has already escaped every `<` as `&lt;`, broken every copy of the run's nonce with a space, and put a space after the opener of chat-template markup such as `[INST]` (see [What the envelope escapes](12-tools.md#what-the-envelope-escapes)), so a string value can differ from what the server sent. A body of `{"html":"<b>hi</b>"}` decodes with `html` reading `&lt;b>hi&lt;/b>`.
+
+Decoded strings are plain Lua strings, outside any envelope, even though they came from an untrusted tool. Wrap one with `untrusted` before it reaches a model, as in `untrusted(data.key)` (see [Handing store text to a model with `untrusted`](09-the-store.md#handing-store-text-to-a-model-with-untrusted)).
+
+A [soft failure](#soft-fetch-failures) has no header block, so `page:match` returns `nil` and `json.decode` raises `json.decode expects a string, got nil`. A body that `max_chars` cut short, which the header marks `truncated: true`, is no longer a whole JSON document, so `json.decode` raises on it too. Wrap the decode in `pcall` when either can happen.
 
 ### Which content types fetch accepts
 

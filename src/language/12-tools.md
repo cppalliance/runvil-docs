@@ -1148,7 +1148,7 @@ A name that is neither a local tool's alias nor the canonical id of a catalog to
 
 The second argument is a plain Lua table, and it reaches the tool as a JSON object with the same keys and values. So `{ url = 'https://www.lua.org/' }` arrives as `{ "url": "https://www.lua.org/" }`, which matches the parameter schema of `web/fetch`, whose one required property is the string `url`.
 
-Omitting `args`, or passing `nil`, sends the tool the empty JSON object `{}`, the empty-argument call every tool accepts, and passing an empty table, as in `tools.call('user-input/ask', {})`, also calls a tool with no arguments. You call a tool that takes no arguments, one whose parameter schema is `{ "type": "object", "properties": {} }`, by passing only the tool, as in `tools.call('user-input/ask')` or `tools.call(ask)` with a Tool object in `ask`.
+Omitting `args`, or passing `nil`, sends the tool the empty JSON object `{}`, the empty-argument call every tool accepts, and passing an empty table, as in `tools.call('user-input/ask', {})`, also calls a tool with no arguments. An empty table nested inside the arguments is sent as `{}` too, so an empty list needs `json.array()` to reach the tool as `[]`, as in `{ include_domains = json.array() }` (see [Encoding and decoding JSON with `json`](05-lua-environment.md#encoding-and-decoding-json-with-json)). You call a tool that takes no arguments, one whose parameter schema is `{ "type": "object", "properties": {} }`, by passing only the tool, as in `tools.call('user-input/ask')` or `tools.call(ask)` with a Tool object in `ask`.
 
 Each mistake in the arguments raises a Lua error at the `tools.call` line:
 
@@ -1310,13 +1310,13 @@ returns:
 typed|0
 ````
 
-A structured tool's text is parsed as JSON before your Lua sees it, so `tools.call` returns a Lua table built from the tool's JSON object, and you read its fields directly: `r.text` gives `typed`. The script never decodes JSON itself and has no JSON codec to reach for. The parsed values convert this way:
+A structured tool's text is parsed as JSON before your Lua sees it, so `tools.call` returns a Lua table built from the tool's JSON object, and you read its fields directly: `r.text` gives `typed`. The output arrives already parsed, so the script needs no decode step, unlike JSON text from a plain tool, which it decodes with [`json.decode`](05-lua-environment.md#encoding-and-decoding-json-with-json). The parsed values convert this way:
 
 - A JSON object becomes a Lua table whose fields you index directly, so the text `{"text":"hi"}` arrives as data with a `text` field holding `hi`.
 - A JSON array becomes a Lua sequence that the `#` length operator measures, so `#r.images` is `0` for `"images":[]`.
-- A JSON `null` becomes a null light userdata, not `nil`, so for the output `{"none":null}`, `type(tools.call(stats, {}).none)` is `userdata`.
+- A JSON `null` becomes a null light userdata, not `nil`, so for the output `{"none":null}`, `type(tools.call(stats, {}).none)` is `userdata`. That value is `json.null`, and like any userdata it is truthy, so test for it with `v == json.null`, as in `tools.call(stats, {}).none == json.null`, not with `if v then`.
 
-Whether `tools.call` returns a string or a table is decided by the tool's declared output kind, which comes from the Host's tool catalog and not from anything the prompt writes. A script call to a catalog tool returns a result shaped by that kind: a plain tool's text comes back as a string, and a structured tool's JSON output comes back as a table. JSON text from a plain tool still arrives as a string.
+Whether `tools.call` returns a string or a table is decided by the tool's declared output kind, which comes from the Host's tool catalog and not from anything the prompt writes. A script call to a catalog tool returns a result shaped by that kind: a plain tool's text comes back as a string, and a structured tool's JSON output comes back as a table. JSON text from a plain tool still arrives as a string, which [`json.decode`](05-lua-environment.md#encoding-and-decoding-json-with-json) turns into a table. When the plain tool is untrusted, cut the text out of its envelope before decoding it, as [Decoding a fetched JSON body](13-web-fetch-and-search.md#decoding-a-fetched-json-body) shows.
 
 A structured tool whose output is not valid JSON makes `tools.call` raise an error value of kind `tool`. Its message names the tool in quotes, says it returned invalid JSON, and gives the JSON parser's detail, which appears only once in the error chain:
 
@@ -2540,7 +2540,7 @@ A prelude runs in a restricted environment of its own, and its functions keep th
 
 - the base functions `assert`, `error`, `getmetatable`, `ipairs`, `next`, `pairs`, `pcall`, `select`, `setmetatable`, `tonumber`, `tostring`, `type`, and `xpcall`
 - the `string`, `table`, and `math` libraries
-- the `tools`, `store`, and `untrusted` globals, which are the same values your code uses
+- the `tools`, `store`, `untrusted`, and `json` globals, which are the same values your code uses
 - a read-only `var`, covered in [`var` inside a prelude](#var-inside-a-prelude)
 
 Every other global reads as nil inside a prelude and its functions, including Engine globals such as `sys`, `log`, `models`, and `require`. A helper cannot read the `ui`, `argv`, `sys`, or `models` globals even when your code calls it, so those values reach a helper only as arguments. A prelude function that returns `type(ui)`, `type(argv)`, `type(sys)`, `type(models)` joined with commas gives `nil,nil,nil,nil` when your block calls it, though the block itself sees all four. Global names inside prelude functions resolve through the prelude's environment, not the section's globals.
@@ -2549,7 +2549,7 @@ A helper also does not see the globals another Plugin's prelude defines, even on
 
 ### Calling tools and the store from a prelude
 
-Inside a prelude function, `pcall` and `xpcall` are the same coroutine-safe versions your code gets, and `tools.call` is the same suspending version, so a prelude function called from a block can call tools and wrap them in `pcall`. A helper can call `tools.call`, use the `store` table, call `untrusted`, and use the standard `string` library.
+Inside a prelude function, `pcall` and `xpcall` are the same coroutine-safe versions your code gets, and `tools.call` is the same suspending version, so a prelude function called from a block can call tools and wrap them in `pcall`. A helper can call `tools.call`, use the `store` table, call `untrusted`, call the `json` functions, and use the standard `string` library.
 
 A tool call made through a helper goes to the tool id and argument table that the helper passes. The `input.ask` helper passes `plugin .. "/ask"` and no argument table, so with the Plugin installed as `user-input`, a block that runs `return input.ask()` calls the tool `user-input/ask` with the empty arguments object. Calling a helper that wraps `tools.call` suspends the block on that tool call, just as a direct `tools.call` does, and the tool's result comes back to the function and from it to the section like any Lua return value, which is how `input.ask()` returns the operator's answer. Tool calls that a prelude function makes to its own Plugin's tools succeed without anything else in the prompt naming those tools.
 
@@ -2614,7 +2614,7 @@ A prelude never replaces or shadows an Engine global for your code. Before any o
 
 A collision with another prelude fails the run even when the prompt's only section just returns a value. When two declared Plugins' preludes define the same global, the message names the Plugin whose prelude installs later as `{plugin}` and the Plugin whose prelude installed first as `{owner}`.
 
-In the reserved-name message, `{kind}` is `an Engine global`, `a Lua standard-library global`, or `a Lua keyword`. The Engine global names a prelude global may not take are `args`, `argv`, `call`, `compactors`, `item`, `jump`, `log`, `messages`, `models`, `plugins`, `prompt`, `prose`, `require`, `store`, `sys`, `tasks`, `tools`, `ui`, `untrusted`, and `var`. The sandbox's Lua standard-library globals, such as `string`, `pairs`, `_G`, and `_VERSION`, are reserved too, and so are the Lua 5.5 keywords, `global` included (see [The sandbox](05-lua-environment.md#the-sandbox)).
+In the reserved-name message, `{kind}` is `an Engine global`, `a Lua standard-library global`, or `a Lua keyword`. The Engine global names a prelude global may not take are `args`, `argv`, `call`, `compactors`, `item`, `json`, `jump`, `log`, `messages`, `models`, `plugins`, `prompt`, `prose`, `require`, `store`, `sys`, `tasks`, `tools`, `ui`, `untrusted`, and `var`. The sandbox's Lua standard-library globals, such as `string`, `pairs`, `_G`, and `_VERSION`, are reserved too, and so are the Lua 5.5 keywords, `global` included (see [The sandbox](05-lua-environment.md#the-sandbox)).
 
 The reserved names hold in every section:
 

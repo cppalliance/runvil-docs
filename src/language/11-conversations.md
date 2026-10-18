@@ -363,9 +363,9 @@ Each entry in `tool_calls` is a table with exactly three fields:
 
 - `id` is a string holding the call id the model assigned, such as `'call_1'`.
 - `name` is a string holding the name the model called the tool by, such as `'web_search'`, which is how the model calls the tool you offer as `web/search` (see [Offering tools with `tools.offer` and `plugins.offer`](12-tools.md#offering-tools-with-toolsoffer-and-pluginsoffer)).
-- `arguments` is a table holding the model's JSON arguments, already parsed into a Lua table, so a model that sends `{"query":"hi"}` gives `call.arguments.query == 'hi'`.
+- `arguments` is a table holding the model's JSON arguments, already parsed into a Lua table, so a model that sends `{"query":"hi"}` gives `call.arguments.query == 'hi'`. A JSON list in the arguments arrives as a marked list and a JSON null as `json.null`, just as [`json.decode`](05-lua-environment.md#encoding-and-decoding-json-with-json) gives them.
 
-`arguments` may be left out, set to `nil`, or set to a table, and it can be empty or richer, such as a table holding `path` set to `"notes.txt"` and `limit` set to `3`. A call whose `arguments` is left out or `nil` gets the empty object `{}` and is sent that way, which is why the `clock` call above reads `type(calls[2].arguments)` as `table`. A Lua `arguments` table is stored as a JSON object with the same keys and values, so `arguments = { query = 'hi' }` is stored as `{ "query": "hi" }`, and [Tool exchanges in a request](#tool-exchanges-in-a-request) shows how it reaches the model. It must be a Lua table, not JSON text, or adding the record fails with `messages[N] tool_calls[K] arguments must be a table`.
+`arguments` may be left out, set to `nil`, or set to a table, and it can be empty or richer, such as a table holding `path` set to `"notes.txt"` and `limit` set to `3`. A call whose `arguments` is left out or `nil` gets the empty object `{}` and is sent that way, which is why the `clock` call above reads `type(calls[2].arguments)` as `table`. A Lua `arguments` table is stored as a JSON object with the same keys and values, so `arguments = { query = 'hi' }` is stored as `{ "query": "hi" }`, and [Tool exchanges in a request](#tool-exchanges-in-a-request) shows how it reaches the model. An empty table inside it is stored as the empty object `{}`, so write an empty list as `json.array()`, as in `arguments = { tags = json.array() }`, to have it sent as `[]`. It must be a Lua table, not JSON text, or adding the record fails with `messages[N] tool_calls[K] arguments must be a table`.
 
 `tool_calls` is an array of call tables even for one call, as in `tool_calls = { { id = 'call_1', name = 'web_search' } }`. A single call table placed directly in `tool_calls`, or a string there, is not an array and fails with `messages[N] tool_calls must be an array`. A call with a bad `id`, `name`, or `arguments` is refused with a message naming that field.
 
@@ -616,7 +616,7 @@ Errors inside a record add a second position:
 
 A record's rules run in a fixed order, so you see the first rule the record breaks in that order:
 
-1. JSON form. Every value in a record, including values in extra fields that get dropped, must be JSON-representable: strings, numbers, booleans, and nested tables. This check runs first, so a record holding a function anywhere fails with it, whatever else is wrong. A builder converts each non-nil argument from Lua to JSON first, so a field value can be any JSON-representable Lua value, which the record check then accepts or refuses.
+1. JSON form. Every value in a record, including values in extra fields that get dropped, must be JSON-representable: strings, numbers, booleans, `json.null`, and nested tables. This check runs first, so a record holding a function anywhere fails with it, whatever else is wrong. A builder converts each non-nil argument from Lua to JSON first, so a field value can be any JSON-representable Lua value, which the record check then accepts or refuses.
 2. Table shape. The record must be a table.
 3. Role.
 4. Content, including each content part.
@@ -632,7 +632,7 @@ Every message below is the full text of a `lua`-kind error value. N, J, and K ar
 
 JSON form:
 
-- `messages[N] must be a JSON-representable message table: {reason}` comes from a record given to `append` or `replace` that has no JSON form, meaning it holds a value that is not a string, number, boolean, or nested table, even in a field the list drops.
+- `messages[N] must be a JSON-representable message table: {reason}` comes from a record given to `append` or `replace` that has no JSON form, meaning it holds a value that is not a string, number, boolean, `json.null`, or nested table, even in a field the list drops.
 - `messages[N] {field} must be JSON-representable: {reason}` comes from a builder argument that has no JSON form, where `{field}` names `content`, `tool_calls`, or `tool_call_id`, and N is `#list + 1`.
 
 The `{reason}` is the converter's own explanation of why the value has no JSON form, such as ``unsupported value type `function` ``. On a list holding one record, these messages read as follows: the first for a whole record that JSON cannot represent, or one with such a field inside it, passed to `append` or `replace`, and the others for a function in a tool call's arguments, as a `tool_call_id`, and as content or inside a content table:
@@ -896,6 +896,7 @@ Store or insert a record's fields, such as `msgs[i].content`, rather than the vi
 
 - Assigning a view straight to a `var` field fails with `var.{name} must be JSON data, got userdata`.
 - A prose reference to a global holding a view (see [Inserting Lua globals by bare name](07-substitution.md#inserting-lua-globals-by-bare-name)) fails with ``global `{name}` is a userdata; bare globals in prose must be JSON data``.
+- `json.encode(msgs[1])` fails with `json.encode: value must be JSON data, got userdata`, and a view anywhere inside the value you encode fails the same way at its path, so encode `msgs[i].content` or a plain table of the fields you need instead (see [Encoding and decoding JSON with `json`](05-lua-environment.md#encoding-and-decoding-json-with-json)).
 
 ## Editing a list with `replace`
 
@@ -1403,7 +1404,7 @@ A compactor that is neither a function nor `nil`, passed to `models.loop` or to 
 compactor must be a function, got integer
 ````
 
-The message names an integer `integer` and every other value by Lua's `type()` name. A float reads `number`, a string reads `string`, and a table reads `table`. Any userdata reads `userdata`, including a message list, a model handle, and the JSON null that a tool result holds.
+The message names an integer `integer` and every other value by Lua's `type()` name. A float reads `number`, a string reads `string`, and a table reads `table`. Any userdata reads `userdata`, including a message list, a model handle, and `json.null`, the JSON null that a tool result holds.
 
 ### Errors while a round runs
 

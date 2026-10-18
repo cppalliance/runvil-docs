@@ -321,6 +321,8 @@ Second
 
 `store.append` adds no separator of its own between the existing text and the new text, so you write any newline between pieces yourself. Writing `'one'` and then appending `'two'` leaves `'onetwo'`, while appending `'one\n'` and then `'two'` leaves `'one\ntwo'`. An append also builds on whatever the last write left: writing `one`, then `two`, then appending `!` reads back `two!`, not `onetwo!`.
 
+To keep records in a file, [`json.encode_lines`](05-lua-environment.md#encoding-and-decoding-json-with-json) ends every record with a newline, so `store.append('rows.jsonl', json.encode_lines(rows))` appends whole records, and `json.decode_lines(store.read('rows.jsonl'))` reads them all back as a list.
+
 Successive `store.append` calls keep their call order in the file, including across sections and child `###` sections (see [Section headings and nesting](02-file-structure.md#section-headings-and-nesting)), so appends from successive sections accumulate in order. A whole-file `store.read` returns everything earlier sections of the same run wrote or appended to the file, which is why `## Second` in `order` returns `First\nSecond\n`.
 
 ### Nested paths create their directories
@@ -352,7 +354,7 @@ Writing to a nested path, with directory names separated by `/` as in `src/b.rs`
 
 ### Store files hold UTF-8 text
 
-The store holds text. The `path` and `contents` you pass to `store.write` and `store.append` must be valid UTF-8, and an argument that is not raises `path must be a valid UTF-8 string` or `contents must be a valid UTF-8 string`, naming the argument. Every file your prompt creates with `store.write` therefore reads back as text.
+The store holds text, so a table goes through [`json.encode`](05-lua-environment.md#encoding-and-decoding-json-with-json) before a write and `json.decode` after a read. The `path` and `contents` you pass to `store.write` and `store.append` must be valid UTF-8, and an argument that is not raises `path must be a valid UTF-8 string` or `contents must be a valid UTF-8 string`, naming the argument. Every file your prompt creates with `store.write` therefore reads back as text.
 
 Reading needs UTF-8 as well. `store.read`, `store.read_numbered`, and `store.str_replace` need the file's contents to be UTF-8, and reading or editing a file whose bytes are not valid UTF-8 fails with a `store` error whose reason is `not_utf8`. The error value has a string `path` field and an integer `valid_up_to` field, and its message has this form:
 
