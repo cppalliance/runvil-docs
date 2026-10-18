@@ -1,18 +1,176 @@
-# What a Prompt Is
+# What a prompt is
 
-A Runvil prompt is a single Markdown file that is also a program: the prose you want a model to see sits right next to the Lua that decides what happens to it, and the Harness runs the whole file for you. This chapter shows you the shape of that file, the smallest prompt that runs, how prose and Lua meet, how sections work together, and what the Harness does before and during a run, so you can write and run a first prompt today and know which chapter to open next for each part.
+A Runvil prompt is one Markdown file whose prose is meant for a model and whose Lua decides what happens to that prose. The Harness runs the file for a Host, the application that starts each run. This chapter names every part of a prompt file, shows the smallest prompts that run, and explains who does what during a run, so you know where each line you write belongs and what it can reach.
 
-## What a prompt file is
+## A Markdown file that is a program
 
-A prompt file is one Markdown file (`.md`) that the Engine parses and the Harness runs. The Harness is the program that runs your prompt and does its outside work for it, and the Host is the application, such as Workshop, that starts the run. You write the file, and the Harness runs it. The prompt is the program, with Lua holding the logic and prose holding text that Lua can read and send to a model.
+After this section you can name every part of a prompt file and say what Runvil does with each one.
 
-A prompt file has three parts, in this order:
+````markdown
+---
+name: greeter
+description: says hi
+runvil: 0
+---
 
-- Frontmatter: a YAML block between two `---` lines at the top of the file, holding at least `name`, `description`, and `runvil: 0`.
-- One H1 title: a `# ` line with non-empty text.
-- Sections: the headings after the H1 at level two or deeper, starting with `##`. Each section holds Markdown prose, `lua` fences with the prompt's logic, or both.
+# Greeter
 
-Here is a complete prompt file:
+## Say hi
+
+Say hello.
+
+```lua
+return prose
+```
+````
+
+Running this prompt ends with this run result (see [The run result and outcomes](04-how-a-prompt-runs.md#the-run-result-and-outcomes)):
+
+````text
+Say hello.
+````
+
+This file is a prompt file, which is a Markdown file with the `.md` extension. You write a Runvil prompt as that single Markdown file, and the file is also a program: the prose meant for a model sits right next to the Lua that decides what happens to it. Prose is the Markdown text you write for a model to read, such as `Say hello.` above. A Lua block is the code inside a fence that opens with a `lua` label, and it runs as one unit, such as `return prose` above.
+
+### The parts of a complete prompt
+
+A complete prompt is one `.md` file that parses and runs. The prompt above is complete and combines every part a prompt can have: YAML frontmatter, an H1 title, a `##` section heading, a Lua block, and prose. In it:
+
+- The frontmatter is the YAML between the two `---` lines.
+- The H1 title is `# Greeter`, the prompt's one level-1 heading.
+- `## Say hi` is the heading of a section, which is a heading plus everything under it up to the next heading at the same or a higher level.
+- `Say hello.` is prose.
+- `return prose` is a Lua block.
+
+The shipped `analyst-example.md` prompt has the same parts with more in its section: frontmatter, the H1 title `# Analyst Example`, an `## Analyze` section, and prose between two Lua blocks.
+
+### Three parts in a fixed order
+
+A prompt file has three parts, always in this order, which is also the order Runvil reads them:
+
+1. Frontmatter, the YAML block at the top of the file.
+2. Exactly one H1 title with non-empty text, followed by an optional H1 body of prose and Lua blocks (see [The H1 title and H1 body](02-file-structure.md#the-h1-title-and-h1-body)).
+3. Any number of `##` sections, including none.
+
+Because sections are optional, a prompt whose H1 body does all the work is complete and runs. [The smallest complete prompt](#the-smallest-complete-prompt) shows one.
+
+### Frontmatter comes first
+
+A prompt file opens with its frontmatter. The very first line of the file is `---`, YAML follows, and the frontmatter ends at the next `---` line. This is the frontmatter of the prompt above on its own:
+
+````markdown
+---
+name: greeter
+description: says hi
+runvil: 0
+---
+````
+
+The Host can read all of the frontmatter, such as `name` and `description`, as soon as the file is parsed and before any run starts.
+
+Two mistakes stop parsing at this point. A file whose first line is something other than `---` fails with `file must begin with a --- frontmatter delimiter`, and frontmatter with no closing `---` line fails with `frontmatter was not closed with ---`.
+
+### Lua decides what happens to prose
+
+You put logic in Lua blocks and text meant for a model in prose. A Lua block below the prose reads that text as `prose` (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)). The block can hand the text back as the run result with `return prose`, as the first example does, or send it to a model with `models.infer(prose)` (see [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer)).
+
+Prose alone never reaches a model, and nothing reaches a model until Lua sends it with `models.infer`. Prose that no Lua reads, whether in the H1 body or in a section that holds only prose, is discarded at the end of that part without needing a model, and the run continues:
+
+````markdown
+---
+name: greeter
+description: says hi
+runvil: 0
+---
+
+# Greeter
+
+This line sits in the H1 body, and no Lua reads it.
+
+## Notes
+
+This section holds only prose.
+
+## Say hi
+
+```lua
+return 'ok'
+```
+````
+
+````text
+ok
+````
+
+The line in the H1 body and the whole `## Notes` section are discarded unread, no model is needed, and the run goes on to `## Say hi`, whose block returns `ok` as the run result.
+
+### Runs and run events
+
+A run is one execution of one prompt, from its start to its run result. A run reports a run event for each thing that happens during it, so the Host can log them.
+
+Runvil parses a prompt file into a parsed prompt before anything runs. A parsed prompt is the prompt file read into its frontmatter, H1 title, and sections, and each run executes exactly one parsed prompt.
+
+### The runvil version
+
+Every prompt that runs declares `runvil: 0` in its frontmatter. This line is the runvil version, and it marks the file as a Runvil prompt. `0` is the only version Runvil runs.
+
+A file that leaves the key out still parses, but its run stops before any section runs. The error has the parse error kind `Structure` (see [Parse errors and their kinds](16-limits-and-errors.md#parse-errors-and-their-kinds)), names the prompt's `name`, and carries the message `not a runvil prompt: no runvil version`. [Leaving out the runvil version](#leaving-out-the-runvil-version) shows this case.
+
+## The smallest complete prompt
+
+Here you build the smallest prompt that runs, then grow it one part at a time.
+
+````markdown
+---
+name: greeter
+description: says hi
+runvil: 0
+---
+
+# Greeter
+````
+
+````text
+done
+````
+
+This is the smallest prompt that runs: frontmatter with `name`, `description`, and `runvil: 0`, plus one H1 title with nothing under it. It parses with no sections, and the run ends with `done`, the default run result when nothing returns a value. A line of prose under the title gives the same result, because nothing reads that prose.
+
+### Lua in the H1 body
+
+Add a Lua block under the title:
+
+````markdown
+---
+name: greeter
+description: says hi
+runvil: 0
+---
+
+# Greeter
+
+```lua
+return "hello"
+```
+````
+
+````text
+hello
+````
+
+A complete prompt needs no `##` section. Frontmatter, one H1 title, and a Lua block in the H1 body run on their own, and the block's return value is the run result. With no return, the run ends with `done`. Replace the block's code with a line that returns nothing:
+
+````lua
+local x = 1
+````
+
+````text
+done
+````
+
+### A section holding prose
+
+Now move the work into a section. This prompt has one `##` section holding only a line of prose:
 
 ````markdown
 ---
@@ -28,59 +186,20 @@ runvil: 0
 Say hello.
 ````
 
-Its frontmatter is the three lines between the `---` delimiters, its H1 title is `Greeter`, and it has one section, `## Say hi`, holding one line of prose. The delimiters and keys are covered in [the frontmatter header](02-file-structure.md#the-frontmatter-header), and the two required strings in [name and description](02-file-structure.md#name-and-description).
-
-A file with no `---` delimiters at the top, or with YAML between them that does not parse, fails with the parse error kind `Frontmatter` ([parse error kinds](16-limits-and-errors.md#parse-error-kinds)).
-
-The title is exactly one H1 with non-empty text: a file with no H1 fails with the parse error kind `Structure` and `prompt requires an H1 title`, a file with several gives `prompt must contain exactly one H1 title`, and a blank title gives `prompt H1 title must not be empty` ([the one-H1 rule](02-file-structure.md#what-a-prompt-file-looks-like)).
-
-Sections nest by heading level, so a `###` heading under a `##` section starts a child section, as [sections and nesting](02-file-structure.md#sections-and-nesting) describes. Inside a section, prose and `lua` fences alternate into prose blocks and Lua blocks, which [Lua blocks and prose blocks](03-blocks-and-prose.md#lua-blocks-and-prose-blocks) teaches.
-
-The `runvil: 0` line is what marks a Markdown file as a Runvil prompt. `0` is the version this build runs, and the run checks it before any section runs. Two cases stop a run at that check:
-
-- Any other version number fails the run with the run error kind `Version` and `unsupported runvil version: {n} (this build supports major 0)`, where `{n}` is the declared number.
-- A file with no `runvil:` key still parses, but the run declines it with the parse error kind `Structure` and `not a runvil prompt: no runvil version`, an error that names the prompt's `name`.
-
-So a file with the right layout but no `runvil: 0` parses and never runs, and every prompt that runs declares `runvil: 0`. [The runvil version](02-file-structure.md#the-runvil-version) covers the key in full, [parse error kinds](16-limits-and-errors.md#parse-error-kinds) lists `Structure`, and [how a failed run is classified](16-limits-and-errors.md#how-a-failed-run-is-classified) lists `Version` with the other run error kinds.
-
-The part between the H1 title and the first section is the H1 body, and it can hold prose and `lua` fences too ([the H1 title and its content](02-file-structure.md#the-h1-title-and-its-content)). Because the H1 body can do all the work, a prompt needs no minimum number of sections. This prompt has none, and its run ends with the result `hello`:
-
-````markdown
----
-name: h1-only
-description: Does all its work in the H1 body
-runvil: 0
----
-
-# H1 Only
-
-```lua
-return "hello"
-```
-````
-
-````text
-hello
-````
-
-With `local x = 1` in place of the `return`, the same prompt ends with `done`. Blocks in the H1 body run in [the H1 pass](04-how-a-prompt-runs.md#the-h1-pass), before any section.
-
-## The smallest complete prompt
-
-The greeter above is already a complete prompt. It has one section, no Lua anywhere, and nothing in its H1 body, and it declares nothing the Harness has to provide. Run it, and it ends like this:
-
 ````text
 done
 ````
 
-No model is called. No Lua reads the section's prose, so the prose is discarded unread ([pending prose](03-blocks-and-prose.md#the-pending-prose-buffer)). The section ends without a result, and because no section returns anything, [the run](04-how-a-prompt-runs.md#what-a-run-does) ends with the fallback result `done` ([block and section returns](04-how-a-prompt-runs.md#block-and-section-returns)).
+Running it makes no model round, which is one request to a model and its reply. The unread prose `Say hello.` is dropped without error, and the run ends with the default run result `done`.
 
-To compute a result instead, add one `lua` fence to the section:
+### A section holding Lua
+
+Replace the prose with a Lua block:
 
 ````markdown
 ---
 name: greeter
-description: Returns a greeting
+description: says hi
 runvil: 0
 ---
 
@@ -97,85 +216,136 @@ return 'hello'
 hello
 ````
 
-The fence's `return` value becomes the section's result, and because this section's return ends the run, it is also the run's result text. The prompt declares no model, no tools, and no Plugins, and needs none: a Lua block that returns a string does all the work itself. A literal `return` asks the Harness for no work at all, so the run never waits on anything outside the prompt. Tools that Lua never calls change nothing either: with [tool slots](#the-prompt-the-host-and-the-harness) filled but never called, a block of `return 'plain'` still ends the run with `plain`.
+The block's return value is the run result. This prompt declares no model roles (see [Model roles instead of models](10-models.md#model-roles-instead-of-models)), no tools, and no Plugins, so it runs on Lua alone: the block's `return` is the whole result, and no model round happens.
 
-A prompt can also return the argument string the run received, which Lua reads as `args` ([input basics](06-arguments.md#input-basics)). This prompt ends with whatever text it was given:
+### Leaving out the runvil version
 
-````markdown
----
-name: echo
-description: Return the input argument unchanged
-runvil: 0
----
-
-# Echo
-
-## Main
-
-```lua
-return args
-```
-````
-
-## Prose and Lua
-
-Prose becomes useful when a Lua block reads it. Write a line of prose, then a `lua` fence below it in the same section:
+Frontmatter with only `name` and `description` still parses, but the run refuses the prompt:
 
 ````markdown
 ---
-name: read-prose
-description: Returns the prose written above its block
-runvil: 0
+name: greeter
+description: says hi
 ---
 
-# Read Prose
+# Greeter
 
-## Main
-
-Tell the reader what this prompt does.
+## Say hi
 
 ```lua
-return prose
+return 'hello'
 ```
 ````
 
 ````text
-Tell the reader what this prompt does.
+not a runvil prompt: no runvil version
 ````
 
-The prose written since the heading or the previous fence is pending prose, and it builds up for the next Lua block ([pending prose](03-blocks-and-prose.md#the-pending-prose-buffer)). That block reads it as the read-only `prose` global ([the prose global](03-blocks-and-prose.md#the-prose-global)), so `return prose` makes the prose the section's result.
+The run stops before `## Say hi` or any other section runs. The error has the parse error kind `Structure`, names the prompt `greeter`, and carries the message above, so every prompt that runs declares `runvil: 0`.
 
-A `{{ var.word }}` placeholder fills in a value the first time a block reads the prose, not before ([what substitution does](07-substitution.md#what-substitution-does)). `var` is a table that keeps values from block to block ([keeping values in var](05-lua-environment.md#keeping-values-in-var)), so a block that sets `var.word` first and then reads `prose` sees its own value:
+## Putting the parts together
+
+Here you walk one complete prompt from its frontmatter to its run result and see how prose and Lua in one section work together.
 
 ````markdown
 ---
-name: late-render
-description: Renders its prose at the first read
+name: greet
+description: Has the model repeat a greeting.
 runvil: 0
+models:
+  writer: {}
 ---
 
-# Late Render
-
-## Only
-
-The word is {{ var.word }}.
+# Greet
 
 ```lua
-var.word = 'mutated'
-return prose
+models.default("writer")
+```
+
+## Main
+
+```lua
+var.greeting = "Hello, " .. args .. "!"
+```
+
+Repeat exactly, with no extra words: {{ var.greeting }}
+
+```lua
+return models.infer(prose)
 ```
 ````
 
+Run with the argument `Ada`, the model receives this text, and its reply is the run result:
+
 ````text
-The word is mutated.
+Repeat exactly, with no extra words: Hello, Ada!
 ````
 
-Prose alone never calls a model, and nothing reaches a model until Lua sends it. To send prose to a model, declare a model role in the frontmatter, select it, and call `models.infer`:
+### The frontmatter and the contract keys
+
+The frontmatter holds `name`, `description`, and `runvil: 0`, plus a `models:` key. `plugins:`, `models:`, and `args:` are the contract keys, three optional keys that state what the prompt needs from its run:
+
+- `plugins:` names the Plugins the run requires (see [Tools, Plugins, and the `plugins:` key](12-tools.md#tools-plugins-and-the-plugins-key)).
+- `models:` declares model roles, such as the `writer` role here.
+- `args:` types the prompt's arguments (see [Declaring arguments in frontmatter](06-arguments.md#declaring-arguments-in-frontmatter)).
+
+The parser checks only the shape of these keys. Prepare (see [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run)) satisfies them against the run's environment.
+
+### Setup Lua in the H1 body
+
+Under `# Greet`, a Lua block calls `models.default("writer")` (see [The prompt-wide default with `models.default`](10-models.md#the-prompt-wide-default-with-modelsdefault)), which makes the `writer` role the prompt-wide default.
+
+### Prose and Lua in one section
+
+`## Main` holds a Lua block, a line of prose, and a second Lua block. The first block computes a value and stores it in `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)) with `var.greeting = "Hello, " .. args .. "!"`, where `args` holds the argument string (see [The argument string in `args`](06-arguments.md#the-argument-string-in-args)).
+
+The prose then uses the placeholder `{{ var.greeting }}` (see [Placeholders in prose](07-substitution.md#placeholders-in-prose)), which renders the stored value into the text. The last block passes that prose to `models.infer(prose)`, and `return` makes the model's reply the run result. Data moves from Lua, through prose, to the model.
+
+The shipped `greet.md` prompt has this shape, with setup Lua under `# Greet` and a `## Main` section that ends in `return models.infer(prose)`.
+
+### Calling a tool from a section
+
+A prompt with frontmatter, an H1 title, and one `##` section holding a Lua block is complete, and that block can call a tool with `tools.call` (see [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls)). The tool can be one the section defines itself with `tools.offer_local` (see [Defining local tools with `tools.offer_local`](12-tools.md#defining-local-tools-with-toolsoffer_local)). A greeter prompt with a `# Greeter` title and a `## Greet` section ends its block with these lines, where `reply` holds a model's reply:
+
+````lua
+tools.offer_local('shout', 'Returns the text in capital letters.', { text = 'string' }, function(args)
+  return string.upper(args.text)
+end)
+return tools.call('shout', { text = reply })
+````
+
+The first call defines a tool named `shout` that answers with its `text` argument in capital letters, and the last line passes the model's reply to it. When the model replies `hi there`, the run ends with:
+
+````text
+HI THERE
+````
+
+The tool's answer is the block's return value, so it becomes the run result.
+
+### Declaring a Plugin
+
+A prompt that uses a Plugin lists it under `plugins:`. This frontmatter declares the `web` Plugin:
+
+````markdown
+---
+name: researcher
+description: Researches a topic on the web.
+runvil: 0
+plugins:
+  - web
+---
+````
+
+The rest of a complete Plugin-using prompt is the same shape as before: an H1 title and one `##` section holding a Lua block.
+
+### A prompt that sends prose to a model
+
+A prompt that sends prose to a model needs one model role in its frontmatter, a default set in its H1 body, and a section that infers from its prose:
 
 ````markdown
 ---
 name: hello
-description: Say hello
+description: Says hello.
 runvil: 0
 models:
   writer: {}
@@ -196,393 +366,273 @@ return models.infer(prose)
 ```
 ````
 
-Each model piece is introduced here and taught in full later:
+The frontmatter declares one model role, `writer: {}`, under `models:`. The H1 body makes `writer` the default with `models.default("writer")`, and the `## Greet` block sends the section's prose to the model with `return models.infer(prose)`, so the model's reply to `Say "Hello, world!"` is the run result. The shipped `hello.md` prompt, which describes itself as `A minimal test prompt.`, has this shape.
 
-- `models:` with `writer: {}` declares a model role with the role label `writer` ([model roles at a glance](10-models.md#model-roles-at-a-glance)).
-- `models.default("writer")` in a `lua` fence in the H1 body selects that role for the whole prompt, and `models.use('writer')` inside a section selects it for that section instead ([choosing a section's model](10-models.md#choosing-a-sections-model)). The H1 fence runs in [the H1 pass](04-how-a-prompt-runs.md#the-h1-pass), before `## Greet`.
-- `models.infer(prose)` sends the section's prose to the model in one round and returns the reply text, and `return` makes that reply the result ([running a round with models.infer](10-models.md#running-a-round-with-modelsinfer)).
+### A prompt with no contract keys
 
-The run result of this prompt is whatever the model replies.
-
-For a conversation instead of a single round, build a message list and run it with `models.loop`:
+A prompt that declares none of the contract keys passes prepare and runs on its Lua alone, with no model and no tool:
 
 ````markdown
 ---
-name: first-chat
-description: Holds a one-message conversation
+name: greeter
+description: Writes a note to the store and reads it back.
 runvil: 0
-models:
-  writer: {}
 ---
 
-# First Chat
+# Greeter
 
-## Talk
+## Greet
 
 ```lua
+store.write('note.md', 'hello')
+return store.read('note.md')
+```
+````
+
+````text
+hello
+````
+
+Its frontmatter holds only `name`, `description`, and `runvil: 0`. The one `## Greet` block writes a note to the store (see [What the store is](09-the-store.md#what-the-store-is)) and reads it back, and the run result is `hello`.
+
+### Store, model, and tool in one block
+
+One block can combine store calls, a model round, and a tool call to produce its result. This is the whole `## Greet` block of the greeter prompt from [Calling a tool from a section](#calling-a-tool-from-a-section):
+
+````lua
+store.write('note.md', 'hello')
 models.use('writer')
-local msgs = messages.new()
-msgs:user('hello')
-models.loop(msgs)
-return msgs[#msgs].content
-```
+local reply = models.infer(store.read('note.md'))
+tools.offer_local('shout', 'Returns the text in capital letters.', { text = 'string' }, function(args)
+  return string.upper(args.text)
+end)
+return tools.call('shout', { text = reply })
 ````
 
-`messages.new()` makes an empty message list, `msgs:user('hello')` adds a user record, and `models.loop(msgs)` runs the conversation under the selected role and appends the reply as the last record, which the block reads as `msgs[#msgs].content` because `models.loop` itself returns nil ([a first conversation](11-conversations.md#a-first-conversation)).
+When the model replies `hi there`, the run ends with:
 
-A model call needs a selected model role. This prompt sends its prose to a model without selecting one:
+````text
+HI THERE
+````
+
+The block writes `hello` to `note.md` in the store, selects the `writer` role with `models.use` (see [Selecting a role per section with `models.use`](10-models.md#selecting-a-role-per-section-with-modelsuse)), sends the note's text to the model with `models.infer`, defines the `shout` tool, and passes the reply to it. The tool's answer, the model's reply in capital letters, is the run result.
+
+### A helper section and a nested section
+
+One prompt can combine a section that other sections load, prose in the H1 body, several `##` sections, and a nested section. In a prompt titled `# Require Library`, the H1 body holds prose and a `## helpers` section defines a function named `normalize`. The `## Prepare` and `## Finish` sections each load it with `require '## helpers'` (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)) and call `normalize`. A `### Author note` section of prose nests under `## Prepare`, so the prompt has three `##` sections and `## Prepare` holds one nested section.
+
+### Sections that run in sequence
+
+A prompt can run a fixed sequence of sections, each one handing its result to the next until the run ends. A drafting prompt can write a draft with prose and `models.infer` in `## Draft` and keep it in `var.draft`, refine it in `## Refine` with a `models.loop` that uses tools (see [Starting a conversation](11-conversations.md#starting-a-conversation)), and hand the refined reply to `## Deliver` with `call` (see [Calling a section](08-jump-and-call.md#calling-a-section)). `var` and the value `call` passes carry results from one section to the next, and the run ends with `delivered: refined text`.
+
+## The Engine, the Harness, and the Host
+
+Here you learn which of three pieces does each job in a run, and which run inputs a prompt can read.
 
 ````markdown
 ---
-name: no-role
-description: Calls a model without selecting a role
+name: greeter
+description: says hi
 runvil: 0
 ---
 
-# No Role
+# Greeter
+
+## Say hi
+
+```lua
+return 'hello'
+```
+````
+
+````text
+hello
+````
+
+When a Host starts a run of this prompt, the Harness hands the file's text to the Engine, the Engine parses it, and the Harness runs it. Every prompt follows that path: it is one Markdown (`.md`) file that you write, the Engine parses, and the Harness runs.
+
+### What each piece does
+
+- The Engine parses the prompt and carries out its run.
+- The Harness runs the prompt and does the run's outside work. It prepares each run and then drives it: it steps the Engine's run, does each piece of outside work the run asks for, and resumes the run with the answer.
+- The Host is the application that starts each run. Workshop is one Host.
+
+### Run policy and cancelling
+
+The Host launches runs and sets run policy, the settings that govern a run, such as which model the run uses and whether anyone can answer `input.ask()` (see [Asking the operator](05-lua-environment.md#asking-the-operator)). The Host can also cancel a run.
+
+### Plugins and the tool catalog
+
+The Host installs Plugins once and shares them across runs. A Plugin is an installed bundle of tools, such as the web tools. The Harness takes each run's tool catalog, the set of tools that run can use, from a snapshot of the installed Plugins. The prompt itself installs no Plugins, and it names the ones it needs under `plugins:`.
+
+### Seed, start time, and repeatable runs
+
+The Host names each run. The Harness draws the run's seed, a random value, from a secure random source, and takes the run's start time from the clock. A run given the same seed, the same start time, and the same outside answers repeats exactly.
+
+### Run inputs a prompt can read
+
+A prompt can observe three run inputs, the values from outside that shape a run. This prompt reads two of them:
+
+````markdown
+---
+name: run-inputs
+description: Reads the start time and an untrusted envelope.
+runvil: 0
+---
+
+# Run inputs
 
 ## Only
 
-Ask the model.
-
 ```lua
-return models.infer(prose)
+return sys.when .. '|' .. untrusted('data')
 ```
 ````
 
-It fails with the run error kind `Binding` ([how a failed run is classified](16-limits-and-errors.md#how-a-failed-run-is-classified)) and the message `model binding required for section {name}`, where `{name}` is the section's heading text:
+The run result is the run's start time in RFC 3339 form, a `|`, and the envelope that `untrusted('data')` returns, which carries a nonce of 32 hex digits drawn from the seed. The three run inputs are:
 
-````text
-model binding required for section Only
-````
+- The seed, which a prompt sees through the nonce in each `untrusted()` envelope (see [Handing store text to a model with `untrusted`](09-the-store.md#handing-store-text-to-a-model-with-untrusted)).
+- The start time, read as `sys.when` (see [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui)).
+- The Host's UI snapshot, served by `ui()`.
 
-If the block catches this failure with `pcall`, the error value it receives has the error kind `internal` ([catching and inspecting errors](05-lua-environment.md#catching-and-inspecting-errors)).
+When the run has no UI snapshot, `ui` is `nil`. In that run, this block returns `nil`:
 
-## How sections fit together
-
-A prompt can hold several `##` sections, each with its own `lua` fence. They run in document order, starting at the first `##` section, the entry section, and each section whose Lua does not return falls through to the next, so a later section sees what an earlier one left behind. This walk from section to section is taught in [the section walk](04-how-a-prompt-runs.md#the-section-walk).
-
-````markdown
----
-name: handoff
-description: Passes a note from one section to the next
-runvil: 0
----
-
-# Handoff
-
-## Writer
-
-```lua
-store.write('note.txt', 'handoff text')
-```
-
-## Reader
-
-```lua
-return store.read('note.txt')
-```
+````lua
+return type(ui)
 ````
 
 ````text
-handoff text
+nil
 ````
 
-`store.write` writes a file to the run's store, and `store.read` returns its text ([writing and reading files](09-the-store.md#writing-and-reading-files)). `## Writer` does not return, so it falls through, and `## Reader` returns what `## Writer` wrote.
+### Stopping a model round
 
-The `var` table passes values along the walk the same way:
+Besides cancelling a run, the Host can stop the model round in flight, which is called stopping a round. The dropped round raises an error value whose error kind is `cancelled` (see [Error values](05-lua-environment.md#error-values)), and `pcall` can catch it so the run goes on (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)):
 
-````markdown
----
-name: three-steps
-description: Builds a value across three sections
-runvil: 0
----
-
-# Three Steps
-
-## A
-
-```lua
-var.from_a = 'a'
-```
-
-## B
-
-```lua
-assert(var.from_a == 'a')
-var.from_b = 'b'
-```
-
-## C
-
-```lua
-return var.from_a .. var.from_b
-```
-````
-
-````text
-ab
-````
-
-Three rules govern the walk:
-
-- A section whose Lua does not return falls through to the next section.
-- An explicit `return` stops the walk, and any later sections are never reached.
-- When no section returns, the run result is `done` ([block and section returns](04-how-a-prompt-runs.md#block-and-section-returns)).
-
-Sections can also run only when another section starts them. Here the entry section `## Main` starts its two siblings as tasks and waits for both before it returns:
-
-````markdown
----
-name: two-tasks
-description: Starts two sections as tasks and joins their results
-runvil: 0
----
-
-# Two Tasks
-
-## Main
-
-```lua
-local a = tasks.spawn('## Alpha')
-local b = tasks.spawn('## Beta')
-local results = tasks.join({ a, b })
-return results[1].result .. ' and ' .. results[2].result
-```
-
-## Alpha
-
-```lua
-return 'alpha'
-```
-
-## Beta
-
-```lua
-return 'beta'
-```
-````
-
-````text
-alpha and beta
-````
-
-The string `'## Alpha'` is a heading reference, which names a section by its level and heading text ([referring to a section by heading](02-file-structure.md#referring-to-a-section-by-heading)). `tasks.spawn('## Alpha')` starts that section as a task and returns a Task handle, and `tasks.join` waits for every handle and returns one entry per handle, in the order given, each with its `result` ([tasks at a glance](15-tasks.md#tasks-at-a-glance)).
-
-`## Main` returns after the wait, and that return ends the walk, so the walk never falls through into `## Alpha` or `## Beta`. Each of them runs only as a task that `## Main` started, and its return goes back to `## Main`. Only the entry section's return becomes the run result.
-
-Sections nest too. A `###` section under a `##` section is a child section with its own `lua` fence, all under the one H1 title ([sections and nesting](02-file-structure.md#sections-and-nesting)). The walk never enters a child section on its own: a child section runs only when addressed by heading, for example as the worker section of `fanout`:
-
-````markdown
----
-name: each-member
-description: Runs a nested worker once per member
-runvil: 0
----
-
-# Each Member
-
-## Parent
-
-```lua
-local r = fanout('### Worker', {'a', 'b', 'c'})
-return r[1].text .. '|' .. r[2].text .. '|' .. r[3].text
-```
-
-### Worker
-
-```lua
-return item
-```
-````
-
-````text
-a|b|c
-````
-
-`fanout('### Worker', {'a', 'b', 'c'})` runs `### Worker` once per member of the collection and returns one result per member in collection order, with the first one's text read as `r[1].text` ([the fanout call](14-fanout.md#the-fanout-call)). Inside each run of the worker, the member is available as `item` ([inside an arm](14-fanout.md#inside-an-arm)). `## Parent`'s return is the run result. A `jump` to a direct child also runs it, as a [child walk](08-jump-and-call.md#child-level-walks).
-
-Without such a call, the walk goes from one `##` section straight to the next and skips the child sections in between:
-
-````markdown
----
-name: nested-child
-description: Shows that the walk never enters a child section
-runvil: 0
----
-
-# Nested Child
-
-## A
-
-```lua
-var.seen = 'A'
-```
-
-### Child
-
-```lua
-error('a child must not run by fall-through')
-```
-
-## B
-
-```lua
-return var.seen .. 'B'
-```
-````
-
-````text
-AB
-````
-
-The walk runs `## A`, then `## B`. `### Child` never runs, so its `error` never fires, and the run succeeds.
-
-One prompt can combine all of these parts: a shared library, prose in the H1 body, several sections, and a nested section of prose:
-
-````markdown
----
-name: tidy-subject
-description: Lowercases a subject with a shared helper
-runvil: 0
----
-
-# Tidy Subject
-
-```lua shared
-function normalize(value)
-    return string.lower(value)
+````lua
+local ok, err = pcall(writer.infer, writer, 'Take your time.')
+if not ok then
+  return err.kind
 end
-```
+````
 
-The shared helper is available to each executable section.
+Here `writer` is a model handle (see [Model handles](10-models.md#model-handles)). When the Host stops the round while it is in flight, the block catches the error and the run completes with:
 
-## Prepare
+````text
+cancelled
+````
+
+An uncaught `cancelled` error ends the run as cancelled.
+
+## Effects and Harness work
+
+Here you learn which lines of a prompt wait on the outside world and which run as plain Lua.
+
+````markdown
+---
+name: greeter
+description: Writes a note to the store and reads it back.
+runvil: 0
+---
+
+# Greeter
+
+## Greet
 
 ```lua
-var.subject = normalize('Hello World')
-```
-
-### Author note
-
-A note for people reading the file.
-
-## Finish
-
-```lua
-return var.subject
+store.write('note.md', 'hello')
+return store.read('note.md')
 ```
 ````
 
 ````text
-hello world
+hello
 ````
 
-This file has a shared library, two sections, and one child section. The `lua shared` fence in the H1 body holds the shared library, code that loads in every section so each one can call its helpers ([the shared library](03-blocks-and-prose.md#the-shared-library)), which is why `## Prepare` can call `normalize`. No block reads the line of prose in the H1 body, so it is discarded. `var` passes the tidied subject from `## Prepare` to `## Finish`, and the walk never enters `### Author note`.
+Each store call in this block is an effect. Every model round, every call to a Plugin's tool, and every store read or write that a prompt makes is an effect, and the Harness performs every effect outside the run.
 
-## The prompt, the Host, and the Harness
+### How an effect is answered
 
-Three layers take part in every run. The Engine parses the prompt, steps the run, and emits an effect whenever the run needs something from outside, such as a model reply or a tool result. The Harness performs each effect, hands the answer back to the Engine, and records the run through the Host's recorder. The Host is the application you run prompts in, such as Workshop: it launches runs, chooses policy such as the selected model and whether someone can answer `input.ask()`, and can cancel a run.
+A prompt never does its own outside work. The block that asks for an effect waits while the Harness performs it, then resumes with the Harness's answer. In the prompt above, the block waits on `store.write`, resumes, waits again on `store.read`, and resumes with `hello`, which it returns.
 
-Four optional frontmatter keys are the contract keys, the prompt's contract with the Harness and the Host:
+The Engine parses the prompt, steps the run, and emits an effect whenever the run needs something from outside, such as a model reply or a tool result. The Harness performs each effect, hands the answer back to the Engine, and records the run through the Host's recorder, which keeps the Host's record of each run.
 
-- `plugins:` names the Plugins the prompt needs from the Harness ([declaring Plugins](12-tools.md#declaring-plugins)).
-- `tools:` binds tool slots, each an alias mapped to a tool path ([tool slots and Tool objects](12-tools.md#tool-slots-and-tool-objects)).
-- `models:` declares model roles ([declaring roles](10-models.md#declaring-roles)).
-- `args:` types the prompt's arguments ([arg declarations](06-arguments.md#arg-declarations)).
+### Harness work is the only way out
 
-The parser checks only the shape of these keys. The Harness satisfies them at prepare, the step before the run starts ([what a run does](04-how-a-prompt-runs.md#what-a-run-does)). A declaration the Harness cannot satisfy fails the run with the run error kind `RequirementsUnmet` before any section runs ([how a failed run is classified](16-limits-and-errors.md#how-a-failed-run-is-classified)), and prepare's refusal text is the requirements notice ([when a run cannot start](04-how-a-prompt-runs.md#when-a-run-cannot-start)).
+A prompt reaches the outside world only through Harness work, meaning requests that the Harness performs for the run and answers. The set of effect kinds is closed, so a prompt has no other path outside.
 
-A prompt that declares no Plugins, tools, or model roles has no requirements for the Harness to meet before the run. It runs on its Lua sections alone, with no model, no tools, and no real files behind it:
+The language itself performs no I/O and reads no clock. Inside a block, `io` and `os` are `nil`:
 
 ````markdown
 ---
-name: no-requirements
-description: Runs on Lua alone
+name: no-io
+description: Shows that io and os are absent.
 runvil: 0
 ---
 
-# No Requirements
+# No io
 
 ## Only
 
 ```lua
-return 'no Plugins'
+return tostring(io) .. ',' .. tostring(os)
 ```
 ````
 
 ````text
-no Plugins
+nil,nil
 ````
 
-When a prompt does declare model roles and tool slots, the frontmatter decides what is bound. Before the run begins, the Harness fills every declared model role with a concrete model and every tool slot with the tool at its declared tool path ([filling tool slots and model roles](04-how-a-prompt-runs.md#filling-tool-slots-and-model-roles)). For the `writer: {}` role in the prompts above, prepare fills `writer` with the Host's current model and reports the declaration satisfied, and a section's `models.use('writer')` then runs its rounds under that model.
+A block's Lua has no `io` or `os` library, so it reaches the outside world only through Harness work, and it reads the time only as the start time in `sys.when`.
 
-Lua only ever selects labels that are already bound:
+### The four kinds of Harness work
 
-- `models.use` selects only a role label that the frontmatter declared and the Harness filled, and raises `models.use label "{label}" is not a bound model role` for any other label.
-- `tools.add` puts a slot's tool in scope for the model in the current section ([advertising tools to the model](12-tools.md#advertising-tools-to-the-model)), accepts only an alias whose slot is filled, and fails with `tools.add alias "{alias}" is not a bound tool slot` for any other alias.
+There are exactly four kinds of Harness work:
 
-The model calls a bound tool by its alias from `tools:`, such as `search`, never by its tool path, such as `runvil/web/search`.
+- A model round.
+- A call to a Plugin's tool.
+- A store operation.
+- The timer behind a timed wait on tasks (see [Time limits on waits](15-tasks.md#time-limits-on-waits)).
 
-The language itself performs no I/O and reads no clock. A prompt reaches the outside world only through Harness work: requests the Harness performs for the run and answers. There are exactly four kinds of Harness work:
+A model round is one request to a model and its reply. The Harness answers it with the model's reply or with the reason the round failed.
 
-- A model round: `models.infer` sends one round with its prompt text and no tools, and `models.loop` runs rounds ([running a round with models.infer](10-models.md#running-a-round-with-modelsinfer)).
-- A tool call ([calling tools from Lua](12-tools.md#calling-tools-from-lua)), a wait for operator input included, because `input.ask()` calls a tool ([asking the operator with input.ask](05-lua-environment.md#asking-the-operator-with-inputask)).
-- A store operation, one for each store call ([what the store is](09-the-store.md#what-the-store-is)).
-- The timer behind a timed wait on tasks ([time limits on waits](15-tasks.md#time-limits-on-waits)).
+Asking the operator with `input.ask()` is a call to a Plugin's tool. The operator is the person who answers `input.ask` during a run. The user-input Plugin defines `input.ask` to end in `return tools.call(plugin .. "/ask")`, so every ask reaches the Harness as an ordinary tool call, and the wait for the operator's answer is Harness work.
 
-Everything else a block does, such as computing and returning a value, is plain Lua that needs no Harness work, which is why a literal `return` asks the Harness for nothing. While the Harness performs Harness work, only the chain that asked for it waits ([waiting and reproducibility](04-how-a-prompt-runs.md#waiting-and-reproducibility)).
+Every store call, even a read, is a store operation that the Harness performs. That covers all eight `store.*` calls a prompt can make (see [Writing and reading files](09-the-store.md#writing-and-reading-files)), and the block that made the call waits for its answer.
 
-This section asks for two store operations, a write and then a read:
+### Every effect gets one answer
 
-````markdown
----
-name: notes
-description: keeps a note
-runvil: 0
----
+The Harness answers every effect exactly once, either with its result or with its failure, such as the reason a model round, a tool call, or a store operation failed. A round the Host stops is answered with its failure, as [Stopping a model round](#stopping-a-model-round) shows.
 
-# Notes
+### Work that needs no Harness
 
-## Save
+Everything else a block does, such as computing and returning a value, is plain Lua that needs no Harness work. The greeter prompt from [A section holding Lua](#a-section-holding-lua), whose `## Say hi` block is `return 'hello'`, ends with `hello` without issuing any effect.
 
-```lua
-store.write('todo.md', 'ship it')
-return store.read('todo.md')
-```
+A call to a local tool needs no Harness work either. A local tool is a Lua function that a section defines with `tools.offer_local` (see [Defining local tools with `tools.offer_local`](12-tools.md#defining-local-tools-with-toolsoffer_local)). The Engine runs its handler inside the calling block, so in a prompt whose local tool `grab` answers `got ` followed by its `value` argument, the call `tools.call('grab', { value = 'hi' })` returns `got hi` and the run issues zero effects.
+
+## Shipped example prompts
+
+Here you find the example prompts that ship with Runvil, so you can open a working file for each idea this chapter introduces.
+
+The smallest of them, `echo.md`, does all its work in one Lua block under `## Main`:
+
+````lua
+return args
 ````
+
+Run with the argument `hello`, it ends with:
 
 ````text
-ship it
+hello
 ````
 
-All four contract keys can sit together in one frontmatter block, alongside `name`, `description`, and `runvil: 0`:
+Every prompt shipped in the repository's `prompts` directory, including the prompts in its subdirectories, parses as written, so you can open any of them as a working example. The directory ships these small examples:
 
-````yaml
----
-name: research
-description: Searches public and private sources
-runvil: 0
-plugins:
-  - runvil/web
-  - ref: io.github.corp/mcp
-    optional: true
-    config: { servers: [alpha] }
-tools:
-  search: runvil/web/search
-  fetch: runvil/web/fetch
-args:
-  use_mcp: { type: boolean, default: true, description: Search MCP-connected private sources }
-models:
-  analyst: { keywords: [frontier, thinking], min_context: 200000, description: deep reasoning }
-  triage: { keywords: [fast, small], description: quick triage of search results }
----
-````
+- `echo.md` returns its argument unchanged with `return args` and makes no model round; [The argument string in `args`](06-arguments.md#the-argument-string-in-args) teaches `args`.
+- `hello.md` has the model say hello through the prose `Say "Hello, world!"` and `return models.infer(prose)`; [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer) teaches `models.infer`.
+- `greet.md` builds a greeting from its argument with `var.greeting = "Hello, " .. args .. "!"` and has the model repeat it through `{{ var.greeting }}` in its prose; [Placeholders in prose](07-substitution.md#placeholders-in-prose) teaches placeholders.
+- `analyst-example.md` declares an `analyst` model role under `models:` and calls `models.use("analyst")` before `return models.infer(prose)`; [Model roles instead of models](10-models.md#model-roles-instead-of-models) teaches model roles.
 
-- `plugins:` lists `runvil/web` as a required Plugin id ([the web Plugin](13-web-fetch-and-search.md#the-web-plugin)), then a mapping that names `io.github.corp/mcp` with `ref:`, marks it `optional: true`, and gives it its own `config:`.
-- `tools:` maps two aliases, `search` and `fetch`, to tool paths, and the model calls the tools as `search` and `fetch`.
-- `args:` declares `use_mcp`, a `boolean` argument with a default of `true` and a description.
-- `models:` declares two roles, `analyst` and `triage`, each with `keywords` and a `description`, and `analyst` also sets `min_context`.
+Runvil also ships `research-person.md`, which researches a person. Its `## Research` section calls `tools.offer({"web/search", "web/fetch"})` (see [Offering tools with `tools.offer` and `plugins.offer`](12-tools.md#offering-tools-with-toolsoffer-and-pluginsoffer)), and the prompt runs end to end to a factual summary. [What the web Plugin gives a prompt](13-web-fetch-and-search.md#what-the-web-plugin-gives-a-prompt) teaches `web/search` and `web/fetch`.
 
-A prompt with this frontmatter still needs its H1 title and the H1 body blocks or sections that do its work, and prepare checks each declaration against the Harness before the run starts.
+The research prompt takes the person to research as its argument. Its prose puts `{{ args }}` after the line `Your input is a request about a person:`, so a run given the argument `Ada Lovelace` places that name into the prose right after that line.
