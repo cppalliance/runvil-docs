@@ -840,7 +840,7 @@ Run it with the argument string `{"prose":""}`:
 empty
 ````
 
-Outside the H1 body, a JSON `null` nested anywhere inside the argument string reads as nil, and a `null` element inside a JSON array leaves that index reading nil.
+A JSON `null` nested inside the argument string reads as [`json.null`](05-lua-environment.md#null-values-and-jsonnull) in every section, the H1 body included, and a `null` element inside a JSON array keeps its index. So for the argument string `{"note":null,"ids":[1,null,3]}`, both `argv.note == json.null` and `argv.ids[2] == json.null` are true, `json.encode(argv)` gives back `{"ids":[1,null,3],"note":null}`, and a field the string leaves out still reads nil. `json.null` is a userdata and so it is truthy, which means `if argv.note then` passes for a null. Test for a null with `argv.note == json.null` and for an absent field with `argv.note == nil`. A whole argument string that is the JSON `null` is different: it makes `argv` itself nil, as [Malformed input](#malformed-input) describes.
 
 ## Prompts with no `args:` key
 
@@ -1181,7 +1181,7 @@ In the H1 body, keep `argv` as [JSON data](05-lua-environment.md#keeping-state-i
 argv must be JSON data, got {type}
 ````
 
-The one userdata the freeze accepts is `json.null`, which freezes as JSON null, and later sections read it as nil like any other JSON `null`. So after an H1 body runs `argv = { a = json.null }`, a later section reads `argv.a` as nil.
+The one userdata the freeze accepts is `json.null`, which freezes as JSON null, and later sections read it as `json.null` again, like any other JSON `null` in the arguments. So after an H1 body runs `argv = { a = json.null }`, a later section reads `argv.a` as `json.null`, and `argv.a == json.null` is true.
 
 ### Your own `_G` metatable in the H1 pass
 

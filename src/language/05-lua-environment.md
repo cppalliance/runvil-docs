@@ -1182,6 +1182,14 @@ Here the write raises `var.handler must be JSON data, got function`. The path is
 
 `var` checks an assigned table deeply, so a table holding a function at any depth, such as `{ f = function() end }`, fails at the assigning line too. That error comes from the conversion to JSON, and its message names the offending type, such as `function`.
 
+A table that is shared at many levels can also be too large to store, because the conversion to JSON copies it once for every place it appears. Before it converts an assigned table, `var` spends the same value and byte budgets that [`json.encode`](#size-and-nesting-limits) does, and a table that runs the budget out raises this error at the assigning line, with the full target path in place of `{path}`:
+
+````text
+{path} is too large to store
+````
+
+After `local t = {} for i = 1, 40 do t = { t, t } end`, the write `var.x = t` raises `var.x is too large to store`. Like any rejected write it stores nothing. A table that contains itself is not a size problem, so the conversion to JSON refuses it with its own message.
+
 The guard raises its error at the assigning statement itself, not later when `var` is saved. That is why a `pcall` around that one write catches it, the block keeps running, and later `var` writes still work, as `var.kept = 'yes'` does in the `guarded` prompt. A rejected write stores nothing, so `var` holds only the writes that passed the guard: after a rejected `var.t.f = function() end` following `var.t.kept = 'yes'`, `var` reads back as exactly `{ "t": { "kept": "yes" } }`.
 
 `pcall` returns `false` and an [error value](#error-values) whose `tostring` text contains the guard's message, so `tostring(err):match('must be JSON data')` finds it. In a section, the caught error value has error kind `lua`, its `message` field is the guard's text, and `tostring(err)` returns that message. [Raising and catching errors](#raising-and-catching-errors) covers `pcall` in full.
@@ -1330,7 +1338,7 @@ Every JSON `null` decodes to `json.null`, and `json.null` is what you put in a t
 
 `json.null` is a light userdata, so `type(json.null)` is `userdata`, and error messages name its type `lightuserdata`. Like every userdata it is truthy, so `if row.note then` passes for a null, as the `truthy` in the result shows. Test for null with `v == json.null`, and for an absent field with `v == nil`.
 
-Outside `json.encode`, `json.null` passes the Engine's other conversions to JSON too. The `var` guard accepts it and stores JSON null (see [When a value is not JSON data](#when-a-value-is-not-json-data)), a `tools.call` argument table or a task's `item` can hold it, and a fanout member that is `json.null` runs its arm with `item == json.null`. A prose placeholder still refuses it: naming a bare global that holds `json.null`, as in `{{ nothing }}` after `nothing = json.null`, fails with `missing {{ nothing }}` and substitution kind `NullValue`, the same failure a `var` field holding null gives (see [Substitution error kinds](07-substitution.md#substitution-error-kinds)).
+Outside `json.encode`, `json.null` passes the Engine's other conversions to JSON too. The `var` guard accepts it and stores JSON null (see [When a value is not JSON data](#when-a-value-is-not-json-data)), a `tools.call` argument table or a task's `item` can hold it, and a fanout member that is `json.null` runs its arm with `item == json.null`. A JSON null nested in the argument string reads as `json.null` in `argv` too, as [Missing fields and null values](06-arguments.md#missing-fields-and-null-values) shows. A prose placeholder still refuses it: naming a bare global that holds `json.null`, as in `{{ nothing }}` after `nothing = json.null`, fails with `missing {{ nothing }}` and substitution kind `NullValue`, the same failure a `var` field holding null gives (see [Substitution error kinds](07-substitution.md#substitution-error-kinds)).
 
 ### Keeping empty lists with `json.array`
 
@@ -1425,6 +1433,7 @@ Tables encode this way:
 - A table's keys are checked before any of its values are encoded.
 - A table that contains itself raises an error, while the same table in two places is fine: after `local s = { 1 }`, `json.encode({ a = s, b = { s } })` gives `{"a":[1],"b":[[1]]}`.
 - A table nested more than 127 levels deep raises an error (see [Size and nesting limits](#size-and-nesting-limits)).
+- A value whose walk spends more than the size budget raises an error, as a table shared at every level of a deep nest does (see [Size and nesting limits](#size-and-nesting-limits)).
 - Any metatable other than the list marker or a sealed view's is ignored, and the table's own entries are encoded, so a `__pairs` or `__tostring` metamethod never changes the output.
 
 Functions, threads, and every userdata other than `json.null` are not JSON data, so they raise an error. That includes Engine objects such as tool objects, message lists, and the record views that `msgs[i]` returns. To encode a message record, encode `msgs[i].content` or a plain table you build from its fields.
@@ -1462,7 +1471,7 @@ The run result is:
 lua|json.encode: value.items[2] must be JSON data, got function
 ````
 
-Every message names the failing value by its path. The path starts at `value`, the value you passed, and adds `.name` for each string key and `[k]` for any other key, so `value.items[2]` is the second item of the `items` field. A string key that is not valid UTF-8 appears in the path with replacement characters. These are the messages:
+Every message names the failing value by its path. The path starts at `value`, the value you passed, and adds `.name` for each string key and `[k]` for any other key, so `value.items[2]` is the second item of the `items` field. A string key that is not valid UTF-8 appears in the path with replacement characters. The size refusal is the one message with no path, because the walk stops wherever the budget runs out. These are the messages:
 
 | Problem | Message |
 | --- | --- |
@@ -1475,6 +1484,7 @@ Every message names the failing value by its path. The path starts at `value`, t
 | A marked list with a key that is not an integer | `json.encode: {path} is marked as a list but has a {type} key` |
 | A table that contains itself | `json.encode: {path} contains itself` |
 | A table more than 127 levels deep | `json.encode: {path} is nested more than 127 levels deep` |
+| A walk that spends more than the size budget | `json.encode: value is too large to encode` |
 | A sealed view whose `__index` is a function | `json.encode: {path} cannot be read ({label}); copy the fields you need into a plain table` |
 
 `{type}` is the type name every Engine argument error uses, which is not always what Lua's `type` returns: an integer reads `integer`, a float reads `number`, and `json.null` or any other light userdata reads `lightuserdata`. So `json.decode(5)` raises `json.decode expects a string, got integer`, `json.decode(1.5)` raises `json.decode expects a string, got number`, and `json.array(json.null)` raises `json.array expects a table or no argument, got lightuserdata`.
@@ -1518,7 +1528,7 @@ The run result is:
 {"ratio":"NaN","retry":"[function]","self":"[cycle]","step":2}
 ````
 
-Debug mode never fails on the value. It follows the same rules as a strict encode, but writes a string in place of each failure:
+Debug mode never fails on a value that stays within the [size budget](#size-and-nesting-limits). It follows the same rules as a strict encode, but writes a string in place of each failure:
 
 - A function becomes `"[function]"`, a thread becomes `"[thread]"`, and every userdata other than `json.null` becomes `"[userdata]"`, whether or not it defines `__tostring`.
 - A table that contains itself becomes `"[cycle]"`, and a table more than 127 levels deep becomes `"[too deep]"`.
@@ -1527,7 +1537,7 @@ Debug mode never fails on the value. It follows the same rules as a strict encod
 - A sealed view that cannot be read becomes `"[cannot read: <label>]"`, as in `"[cannot read: sys is sealed]"`, or `"[cannot read]"` when its `__metatable` is not a string.
 - A table that breaks the key rules, marked or not, becomes an object, so `{ [1] = 'a', [3] = 'c' }` becomes `{"1":"a","3":"c"}`. A number key becomes the text it would encode as, such as `2`, `2.5`, or `1e+300`, an infinite key becomes `Infinity` or `-Infinity`, and a boolean key becomes `true` or `false`. When two keys give the same text, the later one in visiting order wins, so with both `t[1]` and `t['1']` set, the string key's value is kept. Table, function, userdata, and thread keys are left out, because their order is not fixed between runs.
 
-Option errors still raise in debug mode, and the output never contains a memory address. Use debug mode only to look at values. A placeholder such as `"[function]"` is ordinary text to `json.decode`, a tool, or a model, so encode data you send anywhere without `debug`, where a value that is not JSON data fails at the line that encodes it.
+Option errors still raise in debug mode, and so does the size refusal, `json.encode: value is too large to encode`, because a placeholder for every remaining value would not stop the walk. The output never contains a memory address. Use debug mode only to look at values. A placeholder such as `"[function]"` is ordinary text to `json.decode`, a tool, or a model, so encode data you send anywhere without `debug`, where a value that is not JSON data fails at the line that encodes it.
 
 ### JSON Lines with `json.encode_lines` and `json.decode_lines`
 
@@ -1576,8 +1586,9 @@ When the store holds no `rows.jsonl` yet, the run result is:
 - The table rules of `json.encode` with the `json.encode_lines:` prefix, for a table that has list items but is still not a list, as in `json.encode_lines: value mixes list items and named keys` or `json.encode_lines: value is missing list item [2]`.
 - `json.encode_lines: value cannot be read (sys is sealed); copy the fields you need into a plain table`, for a sealed view that cannot be read, such as `sys`.
 - The three options errors, with the `json.encode_lines:` prefix, as in `json.encode_lines: unknown option pretty`.
+- `json.encode_lines: value is too large to encode`, when the items of one call together spend more than the size budget. The items share one budget, so the refusal can come from any item or from the list as a whole.
 
-An error inside an item names the item by its path under the list, as in `json.encode_lines: value[2].name must be JSON data, got function`. The list stays on the cycle path while its items are encoded, so a list that contains itself raises `json.encode_lines: value[1] contains itself`. In debug mode the argument errors above still raise, and only failures inside items become placeholders.
+An error inside an item names the item by its path under the list, as in `json.encode_lines: value[2].name must be JSON data, got function`. The list stays on the cycle path while its items are encoded, so a list that contains itself raises `json.encode_lines: value[1] contains itself`. In debug mode the argument errors above and the size refusal still raise, and only the other failures inside items become placeholders.
 
 ### Size and nesting limits
 
@@ -1589,6 +1600,20 @@ Nesting is limited to 127 levels in both directions, so `json.encode` never writ
 - `json.encode` counts the value you pass as level 1 and raises `json.encode: {path} is nested more than 127 levels deep` for a table at level 128. The path names that table, such as `value` followed by 127 steps of `[1]` for lists nested in lists. In debug mode the table becomes `"[too deep]"` instead.
 
 Reading through a sealed view to its data adds no level, so a `var` value nested 127 levels deep still encodes. At each table, `json.encode` checks for a cycle before it checks the depth, so a loop of 127 tables or fewer reports `contains itself`, even when the repeated table falls at level 128. A longer loop reaches the depth limit before it repeats, so it reports the depth.
+
+`json.encode` and `json.encode_lines` also bound the work of one call, because a table can be reachable from many places while the Lua heap holds it once. After `local t = {} for i = 1, 40 do t = { t, t } end`, the heap holds 41 small tables, but `json.encode(t)` would write about 2^41 values. Each call therefore spends a budget while it walks, and a call that runs the budget out stops and raises this error, or the same message with the `json.encode_lines:` prefix, with no path:
+
+````text
+json.encode: value is too large to encode
+````
+
+The budget comes from the Lua memory limit of the section VM, `lua_memory_bytes`, which is 64 MiB by default (see [Lua memory and log quotas](16-limits-and-errors.md#lua-memory-and-log-quotas)), so a value that fits the heap once is never refused for its size alone. The walk spends it in three ways:
+
+- One value for each value the walk visits, up to one eighth of the memory limit, which is 8,388,608 values at the default. A table counts once for every place it appears, and each sealed view the walk reads through counts too. At the default limit this is enough for any text that `json.decode` accepts, so a value decoded from text within the 8,388,608-byte cap encodes again.
+- One byte for each byte of every string value and every string key the walk visits, up to the memory limit itself, which is 67,108,864 bytes at the default. A string that appears in many places counts at each place.
+- At most 100,000 keys that are not numbers or booleans on one path, counting the keys of the table being encoded and of every table above it on the way down. Integer keys cost nothing here, so a list of a million strings still encodes, while an object with more than 100,000 string keys on one path raises the same error.
+
+Debug mode raises this error too. A `var` write spends the same value and byte budgets before it converts the value, as [When a value is not JSON data](#when-a-value-is-not-json-data) describes.
 
 ## Run facts in `sys` and `ui`
 

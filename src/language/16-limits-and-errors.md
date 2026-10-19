@@ -184,7 +184,7 @@ Each [`log`](05-lua-environment.md#logging-and-lifecycle-reports) call records o
 
 The memory ceiling is the most Lua heap a section VM may use. A block that allocates past it fails, so with a Harness ceiling of 4 MiB, a block that keeps allocating hits the ceiling and fails. A section VM runs its Lua under a default memory limit of 64 MiB, applied when the VM is built.
 
-Each section VM may use at most 64 MiB (67,108,864 bytes) of Lua heap by default, and only the Harness sets this ceiling. Running out of it is an ordinary Lua error, not a quota error, because only the two log quotas raise quota errors.
+Each section VM may use at most 64 MiB (67,108,864 bytes) of Lua heap by default, and only the Harness sets this ceiling. Running out of it is an ordinary Lua error, not a quota error, because only the two log quotas raise quota errors. The ceiling also sets the size budget that `json.encode`, `json.encode_lines`, and a `var` write spend, as [Size and nesting limits](05-lua-environment.md#size-and-nesting-limits) describes.
 
 ### The log event quota and the log byte quota
 
