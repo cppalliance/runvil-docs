@@ -37,7 +37,7 @@ Two lines do the work. `plugins: [web]` declares that the prompt needs the web P
 
 ### The two tools and how you declare them
 
-The web Plugin, whose package name is `runvil/web`, gives a prompt two tools: a fetch tool that fetches a page and a search tool that searches the web.
+The web Plugin, whose fully qualified name is `runvil/web`, gives a prompt two tools: a fetch tool that fetches a page and a search tool that searches the web.
 
 You declare the Plugin by its plain name, `web`, under `plugins:`. The flow form `plugins: [web]` is one way to write it, and the YAML list item `- web` is the other. This frontmatter declares exactly what the frontmatter of `fetch-page` declares:
 
@@ -57,13 +57,13 @@ Both tools return untrusted output, which is tool output whose trust level is un
 
 ### What the Host supplies
 
-A prompt can use the web Plugin only on a Host that installs its package, `runvil/web`. The Host also supplies the search provider, the Host-wide service `runvil/search-provider` that every web search runs through. The prompt never sees the search provider, and it never sees the client that fetches pages either.
+A prompt can use the web Plugin only on a Host that installs it by its fully qualified name, `runvil/web`. The Host also supplies the search provider, the Host-wide service `runvil/search-provider` that every web search runs through. The prompt never sees the search provider, and it never sees the client that fetches pages either.
 
 Neither web tool takes a credential argument, so a prompt never supplies an API key, a gateway address, or a token. The fetch tool's only arguments are `url`, `max_chars`, and `raw`. The search tool accepts only `query`, `count`, `freshness`, `country`, `search_lang`, `safesearch`, `include_domains`, and `exclude_domains`, and no other argument.
 
 ### Plugin ids and tool ids
 
-When the Host picks no Plugin id, the web Plugin installs under `web`, the second segment of its package name `runvil/web`. A Host that picks a Plugin id, such as `browse`, installs it under that name instead.
+When the Host picks no Plugin id, the web Plugin installs under `web`, the second segment of its fully qualified name `runvil/web`. A Host that picks a Plugin id, such as `browse`, installs it under that name instead.
 
 Each web tool id is the Plugin id, a slash, and the tool name:
 

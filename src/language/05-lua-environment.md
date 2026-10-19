@@ -2362,7 +2362,7 @@ The operator is the person who answers during a run. The `runvil/user-input` Plu
 
 You get operator input in a prompt by declaring the Plugin under the frontmatter [`plugins:`](12-tools.md#tools-plugins-and-the-plugins-key) key by its Plugin id, `user-input`. Write it as the line `  - user-input` after `plugins:`, as the `ask-once` prompt does, or in flow style as `plugins: [user-input]`. The entry is the one-segment Plugin id, because an entry of two segments fails the parse with ``a Plugin id is one segment, such as `web` ``.
 
-The Plugin's package name is `runvil/user-input`, and a Host that picks no other Plugin id installs it as `user-input`, the Plugin id a prompt declares.
+The Plugin's fully qualified name is `runvil/user-input`, and a Host that picks no other Plugin id installs it as `user-input`, the Plugin id a prompt declares.
 
 Declaring `user-input` gives your Lua the `input` table, one of the globals that [Plugin preludes](#plugin-preludes) define. Its `ask` field is a function, so `type(input.ask)` returns `function`. The `input` table is plain Lua built by the Plugin's prelude, and `ask` is its only function.
 

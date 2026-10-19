@@ -365,7 +365,7 @@ A host service is a named service the Host supplies for each run, such as an inp
 
 A declared Plugin that lacks a service it needs refuses the run at prepare with run error kind `RequirementsUnmet`. The notice gets one line per missing service, in the form `- {plugin} needs {service}, and the environment provides none`, which names both the Plugin and the service instead of calling the Plugin missing. A run refused this way never calls the Plugin, so no tool effect happens, and the refused run records zero effects.
 
-The `user-input` Plugin is the common case. Its package name is `runvil/user-input`, so a Host that picks no other name installs it with the Plugin id `user-input`. It needs the run's input broker, the service `runvil/input-broker`, so a run without a broker cannot use it. A prompt that declares it is refused before the run starts on a Host with no operator to ask, and the notice names both the Plugin and the service:
+The `user-input` Plugin is the common case. Its fully qualified name is `runvil/user-input`, so a Host that picks no other name installs it with the Plugin id `user-input`. It needs the run's input broker, the service `runvil/input-broker`, so a run without a broker cannot use it. A prompt that declares it is refused before the run starts on a Host with no operator to ask, and the notice names both the Plugin and the service:
 
 ````text
 the environment cannot satisfy this prompt:

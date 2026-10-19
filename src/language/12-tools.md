@@ -33,7 +33,7 @@ Two lines do the work. `plugins: [user-input]` in the frontmatter declares that 
 
 ### Tools and Plugins
 
-A tool is one operation a prompt can ask for, and every tool is implemented by a Plugin, the unit that supplies tools to a run (see [The Engine, the Harness, and the Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host)). Runvil's bundled tools come from its built-in Plugin packages, such as the package `runvil/web`, which is described as `Search the web and fetch pages`.
+A tool is one operation a prompt can ask for, and every tool is implemented by a Plugin, the unit that supplies tools to a run (see [The Engine, the Harness, and the Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host)). Runvil's bundled tools come from its bundled Plugins, such as the one with the fully qualified name `runvil/web` and the description `Search the web and fetch pages`.
 
 Every Plugin is named by a Plugin id, and every tool is named by a tool id. Each tool has three things, all set by the Plugin that implements it:
 
@@ -78,7 +78,7 @@ Each entry is a plain string with no settings of its own. A Plugin's configurati
 
 Listing a Plugin under `plugins:` declares that the prompt needs it and makes the Plugin's prelude run in every section (see [Plugin preludes](#plugin-preludes)). Every listed Plugin is a required Plugin, one the run cannot start without (see [Plugins at prepare](04-how-a-prompt-runs.md#plugins-at-prepare)).
 
-Declaring a Plugin does not install it. The Host installs Plugins, and a prompt can only declare Plugins the Host already has. The Host installs each Plugin under a one-segment Plugin id, by default the second part of its package name, so the package `runvil/web` installs as `web`, and that Plugin id is what you write under `plugins:`. A Plugin id has no version part and no path, so the name `web` names the one Plugin the Host installed under exactly that name.
+Declaring a Plugin does not install it. The Host installs Plugins, and a prompt can only declare Plugins the Host already has. The Host installs each Plugin under a one-segment Plugin id, by default the second part of its fully qualified name, so `runvil/web` installs as `web`, and that Plugin id is what you write under `plugins:`. A Plugin id has no version part and no path, so the name `web` names the one Plugin the Host installed under exactly that name.
 
 A declared Plugin that the Host has not installed refuses the run before it starts. The run fails with run error kind `RequirementsUnmet` (see [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run)), and its requirements notice opens with `the environment cannot satisfy this prompt:` and includes a line that names the Plugin:
 
@@ -144,10 +144,10 @@ invalid Plugin id `{text}`: {reason}
 
 [Plugin ids, tool ids, and wire names](#plugin-ids-tool-ids-and-wire-names) lists every reason. Two are the ones you are most likely to meet:
 
-- A Plugin id is one segment, so write the Plugin id the Host installed, such as `web`, and not the two-part package name such as `runvil/web`. An entry with a `/` fails with the reason `` a Plugin id is one segment, such as `web`, with no '/' ``.
+- A Plugin id is one segment, so write the Plugin id the Host installed, such as `web`, and not the two-part fully qualified name such as `runvil/web`. An entry with a `/` fails with the reason `` a Plugin id is one segment, such as `web`, with no '/' ``.
 - A Plugin id uses only lowercase ASCII letters, digits, `-`, `_`, and `.`. Any other character, such as an uppercase letter or the `@` of a version pin, fails with the reason `segments may contain only lowercase ASCII letters, digits, '-', '_', '.'`.
 
-So a prompt whose frontmatter lists the package name instead of the Plugin id, as in `plugins: [runvil/web]`, fails to parse with this message:
+So a prompt whose frontmatter lists the fully qualified name instead of the Plugin id, as in `plugins: [runvil/web]`, fails to parse with this message:
 
 ````text
 invalid frontmatter: invalid Plugin id `runvil/web`: a Plugin id is one segment, such as `web`, with no '/'
@@ -215,15 +215,15 @@ A name reads back exactly as you wrote it, with its segments joined by `/`, and 
 
 ### Plugin ids
 
-A Plugin id is exactly one segment: the name the Host installed the Plugin under, such as `web`. By default that is the last segment of the Plugin's package name, so the package `runvil/web` is declared as `- web` and offers `web/fetch`. A Plugin id is a single lowercase segment that may contain digits, hyphens, underscores, and dots, so `user-input` is a valid Plugin id, and `plugins: [web, user-input]` declares two Plugins. Under `plugins:`, an uppercase letter in an entry fails the parse with a `Frontmatter` error and the character-set reason, so write every Plugin id in lowercase.
+A Plugin id is exactly one segment: the name the Host installed the Plugin under, such as `web`. By default that is the last segment of the Plugin's fully qualified name, so `runvil/web` is declared as `- web` and offers `web/fetch`. A Plugin id is a single lowercase segment that may contain digits, hyphens, underscores, and dots, so `user-input` is a valid Plugin id, and `plugins: [web, user-input]` declares two Plugins. Under `plugins:`, an uppercase letter in an entry fails the parse with a `Frontmatter` error and the character-set reason, so write every Plugin id in lowercase.
 
 Three name shapes are easy to mix up:
 
 - a Plugin id has one segment, such as `web`
-- a package name is a vendor and name pair, such as `runvil/web`
+- a fully qualified name is a vendor and name pair, such as `runvil/web`
 - a tool id starts with the Plugin id and adds the tool's own segment, such as `web/fetch`
 
-Only the first goes under `plugins:`. A package name is not a Plugin id, and neither is a tool id such as `web/fetch`, so writing either one under `plugins:`, or passing a tool id to `plugins.offer`, fails with the reason `` a Plugin id is one segment, such as `web`, with no '/' ``.
+Only the first goes under `plugins:`. A fully qualified name is not a Plugin id, and neither is a tool id such as `web/fetch`, so writing either one under `plugins:`, or passing a tool id to `plugins.offer`, fails with the reason `` a Plugin id is one segment, such as `web`, with no '/' ``.
 
 ### Tool ids
 
@@ -310,8 +310,8 @@ Because the segments are checked first, a Plugin id with an empty segment, such 
 
 Each place that reads a Plugin id puts the reason in its own message:
 
-- Under `plugins:`, the parse fails with a `Frontmatter` error whose message, after `invalid frontmatter: `, quotes the entry as written: `` invalid Plugin id `{text}`: {reason} ``. For a package name such as `runvil/web`, the message contains `` a Plugin id is one segment, such as `web` ``, and the fix is to write the Plugin id, such as `web`.
-- `plugins.offer` fails with `plugins.offer takes a Plugin name, a Plugin object, or a list of them, got "{text}": invalid Plugin id: {reason}`.
+- Under `plugins:`, the parse fails with a `Frontmatter` error whose message, after `invalid frontmatter: `, quotes the entry as written: `` invalid Plugin id `{text}`: {reason} ``. For a fully qualified name such as `runvil/web`, the message contains `` a Plugin id is one segment, such as `web` ``, and the fix is to write the Plugin id, such as `web`.
+- `plugins.offer` fails with `plugins.offer takes a Plugin id, a Plugin object, or a list of them, got "{text}": invalid Plugin id: {reason}`.
 
 ## Tool scope and the task built-ins
 
@@ -693,12 +693,12 @@ Plugin objects are frozen: cannot assign field "name"
 
 ### Finding a Plugin with `plugins.get`
 
-`plugins.get(name)` takes a Plugin id string and returns that Plugin's object, whether the Plugin is required or extra, so in `look-up`, `plugins.get('web').name` reads `web`. It returns `nil`, rather than raising an error, for a name that matches no Plugin the run knows. It checks no Plugin name grammar, so any string that names no Plugin object reads `nil`, never an error, unlike `plugins.offer`, which checks the name first. It takes a bare Plugin id, so a tool id such as `'web/fetch'` reads `nil` even when the `web` Plugin exists.
+`plugins.get(name)` takes a Plugin id string and returns that Plugin's object, whether the Plugin is required or extra, so in `look-up`, `plugins.get('web').name` reads `web`. It returns `nil`, rather than raising an error, for a name that matches no Plugin the run knows. It checks no Plugin id grammar, so any string that names no Plugin object reads `nil`, never an error, unlike `plugins.offer`, which checks the name first. It takes a bare Plugin id, so a tool id such as `'web/fetch'` reads `nil` even when the `web` Plugin exists.
 
 Calling `plugins.get` with anything other than a string raises an error that `pcall` catches, and its message names the type passed, such as `got integer`, `got table`, or `got nil`:
 
 ````text
-plugins.get takes a Plugin name, got {type}
+plugins.get takes a Plugin id, got {type}
 ````
 
 Because `plugins.get` also returns an extra Plugin, one in the catalog but not declared under `plugins:`, a section can check for a Plugin and offer its tools only when the run has it. This prompt declares no Plugins:
@@ -1056,12 +1056,12 @@ A shape error refuses the whole call too, so a `tools.offer` refused for an extr
 `plugins.offer` checks every entry of an array before it records any, so a refused call offers nothing, not even the valid Plugins listed before the bad entry, and the section's earlier offers stay in place. Its shape errors name the type of the value it received:
 
 - More than one argument raises `plugins.offer takes one Plugin or a list of them, got extra {type}`, naming the type of the first extra argument, so a list is the way to offer several Plugins in one call.
-- `nil`, or no argument at all, raises `plugins.offer takes a Plugin name, a Plugin object, or a list of them, got nil`.
+- `nil`, or no argument at all, raises `plugins.offer takes a Plugin id, a Plugin object, or a list of them, got nil`.
 - A number, boolean, function, or any other value that is not a Plugin raises the same message with the value's type at the end, such as `got integer` for a whole number.
 - A list element that is neither a Plugin id nor a Plugin object raises that message with the element's type, and a nested table ends it with `got table`, so the list form is one level deep.
 - A userdata that is not a Plugin object, such as a Tool object, ends the message with `got userdata`. Tool objects go to `tools.offer` instead.
 
-A string that is not a valid Plugin id, a tool id such as `'web/fetch'` included, raises an error that quotes the text and adds the Plugin id parse error (see [Name errors and their reasons](#name-errors-and-their-reasons)). The message starts `plugins.offer takes a Plugin name, a Plugin object, or a list of them, got "web/fetch": ` and goes on with the parse error's text.
+A string that is not a valid Plugin id, a tool id such as `'web/fetch'` included, raises an error that quotes the text and adds the Plugin id parse error (see [Name errors and their reasons](#name-errors-and-their-reasons)). The message starts `plugins.offer takes a Plugin id, a Plugin object, or a list of them, got "web/fetch": ` and goes on with the parse error's text.
 
 A well-formed Plugin id can still fail in two ways. Offering by name a Plugin the run does not know, one that is neither declared nor offering tools, raises an error that quotes the name twice and tells you to declare it under `plugins:` or guard the offer with `plugins.get`:
 

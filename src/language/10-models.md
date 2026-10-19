@@ -351,9 +351,9 @@ Prepare binds `scout` and `sprinter` to the Host's current model, one binding ea
 
 ### The model catalog and the current model
 
-The models that a prompt's roles bind to come from the Host, not from the prompt file. The Host supplies a model catalog, its list of available models, in which each model is described by a model descriptor and named by a model id, and it sets one of them as the run's current model before prepare. The current model is the one model that every role in the run is bound to, and the Host chooses it.
+The models that a prompt's roles bind to come from the Host, not from the prompt file. The Host supplies a model catalog, its list of available models, in which each model is described by its model info and named by a model id, and it sets one of them as the run's current model before prepare. The current model is the one model that every role in the run is bound to, and the Host chooses it.
 
-Each model descriptor carries a description, a context window, a thinking mode, and an optional provider id alongside its model id. These show up on a model handle as `description`, `context`, `thinking`, and `provider` (see [Model handles](#model-handles)):
+Each model's info carries a description, a context window, a thinking mode, and an optional provider id alongside its model id. These show up on a model handle as `description`, `context`, `thinking`, and `provider` (see [Model handles](#model-handles)):
 
 - The description is prose that describes the model.
 - The context window is a size in tokens. It is always at least one token and at most 4294967295 tokens, the largest unsigned 32-bit value, with windows such as 131072 and 8192 tokens.

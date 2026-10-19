@@ -244,7 +244,7 @@ Each form goes in a section's prose and takes effect when a Lua block reads `pro
 
 ## Plugin tools
 
-Each Plugin tool comes from a Plugin you declare under `plugins:` by its plain name, `web` or `user-input`, while Provided by gives the package a Host installs, and the Engine offers the four task built-ins to the model in each round after a section calls `tools.allow_tasks`.
+Each Plugin tool comes from a Plugin you declare under `plugins:` by its plain name, `web` or `user-input`, while Provided by gives the fully qualified name of the Plugin a Host installs, and the Engine offers the four task built-ins to the model in each round after a section calls `tools.allow_tasks`.
 
 | Tool | Provided by | Arguments | Returns | Taught in |
 |---|---|---|---|---|
