@@ -29,7 +29,7 @@ remember this
 
 Every run has a store: a set of files, each addressed by a logical string path such as `report.md` or `notes/plan.md`, where a prompt keeps its bulk state. That string is a store path, and [Store paths](#store-paths) gives its rules. `notebook` writes the text `remember this` to the store path `note.txt`, reads it back, and returns it.
 
-Nothing in the frontmatter mentions the store. Because every run has one, a prompt calls `store` functions without declaring anything, not even a [Plugin](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host), and a prompt that declares no Plugins at all still gets a store. By default the run starts with a fresh in-memory store rooted at `/`. The Host can supply the store instead, such as one backed by a real directory, and [Host stores, policies, and modes](#host-stores-policies-and-modes) says what you can rely on then.
+Nothing in the frontmatter mentions the store. Because every run has one, a prompt calls `store` functions without declaring anything, not even a [Pack](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host), and a prompt that declares no Packs at all still gets a store. By default the run starts with a fresh in-memory store rooted at `/`. The Host can supply the store instead, such as one backed by a real directory, and [Host stores, policies, and modes](#host-stores-policies-and-modes) says what you can rely on then.
 
 Each run has its own store, and every `store` call in a run reads and writes that same store. That is why `notebook` gets its note back: the read on the second line goes to the same store the write on the first line changed.
 
@@ -1261,7 +1261,7 @@ The fields you can read are `err.kind`, `err.reason`, `err.path`, `err.anchor`, 
 
 The `path` field names the path the failing call was given, exactly as you passed it, so a failed `store.read('missing.txt')` has `err.path == 'missing.txt'`. Only a `not_a_directory` failure differs: its `path` can name the file that sits where a directory is needed. Store errors name paths in the logical form you write, relative to the store root and without a leading `/`. When an error's prose embeds the path, as a permission denial's reason text or a conflict's detail does, that prose names the logical path too.
 
-The `valid_up_to` and `count` fields arrive in Lua as integers, capped at the largest 64-bit signed integer, 9223372036854775807. A store error value has the same fields whether the failure happens while a [Plugin prelude](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals) is installing or during an ordinary store call, so Lua code sees no difference between the two. A failed read of `missing.txt` caught with `pcall` before the Plugin preludes install still renders `store|not_found|missing.txt|file not found in store: missing.txt`.
+The `valid_up_to` and `count` fields arrive in Lua as integers, capped at the largest 64-bit signed integer, 9223372036854775807. A store error value has the same fields whether the failure happens while a [Pack prelude](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals) is installing or during an ordinary store call, so Lua code sees no difference between the two. A failed read of `missing.txt` caught with `pcall` before the Pack preludes install still renders `store|not_found|missing.txt|file not found in store: missing.txt`.
 
 ### Store error messages
 
@@ -2396,7 +2396,7 @@ The library under `## loader` writes `lib.md` and reads it back while `require` 
 
 Store calls work in three places: in a section's blocks, in the blocks under the H1 during the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass), and in library code while `require` loads it. In all three, a call runs the same way and gives the same results, the same store errors, and the same [line-range](#reading-line-ranges-and-numbered-lines) rules, so an H1 block that runs `return store.read('missing.txt')` ends the run with run error kind `Vfs`, exactly as a section would (see [The store in the H1 body](#the-store-in-the-h1-body)).
 
-`require` is ready before the store functions take their run-time form, and that switch covers every reference to a store function, including any store function a [Plugin prelude](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals) captured earlier.
+`require` is ready before the store functions take their run-time form, and that switch covers every reference to a store function, including any store function a [Pack prelude](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals) captured earlier.
 
 ### One store call, one piece of Harness work
 
@@ -2451,7 +2451,7 @@ The run result is:
 saved
 ````
 
-The captured `store.write`, called after the library has loaded, really writes the file, so the run records a write to `note.txt` and the section then returns normally. A `store` function saved in a local, such as `local write = store.write`, behaves exactly like a fresh `store.write` lookup every time it is called, whichever reference the prompt holds. This holds even for a function a Plugin prelude captured while it installed.
+The captured `store.write`, called after the library has loaded, really writes the file, so the run records a write to `note.txt` and the section then returns normally. A `store` function saved in a local, such as `local write = store.write`, behaves exactly like a fresh `store.write` lookup every time it is called, whichever reference the prompt holds. This holds even for a function a Pack prelude captured while it installed.
 
 ### Store run events
 

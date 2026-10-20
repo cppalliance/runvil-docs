@@ -1,17 +1,17 @@
 # Web fetch and search
 
-The `runvil/web` Plugin gives a prompt two tools: `web/fetch`, which fetches one web page and returns it as text, and `web/search`, which searches the web and returns a list of results. Both tools return untrusted output, because everything they bring back comes from third parties. This chapter covers each tool's arguments, its limits, the safety rules it follows, and the ways it fails, whether your Lua calls it or a model asks for it.
+The `runvil/web` Pack gives a prompt two tools: `web/fetch`, which fetches one web page and returns it as text, and `web/search`, which searches the web and returns a list of results. Both tools return untrusted output, because everything they bring back comes from third parties. This chapter covers each tool's arguments, its limits, the safety rules it follows, and the ways it fails, whether your Lua calls it or a model asks for it.
 
-## What the web Plugin gives a prompt
+## What the web Pack gives a prompt
 
-After this section you can declare the web Plugin, call one of its tools, and tell what happens to a run when the Host cannot supply the Plugin.
+After this section you can declare the web Pack, call one of its tools, and tell what happens to a run when the Host cannot supply the Pack.
 
 ````markdown
 ---
 name: fetch-page
-description: Fetches one web page with the web Plugin.
+description: Fetches one web page with the web Pack.
 runvil: 0
-plugins: [web]
+uses: [web]
 ---
 
 # Fetch page
@@ -23,7 +23,7 @@ return tools.call('web/fetch', { url = 'https://example.com/' })
 ```
 ````
 
-On a Host that installs the web Plugin, the run result is the page as text, wrapped in the untrusted envelope (see [What a tool returns](12-tools.md#what-a-tool-returns)). Inside the envelope it reads:
+On a Host that has the web Pack, the run result is the page as text, wrapped in the untrusted envelope (see [What a tool returns](12-tools.md#what-a-tool-returns)). Inside the envelope it reads:
 
 ````text
 url: https://example.com/
@@ -33,57 +33,48 @@ extraction: readability
 {the page's main article as markdown}
 ````
 
-Two lines do the work. `plugins: [web]` declares that the prompt needs the web Plugin (see [Tools, Plugins, and the `plugins:` key](12-tools.md#tools-plugins-and-the-plugins-key)), and `tools.call('web/fetch', { url = 'https://example.com/' })` calls the Plugin's fetch tool with the address of a page and returns what the tool answers (see [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls)). [Fetching a page](#fetching-a-page) explains the three lines at the top of the answer.
+Two lines do the work. `uses: [web]` declares that the prompt needs the web Pack (see [Tools, Packs, and the `uses:` key](12-tools.md#tools-packs-and-the-uses-key)), and `tools.call('web/fetch', { url = 'https://example.com/' })` calls the Pack's fetch tool with the address of a page and returns what the tool answers (see [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls)). [Fetching a page](#fetching-a-page) explains the three lines at the top of the answer.
 
 ### The two tools and how you declare them
 
-The web Plugin, whose fully qualified name is `runvil/web`, gives a prompt two tools: a fetch tool that fetches a page and a search tool that searches the web.
+The web Pack, whose fully qualified name is `runvil/web`, gives a prompt two tools: a fetch tool that fetches a page and a search tool that searches the web.
 
-You declare the Plugin by its plain name, `web`, under `plugins:`. The flow form `plugins: [web]` is one way to write it, and the YAML list item `- web` is the other. This frontmatter declares exactly what the frontmatter of `fetch-page` declares:
+You declare the Pack by its Pack id, `web`, under `uses:`. A bare entry means the `runvil` Pack of that id, so `runvil/web` declares the same Pack. The flow form `uses: [web]` is one way to write it, and the YAML list item `- web` is the other. This frontmatter declares exactly what the frontmatter of `fetch-page` declares:
 
 ````markdown
 ---
 name: fetch-page
-description: Fetches one web page with the web Plugin.
+description: Fetches one web page with the web Pack.
 runvil: 0
-plugins:
+uses:
   - web
 ---
 ````
 
-On a Host that installs the web Plugin under its default Plugin id, `web`, the two tools have the tool ids `web/fetch` and `web/search` (see [Plugin ids, tool ids, and wire names](12-tools.md#plugin-ids-tool-ids-and-wire-names)).
+The Pack id is `web`, so the two tools have the tool ids `web/fetch` and `web/search` (see [Pack ids, tool ids, and wire names](12-tools.md#pack-ids-tool-ids-and-wire-names)).
 
 Both tools return untrusted output, which is tool output whose trust level is untrusted, so it arrives wrapped in the untrusted envelope. Every page `web/fetch` returns and every list of results `web/search` returns is untrusted output, and [Calling web tools from Lua and from the model](#calling-web-tools-from-lua-and-from-the-model) shows what that means for your Lua and for a model.
 
 ### What the Host supplies
 
-A prompt can use the web Plugin only on a Host that installs it by its fully qualified name, `runvil/web`. The Host also supplies the search provider, the Host-wide service `runvil/search-provider` that every web search runs through. The prompt never sees the search provider, and it never sees the client that fetches pages either.
+A prompt can use the web Pack only on a Host that calls the web Plugin, which adds the Pack under its fully qualified name, `runvil/web`. The Host also supplies the search provider, the Host-wide service `runvil/search-provider` that every web search runs through. The prompt never sees the search provider, and it never sees the client that fetches pages either.
 
 Neither web tool takes a credential argument, so a prompt never supplies an API key, a gateway address, or a token. The fetch tool's only arguments are `url`, `max_chars`, and `raw`. The search tool accepts only `query`, `count`, `freshness`, `country`, `search_lang`, `safesearch`, `include_domains`, and `exclude_domains`, and no other argument.
 
-### Plugin ids and tool ids
+### Pack ids and tool ids
 
-When the Host picks no Plugin id, the web Plugin installs under `web`, the second segment of its fully qualified name `runvil/web`. A Host that picks a Plugin id, such as `browse`, installs it under that name instead.
-
-Each web tool id is the Plugin id, a slash, and the tool name:
-
-| Plugin id | Fetch tool id | Search tool id |
-|---|---|---|
-| `web` | `web/fetch` | `web/search` |
-| `browse` | `browse/fetch` | `browse/search` |
-
-This chapter writes the tool ids for the default Plugin id, `web/fetch` and `web/search`. On a Host that installs the Plugin under another Plugin id, that Plugin id goes in front of the slash.
+The web Pack's Pack id is `web`, the second segment of its fully qualified name `runvil/web`, and no Host can give it another. Each web tool id is the Pack id, a slash, and the tool name, so the fetch tool is `web/fetch` and the search tool is `web/search`.
 
 ### Declared or not, the tools are there
 
-The web Plugin has no prelude, so it defines nothing in the prompt's Lua environment, and you work with the web tools by tool id (see [Plugin preludes](12-tools.md#plugin-preludes)). Declaring `web` under `plugins:` makes the Plugin a required Plugin for the prompt, and because there is no prelude, the declaration adds no Lua names.
+The web Pack has no prelude, so it defines nothing in the prompt's Lua environment, and you work with the web tools by tool id (see [Pack preludes](12-tools.md#pack-preludes)). Declaring `web` under `uses:` makes the Pack a required Pack for the prompt, and because there is no prelude, the declaration adds no Lua names.
 
-You reach both web tools by id, as in `tools.call("web/search", ...)` or `tools.offer("web/fetch")`, whether or not the prompt declares the Plugin, because a run receives the tools of every usable installed Plugin, declared or not. On a Host that installs the web Plugin, this prompt has no `plugins:` key and gives the same run result as `fetch-page`:
+You reach both web tools by id, as in `tools.call("web/search", ...)` or `tools.offer("web/fetch")`, whether or not the prompt declares the Pack, because a run receives the tools of every usable `runvil` Pack, declared or not, unless the prompt declares another vendor's Pack with the Pack id `web`. On a Host that has the web Pack, this prompt has no `uses:` key and gives the same run result as `fetch-page`:
 
 ````markdown
 ---
 name: fetch-undeclared
-description: Fetches one web page without declaring the web Plugin.
+description: Fetches one web page without declaring the web Pack.
 runvil: 0
 ---
 
@@ -96,26 +87,26 @@ return tools.call('web/fetch', { url = 'https://example.com/' })
 ```
 ````
 
-The web Plugin needs no per-run service, so a prompt that declares it is never refused for a service the run is missing.
+The web Pack needs no per-run service, so a prompt that declares it is never refused for a service the run is missing.
 
 ### How a call reaches each tool
 
-The web Plugin always has exactly two tools, `fetch` then `search`. They make up its Plugin object's `tools` list in that order, because that list holds the Plugin's Tool objects in tool id order (see [Tool objects and Plugin objects](12-tools.md#tool-objects-and-plugin-objects)).
+The web Pack always has exactly two tools, `fetch` then `search`. They make up its Pack object's `tools` list in that order, because that list holds the Pack's Tool objects in tool id order (see [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects)).
 
-A tool call reaches the web tool that its tool name names, the last segment of the tool id. So `fetch` and `search` work the same under any Plugin id: with the Plugin installed as `browse`, `browse/search` reaches search and `browse/fetch` reaches fetch. Calling `<name>/fetch` runs the fetch tool with the call's arguments, passed through as JSON, and calling `<name>/search` runs the search tool with the call's arguments the same way.
+A tool call reaches the web tool that its tool name names, the last segment of the tool id. Calling `web/fetch` runs the fetch tool with the call's arguments, passed through as JSON, and calling `web/search` runs the search tool with the call's arguments the same way.
 
-### When the web Plugin is missing or unavailable
+### When the web Pack is missing or unavailable
 
-When a prompt declares `web` and the Host has not installed it, the run is refused before any section runs. The run fails with run error kind `RequirementsUnmet` (see [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run)), and its requirements notice reads:
+When a prompt declares `web` and the Host has no Pack with the Pack id `web`, the run is refused before any section runs. The run fails with run error kind `RequirementsUnmet` (see [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run)), and its requirements notice reads:
 
 ````text
 the environment cannot satisfy this prompt:
-- missing required Plugin: web
+- missing required Pack: web
 ````
 
-The web Plugin can also fail to install, which leaves it unavailable (see [Plugins at prepare](04-how-a-prompt-runs.md#plugins-at-prepare)). It fails when the Host gives it a configuration other than `null` or `{}`, provides no search provider, or provides no Tokio runtime service, and then no run receives `web/fetch` or `web/search`.
+The web Pack can also fail to build when the Host sets up, which leaves it unavailable (see [Packs at prepare](04-how-a-prompt-runs.md#packs-at-prepare)). It fails when the configuration the Host passes the web Plugin holds anything but `null` or `{}` under its `web` key, when the Host provides no search provider, or when it provides no Tokio runtime service, and then no run receives `web/fetch` or `web/search`.
 
-When a prompt declares `web` and the web Plugin is unavailable, the run is refused with run error kind `RequirementsUnmet`, and the notice line reads `- web is unavailable: {reason}`, where the reason is the text of the Plugin's install failure (see [The requirements notice](04-how-a-prompt-runs.md#the-requirements-notice)). On a Host that provides no search provider, a prompt that declares `web` gets this notice:
+When a prompt declares `web` and the web Pack is unavailable, the run is refused with run error kind `RequirementsUnmet`, and the notice line reads `- web is unavailable: {reason}`, where the reason is the text of the Pack's build failure (see [The requirements notice](04-how-a-prompt-runs.md#the-requirements-notice)). On a Host that provides no search provider, a prompt that declares `web` gets this notice:
 
 ````text
 the environment cannot satisfy this prompt:
@@ -130,18 +121,18 @@ Each setup problem has its own reason:
 | No search provider | `web needs runvil/search-provider, and this host provides none` |
 | No Tokio runtime service | `web needs runvil/tokio-runtime, and this host provides none` |
 
-The web Plugin takes no configuration, so it accepts `{}` as well as `null`. When the Plugin has several setup problems at once, its reason names only the first, in the order of the table: a bad configuration comes before a missing search provider, and a missing search provider comes before a missing Tokio runtime service.
+The web Pack takes no configuration, so it accepts `{}` as well as `null`. When the Pack has several setup problems at once, its reason names only the first, in the order of the table: a bad configuration comes before a missing search provider, and a missing search provider comes before a missing Tokio runtime service.
 
-When the web Plugin is unavailable and the prompt does not declare it, offering the whole Plugin fails the run (see [Offering tools with `tools.offer` and `plugins.offer`](12-tools.md#offering-tools-with-toolsoffer-and-pluginsoffer)):
+When the web Pack is unavailable and the prompt does not declare it, offering the whole Pack fails the run (see [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer)):
 
 ````lua
-plugins.offer('web')
+packs.offer('web')
 ````
 
-The message starts `plugins.offer: the web Plugin is unavailable in this run:` and ends with the Plugin's reason, so on a Host that provides no search provider it reads:
+The message starts `packs.offer: the web Pack is unavailable in this run:` and ends with the Pack's reason, so on a Host that provides no search provider it reads:
 
 ````text
-plugins.offer: the web Plugin is unavailable in this run: web needs runvil/search-provider, and this host provides none
+packs.offer: the web Pack is unavailable in this run: web needs runvil/search-provider, and this host provides none
 ````
 
 ## Fetching a page
@@ -151,9 +142,9 @@ After this section you can fetch a page, read the provenance header at the top o
 ````markdown
 ---
 name: fetch-page
-description: Fetches one web page with the web Plugin.
+description: Fetches one web page with the web Pack.
 runvil: 0
-plugins: [web]
+uses: [web]
 ---
 
 # Fetch page
@@ -219,7 +210,7 @@ return tools.call('web/fetch', { url = 'https://example.com/long-article', max_c
 ```
 ````
 
-`max_chars` runs from 1 up to 40,000, which is fetch's character limit. When the call omits `max_chars` or passes it as `null`, the full 40,000 limit applies to that call. A `max_chars` above 40,000 is quietly lowered to 40,000 rather than refused. The limit is always 40,000, because the web Plugin takes no configuration. The model reads this description of the argument:
+`max_chars` runs from 1 up to 40,000, which is fetch's character limit. When the call omits `max_chars` or passes it as `null`, the full 40,000 limit applies to that call. A `max_chars` above 40,000 is quietly lowered to 40,000 rather than refused. The limit is always 40,000, because the web Pack takes no configuration. The model reads this description of the argument:
 
 ````text
 Maximum number of characters of text to return for this call. Clamped to the configured ceiling. Longer text is truncated on a character boundary and the result is flagged as truncated.
@@ -268,9 +259,9 @@ After this section you can run a web search, shape it with the optional search a
 ````markdown
 ---
 name: search-web
-description: Searches the web with the web Plugin.
+description: Searches the web with the web Pack.
 runvil: 0
-plugins: [web]
+uses: [web]
 ---
 
 # Search web
@@ -296,7 +287,7 @@ A call passes one JSON argument object whose `query` names what to search for. `
 
 Every `web/search` call runs through the search provider the Host supplies, the Host-wide service with the id `runvil/search-provider`, and never through one the prompt chooses. So the results you see depend on which search provider the Host supplies.
 
-The search provider owns the search transport and its deadline, so a prompt never sees or supplies the search vendor's credential. The web Plugin accepts no configuration but `null` or `{}`, and none of the eight search arguments is a credential. Under Workshop, every search goes through Workshop's Runvil gateway, which keeps the search vendor's credential on the server and receives only the Gateway's key, so the prompt never touches a search credential.
+The search provider owns the search transport and its deadline, so a prompt never sees or supplies the search vendor's credential. The web Pack accepts no configuration but `null` or `{}`, and none of the eight search arguments is a credential. Under Workshop, every search goes through Workshop's Runvil gateway, which keeps the search vendor's credential on the server and receives only the Gateway's key, so the prompt never touches a search credential.
 
 ### Reading the search results
 
@@ -388,7 +379,7 @@ After this section you can tell a fetch failure that comes back as text from one
 name: fetch-missing
 description: Fetches a page that answers with an error status.
 runvil: 0
-plugins: [web]
+uses: [web]
 ---
 
 # Fetch missing
@@ -494,7 +485,7 @@ These are the eleven soft messages:
 | A body that breaks off | `the response body from {url} could not be read; try again or use a different URL` |
 | Any other network error | `fetch failed for {url}: network error; try a different URL` |
 
-There is no refusal for a blocked IP-literal address with the web Plugin. That refusal applies only when IP-literal hosts are allowed, which is off by default and which the web Plugin's configuration cannot turn on.
+There is no refusal for a blocked IP-literal address with the web Pack. That refusal applies only when IP-literal hosts are allowed, which is off by default and which the web Pack's configuration cannot turn on.
 
 ### Status codes, name lookups, and network errors
 
@@ -545,9 +536,9 @@ After this section you can call both web tools from Lua, catch their failures, a
 ````markdown
 ---
 name: search-web
-description: Searches the web with the web Plugin.
+description: Searches the web with the web Pack.
 runvil: 0
-plugins: [web]
+uses: [web]
 ---
 
 # Search web
@@ -600,7 +591,7 @@ An uncaught search failure ends the run the same way, with run error kind `Tool`
 
 ### Messages reach you unchanged
 
-A web tool's output and errors reach the caller exactly as the fetch or search tool produces them, and the Plugin adds no wrapping of its own. The tools' own messages keep fixed prefixes whatever Plugin id the Host installs the Plugin under. Fetch argument errors start with `web_fetch:`, such as `web_fetch: missing url argument`, `web_fetch: max_chars must be a positive integer`, and `web_fetch: raw must be a boolean`. Every search error starts with `web_search:`, such as `web_search: malformed search response: ...` and `web_search: the results could not be rendered`.
+A web tool's output and errors reach the caller exactly as the fetch or search tool produces them, and the Pack adds no wrapping of its own. The tools' own messages keep fixed prefixes. Fetch argument errors start with `web_fetch:`, such as `web_fetch: missing url argument`, `web_fetch: max_chars must be a positive integer`, and `web_fetch: raw must be a boolean`. Every search error starts with `web_search:`, such as `web_search: malformed search response: ...` and `web_search: the results could not be rendered`.
 
 ### Offering a web tool to the model
 
@@ -611,7 +602,7 @@ A prompt offers a web tool to the model by its tool id, as in `tools.offer('web/
 name: summarize-page
 description: Has a model fetch one page and summarize it.
 runvil: 0
-plugins: [web]
+uses: [web]
 models:
   researcher: {}
 ---
@@ -643,7 +634,7 @@ A section offers both web tools in one call with the array form, `tools.offer({"
 name: research
 description: Has a model research a person with web search and fetch.
 runvil: 0
-plugins: [web]
+uses: [web]
 models:
   researcher: {}
 ---
@@ -674,7 +665,7 @@ Inside `models.loop`, soft and hard fetch failures alike reach the model as the 
 
 ### Tool objects for the web tools
 
-`tools.get('web/fetch')` returns the fetch tool's Tool object (see [Tool objects and Plugin objects](12-tools.md#tool-objects-and-plugin-objects)). This `## Fetch` section replaces the one in `fetch-page`:
+`tools.get('web/fetch')` returns the fetch tool's Tool object (see [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects)). This `## Fetch` section replaces the one in `fetch-page`:
 
 ````markdown
 ## Fetch
@@ -691,7 +682,7 @@ The run result is:
 web/fetch | Fetch a web page and return its main content as markdown.
 ````
 
-The fetch tool's Tool object has the read-only fields `id`, which reads `web/fetch`, `description`, and `plugin`, which is the web Plugin object. `tools.call` and `tools.offer` accept the object in place of the id, as in `tools.call(tools.get('web/fetch'), ...)`.
+The fetch tool's Tool object has the read-only fields `id`, which reads `web/fetch`, `description`, and `pack`, which is the web Pack object. `tools.call` and `tools.offer` accept the object in place of the id, as in `tools.call(tools.get('web/fetch'), ...)`.
 
 Each web tool's description and parameter schema, which the model sees and the Tool object's `description` field shows, come from the fetch and search tools themselves. A web Tool object's `description` field holds the tool's catalog description, never an override, so `tools.get('web/fetch').description` is `Fetch a web page and return its main content as markdown.` and `tools.get('web/search').description` is `Search the web and return a list of results (title, url, description).`
 
@@ -702,9 +693,9 @@ After this section you can predict how `web/fetch` treats a response from the co
 ````markdown
 ---
 name: fetch-data
-description: Fetches a JSON document with the web Plugin.
+description: Fetches a JSON document with the web Pack.
 runvil: 0
-plugins: [web]
+uses: [web]
 ---
 
 # Fetch data
@@ -737,7 +728,7 @@ To work with a fetched JSON document as data, cut the body out of the envelope a
 name: fetch-field
 description: Fetches a JSON document and returns one of its fields.
 runvil: 0
-plugins: [web]
+uses: [web]
 ---
 
 # Fetch field
@@ -837,9 +828,9 @@ After this section you can predict what a `web/fetch` request is allowed to reac
 ````markdown
 ---
 name: fetch-page
-description: Fetches one web page with the web Plugin.
+description: Fetches one web page with the web Pack.
 runvil: 0
-plugins: [web]
+uses: [web]
 ---
 
 # Fetch page
@@ -851,7 +842,7 @@ return tools.call('web/fetch', { url = 'https://example.com/' })
 ```
 ````
 
-This is `fetch-page` from [What the web Plugin gives a prompt](#what-the-web-plugin-gives-a-prompt). Its request goes over HTTPS to port 443, carries the header `User-Agent: harness-webfetch/0.0`, and carries no cookie, no `Authorization` header, and no `Referer` header. Each of those facts comes from the fetch policy.
+This is `fetch-page` from [What the web Pack gives a prompt](#what-the-web-pack-gives-a-prompt). Its request goes over HTTPS to port 443, carries the header `User-Agent: harness-webfetch/0.0`, and carries no cookie, no `Authorization` header, and no `Referer` header. Each of those facts comes from the fetch policy.
 
 ### What a fetch policy sets
 
@@ -861,7 +852,7 @@ The fetch policy is the server-side request forgery (SSRF) boundary. SSRF means 
 
 ### The default fetch policy
 
-The default fetch policy is the built-in policy, and it is the only one in force. The `runvil/web` Plugin builds its fetch client once, when it is installed, using the default policy, and the Plugin takes no configuration (see [When the web Plugin is missing or unavailable](#when-the-web-plugin-is-missing-or-unavailable)). Neither a prompt nor the Host can change the fetch policy, so every `web/fetch` call runs under these values:
+The default fetch policy is the built-in policy, and it is the only one in force. The `runvil/web` Pack builds its fetch client once, when the Host builds the Pack, using the default policy, and the Pack takes no configuration (see [When the web Pack is missing or unavailable](#when-the-web-pack-is-missing-or-unavailable)). Neither a prompt nor the Host can change the fetch policy, so every `web/fetch` call runs under these values:
 
 | Setting | Default fetch policy |
 |---|---|
@@ -912,7 +903,7 @@ After this section you can tell how much of a response `web/fetch` returns, how 
 name: fetch-short
 description: Fetches the first 25 characters of a web page.
 runvil: 0
-plugins: [web]
+uses: [web]
 ---
 
 # Fetch short
@@ -1021,7 +1012,7 @@ After this section you can tell whether `web/fetch` admits a URL, and what comes
 name: fetch-path
 description: Fetches a page whose URL has a query string and a fragment.
 runvil: 0
-plugins: [web]
+uses: [web]
 ---
 
 # Fetch path
@@ -1142,9 +1133,9 @@ After this section you can tell which addresses `web/fetch` connects to once a U
 ````markdown
 ---
 name: fetch-page
-description: Fetches one web page with the web Plugin.
+description: Fetches one web page with the web Pack.
 runvil: 0
-plugins: [web]
+uses: [web]
 ---
 
 # Fetch page
@@ -1255,9 +1246,9 @@ After this section you can tell which redirects `web/fetch` follows, and read th
 ````markdown
 ---
 name: fetch-page
-description: Fetches one web page with the web Plugin.
+description: Fetches one web page with the web Pack.
 runvil: 0
-plugins: [web]
+uses: [web]
 ---
 
 # Fetch page
@@ -1349,9 +1340,9 @@ After this section you can write `web/search` arguments that pass every check, a
 ````markdown
 ---
 name: search-web
-description: Searches the web with the web Plugin.
+description: Searches the web with the web Pack.
 runvil: 0
-plugins: [web]
+uses: [web]
 ---
 
 # Search web

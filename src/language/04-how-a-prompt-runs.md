@@ -26,7 +26,7 @@ return 'hello'
 hello
 ````
 
-This run is as short as a run gets. Prepare finds nothing to check, because the frontmatter declares no Plugins and no model roles. The H1 body under `# Hello` is empty, so there is no H1 pass. The walk enters `## Main`, the block returns `hello`, and the run ends in success with `hello` as its run result. A block that only returns a literal value asks the Harness for no work at all, so this run finishes without waiting on anything outside the prompt.
+This run is as short as a run gets. Prepare finds nothing to check, because the frontmatter declares no Packs and no model roles. The H1 body under `# Hello` is empty, so there is no H1 pass. The walk enters `## Main`, the block returns `hello`, and the run ends in success with `hello` as its run result. A block that only returns a literal value asks the Harness for no work at all, so this run finishes without waiting on anything outside the prompt.
 
 ### The stages in order
 
@@ -38,7 +38,7 @@ Every run goes through these stages, in this order:
 4. The section walk. The top-level sections run in file order. See [The section walk](#the-section-walk).
 5. The outcome. The run ends in exactly one of three run outcomes. See [The run result and outcomes](#the-run-result-and-outcomes).
 
-Parsing is the first check prepare makes after it draws the run's seed and start time, so a file that does not parse never reaches the checks of Plugins and model roles. A prompt whose H1 body holds no `lua` block and no prose skips the H1 pass and goes straight to its first section, as `hello` does. The three run outcomes are success, with the text the run returned; cancelled, when the run is interrupted; and failure, with the error that ended the run.
+Parsing is the first check prepare makes after it draws the run's seed and start time, so a file that does not parse never reaches the checks of Packs and model roles. A prompt whose H1 body holds no `lua` block and no prose skips the H1 pass and goes straight to its first section, as `hello` does. The three run outcomes are success, with the text the run returned; cancelled, when the run is interrupted; and failure, with the error that ended the run.
 
 ### Prepare can stop a run before it starts
 
@@ -113,7 +113,7 @@ Some calls in your Lua need something outside the prompt, and the Harness perfor
 - a store operation
 - the timer behind a timed wait on a task started with `tasks.spawn` (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn))
 
-`input.ask()` is an ordinary tool call to the `user-input` Plugin's ask tool. While one chain waits for its answer, only that chain waits, and every other chain keeps running. A chain is a walk with its own entries, defined in [The section walk](#the-section-walk). So the three arms of one `tasks.fanout` call (see [Fanout in one call](14-fanout.md#fanout-in-one-call)) all send their model rounds together, without any arm waiting for another.
+`input.ask()` is an ordinary tool call to the `user-input` Pack's ask tool. While one chain waits for its answer, only that chain waits, and every other chain keeps running. A chain is a walk with its own entries, defined in [The section walk](#the-section-walk). So the three arms of one `tasks.fanout` call (see [Fanout in one call](14-fanout.md#fanout-in-one-call)) all send their model rounds together, without any arm waiting for another.
 
 A call that needs Harness work looks synchronous to you: the block pauses at the call and continues with the call's answer, as if the call had returned it directly. Each Lua block runs as its own Lua coroutine, which is what lets it pause at the call and resume later. A block that asks for none of the four kinds of work, such as `return 'hello'`, never pauses.
 
@@ -154,11 +154,11 @@ The H1 block's `local secret = 42` compiles during the parse, but none of it run
 
 The whole prompt file is parsed, and every Lua block in it compiled, before any part of the prompt runs. A prompt with a parse error never starts. An invalid prompt file is rejected as a whole, never accepted in part, so none of its sections run. Parsing needs no network access and no connection to a model, so you can check a prompt's structure offline.
 
-Parsing checks only the shape of the frontmatter's contract keys and what the file's text shows: keys, names, duplicates, ranges, and default types. A prompt whose contract has a valid shape parses even when the environment that runs it cannot satisfy it. Matching the Plugins under `plugins:` and the roles under `models:` against the environment is prepare's job, and the tool catalog and the model reach the prompt only at prepare. The tool catalog holds the tools of every Plugin the Host can serve for a run (see [The Engine, the Harness, and the Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host)). A prompt that declares Plugin `web` in an environment without it parses first, and then the requirements notice reports the gap:
+Parsing checks only the shape of the frontmatter's contract keys and what the file's text shows: keys, names, duplicates, ranges, and default types. A prompt whose contract has a valid shape parses even when the environment that runs it cannot satisfy it. Matching the Packs under `uses:` and the roles under `models:` against the environment is prepare's job, and the tool catalog and the model reach the prompt only at prepare. The tool catalog holds the tools of the run's Packs that can serve it, every `runvil` Pack and each third-party Pack the prompt declares (see [The Engine, the Harness, and the Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host)). A prompt that declares Pack `web` in an environment without it parses first, and then the requirements notice reports the gap:
 
 ````text
 the environment cannot satisfy this prompt:
-- missing required Plugin: web
+- missing required Pack: web
 ````
 
 Each check ends the run before the next one starts, so the order of failures is fixed. A parse failure is reported ahead of any input failure, and an input failure is reported ahead of any requirements refusal.
@@ -230,36 +230,36 @@ runvil: 0
 ## Main
 
 ```lua
-return 'no Plugins'
+return 'no Packs'
 ```
 ````
 
 ````text
-no Plugins
+no Packs
 ````
 
-Prepare is the stage before a run starts in which the Harness sets up everything the frontmatter asks for and checks that it can provide it. This prompt declares no Plugins under `plugins:` and no model roles under `models:`, so prepare has nothing to check, its requirements report has no gaps, and prepare never refuses it. A prompt like this one, which also calls no model, runs to completion on a Host with no Plugins installed and no model configured.
+Prepare is the stage before a run starts in which the Harness sets up everything the frontmatter asks for and checks that it can provide it. This prompt declares no Packs under `uses:` and no model roles under `models:`, so prepare has nothing to check, its requirements report has no gaps, and prepare never refuses it. A prompt like this one, which also calls no model, runs to completion on a Host with no Packs and no model configured.
 
 ### What prepare checks
 
-Before a run starts, the Harness checks the Plugins the prompt declares against the Plugins installed on the Host and the services the run provides, and checks the model roles the prompt declares against the Host's current model. Prepare can refuse to start the run, and a refused run ends before it is built.
+Before a run starts, the Harness checks the Packs the prompt declares against the Packs the Host has built and the services the run provides, and checks the model roles the prompt declares against the Host's current model. Prepare can refuse to start the run, and a refused run ends before it is built.
 
 A prompt the environment cannot satisfy is refused before any of its blocks run. `RequirementsUnmet` is the run error kind of that refusal: the run ends as failed, and its message is the requirements notice, which lists what is missing, one line per gap. Prepare refuses the run with `RequirementsUnmet` when any of these holds:
 
-- a Plugin the prompt declares is not installed
-- a declared Plugin is installed but unavailable because it cannot serve, for example because it failed to build
-- a declared Plugin needs a service the run lacks
+- the Host has no Pack, from any vendor, for a bare entry the prompt declares
+- a declared Pack is unavailable, because the Host has it but it cannot serve, for example because it failed to build, or because the Host lacks a declared `vendor/name` entry, or has a bare entry's Pack id only from other vendors
+- a declared Pack needs a service the run lacks
 - the current model falls short of a declared role's context minimum or one of its hard keywords
 
-An unavailable Plugin is one the Host installed that cannot serve the run. The run proceeds only when every model role requirement is met and every required Plugin is installed, can serve, and has the services it needs. [Plugins at prepare](#plugins-at-prepare) shows each Plugin case.
+An unavailable Pack is one the Host has that cannot serve the run, a declared `vendor/name` entry the Host lacks, or a bare entry whose reason tells you which vendor's Pack to write instead. The run proceeds only when every model role requirement is met and the Host has every required Pack, and each one can serve and has the services it needs. [Packs at prepare](#packs-at-prepare) shows each Pack case.
 
-The refusal comes after the Plugin report and the model report are merged into one, and before the run is built. So when the Harness cannot provide what the prompt requires, such as a model with a large enough context window for one of its roles, no section runs, no Lua runs, and nothing in the prompt can catch the refusal. The refusal's message is the notice text, line for line. The notice opens with the line `the environment cannot satisfy this prompt:` and then gives one `- ` line per gap, in this order, with each `{...}` standing for the value the line names:
+The refusal comes after the Pack report and the model report are merged into one, and before the run is built. So when the Harness cannot provide what the prompt requires, such as a model with a large enough context window for one of its roles, no section runs, no Lua runs, and nothing in the prompt can catch the refusal. The refusal's message is the notice text, line for line. The notice opens with the line `the environment cannot satisfy this prompt:` and then gives one `- ` line per gap, in this order, with each `{...}` standing for the value the line names:
 
 ````text
 the environment cannot satisfy this prompt:
-- missing required Plugin: {name}
-- {plugin} needs {service}, and the environment provides none
-- {plugin} is unavailable: {reason}
+- missing required Pack: {name}
+- {pack} needs {service}, and the environment provides none
+- {pack} is unavailable: {reason}
 - role '{role}': requires a context of at least {n} tokens; the current model provides {m}
 - role '{role}': requires '{keyword}'; the current model's thinking capability is {mode}
 ````
@@ -273,11 +273,12 @@ Prepare runs in a fixed order:
 1. It draws the run's seed and start time (see [The Engine, the Harness, and the Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host)).
 2. It parses the prompt.
 3. It stages the input file the prompt declares.
-4. It waits for Plugins to be ready.
-5. It takes the snapshot of the Host's Plugins.
-6. It prepares the run context, which binds the declared model roles.
-7. It refuses a prompt the environment cannot satisfy.
-8. It builds the run.
+4. It picks the run's Packs from the prompt's `uses:` entries.
+5. It waits for the run's Packs to be ready.
+6. It takes the snapshot of the run's Packs.
+7. It prepares the run context, which binds the declared model roles.
+8. It refuses a prompt the environment cannot satisfy.
+9. It builds the run.
 
 When the run is built, after preparation and before any section runs, the `runvil` version in the frontmatter is checked (see [The `runvil` version key](02-file-structure.md#the-runvil-version-key)). Version `0` proceeds, and any other version is refused as unsupported. A missing version fails with the message `not a runvil prompt: no runvil version`. Either way, a prompt with an unsupported or missing version produces no section result.
 
@@ -288,11 +289,11 @@ Input staging happens during prepare, before the run starts. The launch's input 
 - The launch supplies input text, but the prompt declares no `input:` file. The message is ``the launch supplied input text, but the prompt declares no `input:` file``.
 - The prompt declares an `input:` file that the launch did not supply and the store does not already hold. The message is ``the prompt declares the input file `{path}`, but the launch supplied no input text and the store has no such file``, with the declared path in place of `{path}`.
 
-### Waiting for Plugins and taking the snapshot
+### Waiting for Packs and taking the snapshot
 
-Before a run starts, the Harness waits until every built Plugin is ready or the run is cancelled. A Plugin whose readiness check fails is unavailable to the run, with its error as the reason, so a prompt that declares it is refused. Cancelling a run while Plugins are still starting ends the wait, and each Plugin is taken as it stands at that moment. A refusal that follows the cancel, such as one for a declared Plugin that was still starting, ends the run as cancelled rather than failed.
+Before a run starts, the Harness picks the run's Packs: each Pack the prompt declares under `uses:`, plus every `runvil` Pack whose Pack id no declared Pack takes. It then waits until each of those Packs is ready or the run is cancelled, so a Pack outside the run, such as an undeclared third-party Pack, never delays it. A Pack whose readiness check fails is unavailable to the run, with its error as the reason, so a prompt that declares it is refused. Cancelling a run while Packs are still starting ends the wait, and each Pack is taken as it stands at that moment. A refusal that follows the cancel, such as one for a declared Pack that was still starting, ends the run as cancelled rather than failed.
 
-After the wait, each run takes one snapshot of the Host's Plugins. That snapshot supplies the tool catalog the run offers, the object for each Plugin in the run's Lua (see [Tool objects and Plugin objects](12-tools.md#tool-objects-and-plugin-objects)), and the preludes that go to every section's Lua (see [Plugin preludes](12-tools.md#plugin-preludes)).
+After the wait, each run takes one snapshot of its Packs. That snapshot supplies the tool catalog the run offers, the object for each Pack in the run's Lua (see [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects)), and the preludes that go to every section's Lua (see [Pack preludes](12-tools.md#pack-preludes)).
 
 ### Binding model roles
 
@@ -302,16 +303,16 @@ When it prepares the run context, prepare binds every model role the prompt decl
 
 One failure that is not a refusal reports the same run error kind. An uncaught Lua error in the prompt's H1 blocks, such as a failed `assert` or an error raised by a library that an H1 block loads with `require` (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)), is the prompt's failed hard gate. It ends the run before any later H1 block or any section runs, with run error kind `RequirementsUnmet` and a message made of the line `the environment cannot satisfy this prompt:`, the line `- the H1 gate failed`, then `: ` and the Lua error's own text. [The H1 hard gate](#the-h1-hard-gate) shows an example and every gate case.
 
-## Plugins at prepare
+## Packs at prepare
 
-After this section you can predict how prepare treats each Plugin you declare, what an unavailable Plugin does to a run, and what the tool catalog holds once the run starts.
+After this section you can predict how prepare treats each Pack you declare, what an unavailable Pack does to a run, and what the tool catalog holds once the run starts.
 
 ````markdown
 ---
 name: needs-web
-description: Declares the web Plugin.
+description: Declares the web Pack.
 runvil: 0
-plugins: [web]
+uses: [web]
 ---
 
 # Needs web
@@ -323,75 +324,77 @@ return 'done'
 ```
 ````
 
-On a Host that has installed `web` and where it can serve, prepare passes and the run returns `done`. On a Host with no Plugins, the run is refused at prepare, before any section runs, with run error kind `RequirementsUnmet` and this notice:
+On a Host that has `runvil/web` and where it can serve, prepare passes and the run returns `done`. On a Host with no Packs, the run is refused at prepare, before any section runs, with run error kind `RequirementsUnmet` and this notice:
 
 ````text
 the environment cannot satisfy this prompt:
-- missing required Plugin: web
+- missing required Pack: web
 ````
 
 The refused run's record ends with the `parse_succeeded` event, because the prompt parsed before the environment refused it.
 
-### Declared Plugins are required Plugins
+### Declared Packs are required Packs
 
-Every Plugin a prompt lists under the `plugins:` key (see [Tools, Plugins, and the `plugins:` key](12-tools.md#tools-plugins-and-the-plugins-key)) is a required Plugin: the run does not start unless the Host can provide it. Each one is named by its Plugin id and kept in declaration order. Before any Lua runs, prepare checks each declared Plugin against the Host and refuses the run unless that Plugin is installed, can serve, and has every service it needs.
+Every Pack a prompt lists under the `uses:` key (see [Tools, Packs, and the `uses:` key](12-tools.md#tools-packs-and-the-uses-key)) is a required Pack: the run does not start unless the Host can provide it. Each one is named by its Pack id and kept in declaration order. Before any Lua runs, prepare checks each declared Pack against the Host and refuses the run unless the Host has that Pack and it can serve and has every service it needs.
 
-A declared Plugin counts as present when the Host installed it and it can serve, even if it offers no tools, so declaring a Plugin that has no tools never refuses the run. A Plugin the frontmatter declares, and any Plugin listed as able to serve, still has a Plugin object in Lua when it offers no tool. The Plugin check is the Harness's part of prepare. The Engine's own part checks model roles only, so it finds nothing missing in `plugins: [web]` even when the catalog holds no `web` tool.
+A declared Pack counts as present when the Host has it and it can serve, even if it offers no tools, so declaring a Pack that has no tools never refuses the run. A Pack the frontmatter declares, and any Pack listed as able to serve, still has a Pack object in Lua when it offers no tool. The Pack check is the Harness's part of prepare. The Engine's own part checks model roles only, so it finds nothing missing in `uses: [web]` even when the catalog holds no `web` tool.
 
-Each declared Plugin's prelude runs in every section's section VM, in the order the prompt declares the Plugins, after the Engine globals are installed and before any block runs. An undeclared Plugin's prelude never runs, even when the prompt calls that Plugin's tools.
+Each declared Pack's prelude runs in every section's section VM, in the order the prompt declares the Packs, after the Engine globals are installed and before any block runs. An undeclared Pack's prelude never runs, even when the prompt calls that Pack's tools.
 
-A prompt that declares no Plugins has no Plugin requirements, so it prepares and runs even on a Host with no Plugins installed, as `no-requirements` does in [Preparing the run](#preparing-the-run).
+A prompt that declares no Packs has no Pack requirements, so it prepares and runs even on a Host with no Packs, as `no-requirements` does in [Preparing the run](#preparing-the-run).
 
 ### The tool catalog
 
-The run's tool catalog holds the tools of every Plugin the Host can serve for that run, whether the prompt declares it or not. A Plugin that cannot serve, or that lacks a service it needs, adds no tools. Each usable Plugin's tool list is read once, after every Plugin is ready, so the catalog and the tools a call can reach stay fixed for the whole run.
+The run's tool catalog holds the tools of each of the run's Packs that can serve it: every `runvil` Pack, whether the prompt declares it or not, and each third-party Pack the prompt declares. A third-party Pack the prompt does not declare adds no tools. A run holds one Pack per Pack id, so a declared third-party Pack replaces the `runvil` Pack of the same Pack id: with `acme/web` declared, the catalog holds the tools of `acme/web` and none of `runvil/web`. A Pack that cannot serve, or that lacks a service it needs, adds no tools. Each usable Pack's tool list is read once, after every Pack is ready, so the catalog and the tools a call can reach stay fixed for the whole run.
 
-A section can call an undeclared Plugin's tool by its full tool id. On a Host that installs `web`, a prompt with no `plugins:` key can run this block:
+A section can call an undeclared `runvil` Pack's tool by its full tool id. On a Host that has `runvil/web`, a prompt with no `uses:` key can run this block:
 
 ````lua
 local page = tools.call('web/fetch', { url = 'https://example.com' })
 local kind = type(input)
 ````
 
-The call reaches `web/fetch` even though the frontmatter declares no Plugin (see [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls)). The prelude of an undeclared Plugin is never installed, even on a Host that installs that Plugin. The `user-input` Plugin's prelude is what defines `input.ask()`, so in this prompt, which leaves `user-input` undeclared, `type(input)` is `nil`.
+The call reaches `web/fetch` even though the frontmatter declares no Pack (see [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls)). The prelude of an undeclared Pack never installs, even when the Pack is in the run. The `user-input` Pack's prelude is what defines `input.ask()`, so in this prompt, which leaves `user-input` undeclared, `type(input)` is `nil`.
 
-In Lua, `tools.required()` lists the Tool objects of the Plugins the frontmatter declares, and `tools.extras()` lists the Tool objects of every other Plugin in the catalog (see [Tool objects and Plugin objects](12-tools.md#tool-objects-and-plugin-objects)). With `plugins: [web]` on a Host that installs and can serve both `web` and `user-input`, `tools.required()` holds the Tool objects for `web/fetch` and `web/search`, and `tools.extras()` holds the one for `user-input/ask`.
+In Lua, `tools.required()` lists the Tool objects of the Packs the frontmatter declares, and `tools.extras()` lists the Tool objects of every other Pack in the catalog (see [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects)). With `uses: [web]` on a Host that has and can serve both `runvil/web` and `runvil/user-input`, `tools.required()` holds the Tool objects for `web/fetch` and `web/search`, and `tools.extras()` holds the one for `user-input/ask`.
 
-A section can offer only tools in the run's catalog, and offering an id the run cannot offer is a hard error (see [Offering tools with `tools.offer` and `plugins.offer`](12-tools.md#offering-tools-with-toolsoffer-and-pluginsoffer)). Calling `tools.offer` with an id the catalog lacks raises `tools.offer: "{id}" is not a catalog tool in this run`, with the id in place of `{id}`.
+A section can offer only tools in the run's catalog, and offering an id the run cannot offer is a hard error (see [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer)). Calling `tools.offer` with an id the catalog lacks raises `tools.offer: "{id}" is not a catalog tool in this run`, with the id in place of `{id}`.
 
 ### Host services
 
-A host service is a named service the Host supplies for each run, such as an input broker. A Plugin can need host services, and prepare checks every installed Plugin's needs against the run's services. A Plugin is usable only when the run provides every service it needs, and a Plugin missing any of its services has no tools in the run.
+A host service is a named service the Host supplies for each run, such as an input broker. A Pack can need host services, and prepare checks the needs of each of the run's Packs against the run's services. A Pack is usable only when the run provides every service it needs, and a Pack missing any of its services has no tools in the run.
 
-A declared Plugin that lacks a service it needs refuses the run at prepare with run error kind `RequirementsUnmet`. The notice gets one line per missing service, in the form `- {plugin} needs {service}, and the environment provides none`, which names both the Plugin and the service instead of calling the Plugin missing. A run refused this way never calls the Plugin, so no tool effect happens, and the refused run records zero effects.
+A declared Pack that lacks a service it needs refuses the run at prepare with run error kind `RequirementsUnmet`. The notice gets one line per missing service, in the form `- {pack} needs {service}, and the environment provides none`, which names both the Pack and the service instead of calling the Pack missing. A run refused this way never calls the Pack, so no tool effect happens, and the refused run records zero effects.
 
-The `user-input` Plugin is the common case. Its fully qualified name is `runvil/user-input`, so a Host that picks no other name installs it with the Plugin id `user-input`. It needs the run's input broker, the service `runvil/input-broker`, so a run without a broker cannot use it. A prompt that declares it is refused before the run starts on a Host with no operator to ask, and the notice names both the Plugin and the service:
+The `user-input` Pack is the common case. Its fully qualified name is `runvil/user-input`, so its Pack id is `user-input`. It needs the run's input broker, the service `runvil/input-broker`, so a run without a broker cannot use it. A prompt that declares it is refused before the run starts on a Host with no operator to ask, and the notice names both the Pack and the service:
 
 ````text
 the environment cannot satisfy this prompt:
 - user-input needs runvil/input-broker, and the environment provides none
 ````
 
-That notice does not contain `missing required Plugin: user-input`, because the Plugin is installed.
+That notice does not contain `missing required Pack: user-input`, because the Host has the Pack.
 
-Whether a declared Plugin's service needs are met depends only on the Host running the prompt. The same prompt text runs to completion on a Host that supplies the service and is refused on one that does not, and the two runs differ only in the services they provide. When the run supplies the service a declared Plugin needs, the run prepares and that Plugin's tool calls are served through the service the run supplies, so a declared `user-input` on a Host with an operator to ask runs and its ask tool reaches that operator. A Plugin that needs no service prepares and runs normally on a Host that has no operator to ask, so a run without an input broker can still use it.
+Whether a declared Pack's service needs are met depends only on the Host running the prompt. The same prompt text runs to completion on a Host that supplies the service and is refused on one that does not, and the two runs differ only in the services they provide. When the run supplies the service a declared Pack needs, the run prepares and that Pack's tool calls are served through the service the run supplies, so a declared `user-input` on a Host with an operator to ask runs and its ask tool reaches that operator. A Pack that needs no service prepares and runs normally on a Host that has no operator to ask, so a run without an input broker can still use it.
 
-### Unavailable Plugins
+### Unavailable Packs
 
-A declared Plugin that is installed but cannot serve refuses the run with run error kind `RequirementsUnmet` and the notice line `- {plugin} is unavailable: {reason}`. A Plugin cannot serve in two cases:
+A declared Pack that the Host has but that cannot serve refuses the run with run error kind `RequirementsUnmet` and the notice line `- {pack} is unavailable: {reason}`. A Pack cannot serve in two cases:
 
-- Building it failed at install. That is not an install error: the Host stores the Plugin as unavailable with the failure as its reason, and every run that needs it is refused naming that reason.
+- Building it failed when the Host set up. That is not a setup error: the Host stores the Pack as unavailable with the failure as its reason, and every run that needs it is refused naming that reason.
 - Its readiness check fails before the run.
 
-The `web` Plugin cannot be built on a Host that supplies no search provider, so a prompt that declares `web` there is refused with the notice line `- web is unavailable: web needs runvil/search-provider, and this host provides none`.
+The `web` Pack cannot be built on a Host that supplies no search provider, so a prompt that declares `web` there is refused with the notice line `- web is unavailable: web needs runvil/search-provider, and this host provides none`.
 
-When an installed Plugin fails to build or fails its readiness check, the Harness writes a warning naming the Plugin to the Harness's own log, which is separate from the run's events. A build failure logs `Plugin construct failed; it is installed as unavailable`, and a readiness failure logs `Plugin will not be ready; this run treats it as unavailable`.
+Two declared entries the Host has no Pack for are reported as unavailable too, because their reason tells you what to write. A bare Pack id the Host has only from other vendors gets a line such as `- poop is unavailable: poop means runvil/poop, which is not installed; write acme/poop to use that Pack`, which joins every such vendor's fully qualified name with `or`. A `vendor/name` the Host does not have gets a line such as `- poop is unavailable: acme/poop is not installed`.
 
-### Only declared Plugins can refuse a run
+When one of the Host's Packs fails to build or fails its readiness check, the Harness writes a warning naming the Pack to the Harness's own log, which is separate from the run's events. A build failure logs `Pack construct failed; it is built as unavailable`, and a readiness failure logs `Pack will not be ready; this run treats it as unavailable`.
 
-The requirements check looks only at the Plugins the prompt declares, so only declared Plugins can refuse a run. An installed Plugin the prompt does not declare that fails to start or lacks a service just has no tools in the run, and the run goes on. The requirements report lists each Plugin the prompt declares, while the run's roster, its list of Plugins, holds every Plugin, declared or not. An undeclared Plugin with unmet needs joins the roster as unavailable, with the reason `the run lacks the services it needs: {services}`.
+### Only declared Packs can refuse a run
 
-Offering an unavailable Plugin with `plugins.offer` raises `plugins.offer: the {name} Plugin is unavailable in this run: {reason}`. So an undeclared Plugin whose readiness check fails offers no tools, and a section that offers it with `plugins.offer` fails the run with that message.
+The requirements check looks only at the Packs the prompt declares, so only declared Packs can refuse a run. A `runvil` Pack the prompt does not declare that fails to start or lacks a service just has no tools in the run, and the run goes on. The requirements report lists each Pack the prompt declares, while the run's roster, its list of Packs, holds every Pack in the run, declared or not. A third-party Pack the prompt does not declare is in no run, so it can neither refuse nor delay one. An undeclared Pack with unmet needs joins the roster as unavailable, with the reason `the run lacks the services it needs: {services}`.
+
+Offering an unavailable Pack with `packs.offer` raises `packs.offer: the {name} Pack is unavailable in this run: {reason}`. So an undeclared Pack whose readiness check fails offers no tools, and a section that offers it with `packs.offer` fails the run with that message.
 
 ## Model roles at prepare
 
@@ -427,7 +430,7 @@ Before the run starts, prepare binds every model role declared under `models:` t
 
 Every declared role binds to the same current model, whatever keywords it has, so roles `scout` and `sprinter` with different keywords both bind to that one model. A label the prompt does not declare gets no binding.
 
-A prompt whose only declaration is a role with no keys, `models: { writer: {} }`, passes prepare with its requirements satisfied when the Host supplies a model. A prompt with no `models:` key gives prepare no roles to bind or check, so no model requirement can stop it; a prompt whose frontmatter declares only `plugins: [web]` prepares with no model requirement to meet. When the Host sets no current model, prepare skips the role binding and the keyword and context checks, so no role is bound and no model requirement is reported.
+A prompt whose only declaration is a role with no keys, `models: { writer: {} }`, passes prepare with its requirements satisfied when the Host supplies a model. A prompt with no `models:` key gives prepare no roles to bind or check, so no model requirement can stop it; a prompt whose frontmatter declares only `uses: [web]` prepares with no model requirement to meet. When the Host sets no current model, prepare skips the role binding and the keyword and context checks, so no role is bound and no model requirement is reported.
 
 ### The model role check
 
@@ -503,9 +506,9 @@ After this section you can read any requirements notice line by line and tell wh
 ````markdown
 ---
 name: deep-analysis
-description: Needs two Plugins and a large thinking model.
+description: Needs two Packs and a large thinking model.
 runvil: 0
-plugins: [web, user-input]
+uses: [web, user-input]
 models:
   analyst:
     keywords: [frontier, thinking]
@@ -521,11 +524,11 @@ return 'done'
 ```
 ````
 
-Run this prompt on a Host that has not installed `web`, that has installed `user-input` but has no operator to ask, and whose current model has a 32000-token window and never thinks. The run fails with run error kind `RequirementsUnmet`, and its message is this requirements notice:
+Run this prompt on a Host that has no `web` Pack from any vendor, that has `runvil/user-input` but has no operator to ask, and whose current model has a 32000-token window and never thinks. The run fails with run error kind `RequirementsUnmet`, and its message is this requirements notice:
 
 ````text
 the environment cannot satisfy this prompt:
-- missing required Plugin: web
+- missing required Pack: web
 - user-input needs runvil/input-broker, and the environment provides none
 - role 'analyst': requires a context of at least 200000 tokens; the current model provides 32000
 - role 'analyst': requires 'thinking'; the current model's thinking capability is Never
@@ -535,28 +538,30 @@ The requirements notice is the text prepare writes when it refuses to start a ru
 
 ### The notice's fixed layout
 
-The notice has a fixed layout: the opening line `the environment cannot satisfy this prompt:`, then one line starting with `- ` for each unmet requirement. Prepare does not stop at the first gap, so when several requirements are unmet you see all of them together in one notice, not only the first. Each line names what is missing or falls short, such as each missing service and each unavailable Plugin, and states the required value against the actual value where that applies.
+The notice has a fixed layout: the opening line `the environment cannot satisfy this prompt:`, then one line starting with `- ` for each unmet requirement. Prepare does not stop at the first gap, so when several requirements are unmet you see all of them together in one notice, not only the first. Each line names what is missing or falls short, such as each missing service and each unavailable Pack, and states the required value against the actual value where that applies.
 
 The notice is written for a model to read: concise, factual, and self-contained. It names only the gaps that block the run, because the report behind it lists only what needs a person's attention. Each kind of line comes from one kind of gap:
 
 | Notice line | What produces it |
 |---|---|
-| `- missing required Plugin: {name}` | a declared Plugin the Host has not installed |
-| `- {plugin} needs {service}, and the environment provides none` | a declared Plugin whose service the run lacks |
-| `- {plugin} is unavailable: {reason}` | a declared Plugin that is installed but cannot serve |
+| `- missing required Pack: {name}` | a bare entry whose Pack id no Pack of the Host has, from any vendor |
+| `- {pack} needs {service}, and the environment provides none` | a declared Pack whose service the run lacks |
+| `- {pack} is unavailable: {reason}` | a declared Pack that the Host has but that cannot serve, a declared `vendor/name` entry the Host lacks, or a bare entry whose Pack id only other vendors' Packs have |
 | `- role '{label}': requires a context of at least {min} tokens; the current model provides {actual}` | a role whose `min_context` is above the current model's window |
 | `- role '{label}': requires '{keyword}'; the current model's thinking capability is {mode}` | a role whose hard keyword the current model fails |
 | `- the H1 gate failed` | an uncaught Lua error in the H1 pass |
 
-### Plugin lines in the notice
+### Pack lines in the notice
 
-A Plugin declared under `plugins:` that the Harness does not have refuses the run with the line `- missing required Plugin: {name}`, such as `- missing required Plugin: web`.
+A bare entry under `uses:` whose Pack id no Pack of the Host has, from any vendor, refuses the run with the line `- missing required Pack: {name}`, such as `- missing required Pack: web`. A `vendor/name` entry never gives this line.
 
-A declared Plugin that is installed but needs a host service the Host lacks appears as `- {plugin} needs {service}, and the environment provides none`, naming both the Plugin and the missing service id. A Plugin missing several services gets one line for each missing service. The service name in the line is shown exactly as the Host names it, so service names can differ from one Host to another.
+A declared Pack that the Host has but that needs a host service the Host lacks appears as `- {pack} needs {service}, and the environment provides none`, naming both the Pack and the missing service id. A Pack missing several services gets one line for each missing service. The service name in the line is shown exactly as the Host names it, so service names can differ from one Host to another.
 
-A declared Plugin that is installed but cannot serve, for example because it failed to build, appears as `- {plugin} is unavailable: {reason}`, with the Plugin id and the reason the environment gave, word for word. The reason is written for the model that reads the refusal, as in `- web is unavailable: web needs runvil/search-provider, and this host provides none`.
+A declared Pack that the Host has but that cannot serve, for example because it failed to build, appears as `- {pack} is unavailable: {reason}`, with the Pack id and the reason the environment gave, word for word. The reason is written for the model that reads the refusal, as in `- web is unavailable: web needs runvil/search-provider, and this host provides none`.
 
-Each Plugin appears under its real cause only. A Plugin that lacks a host service is reported only under that service gap, never also as a missing required Plugin, whichever check finds it first. A Plugin that is installed but fails to build or activate is reported only as unavailable, with its reason, never as a missing required Plugin. So when a declared Plugin lacks a service or is unavailable, the notice leaves out its `missing required Plugin` line and names only the real cause.
+A declared entry the Host has no Pack for appears the same way, unless it is a bare entry that no vendor has. A bare Pack id that only other vendors' Packs have gives `- poop is unavailable: poop means runvil/poop, which is not installed; write acme/poop to use that Pack`, and a `vendor/name` the Host lacks gives `- poop is unavailable: acme/poop is not installed`, whether or not any vendor has that Pack id.
+
+Each Pack appears under its real cause only. A Pack that lacks a host service is reported only under that service gap, never also as a missing required Pack, whichever check finds it first. A Pack that the Host has but that fails to build or activate is reported only as unavailable, with its reason, never as a missing required Pack. So when a declared Pack lacks a service or is unavailable, the notice leaves out its `missing required Pack` line and names only the real cause.
 
 ### Role lines in the notice
 
@@ -574,22 +579,22 @@ The `- the H1 gate failed` line does not come from a refusal. An uncaught Lua er
 
 ### The order of the lines
 
-Notice lines appear in a fixed order: missing Plugins first, then missing services, then unavailable Plugins, then unmet model role requirements. Missing required Plugins come before Plugins that lack a host service, no matter which gap was found first. Within each kind of gap, the notice keeps the order in which the gaps were found. Role lines are listed in sorted label order, and within a role the context line comes first, then the keyword lines in the order the keywords are declared.
+Notice lines appear in a fixed order: missing Packs first, then missing services, then unavailable Packs, then unmet model role requirements. Missing required Packs come before Packs that lack a host service, no matter which gap was found first. Within each kind of gap, the notice keeps the order in which the gaps were found. Role lines are listed in sorted label order, and within a role the context line comes first, then the keyword lines in the order the keywords are declared.
 
-Each gap appears once. A Plugin gap that more than one merged report names appears only once in the notice. Each Plugin and missing service pair appears once even when it is reported twice, and every distinct pair is listed. Each unavailable Plugin appears once even when more than one check reports it, and every distinct unavailable Plugin is listed with its own reason.
+Each gap appears once. A Pack gap that more than one merged report names appears only once in the notice. Each Pack and missing service pair appears once even when it is reported twice, and every distinct pair is listed. Each unavailable Pack appears once even when more than one check reports it, and every distinct unavailable Pack is listed with its own reason.
 
 ### The requirements report
 
-The requirements report is the preflight check behind the notice, made before the prompt starts. It combines the Harness's check that each declared Plugin can serve, made when the Harness takes its snapshot of installed Plugins, with the model role checks made while the run context is prepared, so one refusal names every gap. It names missing required Plugins, declared Plugins that lack a host service, declared Plugins that are unavailable, and unmet requirements.
+The requirements report is the preflight check behind the notice, made before the prompt starts. It combines the Harness's check that each declared Pack can serve, made when the Harness takes its snapshot of the run's Packs, with the model role checks made while the run context is prepared, so one refusal names every gap. It names missing required Packs, declared Packs that lack a host service, declared Packs that are unavailable, and unmet requirements.
 
 Unmet requirements do not make prepare itself fail. Prepare still produces a requirements report, marked as not satisfied, and when prepare refuses to start the run, its refusal text is the notice built from that report. The report keeps one list per kind of gap:
 
-- missing required Plugins
-- missing services, one entry for each Plugin and missing service
-- unavailable Plugins, each with its reason
+- missing required Packs
+- missing services, one entry for each Pack and missing service
+- unavailable Packs, each with its reason
 - unmet requirements, one entry for each failed model role check
 
-The report keeps unmet role checks apart from its list of missing required Plugins, which stays empty when only a role check fails. Each unmet role entry records:
+The report keeps unmet role checks apart from its list of missing required Packs, which stays empty when only a role check fails. Each unmet role entry records:
 
 - the label of the role that falls short, such as `checker`
 - which check the role failed: `ContextMinimum` for the context minimum, or `HardKeyword` for a hard keyword
@@ -598,7 +603,7 @@ The report keeps unmet role checks apart from its list of missing required Plugi
 
 ### When a cancel comes first
 
-When the run is cancelled before the Harness refuses it, for example while a declared Plugin is still starting, no notice is reported: the run ends as cancelled rather than failing with `RequirementsUnmet`, as [Waiting for Plugins and taking the snapshot](#waiting-for-plugins-and-taking-the-snapshot) explains.
+When the run is cancelled before the Harness refuses it, for example while a declared Pack is still starting, no notice is reported: the run ends as cancelled rather than failing with `RequirementsUnmet`, as [Waiting for Packs and taking the snapshot](#waiting-for-packs-and-taking-the-snapshot) explains.
 
 ## The section walk
 
@@ -1217,7 +1222,7 @@ The H1 is also the place to validate and repair the prompt's parsed input in `ar
 
 A model round in the H1 pass reaches the model exactly once, even though sections run afterward. Model rounds happen in source order, so an H1 pass's `models.infer` call reaches the model before a later `##` section's round.
 
-The H1 pass is its own section entry for offers. A Plugin the H1 offers with [`plugins.offer`](12-tools.md#offering-tools-with-toolsoffer-and-pluginsoffer) reaches only the H1 pass's own model rounds, and walked sections start without that offer. Checkpoints that H1 Lua records with [`log`](05-lua-environment.md#logging-and-lifecycle-reports), such as `log("H1 ran")`, are attributed to the H1 title.
+The H1 pass is its own section entry for offers. A Pack the H1 offers with [`packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer) reaches only the H1 pass's own model rounds, and walked sections start without that offer. Checkpoints that H1 Lua records with [`log`](05-lua-environment.md#logging-and-lifecycle-reports), such as `log("H1 ran")`, are attributed to the H1 title.
 
 ### Falling through to the walk
 
@@ -1560,14 +1565,14 @@ When the Host cancels a run, the run ends as cancelled. A cancel is reported as 
 
 A cancel that lands while every chain is waiting takes effect at the run's next step, which tears down every chain, while Lua code that is already running sees the cancel as it runs. A run cancelled while a `tools.call` to a script tool is suspended ends with the cancelled outcome rather than a text result or an error. A model request cut short by a cancel is not reported as a failed model call.
 
-A requirements refusal that happens after the run's cancel fired ends the run as cancelled instead of failed, as when a cancel cuts the wait short while a needed Plugin is still starting (see [Waiting for Plugins and taking the snapshot](#waiting-for-plugins-and-taking-the-snapshot)).
+A requirements refusal that happens after the run's cancel fired ends the run as cancelled instead of failed, as when a cancel cuts the wait short while a needed Pack is still starting (see [Waiting for Packs and taking the snapshot](#waiting-for-packs-and-taking-the-snapshot)).
 
 ### Failed runs and run error kinds
 
 A run error kind is the name a failed run reports for its cause, and a failed run reports it together with a message. Running a prompt fails with one of these two kinds most often:
 
 - `Lua`, for an uncaught Lua error in a section.
-- `RequirementsUnmet`, when the Harness cannot satisfy the prompt, such as when a required Plugin is missing, or when an H1 block fails the prompt's hard gate.
+- `RequirementsUnmet`, when the Harness cannot satisfy the prompt, such as when a required Pack is missing, or when an H1 block fails the prompt's hard gate.
 
 Any uncaught Lua error in a walked section fails the run with run error kind `Lua`. That includes `assert(false, 'message')`, a call to a function that does not exist, and a walked library section that returns a table, which fails with `cannot return a table as a result`. Calling `error('message')` in a section's Lua block stops the run on purpose, and the rest of the prompt never runs:
 

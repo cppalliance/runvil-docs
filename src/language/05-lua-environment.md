@@ -141,7 +141,7 @@ Each fresh section VM is also restricted. In every one, `io`, `os`, `load`, and 
 
 A block reads its globals each time it runs. The same block `return greeting .. ' world'` returns `hello world` when `greeting` is `hello` and `goodbye world` when `greeting` is `goodbye`.
 
-A function body works the same way. It looks up globals such as `args`, `var`, `store`, and `tools` at the moment it is called, not when it is defined, so calling it from a later block reads and changes the section's current state. In a section of a prompt that declares the `web` Plugin (see [Tools, Plugins, and the `plugins:` key](12-tools.md#tools-plugins-and-the-plugins-key)), a first block can define this function:
+A function body works the same way. It looks up globals such as `args`, `var`, `store`, and `tools` at the moment it is called, not when it is defined, so calling it from a later block reads and changes the section's current state. In a section of a prompt that declares the `web` Pack (see [Tools, Packs, and the `uses:` key](12-tools.md#tools-packs-and-the-uses-key)), a first block can define this function:
 
 ````lua
 function scope_and_store(id)
@@ -151,7 +151,7 @@ function scope_and_store(id)
 end
 ````
 
-A later block of the same section then runs `return scope_and_store('web/search')`. The call offers the tool with [`tools.offer`](12-tools.md#offering-tools-with-toolsoffer-and-pluginsoffer), sets `var.scoped`, and returns `web/search`.
+A later block of the same section then runs `return scope_and_store('web/search')`. The call offers the tool with [`tools.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer), sets `var.scoped`, and returns `web/search`.
 
 ### The Engine globals
 
@@ -169,17 +169,17 @@ Every section VM, in the H1 pass and in walked sections alike, starts with these
 - `models`, `tools`, `messages`, and `compactors`
 - `call`, `jump`, `prompt`, and `require`
 - `tasks`
-- `plugins`, a read-only table with one object per Plugin the run knows
+- `packs`, a read-only table with one object per Pack the run knows
 
 Two more Engine globals are installed only in some section VMs. `ui` is installed when the run has an application-state snapshot (see [Run facts in `sys` and `ui`](#run-facts-in-sys-and-ui)), and `item` is installed in a spawned chain, such as a fanout arm (see [What an arm sees](14-fanout.md#what-an-arm-sees)). That makes 21 Engine globals in all.
 
-Together they give every section's Lua logging through `log` (see [Logging and lifecycle reports](#logging-and-lifecycle-reports)), tool scoping through `tools`, store operations through `store`, and the `var` and `argv` globals, all inside the sandboxed section VM. `prose` is the global that reads pending prose (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)), `prompt` holds the section reads (see [Reading sections with `prompt.section` and `prompt.list`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptlist)), and `models` holds [`models.infer`](10-models.md#running-a-round-with-modelsinfer). The rest are taught where they are used: `args` in [The argument string in `args`](06-arguments.md#the-argument-string-in-args), `argv` in [Reading parsed input from `argv`](06-arguments.md#reading-parsed-input-from-argv), `store` in [What the store is](09-the-store.md#what-the-store-is), `untrusted` in [Handing store text to a model with `untrusted`](09-the-store.md#handing-store-text-to-a-model-with-untrusted), `json` in [Encoding and decoding JSON with `json`](#encoding-and-decoding-json-with-json), `messages` in [Building a message list](11-conversations.md#building-a-message-list), `compactors` in [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion), `tools` in [Tool scope and the task built-ins](12-tools.md#tool-scope-and-the-task-built-ins), `plugins` in [Tool objects and Plugin objects](12-tools.md#tool-objects-and-plugin-objects), and `tasks` in [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn).
+Together they give every section's Lua logging through `log` (see [Logging and lifecycle reports](#logging-and-lifecycle-reports)), tool scoping through `tools`, store operations through `store`, and the `var` and `argv` globals, all inside the sandboxed section VM. `prose` is the global that reads pending prose (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)), `prompt` holds the section reads (see [Reading sections with `prompt.section` and `prompt.list`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptlist)), and `models` holds [`models.infer`](10-models.md#running-a-round-with-modelsinfer). The rest are taught where they are used: `args` in [The argument string in `args`](06-arguments.md#the-argument-string-in-args), `argv` in [Reading parsed input from `argv`](06-arguments.md#reading-parsed-input-from-argv), `store` in [What the store is](09-the-store.md#what-the-store-is), `untrusted` in [Handing store text to a model with `untrusted`](09-the-store.md#handing-store-text-to-a-model-with-untrusted), `json` in [Encoding and decoding JSON with `json`](#encoding-and-decoding-json-with-json), `messages` in [Building a message list](11-conversations.md#building-a-message-list), `compactors` in [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion), `tools` in [Tool scope and the task built-ins](12-tools.md#tool-scope-and-the-task-built-ins), `packs` in [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects), and `tasks` in [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn).
 
 The Engine installs no global beyond these 21. Fanout is `tasks.fanout`, a function on the `tasks` table (see [Fanout in one call](14-fanout.md#fanout-in-one-call)), and reading a list section goes through `prompt.list`.
 
 The H1 pass and every walked section see the same set of globals. The one difference is `argv`: it is writable in the H1 pass, so H1 code can assign it (see [Checking and repairing `argv` in the H1 pass](06-arguments.md#checking-and-repairing-argv-in-the-h1-pass)), and frozen in every other section.
 
-The role label of a declared [model role](10-models.md#model-roles-instead-of-models) and an offered tool never become globals of their own. With the role `writer` bound, `type(writer)` is `nil`. You read a role's model handle with [`models.get(label)`](10-models.md#getting-handles-with-modelsget), so `models.get('writer').name` reads `writer`, and you read a tool with [`tools.get(id)`](12-tools.md#tool-objects-and-plugin-objects), so in a prompt that declares `web`, `tools.get('web/search').id` reads `web/search`.
+The role label of a declared [model role](10-models.md#model-roles-instead-of-models) and an offered tool never become globals of their own. With the role `writer` bound, `type(writer)` is `nil`. You read a role's model handle with [`models.get(label)`](10-models.md#getting-handles-with-modelsget), so `models.get('writer').name` reads `writer`, and you read a tool with [`tools.get(id)`](12-tools.md#tool-objects-and-pack-objects), so in a prompt that declares `web`, `tools.get('web/search').id` reads `web/search`.
 
 Every section VM is set up in one fixed order. The same order applies to every section, the H1 pass, every fanout arm, and every spawned task chain:
 
@@ -190,7 +190,7 @@ Every section VM is set up in one fixed order. The same order applies to every s
 5. `jump` and the `prompt` reads
 6. the suspending calls
 7. `models.loop`
-8. Plugin preludes
+8. Pack preludes
 9. `require`
 10. the store's suspending calls
 
@@ -200,7 +200,7 @@ The Engine reserves the name of every global it installs in a section VM, and it
 
 The 23 Lua 5.5 keywords in prompt Lua are `and`, `break`, `do`, `else`, `elseif`, `end`, `false`, `for`, `function`, `global`, `goto`, `if`, `in`, `local`, `nil`, `not`, `or`, `repeat`, `return`, `then`, `true`, `until`, and `while`. A Lua keyword never reads as a global. Every Engine global and Lua global on the list reads non-nil in a section once its conditional bindings apply, such as `ui` with a snapshot and `item` in a spawned chain.
 
-Apart from what a Plugin prelude adds, every global a section's `_G` holds is either an Engine global or a Lua global on the reserved-name list. With no prelude, `_G` holds exactly what the Engine installs.
+Apart from what a Pack prelude adds, every global a section's `_G` holds is either an Engine global or a Lua global on the reserved-name list. With no prelude, `_G` holds exactly what the Engine installs.
 
 `global` is a contextual keyword. `global declared` compiles as a global declaration, while `local global = 1` still compiles. The prompt Lua lexer reads `global` as a contextual keyword rather than a reserved word, because the built-in Lua 5.5 uses its compatibility build for `global`, though the language reserves the name all the same. The other 22 keywords cannot be local names, as in any Lua. Reserved global names can: `store` and `pairs` compile as ordinary local names, as in `local store = 1`.
 
@@ -239,7 +239,7 @@ These are the suspending calls:
 - `models.loop` (see [Starting a conversation](11-conversations.md#starting-a-conversation))
 - `tools.call` (see [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls))
 - `call`
-- `input.ask`, which is itself a `tools.call` to the `user-input` Plugin's `ask` tool (see [Asking the operator](#asking-the-operator))
+- `input.ask`, which is itself a `tools.call` to the `user-input` Pack's `ask` tool (see [Asking the operator](#asking-the-operator))
 - the `tasks` functions, [`tasks.fanout`](14-fanout.md#fanout-in-one-call) and [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) included
 - the `store` calls (see [Writing and reading files](09-the-store.md#writing-and-reading-files))
 
@@ -267,16 +267,16 @@ The suspending calls work in every section's Lua, the H1 pass and fanout arms in
 
 A block has no direct route to I/O or a clock, because it never has the `io`, `os`, `package`, `coroutine`, or `debug` library. Work outside the block happens only through Engine calls.
 
-### Plugin preludes
+### Pack preludes
 
-A Plugin prelude is Lua source that a Plugin the prompt declares contributes, and every section VM installs it after the Engine globals and before any block runs. A prelude is how a declared Plugin defines Lua globals of its own:
+A Pack prelude is Lua source that a Pack the prompt declares contributes, and every section VM installs it after the Engine globals and before any block runs. A prelude is how a declared Pack defines Lua globals of its own:
 
 ````markdown
 ---
 name: ask-check
-description: Reads the globals a Plugin prelude adds.
+description: Reads the globals a Pack prelude adds.
 runvil: 0
-plugins:
+uses:
   - user-input
 ---
 
@@ -287,13 +287,13 @@ return type(input.ask) .. ',' .. type(store.read) .. ',' .. type(tools.call)
 ```
 ````
 
-Run on a Host that has the `user-input` Plugin and an operator to ask (see [Plugins at prepare](04-how-a-prompt-runs.md#plugins-at-prepare)), the run result is:
+Run on a Host that has the `user-input` Pack and an operator to ask (see [Packs at prepare](04-how-a-prompt-runs.md#packs-at-prepare)), the run result is:
 
 ````text
 function,function,function
 ````
 
-The `user-input` prelude defines the global `input`, so `type(input.ask)` reads `function`. A prelude global sits beside the Engine's globals without replacing them, so `type(store.read)` and `type(tools.call)` still give `function` when `user-input` is declared. Your code still sees the `ui`, `argv`, `sys`, and `models` globals when Plugin preludes are installed.
+The `user-input` prelude defines the global `input`, so `type(input.ask)` reads `function`. A prelude global sits beside the Engine's globals without replacing them, so `type(store.read)` and `type(tools.call)` still give `function` when `user-input` is declared. Your code still sees the `ui`, `argv`, `sys`, and `models` globals when Pack preludes are installed.
 
 A prelude can add any globals to a section's `_G` beyond the ones the Engine installs. A prelude that runs `answer = 42`, `label = 'kit'`, and `function shout(text) ... end` makes `answer`, `label`, and `shout` readable from your blocks.
 
@@ -301,35 +301,35 @@ A prelude can also define a table global holding fields and functions. `input` i
 
 Preludes install when each section VM is set up, before that VM runs its first block, the H1 block included. Every Lua global a prelude defines is therefore available to every block of every section in the run, fanout arms and spawned task chains included, and to every library a block loads with `require`. In a prompt that declares `user-input`, a required library, a fanout arm, and a spawned task can each call `input.ask()`.
 
-Preludes install in the order the prompt's `plugins:` list declares their Plugins.
+Preludes install in the order the prompt's `uses:` list declares their Packs.
 
 A prelude function called from a block can use `store.write` and `store.read`, and each store call inside it is a store effect issued in call order. A prelude function that writes a file and then reads it back issues the write first and the read second, just as the same two calls in a block would.
 
 #### Prelude tables are read-only
 
-A table global that a Plugin's prelude defines is read-only at its top level. You read and call its fields as usual, so `input.ask()` works, but assigning a field, as in `input.extra = 1`, raises this error:
+A table global that a Pack's prelude defines is read-only at its top level. You read and call its fields as usual, so `input.ask()` works, but assigning a field, as in `input.extra = 1`, raises this error:
 
 ````text
-input is read-only: Plugin `user-input` defines it; cannot set 'extra'
+input is read-only: Pack `user-input` defines it; cannot set 'extra'
 ````
 
-The message has the form `` {name} is read-only: Plugin `{plugin}` defines it; cannot set '{field}' ``, naming the table, the Plugin that defines it, and the field. The table is sealed: `getmetatable(input)` returns `input is sealed`, and `pairs(input)` visits nothing.
+The message has the form `` {name} is read-only: Pack `{pack}` defines it; cannot set '{field}' ``, naming the table, the Pack that defines it, and the field. The table is sealed: `getmetatable(input)` returns `input is sealed`, and `pairs(input)` visits nothing.
 
-#### Which Plugins add globals
+#### Which Packs add globals
 
-A prompt that does not declare a Plugin gets none of that Plugin's globals. Without `user-input` declared, there is no `input` global, and `input.ask()` raises this error:
+A prompt that does not declare a Pack gets none of that Pack's globals. Without `user-input` declared, there is no `input` global, and `input.ask()` raises this error:
 
 ````text
 attempt to index a nil value (global 'input')
 ````
 
-A prelude global never takes a reserved name, so no Plugin global replaces an Engine global, a kept Lua standard-library global, or a Lua keyword.
+A prelude global never takes a reserved name, so no Pack global replaces an Engine global, a kept Lua standard-library global, or a Lua keyword.
 
 #### When a prelude fails
 
-All preludes in a run share one global namespace, and a prelude that cannot install fails the run with [run error kind](04-how-a-prompt-runs.md#the-run-result-and-outcomes) `Lua`. Every such message starts with `` Plugin `{plugin}`: its prelude ... ``, naming the Plugin that contributed the prelude. A prelude fails in these cases:
+All preludes in a run share one global namespace, and a prelude that cannot install fails the run with [run error kind](04-how-a-prompt-runs.md#the-run-result-and-outcomes) `Lua`. Every such message starts with `` Pack `{pack}`: its prelude ... ``, naming the Pack that contributed the prelude. A prelude fails in these cases:
 
-- It defines a global an earlier prelude already defines. The message has the form `` Plugin `{plugin}`: its prelude defines the global `{name}`, which Plugin `{earlier}`'s prelude already defines ``, naming the later Plugin, the global, and the Plugin that defined it first.
+- It defines a global an earlier prelude already defines. The message has the form `` Pack `{pack}`: its prelude defines the global `{name}`, which Pack `{earlier}`'s prelude already defines ``, naming the later Pack, the global, and the Pack that defined it first.
 - It defines a global that an Engine global or another reserved name already holds. A prelude defining `ui` or `item` fails the run with a message saying the name `is reserved as an Engine global`.
 - It fails to load. The message says `its prelude failed to load`.
 
@@ -1242,7 +1242,7 @@ The run result is:
 - `json.null` stands for JSON null.
 - `json.array` marks a table as a list, so it stays a list when it is empty.
 
-`json` is in every section VM, the H1 pass, fanout arms, spawned tasks, and libraries loaded with `require` included, and a Plugin prelude's functions can call it too, so you never import it. Encoding is strict: a value that is not JSON data raises an error that names exactly where the value sits, unless you ask for a [debug dump](#dumping-any-value-in-debug-mode). Output and error text are identical on every run, because object keys are written sorted and table keys are always checked in one fixed order. Nulls and lists are recognized by the values themselves, never by looking anything up in the `json` table, so reassigning one of its fields changes nothing about how a value encodes.
+`json` is in every section VM, the H1 pass, fanout arms, spawned tasks, and libraries loaded with `require` included, and a Pack prelude's functions can call it too, so you never import it. Encoding is strict: a value that is not JSON data raises an error that names exactly where the value sits, unless you ask for a [debug dump](#dumping-any-value-in-debug-mode). Output and error text are identical on every run, because object keys are written sorted and table keys are always checked in one fixed order. Nulls and lists are recognized by the values themselves, never by looking anything up in the `json` table, so reassigning one of its fields changes nothing about how a value encodes.
 
 Every error a `json` function raises is an [error value](#error-values) of kind `lua`, so `pcall` catches it, and `tostring(err)` gives its message with no prefix. Left uncaught, it ends the block like any other `lua` failure (see [What an uncaught error ends](#what-an-uncaught-error-ends)).
 
@@ -1380,7 +1380,7 @@ A marked list carries a metatable whose only field is `__metatable = false`. So 
 `json.array` raises two errors:
 
 - `json.array expects a table or no argument, got {type}`, for any value other than a table or nil, so `json.array(5)` reports `got integer`.
-- `json.array: the table already has a metatable`, for a table whose metatable is anything other than the list marker. That covers `var` and every table read from it, frozen `argv`, sealed Plugin globals, fanout results, `_G`, and any table you gave a metatable yourself.
+- `json.array: the table already has a metatable`, for a table whose metatable is anything other than the list marker. That covers `var` and every table read from it, frozen `argv`, sealed Pack globals, fanout results, `_G`, and any table you gave a metatable yourself.
 
 The marker works beyond `json.encode`. Every place the Engine turns a Lua table into JSON honors it, so a marked list goes out as `[]` in a `tools.call` argument table, a task's `item`, a message record, and `var`, where a plain empty table goes out as `{}`. An empty list stored in `var` or in frozen `argv` keeps its marker, so after `var.items = json.array()`, `var` reads back as `{ "items": [] }`, and a `{{ var.items }}` placeholder renders `[]` (see [When the run reads `var` back](#when-the-run-reads-var-back)). `var.items = {}` still reads back as `{ "items": {} }`.
 
@@ -1438,13 +1438,13 @@ Tables encode this way:
 
 Functions, threads, and every userdata other than `json.null` are not JSON data, so they raise an error. That includes Engine objects such as tool objects, message lists, and the record views that `msgs[i]` returns. To encode a message record, encode `msgs[i].content` or a plain table you build from its fields.
 
-A sealed view is a table that holds no entries of its own and whose metatable has both `__index` and `__metatable`. `var` and every table read from it, frozen `argv`, sealed Plugin globals, and [fanout results](14-fanout.md#reading-the-results) are sealed views. When a view's `__index` is a table, `json.encode` encodes that table in the view's place, so `json.encode(var)` gives everything `var` holds. For a fanout arm over the member `alpha` whose worker returns `item .. '-' .. sys.index`, `json.encode(r[1])` gives `{"exhausted":false,"item":"alpha","ok":true,"text":"alpha-1"}`. When a view's `__index` is a function, as in `sys`, the view cannot be read, and `json.encode(sys)` raises this error:
+A sealed view is a table that holds no entries of its own and whose metatable has both `__index` and `__metatable`. `var` and every table read from it, frozen `argv`, sealed Pack globals, and [fanout results](14-fanout.md#reading-the-results) are sealed views. When a view's `__index` is a table, `json.encode` encodes that table in the view's place, so `json.encode(var)` gives everything `var` holds. For a fanout arm over the member `alpha` whose worker returns `item .. '-' .. sys.index`, `json.encode(r[1])` gives `{"exhausted":false,"item":"alpha","ok":true,"text":"alpha-1"}`. When a view's `__index` is a function, as in `sys`, the view cannot be read, and `json.encode(sys)` raises this error:
 
 ````text
 json.encode: value cannot be read (sys is sealed); copy the fields you need into a plain table
 ````
 
-The parenthesis holds the view's `__metatable` text and is left out when that is not a string. Inside a Plugin prelude's function, `var` is a read-only view of this kind, so `json.encode(var)` there raises the same error with `(var is read-only)`. A table whose `__index` is neither a table nor a function is not a sealed view, and it encodes as its own entries.
+The parenthesis holds the view's `__metatable` text and is left out when that is not a string. Inside a Pack prelude's function, `var` is a read-only view of this kind, so `json.encode(var)` there raises the same error with `(var is read-only)`. A table whose `__index` is neither a table nor a function is not a sealed view, and it encodes as its own entries.
 
 ### When `json.encode` refuses a value
 
@@ -1856,7 +1856,7 @@ Comparing two `sys.when` strings as text does not reliably order them in time. T
 name: model-id
 description: Reads the bound model's catalog id before and after the first tool call.
 runvil: 0
-plugins:
+uses:
   - user-input
 models:
   writer: {}
@@ -2343,7 +2343,7 @@ For one section with two blocks, the lifecycle reports come in this order:
 
 Each Lua block's `log` checkpoints sit between that block's chunk started and chunk succeeded reports, and so do its store reports: a block reports chunk started before its store reports, and chunk succeeded after them when it finishes cleanly. In the `log-checkpoints` prompt, `prepare started` falls inside the first block's pair in `Prepare` and `prepare finished` inside the second.
 
-When a section's Lua VM shuts down, the event stream shows teardown started followed by teardown succeeded, tagged with that section. A block that raises reports chunk started and then chunk failed, and the section's teardown still reports started and succeeded. When a section VM's setup fails after the VM is built, for example when a [Plugin prelude](#lua-blocks-section-vms-and-engine-globals) fails to load, the VM is torn down, reporting teardown started and teardown succeeded, before the error is reported.
+When a section's Lua VM shuts down, the event stream shows teardown started followed by teardown succeeded, tagged with that section. A block that raises reports chunk started and then chunk failed, and the section's teardown still reports started and succeeded. When a section VM's setup fails after the VM is built, for example when a [Pack prelude](#lua-blocks-section-vms-and-engine-globals) fails to load, the VM is torn down, reporting teardown started and teardown succeeded, before the error is reported.
 
 Two more kinds of lifecycle report come from compiling and loading:
 
@@ -2359,7 +2359,7 @@ After this section you can pause a section until the operator answers, let a mod
 name: ask-once
 description: Waits for the operator's next message and returns it.
 runvil: 0
-plugins:
+uses:
   - user-input
 ---
 
@@ -2379,38 +2379,38 @@ When the operator sends `kept`, the run result is:
 kept
 ````
 
-The operator is the person who answers during a run. The `runvil/user-input` Plugin lets a prompt ask the operator: a prompt that declares it in its frontmatter runs the Plugin's Lua prelude, which defines an `input` global table in every section, so any section can call `input.ask()` to wait for the operator's next message. The declaration also brings the ask tool, `user-input/ask`.
+The operator is the person who answers during a run. The `runvil/user-input` Pack lets a prompt ask the operator: a prompt that declares it in its frontmatter runs the Pack's Lua prelude, which defines an `input` global table in every section, so any section can call `input.ask()` to wait for the operator's next message. The declaration also brings the ask tool, `user-input/ask`.
 
 `input.ask()` takes no arguments, as in `local text = input.ask()`. It pauses the section until the operator's next message and returns that message's text as a string, byte for byte as the operator sent it. Leading and trailing spaces, newlines, and tabs are kept, with no trimming or re-encoding, so a message with two leading spaces, a newline and a tab inside it, and two trailing spaces comes back exactly as typed. The operator's text is trusted, so it never arrives wrapped in the untrusted `<untrusted_input_...>` markers.
 
-### Declaring the Plugin
+### Declaring the Pack
 
-You get operator input in a prompt by declaring the Plugin under the frontmatter [`plugins:`](12-tools.md#tools-plugins-and-the-plugins-key) key by its Plugin id, `user-input`. Write it as the line `  - user-input` after `plugins:`, as the `ask-once` prompt does, or in flow style as `plugins: [user-input]`. The entry is the one-segment Plugin id, because an entry of two segments fails the parse with ``a Plugin id is one segment, such as `web` ``.
+You get operator input in a prompt by declaring the Pack under the frontmatter [`uses:`](12-tools.md#tools-packs-and-the-uses-key) key by its Pack id, `user-input`. Write it as the line `  - user-input` after `uses:`, as the `ask-once` prompt does, or in flow style as `uses: [user-input]`. A bare entry always means the `runvil` Pack of that id, so `uses: [runvil/user-input]` declares the same Pack.
 
-The Plugin's fully qualified name is `runvil/user-input`, and a Host that picks no other Plugin id installs it as `user-input`, the Plugin id a prompt declares.
+The Pack's fully qualified name is `runvil/user-input`, so its Pack id is the second segment, `user-input`.
 
-Declaring `user-input` gives your Lua the `input` table, one of the globals that [Plugin preludes](#plugin-preludes) define. Its `ask` field is a function, so `type(input.ask)` returns `function`. The `input` table is plain Lua built by the Plugin's prelude, and `ask` is its only function.
+Declaring `user-input` gives your Lua the `input` table, one of the globals that [Pack preludes](#pack-preludes) define. Its `ask` field is a function, so `type(input.ask)` returns `function`. The `input` table is plain Lua built by the Pack's prelude, and `ask` is its only function.
 
-The `input` table is sealed like every prelude table (see [Plugin preludes](#plugin-preludes)). A section can read and call `input.ask`, but writing any field of `input` raises ``input is read-only: Plugin `user-input` defines it; cannot set '{field}'``, with the field's name in place of `{field}`, and `pairs(input)` lists nothing.
+The `input` table is sealed like every prelude table (see [Pack preludes](#pack-preludes)). A section can read and call `input.ask`, but writing any field of `input` raises ``input is read-only: Pack `user-input` defines it; cannot set '{field}'``, with the field's name in place of `{field}`, and `pairs(input)` lists nothing.
 
-A prompt that does not declare `user-input` has no `input` global, even when the Plugin is installed on the Host, so calling `input.ask()` there fails with Lua's own error `attempt to index a nil value (global 'input')` (see [Plugin preludes](#plugin-preludes)).
+A prompt that does not declare `user-input` has no `input` global, even when the Host has the Pack, so calling `input.ask()` there fails with Lua's own error `attempt to index a nil value (global 'input')` (see [Pack preludes](#pack-preludes)).
 
-Your own Lua can call `input.ask()` in a section that never calls `tools.offer` or `plugins.offer`, because offering controls only what the model sees, and your code is not the model.
+Your own Lua can call `input.ask()` in a section that never calls `tools.offer` or `packs.offer`, because offering controls only what the model sees, and your code is not the model.
 
 ### The input broker
 
-An input broker is the per-run service that delivers a question to the operator, and the Plugin names it as the service `runvil/input-broker`. A run can have an optional input broker, and the run lends it to every tool call, so an ask tool can reach the operator.
+An input broker is the per-run service that delivers a question to the operator, and the Pack names it as the service `runvil/input-broker`. A run can have an optional input broker, and the run lends it to every tool call, so an ask tool can reach the operator.
 
-Every Plugin a prompt declares is required, so a prompt that declares `user-input` needs a Host that can ask an operator. The Plugin needs the environment to provide an input broker, so on a Host with nobody to ask, the prompt is refused before it starts, with run error kind `RequirementsUnmet`. The [requirements notice](04-how-a-prompt-runs.md#the-requirements-notice) names the missing service by its id:
+Every Pack a prompt declares is required, so a prompt that declares `user-input` needs a Host that can ask an operator. The Pack needs the environment to provide an input broker, so on a Host with nobody to ask, the prompt is refused before it starts, with run error kind `RequirementsUnmet`. The [requirements notice](04-how-a-prompt-runs.md#the-requirements-notice) names the missing service by its id:
 
 ````text
 the environment cannot satisfy this prompt:
 - user-input needs runvil/input-broker, and the environment provides none
 ````
 
-The ask tool is visible only in a run that has an operator input broker, because the Plugin's declared needs keep a run without one from seeing the tool, and a Plugin missing a service has its tools left out of the tool catalog. The refusal also gives you a guarantee: a section of a prompt that declares `user-input` always has an operator to ask, so it needs no connection check before calling `input.ask()`.
+The ask tool is visible only in a run that has an operator input broker, because the Pack's declared needs keep a run without one from seeing the tool, and a Pack missing a service has its tools left out of the tool catalog. The refusal also gives you a guarantee: a section of a prompt that declares `user-input` always has an operator to ask, so it needs no connection check before calling `input.ask()`.
 
-`input.ask()` names no recipient, run, or section. The ask tool reads the input broker of the run that makes the call, and the Host ties that broker to whoever launched the run, so the Host decides where an `input.ask()` question goes. One Plugin object is shared by every run, while the input broker arrives with each run, so each ask reads the next message from the operator of the run that makes the call, and reads the reply from the run it is called in.
+`input.ask()` names no recipient, run, or section. The ask tool reads the input broker of the run that makes the call, and the Host ties that broker to whoever launched the run, so the Host decides where an `input.ask()` question goes. One Pack object is shared by every run, while the input broker arrives with each run, so each ask reads the next message from the operator of the run that makes the call, and reads the reply from the run it is called in.
 
 ### What `input.ask()` takes
 
@@ -2434,15 +2434,15 @@ A stop of the run is different. The ask tool is declared to survive a stop, so a
 
 ### The ask tool
 
-The Plugin provides exactly one tool, the ask tool, whose tool name is `ask`. Its tool id is the Plugin id the Host installed the user-input Plugin under, then a slash, then `ask`, so it is `user-input/ask` under the default Plugin id and `operator/ask` when the Plugin is installed as `operator`. `tools.get('user-input/ask').id` reads the id back as `user-input/ask`.
+The Pack provides exactly one tool, the ask tool, whose tool name is `ask`. Its tool id is the Pack id, then a slash, then `ask`, so it is `user-input/ask`. `tools.get('user-input/ask').id` reads the id back as `user-input/ask`.
 
-Each `input.ask()` is an ordinary tool call to the ask tool, made through [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls) with the installed tool's full id, so calling the tool yourself asks the operator the same way. With this block as the Lua block of `## Main` in the `ask-once` prompt, the run result is again the operator's text:
+Each `input.ask()` is an ordinary tool call to the ask tool, made through [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls) with the tool's full id, so calling the tool yourself asks the operator the same way. With this block as the Lua block of `## Main` in the `ask-once` prompt, the run result is again the operator's text:
 
 ````lua
 return tools.call('user-input/ask')
 ````
 
-The tool asks the operator when called and returns the text they type, so `tools.call(tools.get('user-input/ask'))` returns the operator's text as well. The Host chooses the Plugin id the Plugin is installed under, and the prelude receives that Plugin id and builds the tool id from it, so `input.ask()` reaches the ask tool under whatever Plugin id the Plugin has.
+The tool asks the operator when called and returns the text they type, so `tools.call(tools.get('user-input/ask'))` returns the operator's text as well. The prelude receives the Pack id and builds the tool id from it, so `input.ask()` reaches `user-input/ask` without the prelude spelling the Pack id out.
 
 Each `input.ask()` is one tool call from Lua, reported like any tool call a Lua block makes: the run records a `ToolCall` for the tool `user-input/ask` under the alias `user-input_ask`, the name a model sees for it, and the result reports as trusted with the operator's text as its content.
 
@@ -2450,16 +2450,16 @@ The ask tool takes no arguments. Its parameters are described as an object with 
 
 ### Letting the model ask
 
-Declaring `user-input` offers nothing to the model, because a [`models.loop`](11-conversations.md#starting-a-conversation) conversation offers the model exactly the tools the section offers, so unless the prompt opts in, only Lua asks the operator. Neither installing nor declaring the Plugin offers the ask tool to the model, and the model can ask the operator only when the prompt's Lua opts in by offering it.
+Declaring `user-input` offers nothing to the model, because a [`models.loop`](11-conversations.md#starting-a-conversation) conversation offers the model exactly the tools the section offers, so unless the prompt opts in, only Lua asks the operator. Neither the Host having the Pack nor the prompt declaring it offers the ask tool to the model, and the model can ask the operator only when the prompt's Lua opts in by offering it.
 
-To let the model ask, offer the ask tool in the section that runs the model, either by its id or as the whole Plugin (see [Offering tools with `tools.offer` and `plugins.offer`](12-tools.md#offering-tools-with-toolsoffer-and-pluginsoffer)):
+To let the model ask, offer the ask tool in the section that runs the model, either by its id or as the whole Pack (see [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer)):
 
 ````lua
 tools.offer('user-input/ask')
 ````
 
 ````lua
-plugins.offer('user-input')
+packs.offer('user-input')
 ````
 
 The model sees the offered ask tool under the name `user-input_ask`, not under its id `user-input/ask`, because each tool's model-facing name is its id with `/` and `.` replaced by `_`. It sees the description `Wait for the operator's next message and return its text.` The model calls the tool with an empty arguments object, `{}`, the call waits until the operator sends their next message, and the tool returns that message's text as its result, in plain text. The operator's answer comes back as trusted tool output, so the text is never wrapped or marked untrusted.
@@ -2471,7 +2471,7 @@ The model sees the offered ask tool under the name `user-input_ask`, not under i
 name: ask-safely
 description: Catches a failed ask and finishes the section.
 runvil: 0
-plugins:
+uses:
   - user-input
 ---
 
@@ -2589,7 +2589,7 @@ Every field is a string, except two `store` fields that are integers: `count`, o
 Each kind comes from the feature that raises it:
 
 - `context_exhausted` comes from a model round that runs out of context, through `models.infer` or `models.loop`.
-- `empty_model_reply`, `tool_loop_exhausted`, `out_of_scope_tool`, `unbound_tool`, and `cancelled` can each come from `models.loop`. `out_of_scope_tool` names a tool that is not offered in the section (see [Offering tools with `tools.offer` and `plugins.offer`](12-tools.md#offering-tools-with-toolsoffer-and-pluginsoffer)).
+- `empty_model_reply`, `tool_loop_exhausted`, `out_of_scope_tool`, `unbound_tool`, and `cancelled` can each come from `models.loop`. `out_of_scope_tool` names a tool that is not offered in the section (see [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer)).
 - `tool` reports a tool failure from [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls).
 - `tasks_live`, `task_not_owned`, and `task_consumed` come from the task functions (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) and [Waiting with `tasks.join_any` and `tasks.join`](15-tasks.md#waiting-with-tasksjoin_any-and-tasksjoin)).
 - `store` comes from store operations, and only from failures the store itself reports.
@@ -2757,7 +2757,7 @@ Every failure the Engine raises into Lua reaches `pcall` as an error value, Engi
 
 - An argument error from an Engine call, such as a badly shaped argument to `models.infer`, `models.loop`, `call`, `tasks.fanout`, `tasks.spawn`, `tools.call`, or a `store` function, is raised at the calling line as a `lua` error value rather than failing the whole block, so a `pcall` around the call catches it.
 - A failed Harness request, such as a model round, arrives as an error value whose `kind` names the failure, such as `context_exhausted`, with the kind's own fields beside it and `tostring` giving the error's display text unchanged. An interrupted chat call wrapped in `pcall` likewise comes back as `false` and an error value carrying both `kind` and `message`.
-- An Engine function that fails on the spot, such as a failing [`tools.offer`](12-tools.md#offering-tools-with-toolsoffer-and-pluginsoffer), a read of an unknown `sys` field such as `sys.nothing`, or the `var` guard, gives the same indexable error value. `err.kind` and `err.message` work on it at the call site, and `tostring(err)` is the message with no traceback appended. A refused `var` write gives a message containing `var is read-only` (see [Keeping state in `var`](#keeping-state-in-var)), and a runtime error raised inside a built-in call is kind `lua`.
+- An Engine function that fails on the spot, such as a failing [`tools.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer), a read of an unknown `sys` field such as `sys.nothing`, or the `var` guard, gives the same indexable error value. `err.kind` and `err.message` work on it at the call site, and `tostring(err)` is the message with no traceback appended. A refused `var` write gives a message containing `var is read-only` (see [Keeping state in `var`](#keeping-state-in-var)), and a runtime error raised inside a built-in call is kind `lua`.
 
 The `pcall` and `xpcall` globals you call are the Engine's own versions, which make this conversion, and they replace the standard library's.
 
@@ -2979,7 +2979,7 @@ The compiler's diagnostic is never rewritten to file lines, so the L in its `[st
 
 Every block compiles this way, whether it sits in a library, under the H1 title, or in any section, the last block of the last section included: an unclosed `return (` in a final epilog fails the parse as ``section `Transform` epilog``. A syntax error in a section's prologue fence is located as ``section `{name}` prologue``, such as ``section `Private section` prologue``, and one in its epilog fence as ``section `{name}` epilog``. The compile error also carries the full Lua source of the block that failed, such as `private_payload =`.
 
-The compile error's text is the parse error's whole message, with nothing added in front. The message states the position itself, and the parse error carries no separate span, name, line, or column. A compile error in a prompt's own blocks always fails the parse, so no run starts. A compile error during a run, such as one in a [Plugin prelude](12-tools.md#plugin-preludes), ends the run with run error kind `Lua`.
+The compile error's text is the parse error's whole message, with nothing added in front. The message states the position itself, and the parse error carries no separate span, name, line, or column. A compile error in a prompt's own blocks always fails the parse, so no run starts. A compile error during a run, such as one in a [Pack prelude](12-tools.md#pack-preludes), ends the run with run error kind `Lua`.
 
 ### Runtime error messages and tracebacks
 

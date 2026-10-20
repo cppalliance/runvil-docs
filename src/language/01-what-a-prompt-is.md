@@ -216,7 +216,7 @@ return 'hello'
 hello
 ````
 
-The block's return value is the run result. This prompt declares no model roles (see [Model roles instead of models](10-models.md#model-roles-instead-of-models)), no tools, and no Plugins, so it runs on Lua alone: the block's `return` is the whole result, and no model round happens.
+The block's return value is the run result. This prompt declares no model roles (see [Model roles instead of models](10-models.md#model-roles-instead-of-models)), no tools, and no Packs, so it runs on Lua alone: the block's `return` is the whole result, and no model round happens.
 
 ### Leaving out the runvil version
 
@@ -283,9 +283,9 @@ Repeat exactly, with no extra words: Hello, Ada!
 
 ### The frontmatter and the contract keys
 
-The frontmatter holds `name`, `description`, and `runvil: 0`, plus a `models:` key. `plugins:`, `models:`, and `args:` are the contract keys, three optional keys that state what the prompt needs from its run:
+The frontmatter holds `name`, `description`, and `runvil: 0`, plus a `models:` key. `uses:`, `models:`, and `args:` are the contract keys, three optional keys that state what the prompt needs from its run:
 
-- `plugins:` names the Plugins the run requires (see [Tools, Plugins, and the `plugins:` key](12-tools.md#tools-plugins-and-the-plugins-key)).
+- `uses:` names the Packs the run requires (see [Tools, Packs, and the `uses:` key](12-tools.md#tools-packs-and-the-uses-key)).
 - `models:` declares model roles, such as the `writer` role here.
 - `args:` types the prompt's arguments (see [Declaring arguments in frontmatter](06-arguments.md#declaring-arguments-in-frontmatter)).
 
@@ -322,21 +322,21 @@ HI THERE
 
 The tool's answer is the block's return value, so it becomes the run result.
 
-### Declaring a Plugin
+### Declaring a Pack
 
-A prompt that uses a Plugin lists it under `plugins:`. This frontmatter declares the `web` Plugin:
+A prompt that uses a Pack lists it under `uses:`. This frontmatter declares the `web` Pack:
 
 ````markdown
 ---
 name: researcher
 description: Researches a topic on the web.
 runvil: 0
-plugins:
+uses:
   - web
 ---
 ````
 
-The rest of a complete Plugin-using prompt is the same shape as before: an H1 title and one `##` section holding a Lua block.
+The rest of a complete Pack-using prompt is the same shape as before: an H1 title and one `##` section holding a Lua block.
 
 ### A prompt that sends prose to a model
 
@@ -461,9 +461,9 @@ When a Host starts a run of this prompt, the Harness hands the file's text to th
 
 The Host launches runs and sets run policy, the settings that govern a run, such as which model the run uses and whether anyone can answer `input.ask()` (see [Asking the operator](05-lua-environment.md#asking-the-operator)). The Host can also cancel a run.
 
-### Plugins and the tool catalog
+### Packs and the tool catalog
 
-The Host installs Plugins once and shares them across runs. A Plugin is an installed bundle of tools, such as the web tools. The Harness takes each run's tool catalog, the set of tools that run can use, from a snapshot of the installed Plugins. The prompt itself installs no Plugins, and it names the ones it needs under `plugins:`.
+A Pack is a bundle of tools, such as the web tools, that can also bring a Lua prelude. A Plugin is an entry point that adds zero or more Packs. The Host calls its Plugins once, when it sets up, and every Pack they add is built then and shared across runs. The Harness takes each run's tool catalog, the set of tools that run can use, from a snapshot of the run's Packs: every `runvil` Pack, plus each third-party Pack the prompt declares. The prompt itself installs no Packs, and it names the ones it needs under `uses:`.
 
 ### Seed, start time, and repeatable runs
 
@@ -549,7 +549,7 @@ return store.read('note.md')
 hello
 ````
 
-Each store call in this block is an effect. Every model round, every call to a Plugin's tool, and every store read or write that a prompt makes is an effect, and the Harness performs every effect outside the run.
+Each store call in this block is an effect. Every model round, every call to a Pack's tool, and every store read or write that a prompt makes is an effect, and the Harness performs every effect outside the run.
 
 ### How an effect is answered
 
@@ -590,13 +590,13 @@ A block's Lua has no `io` or `os` library, so it reaches the outside world only 
 There are exactly four kinds of Harness work:
 
 - A model round.
-- A call to a Plugin's tool.
+- A call to a Pack's tool.
 - A store operation.
 - The timer behind a timed wait on tasks (see [Time limits on waits](15-tasks.md#time-limits-on-waits)).
 
 A model round is one request to a model and its reply. The Harness answers it with the model's reply or with the reason the round failed.
 
-Asking the operator with `input.ask()` is a call to a Plugin's tool. The operator is the person who answers `input.ask` during a run. The user-input Plugin defines `input.ask` to end in `return tools.call(plugin .. "/ask")`, so every ask reaches the Harness as an ordinary tool call, and the wait for the operator's answer is Harness work.
+Asking the operator with `input.ask()` is a call to a Pack's tool. The operator is the person who answers `input.ask` during a run. The user-input Pack defines `input.ask` to end in `return tools.call(pack .. "/ask")`, so every ask reaches the Harness as an ordinary tool call, and the wait for the operator's answer is Harness work.
 
 Every store call, even a read, is a store operation that the Harness performs. That covers all eight `store.*` calls a prompt can make (see [Writing and reading files](09-the-store.md#writing-and-reading-files)), and the block that made the call waits for its answer.
 
@@ -633,6 +633,6 @@ Every prompt shipped in the repository's `prompts` directory, including the prom
 - `greet.md` builds a greeting from its argument with `var.greeting = "Hello, " .. args .. "!"` and has the model repeat it through `{{ var.greeting }}` in its prose; [Placeholders in prose](07-substitution.md#placeholders-in-prose) teaches placeholders.
 - `analyst-example.md` declares an `analyst` model role under `models:` and calls `models.use("analyst")` before `return models.infer(prose)`; [Model roles instead of models](10-models.md#model-roles-instead-of-models) teaches model roles.
 
-Runvil also ships `research-person.md`, which researches a person. Its `## Research` section calls `tools.offer({"web/search", "web/fetch"})` (see [Offering tools with `tools.offer` and `plugins.offer`](12-tools.md#offering-tools-with-toolsoffer-and-pluginsoffer)), and the prompt runs end to end to a factual summary. [What the web Plugin gives a prompt](13-web-fetch-and-search.md#what-the-web-plugin-gives-a-prompt) teaches `web/search` and `web/fetch`.
+Runvil also ships `research-person.md`, which researches a person. Its `## Research` section calls `tools.offer({"web/search", "web/fetch"})` (see [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer)), and the prompt runs end to end to a factual summary. [What the web Pack gives a prompt](13-web-fetch-and-search.md#what-the-web-pack-gives-a-prompt) teaches `web/search` and `web/fetch`.
 
 The research prompt takes the person to research as its argument. Its prose puts `{{ args }}` after the line `Your input is a request about a person:`, so a run given the argument `Ada Lovelace` places that name into the prose right after that line.

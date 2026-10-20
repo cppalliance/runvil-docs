@@ -773,7 +773,7 @@ Reading `prose` gives the block's rendered prose, and every write is refused, wh
 
 `prose` is a reserved global in every section and in the H1 pass, and the Lua environment has no `rawget`, `rawset`, `rawequal`, `debug`, `load`, or other raw or code-loading route around it, so every read and write of `prose` gets the read-only, lazy behavior. A metatable you set on `_G`, including one with its own `__index` or `__newindex`, never sees or changes how `prose` reads or refuses assignment, because `prose` is served and refused before any metatable of yours runs. With a metatable on `_G`, including one a library sets, `prose` stays read-only and still renders at its first read, and the next fence still gets its fresh `prose` even when the metatable has a `__newindex` write hook.
 
-`prose` reads `nil` in code that runs before any block has started, such as a [Plugin prelude](12-tools.md#plugin-preludes) while it installs.
+`prose` reads `nil` in code that runs before any block has started, such as a [Pack prelude](12-tools.md#pack-preludes) while it installs.
 
 ## Thematic breaks and setext headings
 
@@ -2100,7 +2100,7 @@ end
 
 Code in a section loaded with `require` runs as part of the calling section, so every store, model, and tool call it makes while it loads is issued on the caller's behalf. A [`store.write`](09-the-store.md#writing-and-reading-files) lands exactly as if the caller had made it, and a [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls) returns the tool's result.
 
-A library's top-level code runs at load time with every global the Engine provides already installed, so `args`, `store`, `log`, and the `tools` and `models` tables all work while it loads. A library loaded with `require` also sees the globals a [Plugin prelude](12-tools.md#plugin-preludes) installs, including while its top-level code runs at load time.
+A library's top-level code runs at load time with every global the Engine provides already installed, so `args`, `store`, `log`, and the `tools` and `models` tables all work while it loads. A library loaded with `require` also sees the globals a [Pack prelude](12-tools.md#pack-preludes) installs, including while its top-level code runs at load time.
 
 Library blocks run inside the calling block, so a library block can make every call the caller can, including calls that pause the block, such as `tools.call` and [`models.infer`](10-models.md#running-a-round-with-modelsinfer). Each one pauses the calling block like an ordinary call made in the caller:
 
@@ -2302,7 +2302,7 @@ The caller's `prose` comes back the same way however the load ends. After a `req
 
 `require` is Runvil's own section loader, not the Lua base library's `require`. The Engine installs it as a global for each section's whole lifetime, so it is available in every section's Lua and any block can call it, and `type(require)` is `function`. The Engine finds the named library section and renders its prose for it. Author code that rebinds `error`, `setmetatable`, or `table.concat` does not change how `require` behaves.
 
-Because `require` is reserved as one of the Engine's own globals, a [Plugin prelude](12-tools.md#plugin-preludes) cannot define its own `require`, and trying fails with an error containing `which is reserved as an Engine global`. A Plugin prelude cannot call `require` while it installs either, because the Engine installs `require` after the preludes. That call fails the run with a message that starts `` Plugin `{id}`: its prelude failed to load: `` and contains `attempt to call a nil value (global 'require')`, where `{id}` is the Plugin id.
+Because `require` is reserved as one of the Engine's own globals, a [Pack prelude](12-tools.md#pack-preludes) cannot define its own `require`, and trying fails with an error containing `which is reserved as an Engine global`. A Pack prelude cannot call `require` while it installs either, because the Engine installs `require` after the preludes. That call fails the run with a message that starts `` Pack `{id}`: its prelude failed to load: `` and contains `attempt to call a nil value (global 'require')`, where `{id}` is the Pack id.
 
 ## How `require` finds and caches libraries
 

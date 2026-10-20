@@ -107,7 +107,7 @@ Sections can also nest deeper than `##`. In a prompt titled `# Fanout`, a `### W
 
 You write the frontmatter in YAML at the very top of the file. The first line of the file must be `---`, and spaces before or after the dashes on that line are ignored. A file that starts any other way is rejected with the message `file must begin with a --- frontmatter delimiter`, which [Frontmatter delimiters, byte-order mark, and line endings](#frontmatter-delimiters-byte-order-mark-and-line-endings) covers with the other delimiter rules.
 
-The frontmatter declares the prompt's files with the optional `input` and `output` keys, its Plugins with the `plugins` list, its arguments with `args`, and its model roles with `models`. None of these is needed for a prompt to parse and run. A frontmatter of only `name`, `description`, and `runvil: 0` between the `---` lines is complete:
+The frontmatter declares the prompt's files with the optional `input` and `output` keys, its Packs with the `uses` list, its arguments with `args`, and its model roles with `models`. None of these is needed for a prompt to parse and run. A frontmatter of only `name`, `description`, and `runvil: 0` between the `---` lines is complete:
 
 ````markdown
 ---
@@ -119,7 +119,7 @@ runvil: 0
 # Frontmatter Only
 ````
 
-This prompt leaves out `models`, `args`, `plugins`, `input`, and `output`, and it still parses and runs. [Prompts without sections](#prompts-without-sections) explains how a prompt with nothing under its title ends. The `description` value can be a single character such as `d`, and `runvil: 0` is the version value. A frontmatter of `name: greeter`, `description: says hi`, and `runvil: 0` is just as complete.
+This prompt leaves out `models`, `args`, `uses`, `input`, and `output`, and it still parses and runs. [Prompts without sections](#prompts-without-sections) explains how a prompt with nothing under its title ends. The `description` value can be a single character such as `d`, and `runvil: 0` is the version value. A frontmatter of `name: greeter`, `description: says hi`, and `runvil: 0` is just as complete.
 
 ## Frontmatter delimiters, byte-order mark, and line endings
 
@@ -218,7 +218,7 @@ After this section you can write frontmatter values in either YAML style and rea
 name: analyst_example
 description: Demonstrate frontmatter model roles and models.use for careful model selection.
 runvil: 0
-plugins:
+uses:
   - web
 models:
   analyst:
@@ -229,7 +229,7 @@ models:
 # Analyst Example
 ````
 
-You write the frontmatter as YAML, and the parser decodes that YAML into the set of frontmatter keys a prompt accepts. This prompt writes its nested values in YAML block style: the key sits alone on its line, and more-indented lines under it hold `key: value` map entries or `- ` list items. Here `models:` holds a map two levels deep, with `analyst:` under it and `min_context: 40000` and `description: A model suited for careful analysis` under that, and `plugins:` holds the single list item `- web`.
+You write the frontmatter as YAML, and the parser decodes that YAML into the set of frontmatter keys a prompt accepts. This prompt writes its nested values in YAML block style: the key sits alone on its line, and more-indented lines under it hold `key: value` map entries or `- ` list items. Here `models:` holds a map two levels deep, with `analyst:` under it and `min_context: 40000` and `description: A model suited for careful analysis` under that, and `uses:` holds the single list item `- web`.
 
 ### Flow style
 
@@ -240,14 +240,14 @@ YAML flow style writes a map or a list on one line, with `{ }` for maps and `[ ]
 name: analyst_example
 description: Demonstrate frontmatter model roles and models.use for careful model selection.
 runvil: 0
-plugins: [web]
+uses: [web]
 models: { analyst: { min_context: 40000, description: A model suited for careful analysis } }
 ---
 
 # Analyst Example
 ````
 
-Both files decode to the same frontmatter. Flow style suits short declarations, such as `plugins: [web]`, `models: { writer: { keywords: [fast] } }`, or `args: { times: { type: integer, optional: true, default: 1 }, name: { type: string } }`.
+Both files decode to the same frontmatter. Flow style suits short declarations, such as `uses: [web]`, `models: { writer: { keywords: [fast] } }`, or `args: { times: { type: integer, optional: true, default: 1 }, name: { type: string } }`.
 
 The two styles mix, so a block-style `models:` key can hold a flow-style entry on its indented line:
 
@@ -297,7 +297,7 @@ The parse fails with parse error kind `Frontmatter` and a message of this form, 
 invalid frontmatter: {detail}
 ````
 
-The Engine reports a decode failure in the same `invalid frontmatter: {detail}` form. The error also gives the file line and column of the offending spot, counting the opening `---` as line 1, so this one reports line 4 and a column. In the same way, a bad list item under `plugins:` on file line 5, written after `  - ` so that its text starts in column 5, reports line 5, column 5.
+The Engine reports a decode failure in the same `invalid frontmatter: {detail}` form. The error also gives the file line and column of the offending spot, counting the opening `---` as line 1, so this one reports line 4 and a column. In the same way, a bad list item under `uses:` on file line 5, written after `  - ` so that its text starts in column 5, reports line 5, column 5.
 
 The same message and parse error kind cover every way the frontmatter can fail to decode:
 
@@ -366,16 +366,16 @@ description: d
 p
 ````
 
-Every other key, including `runvil`, `max_tool_iterations`, `input`, `output`, `plugins`, `args`, and `models`, takes a default when you leave it out.
+Every other key, including `runvil`, `max_tool_iterations`, `input`, `output`, `uses`, `args`, and `models`, takes a default when you leave it out.
 
-A runnable prompt's frontmatter carries three keys: `name`, `description`, and `runvil: 0`. A run proceeds only when `runvil` is `0`. A prompt without `name` or `description` fails at parse time, while a prompt without `runvil` parses but stops at run time with `not a runvil prompt: no runvil version` (see [The `runvil` version key](#the-runvil-version-key)). You add optional keys next to the three when a prompt needs them, such as `plugins:`:
+A runnable prompt's frontmatter carries three keys: `name`, `description`, and `runvil: 0`. A run proceeds only when `runvil` is `0`. A prompt without `name` or `description` fails at parse time, while a prompt without `runvil` parses but stops at run time with `not a runvil prompt: no runvil version` (see [The `runvil` version key](#the-runvil-version-key)). You add optional keys next to the three when a prompt needs them, such as `uses:`:
 
 ````markdown
 ---
 name: needs-web
 description: d
 runvil: 0
-plugins:
+uses:
   - web
 ---
 ````
@@ -523,7 +523,7 @@ This table lists the nine keys in the order this chapter teaches them, with what
 | `max_tool_iterations` | no | the built-in round cap stays in force |
 | `input` | no | no declared input file |
 | `output` | no | no declared output file |
-| `plugins` | no | no Plugins |
+| `uses` | no | no Packs |
 | `args` | no | the default declaration of one optional `string` argument named `prose` |
 | `models` | no | no model roles |
 
@@ -531,15 +531,15 @@ Because every key besides `name` and `description` has a default, a frontmatter 
 
 ### Adding keys a prompt needs
 
-The `hello` prompt under [Flow style](#flow-style) shows the pattern. The shipped `hello` prompt's frontmatter holds only `name`, `description`, `runvil`, and `models`, and leaves out `max_tool_iterations`, `input`, `output`, `plugins`, and `args` because it does not need them. Its `models:` key declares a `writer: {}` role next to the usual three keys, and its H1 body then calls `models.default("writer")`.
+The `hello` prompt under [Flow style](#flow-style) shows the pattern. The shipped `hello` prompt's frontmatter holds only `name`, `description`, `runvil`, and `models`, and leaves out `max_tool_iterations`, `input`, `output`, `uses`, and `args` because it does not need them. Its `models:` key declares a `writer: {}` role next to the usual three keys, and its H1 body then calls `models.default("writer")`.
 
 The optional `input:` and `output:` declarations sit in the same frontmatter block as the other keys, as in a prompt whose frontmatter reads `name: files`, `description: d`, `runvil: 0`, then an `input:` map and an `output:` map.
 
 ### The contract keys
 
-The contract keys are `plugins`, `args`, and `models` (see [Putting the parts together](01-what-a-prompt-is.md#putting-the-parts-together)). Together they declare what a prompt needs from its environment:
+The contract keys are `uses`, `args`, and `models` (see [Putting the parts together](01-what-a-prompt-is.md#putting-the-parts-together)). Together they declare what a prompt needs from its environment:
 
-- `plugins` lists the Plugins the prompt requires, and each one listed is required.
+- `uses` lists the Packs the prompt requires, and each one listed is required.
 - `args` types the arguments the prompt takes.
 - `models` declares the model roles (see [Model roles instead of models](10-models.md#model-roles-instead-of-models)) that concrete models are bound to when the run is prepared.
 
@@ -554,7 +554,7 @@ description: says hi
 runvil: 0
 input: { path: names.md, description: The names to greet }
 output: { path: note.md, description: The note the greeter leaves }
-plugins: [web]
+uses: [web]
 args: { times: { type: integer, optional: true, default: 1 }, name: { type: string } }
 models: { writer: { keywords: [fast] } }
 ---
@@ -562,24 +562,24 @@ models: { writer: { keywords: [fast] } }
 # Greeter
 ````
 
-A frontmatter with `plugins: [web, user-input]`, an `args:` map holding `use_mcp`, and a `models:` map holding `analyst` and `triage` parses and reads back the same way.
+A frontmatter with `uses: [web, user-input]`, an `args:` map holding `use_mcp`, and a `models:` map holding `analyst` and `triage` parses and reads back the same way.
 
 ### Unknown keys
 
-You spell frontmatter keys exactly as the language defines them. An unknown frontmatter key is any top-level key other than the nine, and it is never ignored: it fails the whole file with parse error kind `Frontmatter`, because any other key is treated as a prompt authoring error. The `greeter` prompt above parses with `plugins: [web]`, but the same file with that key misspelled fails:
+You spell frontmatter keys exactly as the language defines them. An unknown frontmatter key is any top-level key other than the nine, and it is never ignored: it fails the whole file with parse error kind `Frontmatter`, because any other key is treated as a prompt authoring error. The `greeter` prompt above parses with `uses: [web]`, but the same file with that key misspelled fails:
 
 ````markdown
 ---
 name: greeter
 description: says hi
 runvil: 0
-plugns: [web]
+usse: [web]
 ---
 
 # Greeter
 ````
 
-The message has the `invalid frontmatter: {detail}` form, and the detail names the offending key, here `plugns`.
+The message has the `invalid frontmatter: {detail}` form, and the detail names the offending key, here `usse`.
 
 Unknown keys are rejected inside nested declarations too. An `input:` or `output:` declaration accepts only `path` and `description`, an arg entry and a model role each accept only their own fixed set of keys, and any other key inside them fails the parse with parse error kind `Frontmatter`.
 
@@ -715,7 +715,7 @@ In words, a name is 1 to 64 ASCII characters: a letter first, then letters, digi
 - Later characters: ASCII letters, ASCII digits, `_`, and `-` only. Every character of a name is ASCII, so its letters are `A` to `Z` and `a` to `z` in every position.
 - Digits, underscores, and hyphens: these appear only after the first letter, as in `search1`, `web-fetch2`, `web_search`, or `web-search`.
 - Joining words: you join words with `_` or `-`, as in `web_fetch` or `web-fetch`, because spaces and dots are not name characters.
-- No slash: a name is a single plain name with no `/`, which keeps a local tool alias distinct from a tool id such as `web/fetch` (see [Plugin ids, tool ids, and wire names](12-tools.md#plugin-ids-tool-ids-and-wire-names)).
+- No slash: a name is a single plain name with no `/`, which keeps a local tool alias distinct from a tool id such as `web/fetch` (see [Pack ids, tool ids, and wire names](12-tools.md#pack-ids-tool-ids-and-wire-names)).
 
 Within those rules, any style works. Names in uppercase, lowercase, mixed case, snake_case, or kebab-case, with trailing digits, or of a single letter are all valid, such as `a`, `A`, `search`, `web_fetch`, `web-fetch2`, and a name of 64 `z` characters. A valid name keeps its exact text as written, including letter case.
 

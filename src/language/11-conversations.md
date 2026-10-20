@@ -156,7 +156,7 @@ return #msgs
 
 Two user records with a loop after each leave `#msgs` at 4. The second call continues the conversation, because its request carries the earlier reply ahead of the new user record: when the first reply was `ok`, the second request holds `{ "role": "assistant", "content": "ok" }` before `second question`.
 
-When the model asks for tools, one `models.loop` call runs a whole multi-round conversation. It sends the list round after round, runs the tools the model asks for (see [Offering tools with `tools.offer` and `plugins.offer`](12-tools.md#offering-tools-with-toolsoffer-and-pluginsoffer)), and appends every record back to the list until the model replies with text. A round that ends with the model asking for tools is a tool round, which [Tool rounds and the round cap](#tool-rounds-and-the-round-cap) covers. After two tool rounds and a final text reply of `both done`, one `models.loop(msgs)` call leaves `#msgs` at 6, counting the user record, the records the two tool rounds added, and the terminal record, with `msgs[6].content` equal to `'both done'`. The model received 3 requests, and the last one carried both tool results.
+When the model asks for tools, one `models.loop` call runs a whole multi-round conversation. It sends the list round after round, runs the tools the model asks for (see [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer)), and appends every record back to the list until the model replies with text. A round that ends with the model asking for tools is a tool round, which [Tool rounds and the round cap](#tool-rounds-and-the-round-cap) covers. After two tool rounds and a final text reply of `both done`, one `models.loop(msgs)` call leaves `#msgs` at 6, counting the user record, the records the two tool rounds added, and the terminal record, with `msgs[6].content` equal to `'both done'`. The model received 3 requests, and the last one carried both tool results.
 
 When `models.loop` returns, the terminal record is the last record in the list, after tool rounds as well. `msgs[#msgs].role` is `'assistant'`, and you read the final answer with `msgs[#msgs].content`, which after a tool round and a text reply of `final answer` returns `final answer`.
 
@@ -362,7 +362,7 @@ return #calls .. '|' .. calls[1].id .. '|' .. calls[2].name .. '|' .. type(calls
 Each entry in `tool_calls` is a table with exactly three fields:
 
 - `id` is a string holding the call id the model assigned, such as `'call_1'`.
-- `name` is a string holding the name the model called the tool by, such as `'web_search'`, which is how the model calls the tool you offer as `web/search` (see [Offering tools with `tools.offer` and `plugins.offer`](12-tools.md#offering-tools-with-toolsoffer-and-pluginsoffer)).
+- `name` is a string holding the name the model called the tool by, such as `'web_search'`, which is how the model calls the tool you offer as `web/search` (see [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer)).
 - `arguments` is a table holding the model's JSON arguments, already parsed into a Lua table, so a model that sends `{"query":"hi"}` gives `call.arguments.query == 'hi'`. A JSON list in the arguments arrives as a marked list and a JSON null as `json.null`, just as [`json.decode`](05-lua-environment.md#encoding-and-decoding-json-with-json) gives them.
 
 `arguments` may be left out, set to `nil`, or set to a table, and it can be empty or richer, such as a table holding `path` set to `"notes.txt"` and `limit` set to `3`. A call whose `arguments` is left out or `nil` gets the empty object `{}` and is sent that way, which is why the `clock` call above reads `type(calls[2].arguments)` as `table`. A Lua `arguments` table is stored as a JSON object with the same keys and values, so `arguments = { query = 'hi' }` is stored as `{ "query": "hi" }`, and [Tool exchanges in a request](#tool-exchanges-in-a-request) shows how it reaches the model. An empty table inside it is stored as the empty object `{}`, so write an empty list as `json.array()`, as in `arguments = { tags = json.array() }`, to have it sent as `[]`. It must be a Lua table, not JSON text, or adding the record fails with `messages[N] tool_calls[K] arguments must be a table`.
@@ -1177,7 +1177,7 @@ Every record added during `models.loop` appears in your list: assistant replies,
 
 Each round is one stateless, tool-capable model request over your whole message list as it stands at that moment, including every record that earlier rounds and earlier calls have added. A round after a tool call therefore resends the whole conversation so far, with the message roles `user`, `assistant`, and `tool`. In one call with three one-call tool rounds before the final reply, the four requests hold 1, 3, 5, and 7 messages.
 
-A loop round is the same request a nested `infer` makes (see [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer)), only sent over your conversation together with the tools on offer for that round. Each round offers the model the tools in scope at the moment that round is sent (see [Tool scope and the task built-ins](12-tools.md#tool-scope-and-the-task-built-ins)), so a tool offered with `tools.offer` (see [Offering tools with `tools.offer` and `plugins.offer`](12-tools.md#offering-tools-with-toolsoffer-and-pluginsoffer)) or `tools.offer_local` (see [Defining local tools with `tools.offer_local`](12-tools.md#defining-local-tools-with-toolsoffer_local)) between two `models.loop` calls is offered only to the later call.
+A loop round is the same request a nested `infer` makes (see [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer)), only sent over your conversation together with the tools on offer for that round. Each round offers the model the tools in scope at the moment that round is sent (see [Tool scope and the task built-ins](12-tools.md#tool-scope-and-the-task-built-ins)), so a tool offered with `tools.offer` (see [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer)) or `tools.offer_local` (see [Defining local tools with `tools.offer_local`](12-tools.md#defining-local-tools-with-toolsoffer_local)) between two `models.loop` calls is offered only to the later call.
 
 The model's sampling options (see [Sampling options on `models.use`](10-models.md#sampling-options-on-modelsuse)), such as `temperature`, `max_tokens`, and `thinking`, apply to every round of the loop. Each round is sent with the options of the model it runs on, the conversation so far, and the tools on offer.
 
@@ -1435,7 +1435,7 @@ Here you watch `models.loop` run the tools a model asks for, read the records ea
 name: search-chat
 description: Lets a model search the web before it answers.
 runvil: 0
-plugins:
+uses:
   - web
 models:
   writer: {}
@@ -1457,7 +1457,7 @@ return table.concat(roles, ',')
 ```
 ````
 
-The prompt declares the `web` Plugin (see [The Engine, the Harness, and the Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host)) and offers its search tool to the model before the loop (see [Offering tools with `tools.offer` and `plugins.offer`](12-tools.md#offering-tools-with-toolsoffer-and-pluginsoffer)). When the model makes one search and then answers with text, the run result is:
+The prompt declares the `web` Pack (see [The Engine, the Harness, and the Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host)) and offers its search tool to the model before the loop (see [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer)). When the model makes one search and then answers with text, the run result is:
 
 ````text
 user,assistant,tool,assistant
@@ -1545,7 +1545,7 @@ name: search-chat
 description: Lets a model search the web before it answers.
 runvil: 0
 max_tool_iterations: 2
-plugins:
+uses:
   - web
 models:
   writer: {}
@@ -1874,7 +1874,7 @@ After at least one answered tool call, only the finish reason `stop` ends cleanl
 
 ### The clean exit
 
-The clean exit is how a model ends a conversation on purpose after doing its work through tools: an empty reply with finish reason `stop`, after at least one answered tool call in the same `models.loop` call. In a section that offers the model a tool (see [Offering tools with `tools.offer` and `plugins.offer`](12-tools.md#offering-tools-with-toolsoffer-and-pluginsoffer)), this block reads the list after the loop:
+The clean exit is how a model ends a conversation on purpose after doing its work through tools: an empty reply with finish reason `stop`, after at least one answered tool call in the same `models.loop` call. In a section that offers the model a tool (see [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer)), this block reads the list after the loop:
 
 ````lua
 models.use('writer')

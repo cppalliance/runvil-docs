@@ -44,7 +44,7 @@ A task runs beside the section that spawned it instead of in its place, and that
 
 Reach for tasks when the work is not one collection run through one worker section. That shape is a [fanout](14-fanout.md#fanout-in-one-call), which runs every member of one collection through one worker section. Tasks fit the rest, such as starting two different sections, `## Alpha` and `## Beta`, and waiting on both.
 
-Tasks need nothing in the frontmatter and have no command-line flags. The frontmatter keys are `name`, `description`, `runvil`, `max_tool_iterations`, `input`, `output`, `plugins`, `args`, and `models`, and none of them is for tasks, so every task feature is a Lua call, an options table, a returned value, or text the model reads.
+Tasks need nothing in the frontmatter and have no command-line flags. The frontmatter keys are `name`, `description`, `runvil`, `max_tool_iterations`, `input`, `output`, `uses`, `args`, and `models`, and none of them is for tasks, so every task feature is a Lua call, an options table, a returned value, or text the model reads.
 
 ### The `tasks` namespace
 
@@ -198,7 +198,7 @@ You can spawn the same section more than once. Each spawn runs as its own task, 
 
 ### What a task section returns
 
-A task's target section runs ordinary Lua as the task body. It can call a tool with [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls), and the task stays live while that call is outstanding, so a wait on the task lasts until the call returns and the section finishes. It can [offer](12-tools.md#offering-tools-with-toolsoffer-and-pluginsoffer) its own tools and run its own model loop, as a block does that runs `tools.offer('web/search')` in a prompt that declares the `web` Plugin, builds a message list `msgs` with `messages.new()` and `msgs:user('go')`, and calls `models.loop(msgs)`. It also sees every [Plugin prelude](12-tools.md#plugin-preludes) global, so in a prompt that declares the `user-input` Plugin, a `## Child` task can call `input.ask()` to wait for the operator.
+A task's target section runs ordinary Lua as the task body. It can call a tool with [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls), and the task stays live while that call is outstanding, so a wait on the task lasts until the call returns and the section finishes. It can [offer](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer) its own tools and run its own model loop, as a block does that runs `tools.offer('web/search')` in a prompt that declares the `web` Pack, builds a message list `msgs` with `messages.new()` and `msgs:user('go')`, and calls `models.loop(msgs)`. It also sees every [Pack prelude](12-tools.md#pack-preludes) global, so in a prompt that declares the `user-input` Pack, a `## Child` task can call `input.ask()` to wait for the operator.
 
 The section hands back its result with an ordinary `return`, such as `return 'child result'`. A task can return the text of `models.infer`: a task section doing `return models.infer('slow please')`, answered with the reply `slow answer`, gives its owner's wait `ok` and the result `slow answer`. A task that runs off its last section without returning gives the empty string as its result, the same as a fanout arm.
 
@@ -2099,7 +2099,7 @@ After a section calls `tools.allow_tasks(targets?)`, every model round in that s
 | `task_status` | Reads one line reporting a task it started |
 | `await_tasks` | Waits for one of the tasks it started to end |
 
-The four task built-ins belong to the Engine itself rather than to any Plugin, so a model tool call that names one of them goes to the Engine, which answers it. They carry bare names with no slash-separated Plugin path, exactly `task`, `task_cancel`, `task_status`, and `await_tasks`. Their tool schemas are fixed by the Engine and always validate, so you never write them and cannot break them.
+The four task built-ins belong to the Engine itself rather than to any Pack, so a model tool call that names one of them goes to the Engine, which answers it. They carry bare names with no slash-separated Pack path, exactly `task`, `task_cancel`, `task_status`, and `await_tasks`. Their tool schemas are fixed by the Engine and always validate, so you never write them and cannot break them.
 
 While the allowlist is set, the four built-ins are appended to each round's tool list after the section's bound and local tools, in the fixed order `task`, `task_cancel`, `task_status`, `await_tasks`. All four are offered whether the allowlist permits any section, as after `tools.allow_tasks()`, or only listed headings, as after `tools.allow_tasks({ '## Child' })`. The allowlist changes only which targets `task` accepts and what its description names.
 
@@ -2184,7 +2184,7 @@ A model task's section can wait on a suspending call while the owner's model loo
 name: model-tasks-wait
 description: Lets the model start a task that waits for the operator.
 runvil: 0
-plugins:
+uses:
   - user-input
 models:
   writer: {}
@@ -2211,7 +2211,7 @@ return 'child result'
 ```
 ````
 
-`input.ask()` is an ordinary tool call to the `user-input` Plugin's ask tool. While `## Child` waits on it, the model's loop keeps running rounds, and a `task_status` call with `{"id":"0.0"}` reads:
+`input.ask()` is an ordinary tool call to the `user-input` Pack's ask tool. While `## Child` waits on it, the model's loop keeps running rounds, and a `task_status` call with `{"id":"0.0"}` reads:
 
 ````text
 Task id=0.0 (## Child): running, in ## Child, waiting on tool_call, turns 0

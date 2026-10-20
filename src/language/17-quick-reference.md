@@ -18,7 +18,7 @@ Frontmatter is YAML between two `---` delimiter lines at the very top of the fil
 | `output` | file declaration map of `path` and `description` | no | none | [Input and output file declarations](02-file-structure.md#input-and-output-file-declarations) |
 | `output.description` | string giving the output file's purpose | yes | none | [Input and output file declarations](02-file-structure.md#input-and-output-file-declarations) |
 | `output.path` | store path of the output file, such as `report.md` | yes | none | [Input and output file declarations](02-file-structure.md#input-and-output-file-declarations) |
-| `plugins` | list of Plugin ids, such as `[web, user-input]`, each named once | no | none | [Tools, Plugins, and the `plugins:` key](12-tools.md#tools-plugins-and-the-plugins-key) |
+| `uses` | list of Pack ids or `vendor/name` entries, such as `[web, acme/poop]`, each Pack id named once | no | none | [Tools, Packs, and the `uses:` key](12-tools.md#tools-packs-and-the-uses-key) |
 | `args` | map of arg name to arg declaration, each name once and matching `[A-Za-z][A-Za-z0-9_-]{0,63}` | no | one optional `string` arg named `prose` | [The name grammar for role labels, arg names, and local tool aliases](02-file-structure.md#the-name-grammar-for-role-labels-arg-names-and-local-tool-aliases) |
 | `args.<name>.default` | value whose YAML kind matches `type`, or `null` for none | no | none | [Optional arguments, defaults, and descriptions](06-arguments.md#optional-arguments-defaults-and-descriptions) |
 | `args.<name>.description` | string, kept as written | no | none | [Optional arguments, defaults, and descriptions](06-arguments.md#optional-arguments-defaults-and-descriptions) |
@@ -127,13 +127,13 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `pairs` | function | Visits keys in a fixed sorted order on every run | [Deterministic table iteration](05-lua-environment.md#deterministic-table-iteration) |
 | `pairs(list)` | method | Visits each record in order with its 1-based position | [Reading records](11-conversations.md#reading-records) |
 | `pcall` | function | Catches errors, suspending calls included; Engine failures arrive as error values | [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors) |
-| `plugin.name` | field | The Plugin's Plugin id as a string | [Tool objects and Plugin objects](12-tools.md#tool-objects-and-plugin-objects) |
-| `plugin.tools` | field | Array of the Plugin's Tool objects in tool id order | [Tool objects and Plugin objects](12-tools.md#tool-objects-and-plugin-objects) |
-| `plugins` | global | Table of read-only Plugin objects with `required`, `extras`, `get`, `offer` | [Tool objects and Plugin objects](12-tools.md#tool-objects-and-plugin-objects) |
-| `plugins.extras` | function | Plugin objects for undeclared Plugins the run knows, sorted by name | [Tool objects and Plugin objects](12-tools.md#tool-objects-and-plugin-objects) |
-| `plugins.get` | function | Reads one Plugin object by Plugin id, required or extra | [Tool objects and Plugin objects](12-tools.md#tool-objects-and-plugin-objects) |
-| `plugins.offer` | function | Offers every tool of a Plugin given by id, object, or list | [Offering tools with `tools.offer` and `plugins.offer`](12-tools.md#offering-tools-with-toolsoffer-and-pluginsoffer) |
-| `plugins.required` | function | Plugin objects of the declared Plugins, sorted by name | [Tool objects and Plugin objects](12-tools.md#tool-objects-and-plugin-objects) |
+| `pack.name` | field | The Pack's Pack id as a string | [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects) |
+| `pack.tools` | field | Array of the Pack's Tool objects in tool id order | [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects) |
+| `packs` | global | Table of read-only Pack objects with `required`, `extras`, `get`, `offer` | [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects) |
+| `packs.extras` | function | Pack objects for the undeclared `runvil` Packs the run knows, sorted by name | [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects) |
+| `packs.get` | function | Reads one Pack object by Pack id, required or extra | [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects) |
+| `packs.offer` | function | Offers every tool of a Pack given by id, object, or list | [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer) |
+| `packs.required` | function | Pack objects of the declared Packs, sorted by name | [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects) |
 | `print` | removed | Reads nil; `log` is the output path instead | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `prompt` | global | Table holding `prompt.section` and `prompt.list` | [Reading sections with `prompt.section` and `prompt.list`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptlist) |
 | `prompt.list` | function | Returns a visible list section's items as strings, or `nil` | [Reading sections with `prompt.section` and `prompt.list`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptlist) |
@@ -203,18 +203,18 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `tasks.spawn (item)` | option | JSON data that becomes the task's `item` and `{{ item }}` seed | [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) |
 | `tasks.status` | function | Returns a task's status as a plain table | [Checking on a task with `tasks.status`, `tasks.ready`, and `tasks.note`](15-tasks.md#checking-on-a-task-with-tasksstatus-tasksready-and-tasksnote) |
 | `tonumber` | function | Turns a value such as a numeric string into a number | [The sandbox](05-lua-environment.md#the-sandbox) |
-| `tool.description` | field | The tool's description text from the tool catalog | [Tool objects and Plugin objects](12-tools.md#tool-objects-and-plugin-objects) |
-| `tool.id` | field | The tool's canonical tool id, such as `web/search` | [Tool objects and Plugin objects](12-tools.md#tool-objects-and-plugin-objects) |
-| `tool.plugin` | field | Plugin object of the Plugin named by the tool id | [Tool objects and Plugin objects](12-tools.md#tool-objects-and-plugin-objects) |
-| `tools` | global | Table holding every tool operation | [Tools, Plugins, and the `plugins:` key](12-tools.md#tools-plugins-and-the-plugins-key) |
+| `tool.description` | field | The tool's description text from the tool catalog | [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects) |
+| `tool.id` | field | The tool's canonical tool id, such as `web/search` | [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects) |
+| `tool.pack` | field | Pack object of the Pack named by the tool id | [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects) |
+| `tools` | global | Table holding every tool operation | [Tools, Packs, and the `uses:` key](12-tools.md#tools-packs-and-the-uses-key) |
 | `tools.allow_tasks` | function | Lets the section's model start tasks, optionally on listed headings | [Tool scope and the task built-ins](12-tools.md#tool-scope-and-the-task-built-ins) |
 | `tools.call` | function | Calls a tool from Lua and returns its output | [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls) |
 | `tools.calls` | field | Read-only per-section call counts keyed by tool id or alias | [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls) |
-| `tools.extras` | function | Tool objects of offered tools from undeclared Plugins, in id order | [Tool objects and Plugin objects](12-tools.md#tool-objects-and-plugin-objects) |
-| `tools.get` | function | Reads one Tool object by tool id | [Tool objects and Plugin objects](12-tools.md#tool-objects-and-plugin-objects) |
-| `tools.offer` | function | Puts catalog tools in the section's tool scope | [Offering tools with `tools.offer` and `plugins.offer`](12-tools.md#offering-tools-with-toolsoffer-and-pluginsoffer) |
+| `tools.extras` | function | Tool objects of offered tools from undeclared `runvil` Packs, in id order | [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects) |
+| `tools.get` | function | Reads one Tool object by tool id | [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects) |
+| `tools.offer` | function | Puts catalog tools in the section's tool scope | [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer) |
 | `tools.offer_local` | function | Defines a local tool from an alias, description, params, and handler | [Defining local tools with `tools.offer_local`](12-tools.md#defining-local-tools-with-toolsoffer_local) |
-| `tools.required` | function | Tool objects of offered tools from declared Plugins, in id order | [Tool objects and Plugin objects](12-tools.md#tool-objects-and-plugin-objects) |
+| `tools.required` | function | Tool objects of offered tools from declared Packs, in id order | [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects) |
 | `tostring` | function | Turns a value such as a number into text | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `type` | function | Returns a value's Lua type name, such as `'table'` | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `ui` | function | Returns the Host's run-start snapshot table, when the run has one | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
@@ -242,9 +242,9 @@ Each form goes in a section's prose and takes effect when a Lua block reads `pro
 | `{{ sys.key }}` | A field of `sys`, such as `sys.id` or `sys.when` | [Inserting `var` and `sys` values](07-substitution.md#inserting-var-and-sys-values) |
 | `{{ var.key }}` | The current value of that field of `var` | [Inserting `var` and `sys` values](07-substitution.md#inserting-var-and-sys-values) |
 
-## Plugin tools
+## Pack tools
 
-Each Plugin tool comes from a Plugin you declare under `plugins:` by its plain name, `web` or `user-input`, while Provided by gives the fully qualified name of the Plugin a Host installs, and the Engine offers the four task built-ins to the model in each round after a section calls `tools.allow_tasks`.
+Each Pack tool comes from a Pack you declare under `uses:` by its Pack id, `web` or `user-input`, while Provided by gives the fully qualified name of the Pack, which a Host's Plugin adds, and the Engine offers the four task built-ins to the model in each round after a section calls `tools.allow_tasks`.
 
 | Tool | Provided by | Arguments | Returns | Taught in |
 |---|---|---|---|---|
@@ -258,7 +258,7 @@ Each Plugin tool comes from a Plugin you declare under `plugins:` by its plain n
 
 ## Limits and defaults
 
-Each row gives a limit, its default, and who can change it, and the Plugin tools table holds the Plugin tool limits.
+Each row gives a limit, its default, and who can change it, and the Pack tools table holds the Pack tool limits.
 
 | Limit | Default | Set by | Taught in |
 |---|---|---|---|
@@ -312,7 +312,7 @@ A failed run reports exactly one run error kind, and a failed `{{ }}` placeholde
 | `Determinism` | run error kind | a store call meets a claims conflict, which no `pcall` catches | [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism) |
 | `EmptySegment` | substitution kind | an empty or space-padded path segment, as in `{{ var. }}` or `{{ }}` | [Substitution error kinds](07-substitution.md#substitution-error-kinds) |
 | `Internal` | run error kind | an Engine invariant breaks, a fault in the Engine rather than the prompt | [Run error kinds](16-limits-and-errors.md#run-error-kinds) |
-| `Lua` | run error kind | an uncaught runtime error or `{{ }}` failure, running past the memory ceiling, a block that returns a table, a Plugin prelude that cannot install, or a task fault: a leaked task, a task its chain does not own, a result waited on twice, or a cancelled task's error raised again right after its wait | [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals) |
+| `Lua` | run error kind | an uncaught runtime error or `{{ }}` failure, running past the memory ceiling, a block that returns a table, a Pack prelude that cannot install, or a task fault: a leaked task, a task its chain does not own, a result waited on twice, or a cancelled task's error raised again right after its wait | [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals) |
 | `MissingKey` | substitution kind | an absent key under `var`, `sys`, `argv`, or a global, as in `{{ sys.bogus }}`, or a path that continues past a scalar or aims at an array element | [Inserting `var` and `sys` values](07-substitution.md#inserting-var-and-sys-values) |
 | `NilArgv` | substitution kind | any `argv` placeholder while `argv` is nil, as when the argument string is not JSON | [Inserting arguments with `args` and `argv`](07-substitution.md#inserting-arguments-with-args-and-argv) |
 | `NilItem` | substitution kind | `{{ item }}` where no item is seeded, such as in a walked section | [Inserting the fanout or task `item`](07-substitution.md#inserting-the-fanout-or-task-item) |

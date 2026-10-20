@@ -76,7 +76,7 @@ name: capped
 description: Searches with a tight round cap.
 runvil: 0
 max_tool_iterations: 3
-plugins:
+uses:
   - web
 models:
   writer: {}
@@ -366,7 +366,7 @@ A parse error's message names the specific rule the file broke, so you see which
 
 ### What each kind covers
 
-Every frontmatter failure has parse error kind `Frontmatter`. The block is missing, left unclosed, or not valid YAML, or the prompt contract rejects a key or value in it, such as an unknown or misspelled key, an out-of-range `max_tool_iterations`, a Plugin entry that is not a plain name, or a Plugin declared twice. [Optional keys and unknown keys](02-file-structure.md#optional-keys-and-unknown-keys) lists the keys the contract accepts.
+Every frontmatter failure has parse error kind `Frontmatter`. The block is missing, left unclosed, or not valid YAML, or the prompt contract rejects a key or value in it, such as an unknown or misspelled key, an out-of-range `max_tool_iterations`, a `uses:` entry that is neither a Pack id nor a `vendor/name`, or a Pack id declared twice. [Optional keys and unknown keys](02-file-structure.md#optional-keys-and-unknown-keys) lists the keys the contract accepts.
 
 Parse error kind `Structure` means the [H1 title](02-file-structure.md#the-h1-title-and-h1-body) or the [heading tree](02-file-structure.md#section-headings-and-nesting) is invalid: the H1 is missing, repeated, or empty, a section heading skips a level (such as an H4 directly under an H2) or is empty, or two sibling sections share a name.
 
@@ -395,7 +395,7 @@ The frontmatter is decoded before the body is checked, so a frontmatter failure 
 
 1. The frontmatter delimiters.
 2. YAML decoding and the contract checks inside it.
-3. Duplicate Plugins.
+3. Duplicate Pack ids.
 4. The H1's presence and count.
 5. An empty H1 title.
 6. The fence rule.
@@ -428,14 +428,14 @@ runvil: 0
 
 Frontmatter that is not valid YAML fails with `Frontmatter` and the message `invalid frontmatter: {message}`. Here `{message}` is the YAML decoder's own readable diagnostic, never a dump of the raw source, given with its line and column when the decoder reports them.
 
-Once the frontmatter block is present and closed, every frontmatter failure, whether the YAML decoder, a contract check, or the duplicate-Plugin check rejects it, has a message that starts with `invalid frontmatter:` followed by the specific problem. Declaring the same Plugin twice under `plugins:` shows the pattern:
+Once the frontmatter block is present and closed, every frontmatter failure, whether the YAML decoder, a contract check, or the duplicate Pack id check rejects it, has a message that starts with `invalid frontmatter:` followed by the specific problem. Declaring the same Pack id twice under `uses:` shows the pattern:
 
 ````markdown
 ---
 name: twice
-description: Declares one Plugin two times.
+description: Declares one Pack two times.
 runvil: 0
-plugins:
+uses:
   - web
   - web
 ---
@@ -444,10 +444,10 @@ plugins:
 ````
 
 ````text
-invalid frontmatter: Plugin web is declared more than once under plugins
+invalid frontmatter: Pack id web is declared more than once under uses
 ````
 
-A frontmatter key or value the prompt contract rejects fails with `Frontmatter` and that key's own message, with the line and column. That covers an unknown entry field, a bad arg name, type, or default, a malformed Plugin id, an unknown model keyword, a role label outside the [prompt-local alias grammar](02-file-structure.md#the-name-grammar-for-role-labels-arg-names-and-local-tool-aliases), a zero `min_context`, and an out-of-range `max_tool_iterations`.
+A frontmatter key or value the prompt contract rejects fails with `Frontmatter` and that key's own message, with the line and column. That covers an unknown entry field, a bad arg name, type, or default, a malformed `uses:` entry, an unknown model keyword, a role label outside the [prompt-local alias grammar](02-file-structure.md#the-name-grammar-for-role-labels-arg-names-and-local-tool-aliases), a zero `min_context`, and an out-of-range `max_tool_iterations`.
 
 A file whose frontmatter has no `runvil:` key still parses, but running it fails before any section runs, with run error kind `Parse` and this message:
 
@@ -610,7 +610,7 @@ Error locations report 1-based line numbers and 1-based column numbers. A failur
 
 ### Counting lines from the top of the file
 
-Parse locations use 1-based lines counted from the top of the file, the frontmatter included, so the opening `---` frontmatter delimiter is line 1. A bad `plugins:` entry on the fifth line of the file is reported at line 5, and with frontmatter on lines 1 to 4 a `## S` heading on file line 8 is reported at line 8. Line numbers in body parse errors count from the top of the file, with the frontmatter lines included, not from the start of the body.
+Parse locations use 1-based lines counted from the top of the file, the frontmatter included, so the opening `---` frontmatter delimiter is line 1. A bad `uses:` entry on the fifth line of the file is reported at line 5, and with frontmatter on lines 1 to 4 a `## S` heading on file line 8 is reported at line 8. Line numbers in body parse errors count from the top of the file, with the frontmatter lines included, not from the start of the body.
 
 ### The prompt name or `<prompt>`
 
@@ -630,7 +630,7 @@ A parse failure that happens before the prompt's `name` is known shows the place
 
 ### Frontmatter failure locations
 
-A frontmatter failure carries no prompt name, because it happens before the prompt's `name` is read from the frontmatter itself. A missing delimiter, a YAML decode failure, and an error in the `plugins:` list all report none, even one found after the YAML decodes, and the Host can use its own label for the file instead. A frontmatter syntax error reports no prompt name for the same reason.
+A frontmatter failure carries no prompt name, because it happens before the prompt's `name` is read from the frontmatter itself. A missing delimiter, a YAML decode failure, and an error in the `uses:` list all report none, even one found after the YAML decodes, and the Host can use its own label for the file instead. A frontmatter syntax error reports no prompt name for the same reason.
 
 A frontmatter failure's location path is the placeholder `<prompt>`, which the Host may replace with its own name for the file. A frontmatter YAML failure always shows `<prompt>` as its path, because it happens before the name is read.
 
@@ -656,18 +656,18 @@ A frontmatter decode failure, whether invalid YAML or a value the contract rejec
 ````markdown
 ---
 name: helper
-description: Declares an entry that is not a Plugin id.
-plugins:
-  - not a Plugin id
+description: Declares an entry that is not a valid uses entry.
+uses:
+  - not a Pack id
 runvil: 0
 ---
 
 # Helper
 ````
 
-The `plugins:` entry fails on its own value, so the parse error's line points at that entry's own line in the prompt file, line 5, and its column is 5, where the value starts after the list marker. A rejected frontmatter value's column is 1-based and points at the value's first character, the `n` of `not`, not at the `-` marker and the spaces before it.
+The `uses:` entry fails on its own value, so the parse error's line points at that entry's own line in the prompt file, line 5, and its column is 5, where the value starts after the list marker. A rejected frontmatter value's column is 1-based and points at the value's first character, the `n` of `not`, not at the `-` marker and the spaces before it.
 
-A Plugin declared twice under `plugins:`, as in `twice`, gives neither a line nor a column, because that check compares the entries after the YAML decodes, when no source position is kept. A missing opening `---` or an unclosed frontmatter block also gives no line or column, and its location path is the placeholder `<prompt>`; the messages read `file must begin with a --- frontmatter delimiter` and `frontmatter was not closed with ---`.
+A Pack id declared twice under `uses:`, as in `twice`, gives neither a line nor a column, because that check compares the entries after the YAML decodes, when no source position is kept. A missing opening `---` or an unclosed frontmatter block also gives no line or column, and its location path is the placeholder `<prompt>`; the messages read `file must begin with a --- frontmatter delimiter` and `frontmatter was not closed with ---`.
 
 ### Body failure locations
 
@@ -738,7 +738,7 @@ A structural failure's column is a 1-based byte column, so each multibyte UTF-8 
 
 Only a parse failure can report a byte span of the offending region. A failure's byte span is set only for structural parse failures in the prompt body, never for a frontmatter failure or an internal fault. A structural failure without a byte span reports no line and no column.
 
-Many parse failures carry no line or column, among them H1 title failures (missing, repeated, or empty), rule failures in otherwise valid frontmatter such as a Plugin declared twice, and Lua compile failures. A Host therefore shows the line and column when present, and otherwise the message.
+Many parse failures carry no line or column, among them H1 title failures (missing, repeated, or empty), rule failures in otherwise valid frontmatter such as a Pack id declared twice, and Lua compile failures. A Host therefore shows the line and column when present, and otherwise the message.
 
 A `List` failure never gives a line or column, because the list check records no span, so its message names the section instead:
 
@@ -805,7 +805,7 @@ A failed run reports one run error kind from a fixed set of twelve:
 | `Tool` | a tool fails, is out of scope or unknown, or the tool-call loop reaches its round cap |
 | `Vfs` | a `store` operation fails uncaught, the run declares no store, or the store backend fails as the run starts |
 | `Determinism` | a store call meets a claims conflict |
-| `Lua` | a section's Lua fails at run time or returns an unusable value, or a Plugin prelude cannot install |
+| `Lua` | a section's Lua fails at run time or returns an unusable value, or a Pack prelude cannot install |
 | `Quota` | a log quota runs out, or a call nests past the call depth cap |
 | `ContextExhausted` | a request overflows the model's context window and the compactor leaves it over |
 | `Internal` | an Engine invariant breaks |
@@ -819,7 +819,7 @@ A failed run's message is the underlying error's own text followed by the text o
 
 ### `Parse` and `Version`
 
-A run fails with kind `Parse` when the prompt fails to parse, including when one of its Lua blocks has a syntax error and does not compile. A prompt that fails to parse ends its run as failed with kind `Parse` before any section or code runs, before input staging and before the wait for Plugins, and the recorded message is the parse error followed by its chain of causes.
+A run fails with kind `Parse` when the prompt fails to parse, including when one of its Lua blocks has a syntax error and does not compile. A prompt that fails to parse ends its run as failed with kind `Parse` before any section or code runs, before input staging and before the wait for Packs, and the recorded message is the parse error followed by its chain of causes.
 
 Any parse failure, whatever its parse error kind, ends the run with kind `Parse`, including a file with no `runvil:` key, whose parse error reads `not a runvil prompt: no runvil version`. The run carries the parse failure's own message and its location when known: the path is the frontmatter name or `<prompt>`, with line, column, and span when known. A `runvil:` key with an unsupported version reports `Version` instead.
 
@@ -851,7 +851,7 @@ Run error kind `Lua` means a section's Lua fails at run time or returns an unusa
 - `task_consumed`, a result waited on twice
 - a block that returns a table, whose message includes `cannot return a table as a result`
 
-A [Plugin prelude](12-tools.md#plugin-preludes) that cannot install also fails the run with `Lua`, before any section code runs.
+A [Pack prelude](12-tools.md#pack-preludes) that cannot install also fails the run with `Lua`, before any section code runs.
 
 A run fails with kind `Quota` when a section's Lua runs out its `log` event quota or its `log` byte quota, or when a `call`, `tasks.spawn`, or `tasks.fanout` arm would nest past the call depth cap. No instruction-count quota runs out in practice. A `Quota` failure's message is one of these:
 
@@ -870,7 +870,7 @@ A run fails with kind `ContextExhausted` when a request overflows the model's co
 
 Run error kind `Internal` means an Engine invariant breaks, a fault in the Engine rather than in the prompt. That includes Harness mistakes such as an answer of the wrong kind, an answer for an id never issued, or a second answer to one effect. The message starts with `internal invariant violated: {message}`, and the location names an Engine source file and line rather than a place in the prompt.
 
-A run fails with kind `RequirementsUnmet` when the environment falls short of a requirement the prompt states: a required Plugin is missing, unavailable, or needs a service the run lacks, the bound model fails a declared requirement such as a context minimum or a hard keyword, or an H1 block fails the prompt's [hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate).
+A run fails with kind `RequirementsUnmet` when the environment falls short of a requirement the prompt states: a required Pack is missing, unavailable, or needs a service the run lacks, the bound model fails a declared requirement such as a context minimum or a hard keyword, or an H1 block fails the prompt's [hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate).
 
 ### Cancelled runs and preparation failures
 
@@ -1293,7 +1293,7 @@ Once a run is cancelled, it issues no further model rounds or tool calls. Its ou
 
 ### The cancel flag
 
-The cancel flag is the one signal a cancel sets. One cancel flag is shared by the Lua instruction hook in every section VM, by every activated [Plugin](12-tools.md#tools-plugins-and-the-plugins-key), and by the run itself, so one cancel reaches them all. A cancel stops a run even in the middle of a running Lua block, because the Engine checks the cancel flag between chain steps and from the Lua instruction hook.
+The cancel flag is the one signal a cancel sets. One cancel flag is shared by the Lua instruction hook in every section VM, by every activated [Pack](12-tools.md#tools-packs-and-the-uses-key), and by the run itself, so one cancel reaches them all. A cancel stops a run even in the middle of a running Lua block, because the Engine checks the cancel flag between chain steps and from the Lua instruction hook.
 
 A Host cancel stops a running Lua block promptly, even a tight endless loop such as `while true do n = n + 1 end` that nothing in the prompt and no limit would end, because the section's Lua instruction hook checks for cancellation as the code runs, and the run ends with the cancelled outcome, as `spinner` shows. Cancelling a run aborts a Lua block that is still running, even a tight `while true do end` loop, and even when the run is cancelled before the block starts; the block ends with the interrupted error.
 
@@ -1395,7 +1395,7 @@ A run cancelled before a fanout (`tasks.fanout`) begins ends with the cancelled 
 
 A stop reaches only the calls waiting when it lands. A stop that lands while no call is waiting changes nothing, so the next call runs as usual.
 
-A stop drops a tool's calls unless the tool's Plugin marks it as surviving a stop; by default a tool does not survive a stop. A tool call that survives a stop still ends when the run ends.
+A stop drops a tool's calls unless the tool's Pack marks it as surviving a stop; by default a tool does not survive a stop. A tool call that survives a stop still ends when the run ends.
 
 A stop leaves a question to the operator open: [`input.ask()`](05-lua-environment.md#asking-the-operator) keeps waiting through the stop, and the operator's answer still reaches the prompt. A stop that interrupts a timed `tasks.join` or `tasks.join_any` does not cancel the tasks it waits on, so a later wait still joins them (see [Time limits on waits](15-tasks.md#time-limits-on-waits)).
 

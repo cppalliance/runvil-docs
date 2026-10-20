@@ -1209,7 +1209,7 @@ nil|table
 
 Because a role label never becomes a Lua global (see [Role labels](#role-labels)), declaring a role `writer` leaves `type(writer)` as `nil`. For the same reason, a reserved name such as `store`, `models`, or `tools` can be a role label, and the Engine global with that name keeps its own value, so with a role `tools` declared, `type(tools)` is still `table`.
 
-A global that shares a role label's name, such as one a Plugin prelude sets, sits side by side with the role, and the role stays reachable through `models.get`. With a prelude that sets `writer = 'mine'` and a role `writer`, `writer .. '|' .. models.get('writer').name` gives `mine|writer`.
+A global that shares a role label's name, such as one a Pack prelude sets, sits side by side with the role, and the role stays reachable through `models.get`. With a prelude that sets `writer = 'mine'` and a role `writer`, `writer .. '|' .. models.get('writer').name` gives `mine|writer`.
 
 ## Running a round with `models.infer`
 
