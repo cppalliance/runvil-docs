@@ -196,7 +196,7 @@ Every section VM is set up in one fixed order. The same order applies to every s
 
 ### Reserved names
 
-The Engine reserves the name of every global it installs in a section VM, and its reserved-name list matches that set exactly. The list holds 62 names: the 21 Engine globals, the 18 Lua globals the sandbox keeps (listed in [The sandbox](#the-sandbox)), and the 23 Lua 5.5 keywords. It classes each name as an Engine global, a Lua global, or a Lua keyword.
+The Engine reserves the name of every global it installs in a section VM, and its reserved-name list matches that set exactly. The list holds 63 names: the 21 Engine globals, the 19 Lua globals the sandbox keeps (listed in [The sandbox](#the-sandbox)), and the 23 Lua 5.5 keywords. It classes each name as an Engine global, a Lua global, or a Lua keyword.
 
 The 23 Lua 5.5 keywords in prompt Lua are `and`, `break`, `do`, `else`, `elseif`, `end`, `false`, `for`, `function`, `global`, `goto`, `if`, `in`, `local`, `nil`, `not`, `or`, `repeat`, `return`, `then`, `true`, `until`, and `while`. A Lua keyword never reads as a global. Every Engine global and Lua global on the list reads non-nil in a section once its conditional bindings apply, such as `ui` with a snapshot and `item` in a spawned chain.
 
@@ -363,7 +363,7 @@ This is the smallest sandbox block: it returns the result of one library call as
 
 ### The whole toolkit
 
-Each section's Lua runs in a sandbox whose only standard libraries are `string`, `table`, and `math`. Beyond those three libraries, the sandbox keeps only these base functions and values:
+Each section's Lua runs in a sandbox whose only standard libraries are `string`, `table`, `math`, and `utf8`. Beyond those four libraries, the sandbox keeps only these base functions and values:
 
 | Group | Names |
 | --- | --- |
@@ -373,7 +373,7 @@ Each section's Lua runs in a sandbox whose only standard libraries are `string`,
 | Metatables | `getmetatable`, `setmetatable` |
 | Values | `_G`, `_VERSION` |
 
-Those 15 names and the three libraries are the 18 Lua globals on the reserved-name list (see [Reserved names](#reserved-names)), and that list is the whole toolkit. Every section VM runs Lua 5.5 with these libraries and base functions. The safe base functions a block calls are exactly the kept base globals other than the `math`, `string`, and `table` libraries. File access, the operating system, loading code from files or search paths, and loading code from strings are all outside the toolkit. `_G` is the global table, and `_VERSION` holds the Lua version string.
+Those 15 names and the four libraries are the 19 Lua globals on the reserved-name list (see [Reserved names](#reserved-names)), and that list is the whole toolkit. Every section VM runs Lua 5.5 with these libraries and base functions. The safe base functions a block calls are exactly the kept base globals other than the `math`, `string`, `table`, and `utf8` libraries. File access, the operating system, loading code from files or search paths, and loading code from strings are all outside the toolkit. `_G` is the global table, and `_VERSION` holds the Lua version string.
 
 Six of the base functions behave in a Runvil way:
 
@@ -459,7 +459,7 @@ Strings share a metatable whose `__index` is the `string` library, so `getmetata
 - `string.upper` and `string.lower` change case, so `return string.upper(args)` with the argument string `hi` returns `HI`, and `return string.lower(value)` lowers a value.
 - `string.match` matches a Lua pattern and returns its captures, so `string.match(s, '^(%d+):([%d%.]+)$')` returns two captures. Anchored patterns work on message content too, so `messages[9].content:match('^Task id=(%S+)')` returns the captured id string. Pattern escapes work as in standard Lua, as `%-` does in `tostring(err):match('read%-only')`.
 - `string.find` finds a pattern, as in `string.find(wrapped, "untrusted_input_")`. With its plain-find flag it searches for literal text: `string.find(m.content, 'Task id=', 1, true) == 1` tests for a prefix, and `err:find(']:2: undefined global undefined_here', 1, true)` finds that exact text. A plain search returns `nil` when the text is absent, so `tostring(err):find('include more surrounding text', 1, true) ~= nil` tests whether a message contains that text.
-- `string.sub` takes negative indexes that count from the end, inside sections and fanout arms alike, as in `tostring(sys.index) == string.sub(item, -1)`.
+- `string.sub` takes negative indexes that count from the end, inside sections and fanout arms alike, as in `tostring(sys.index) == string.sub(item, -1)`. Its positions count bytes, not characters, so a cut can split a multibyte character, and [the `utf8` library](#the-utf8-library) finds the character boundaries to cut on.
 - `string.rep(s, n)` repeats `s` `n` times, so `messages:user(string.rep('x', 100000))` builds a 100000-character user message.
 - `string.char` builds a string from raw byte values, which can produce bytes that are not valid UTF-8. `log` rejects the string from `string.char(255)` as not UTF-8 (see [Logging and lifecycle reports](#logging-and-lifecycle-reports)).
 
@@ -525,6 +525,47 @@ Each of these is an ordinary Lua runtime error. `pcall` catches it, and left unc
 
 The sandbox keeps the `math` library. A block calls it as `math.{name}(...)`, and it works as in standard Lua 5.5.
 
+### The `utf8` library
+
+The sandbox keeps the `utf8` library, and you use it as in standard Lua 5.5 to count and cut text by character instead of by byte:
+
+````markdown
+---
+name: characters
+description: Counts and cuts a string with the utf8 library.
+runvil: 0
+---
+
+# Characters
+
+```lua
+local s = 'café'
+local cut = s:sub(1, utf8.offset(s, 0, 5) - 1)
+return #s .. '|' .. utf8.len(s) .. '|' .. cut
+```
+````
+
+The run result is:
+
+````text
+5|4|caf
+````
+
+`é` takes two bytes in UTF-8, so `#s` counts `café` as 5 bytes while `utf8.len(s)` counts 4 characters. Positions in every `utf8` function are byte positions, as in the `string` library. `utf8.offset(s, 0, 5)` finds the character that holds byte 5, which is `é` starting at byte 4, so the cut ends at byte 3 and keeps `caf` without splitting `é`. In general, when `#text` is greater than `n`, `text:sub(1, utf8.offset(text, 0, n + 1) - 1)` cuts `text` to at most `n` bytes on a character boundary, so valid UTF-8 stays valid for `untrusted` and `log`.
+
+Lua 5.5's `utf8.offset` returns two values, the start and the end byte of the character, where Lua 5.4 returned only the start. A call used as the last argument of another call passes both values, so `s:sub(utf8.offset(s, 2))` reads `a`, byte 2 through byte 2, rather than `afé`. Adjust the result to one value when you want only the start, as the arithmetic in `utf8.offset(s, 0, i) - 1` does.
+
+`utf8.len` checks its text as it counts. On invalid UTF-8 it returns fail, which is `nil`, and the position of the first invalid byte, so `utf8.len(string.char(255))` returns `nil` and `1`.
+
+The library has six members:
+
+- `utf8.char(...)` builds a string from code points, so `utf8.char(233)` returns `é`.
+- `utf8.charpattern` is a Lua pattern that matches one UTF-8 character in valid text, so `s:gmatch(utf8.charpattern)` visits `c`, `a`, `f`, and `é` in turn.
+- `utf8.codes(s)` iterates over the characters, giving each one's byte position and code point, as in `for at, code in utf8.codes(s) do`, and raises an error on invalid UTF-8.
+- `utf8.codepoint(s, i, j)` returns the code points of the characters that start between byte positions `i` and `j`, with `i` defaulting to 1 and `j` to `i`, so `utf8.codepoint('é')` returns `233`.
+- `utf8.len(s, i, j)` counts the characters that start between byte positions `i` and `j`, the whole string by default.
+- `utf8.offset(s, n, i)` returns the start and the end byte of the `n`-th character counting from byte position `i`, and with `n` equal to 0 it finds the character that holds byte `i`.
+
 ### Names that read nil
 
 Everything outside the toolkit reads nil in a block. This prompt checks the two direct printing functions:
@@ -556,7 +597,7 @@ These names all read nil from `_G` in a section VM:
 | Kind | Names that read nil |
 | --- | --- |
 | Direct printing | `print`, `warn` |
-| Libraries | `io`, `os`, `package`, `debug`, `coroutine`, `utf8` |
+| Libraries | `io`, `os`, `package`, `debug`, `coroutine` |
 | Code loading | `load`, `loadstring`, `loadfile`, `dofile` |
 | Raw access | `rawequal`, `rawget`, `rawset`, `rawlen` |
 | Function environments | `getfenv`, `setfenv` |

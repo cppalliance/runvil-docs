@@ -221,6 +221,7 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `type` | function | Returns a value's Lua type name, such as `'table'` | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `ui` | function | Returns the Host's run-start snapshot table, when the run has one | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
 | `untrusted` | function | Wraps a string in the run's untrusted envelope and returns it | [Handing store text to a model with `untrusted`](09-the-store.md#handing-store-text-to-a-model-with-untrusted) |
+| `utf8` | global | Standard `utf8` library, as in Lua 5.5 | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `var` | global | Guarded table of JSON data that passes between sections | [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var) |
 | `warn` | removed | Reads nil; no Lua warnings | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `xpcall` | function | Like `pcall`, with a message handler that sees the failure first | [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors) |

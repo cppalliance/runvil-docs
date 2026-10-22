@@ -2556,7 +2556,7 @@ For a string key the line reads `` {global} is read-only: Pack `{pack}` defines 
 A prelude runs in a restricted environment of its own, and its functions keep that environment when your code calls them later. Prelude code sees only these globals:
 
 - the base functions `assert`, `error`, `getmetatable`, `ipairs`, `next`, `pairs`, `pcall`, `select`, `setmetatable`, `tonumber`, `tostring`, `type`, and `xpcall`
-- the `string`, `table`, and `math` libraries
+- the `string`, `table`, `math`, and `utf8` libraries
 - the `tools`, `store`, `untrusted`, and `json` globals, which are the same values your code uses
 - a read-only `var`, covered in [`var` inside a prelude](#var-inside-a-prelude)
 
