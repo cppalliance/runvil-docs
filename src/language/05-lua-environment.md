@@ -68,7 +68,7 @@ sum 10: item 1, item 2, item 3
 
 The block declares its block-local variables with `local`, adds up a number in a numeric `for` loop, and grows the table `t` by integer-index assignment inside a `while` loop, with `t[i] = ...` and `i = i + 1`. The line comments sit between statements, the way they can sit between any two calls in a block, such as a [`store.glob`](09-the-store.md#finding-files-with-storeglob) and a [`store.write`](09-the-store.md#writing-and-reading-files). String literals take double quotes or single quotes, so `return "hello"` and `return 'early'` both return their text.
 
-The same syntax does real work. `local msgs = messages.new()` declares a block-local variable holding a new [message list](11-conversations.md#building-a-message-list). A table constructor such as `{ a, b }`, list indexing such as `results[1]`, and `..` concatenation combine in a block that waits on two tasks with [`tasks.join`](15-tasks.md#waiting-with-tasksjoin_any-and-tasksjoin):
+The same syntax does real work. `local last = messages[#messages]` declares a block-local variable holding the last record of the section's [message list](11-conversations.md#building-a-message-list). A table constructor such as `{ a, b }`, list indexing such as `results[1]`, and `..` concatenation combine in a block that waits on two tasks with [`tasks.join`](15-tasks.md#waiting-with-tasksjoin_any-and-tasksjoin):
 
 ````lua
 local results = tasks.join({ a, b })
@@ -173,7 +173,7 @@ Every section VM, in the H1 pass and in walked sections alike, starts with these
 
 Two more Engine globals are installed only in some section VMs. `ui` is installed when the run has an application-state snapshot (see [Run facts in `sys` and `ui`](#run-facts-in-sys-and-ui)), and `item` is installed in a spawned chain, such as a fanout arm (see [What an arm sees](14-fanout.md#what-an-arm-sees)). That makes 21 Engine globals in all.
 
-Together they give every section's Lua logging through `log` (see [Logging and lifecycle reports](#logging-and-lifecycle-reports)), tool scoping through `tools`, store operations through `store`, and the `var` and `argv` globals, all inside the sandboxed section VM. `prose` is the global that reads pending prose (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)), `prompt` holds the section reads (see [Reading sections with `prompt.section` and `prompt.list`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptlist)), and `models` holds [`models.infer`](10-models.md#running-a-round-with-modelsinfer). The rest are taught where they are used: `args` in [The argument string in `args`](06-arguments.md#the-argument-string-in-args), `argv` in [Reading parsed input from `argv`](06-arguments.md#reading-parsed-input-from-argv), `store` in [What the store is](09-the-store.md#what-the-store-is), `untrusted` in [Handing store text to a model with `untrusted`](09-the-store.md#handing-store-text-to-a-model-with-untrusted), `json` in [Encoding and decoding JSON with `json`](#encoding-and-decoding-json-with-json), `messages` in [Building a message list](11-conversations.md#building-a-message-list), `compactors` in [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion), `tools` in [Tool scope and the task built-ins](12-tools.md#tool-scope-and-the-task-built-ins), `packs` in [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects), and `tasks` in [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn).
+Together they give every section's Lua logging through `log` (see [Logging and lifecycle reports](#logging-and-lifecycle-reports)), tool scoping through `tools`, store operations through `store`, and the `var` and `argv` globals, all inside the sandboxed section VM. `prose` is the global that reads pending prose (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)), `prompt` holds the section reads (see [Reading sections with `prompt.section` and `prompt.list`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptlist)), and `models` holds [`models.infer`](10-models.md#running-a-round-with-modelsinfer). The rest are taught where they are used: `args` in [The argument string in `args`](06-arguments.md#the-argument-string-in-args), `argv` in [Reading parsed input from `argv`](06-arguments.md#reading-parsed-input-from-argv), `store` in [What the store is](09-the-store.md#what-the-store-is), `untrusted` in [Handing store text to a model with `untrusted`](09-the-store.md#handing-store-text-to-a-model-with-untrusted), `json` in [Encoding and decoding JSON with `json`](#encoding-and-decoding-json-with-json), `messages`, the section's own conversation that each new section VM starts empty, in [`messages` is the section's conversation](11-conversations.md#messages-is-the-sections-conversation), `compactors` in [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion), `tools` in [Tool scope and the task built-ins](12-tools.md#tool-scope-and-the-task-built-ins), `packs` in [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects), and `tasks` in [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn).
 
 The Engine installs no global beyond these 21. Fanout is `tasks.fanout`, a function on the `tasks` table (see [Fanout in one call](14-fanout.md#fanout-in-one-call)), and reading a list section goes through `prompt.list`.
 
@@ -189,7 +189,7 @@ Every section VM is set up in one fixed order. The same order applies to every s
 4. `item`
 5. `jump` and the `prompt` reads
 6. the suspending calls
-7. `models.loop`
+7. `models.loop` and `models.compact`
 8. Pack preludes
 9. `require`
 10. the store's suspending calls
@@ -379,13 +379,13 @@ Six of the base functions behave in a Runvil way:
 
 - `pairs` and `next` visit keys in a fixed order (see [Deterministic table iteration](#deterministic-table-iteration)).
 - `pcall` and `xpcall` deliver a failure raised by an Engine function as an [error value](#error-values), while passing your own raised value through unchanged, whether it is a string, a table of your own, or an error value already built (see [Raising and catching errors](#raising-and-catching-errors)).
-- `setmetatable` and `getmetatable` give `_G` an author metatable that never replaces the guard on `argv` and `prose` (see [Giving `_G` a metatable](#giving-_g-a-metatable)).
+- `setmetatable` and `getmetatable` give `_G` an author metatable that never replaces the guard on `argv`, `prose`, and `messages` (see [Giving `_G` a metatable](#giving-_g-a-metatable)).
 
 On values other than `_G`, `getmetatable` and `setmetatable` behave as in stock Lua, so `setmetatable(t, mt) == t` and `getmetatable(t) == mt` both hold (see [`setmetatable` and `getmetatable` on other values](#setmetatable-and-getmetatable-on-other-values)). You can call `getmetatable` on a task handle from `tasks.spawn` too, as in `getmetatable(t) == nil`.
 
 The other base functions work as in standard Lua 5.5. You call `ipairs(t)`, `select(n, ...)`, and `tonumber(v)` as in any Lua program, and `select('#', ...)` and `select(2, pcall(...))` give the same results as in stock Lua. `tonumber` turns a numeric string read from the store into a number, as in `tonumber(ok and v or '0') + 1`. `assert(cond, message)` checks a condition with a message. `ipairs` walks an array table, such as a table literal, in order, so `for _, text in ipairs({ 'first question', 'second question' }) do` handles `first question` before `second question`.
 
-The standard functions `string.rep`, `select`, `table.concat`, `ipairs`, `type`, `tostring`, `getmetatable`, and `assert` work around Engine calls too, `models.loop` included, as in `select('#', models.loop(msgs))` and `getmetatable(err) == nil`. Section Lua combines them freely, as in `assert(not pcall(require, '## broken'), 'the broken library raises')`, which checks that requiring a broken library raises.
+The standard functions `string.rep`, `select`, `table.concat`, `ipairs`, `type`, `tostring`, `getmetatable`, and `assert` work around Engine calls too, `models.loop` included, as in `select('#', models.loop())` and `getmetatable(err) == nil`. Section Lua combines them freely, as in `assert(not pcall(require, '## broken'), 'the broken library raises')`, which checks that requiring a broken library raises.
 
 The kept globals are ordinary globals, so you can reassign one in prompt code. `error = function() end` runs without complaint.
 
@@ -457,10 +457,10 @@ t7|6|t7|TASK ID=T7|ababab
 Strings share a metatable whose `__index` is the `string` library, so `getmetatable('').__index == string` holds, and every `string` function works with colon syntax on a string value. `s:match(pattern)` is `string.match(s, pattern)`, and `s:find(text, 1, true)` is `string.find(s, text, 1, true)`. The functions you reach for most:
 
 - `string.upper` and `string.lower` change case, so `return string.upper(args)` with the argument string `hi` returns `HI`, and `return string.lower(value)` lowers a value.
-- `string.match` matches a Lua pattern and returns its captures, so `string.match(s, '^(%d+):([%d%.]+)$')` returns two captures. Anchored patterns work on message content too, so `msgs[9].content:match('^Task id=(%S+)')` returns the captured id string. Pattern escapes work as in standard Lua, as `%-` does in `tostring(err):match('read%-only')`.
+- `string.match` matches a Lua pattern and returns its captures, so `string.match(s, '^(%d+):([%d%.]+)$')` returns two captures. Anchored patterns work on message content too, so `messages[9].content:match('^Task id=(%S+)')` returns the captured id string. Pattern escapes work as in standard Lua, as `%-` does in `tostring(err):match('read%-only')`.
 - `string.find` finds a pattern, as in `string.find(wrapped, "untrusted_input_")`. With its plain-find flag it searches for literal text: `string.find(m.content, 'Task id=', 1, true) == 1` tests for a prefix, and `err:find(']:2: undefined global undefined_here', 1, true)` finds that exact text. A plain search returns `nil` when the text is absent, so `tostring(err):find('include more surrounding text', 1, true) ~= nil` tests whether a message contains that text.
 - `string.sub` takes negative indexes that count from the end, inside sections and fanout arms alike, as in `tostring(sys.index) == string.sub(item, -1)`.
-- `string.rep(s, n)` repeats `s` `n` times, so `msgs:user(string.rep('x', 100000))` builds a 100000-character user message.
+- `string.rep(s, n)` repeats `s` `n` times, so `messages:user(string.rep('x', 100000))` builds a 100000-character user message.
 - `string.char` builds a string from raw byte values, which can produce bytes that are not valid UTF-8. `log` rejects the string from `string.char(255)` as not UTF-8 (see [Logging and lifecycle reports](#logging-and-lifecycle-reports)).
 
 ### The `table` library
@@ -801,7 +801,7 @@ This `__pairs` returns just an iterator function, with no state or control value
 
 `pairs` looks up `__pairs` on a table's metatable directly, without going through that metatable's own `__index`. A `__pairs` reachable only through the metatable's `__index` is not found, and the default ordered walk runs.
 
-A userdata whose metatable holds `__pairs` can be passed to `pairs` as well, which iterates the pairs that metamethod yields and returns its results. A [message list](11-conversations.md#building-a-message-list) made with `messages.new()`, and a record read from one, are userdata of this kind.
+A userdata whose metatable holds `__pairs` can be passed to `pairs` as well, which iterates the pairs that metamethod yields and returns its results. The section's [message list](11-conversations.md#building-a-message-list) `messages`, and a record read from it, are userdata of this kind.
 
 #### When `pairs` fails
 
@@ -1178,7 +1178,7 @@ yes lua
 {path} must be JSON data, got {type}
 ````
 
-Here the write raises `var.handler must be JSON data, got function`. The path is the field's full path, dotted for string keys of object fields and bracketed for any other key, with array elements counted from 1, as in `var.t.f` or `var.list[2]`. A message list or a message record such as `msgs[1]` (see [Building a message list](11-conversations.md#building-a-message-list)) is userdata, so assigning one to a `var` field raises the same error ending in `got userdata`. [`json.null`](#null-values-and-jsonnull) is the one userdata the guard accepts, and it stores JSON null: after `var.x = json.null`, `var` reads back as `{ "x": null }`, and `var.x == json.null` holds in Lua.
+Here the write raises `var.handler must be JSON data, got function`. The path is the field's full path, dotted for string keys of object fields and bracketed for any other key, with array elements counted from 1, as in `var.t.f` or `var.list[2]`. The `messages` list or a message record such as `messages[1]` (see [Building a message list](11-conversations.md#building-a-message-list)) is userdata, so assigning one to a `var` field raises the same error ending in `got userdata`. [`json.null`](#null-values-and-jsonnull) is the one userdata the guard accepts, and it stores JSON null: after `var.x = json.null`, `var` reads back as `{ "x": null }`, and `var.x == json.null` holds in Lua.
 
 `var` checks an assigned table deeply, so a table holding a function at any depth, such as `{ f = function() end }`, fails at the assigning line too. That error comes from the conversion to JSON, and its message names the offending type, such as `function`.
 
@@ -1436,7 +1436,7 @@ Tables encode this way:
 - A value whose walk spends more than the size budget raises an error, as a table shared at every level of a deep nest does (see [Size and nesting limits](#size-and-nesting-limits)).
 - Any metatable other than the list marker or a sealed view's is ignored, and the table's own entries are encoded, so a `__pairs` or `__tostring` metamethod never changes the output.
 
-Functions, threads, and every userdata other than `json.null` are not JSON data, so they raise an error. That includes Engine objects such as tool objects, message lists, and the record views that `msgs[i]` returns. To encode a message record, encode `msgs[i].content` or a plain table you build from its fields.
+Functions, threads, and every userdata other than `json.null` are not JSON data, so they raise an error. That includes Engine objects such as tool objects, the `messages` list, and the record views that `messages[i]` returns. To encode a message record, encode `messages[i].content` or a plain table you build from its fields.
 
 A sealed view is a table that holds no entries of its own and whose metatable has both `__index` and `__metatable`. `var` and every table read from it, frozen `argv`, sealed Pack globals, and [fanout results](14-fanout.md#reading-the-results) are sealed views. When a view's `__index` is a table, `json.encode` encodes that table in the view's place, so `json.encode(var)` gives everything `var` holds. For a fanout arm over the member `alpha` whose worker returns `item .. '-' .. sys.index`, `json.encode(r[1])` gives `{"exhausted":false,"item":"alpha","ok":true,"text":"alpha-1"}`. When a view's `__index` is a function, as in `sys`, the view cannot be read, and `json.encode(sys)` raises this error:
 
@@ -2629,7 +2629,7 @@ return err.kind .. '|' .. tostring(err)
 
 `models.infer` takes only the prompt, so this block returns `lua|models.infer takes (prompt)` and finishes without making a model request.
 
-A caught argument error has a message of fixed text that names the argument. Argument errors from `tools.call` are worded and shaped exactly like the others, failures from the `tasks` functions, `tasks.fanout` included, arrive in the same shape as every other Engine failure, and so do the errors `models.loop` builds itself. Rendered as `err.kind .. ':' .. tostring(err)`, every argument error from `models.loop` starts with `lua:`, as in `lua:models.loop needs a messages.new() list; ...` (see [Building a message list](11-conversations.md#building-a-message-list)), and the errors the loop raises around the function passed as its second argument are kind `lua` too.
+A caught argument error has a message of fixed text that names the argument. Argument errors from `tools.call` are worded and shaped exactly like the others, failures from the `tasks` functions, `tasks.fanout` included, arrive in the same shape as every other Engine failure, and so do the errors `models.loop` builds itself. Rendered as `err.kind .. ':' .. tostring(err)`, every argument error from `models.loop` starts with `lua:`, as in `lua:models.loop takes (compactor?)` (see [Argument errors](11-conversations.md#argument-errors)), and the errors the loop raises about the compactor passed as its argument are kind `lua` too.
 
 Argument type errors on every Engine function, the `store` functions included, are kind `lua`. Only failures the store itself reports are kind `store`, so `pcall(function() store.write(123, 'x') end)` catches `err.kind == 'lua'`.
 
@@ -2739,7 +2739,7 @@ return reply
 A failed Engine call raises the Engine's error value right at the call site, so you can pass the function straight to `pcall` with its arguments, get `false` and that value back, branch on it, and keep going:
 
 - `pcall(models.infer, prose)` returns a status and the round's error value instead of ending the block.
-- `pcall(models.loop, msgs)` catches an error the loop raises, and `err.kind` names it, such as `empty_model_reply`, `cancelled`, `out_of_scope_tool`, or `unbound_tool`. With a second argument, as in `pcall(models.loop, msgs, f)`, it catches the loop's failures the same way, and the model rounds inside still suspend and resume normally.
+- `pcall(models.loop)` catches an error the loop raises, and `err.kind` names it, such as `empty_model_reply`, `cancelled`, `out_of_scope_tool`, or `unbound_tool`. With a compactor, as in `pcall(models.loop, f)`, it catches the loop's failures the same way, and the model rounds inside still suspend and resume normally.
 - `pcall(call, '## Heading')` catches a failed call, such as one to a missing or non-visible section, and returns `false` and the error value instead of failing the run. A target that is not a string, as in `pcall(call, 42)`, comes back with a message containing `section target must be a string`.
 - `pcall(jump, '## Other')` catches a failed [`jump`](08-jump-and-call.md#jumping-to-a-section).
 - `pcall(tasks.fanout, '### Worker', 5)` returns `false` and an error value whose message is about the collection, and `pcall(tasks.spawn, ...)` catches a failed spawn.
@@ -2809,7 +2809,7 @@ An uncaught Lua runtime error ends the block with an error instead of a return v
 
 In the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass), an uncaught failure such as `assert(false, message)` or `error(message)` is a failed gate instead. The run ends before the walk with run error kind `RequirementsUnmet` instead of `Lua`, the Lua failure's message is kept as the error's cause text, and no later block runs (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)).
 
-When an Engine operation fails and the block does not catch the failure, the block fails with the error the operation returned. The run ends with that call's own specific error, such as a `context_exhausted` failure from `models.infer`, rather than a plain string or a generic Lua runtime error. An uncaught error from a built-in Lua function ends the run with run error kind `Lua`, and its message names the calling function, as in `tools.offer: ...`. An uncaught `models.loop` error ends the run according to its error kind: `tool_loop_exhausted` with run error kind `Tool`, `context_exhausted` with `ContextExhausted`, and `empty_model_reply` with `Completion`. A `lua`-kind loop error, such as a call with the wrong arguments, fails the run as a Lua runtime error with run error kind `Lua`, and its message keeps the loop's own text.
+When an Engine operation fails and the block does not catch the failure, the block fails with the error the operation returned. The run ends with that call's own specific error, such as a `context_exhausted` failure from `models.infer`, rather than a plain string or a generic Lua runtime error. An uncaught error from a built-in Lua function ends the run with run error kind `Lua`, and its message names the calling function, as in `tools.offer: ...`. An uncaught `models.loop` error ends the run according to its error kind: `tool_loop_exhausted` with run error kind `Tool`, `context_exhausted` with `ContextExhausted`, and `empty_model_reply` with `Completion`. A `lua`-kind loop error, such as a call with the wrong arguments or a loop started while another runs, fails the run as a Lua runtime error with run error kind `Lua`, and its message keeps the loop's own text.
 
 An uncaught Lua failure leaves its block in one of two forms: a Lua error, which holds a message, or a Lua runtime error, which holds a message plus further details. A Lua runtime error's message already holds the Lua error's text, so a printout of the error and its causes shows that text once rather than repeating it. A store failure you do not catch keeps its own error instead and ends the run with run error kind `Vfs`, in the H1 pass too (see [When a store call fails](09-the-store.md#when-a-store-call-fails)).
 
@@ -3199,7 +3199,7 @@ return table.concat(names, ',')
 
 ### What the Engine guard on `_G` still blocks
 
-The Engine guard on `_G` serves two names that your metatable never touches: `prose`, and `argv` outside the H1 pass. Your code reads both as globals, even though a raw read of either name from `_G` gives `nil`. The guard handles `argv` and `prose` before your metatable, so reads and assignments of those two names never reach your `__index` or `__newindex`, an `argv` assignment in the H1 pass included, whatever metatable you set, clear, or change.
+The Engine guard on `_G` serves three names that your metatable never touches: `prose`, `messages`, and `argv` outside the H1 pass. Your code reads them as globals, even though a raw read of any of them from `_G` gives `nil`. The guard handles `argv`, `prose`, and `messages` before your metatable, so reads and assignments of those names never reach your `__index` or `__newindex`, an `argv` assignment in the H1 pass included, whatever metatable you set, clear, or change. An assignment to `messages` always raises the refusal that [`messages` is the section's conversation](11-conversations.md#messages-is-the-sections-conversation) shows.
 
 In an epilog that follows the prose `Hi.`, this block returns `Hi.` even though its `__index` raises for every undefined global and its `__newindex` records every new one:
 
@@ -3212,4 +3212,4 @@ setmetatable(_G, {
 return prose
 ````
 
-Because `setmetatable(_G, mt)` records `mt` behind the guard instead of replacing it, no `setmetatable(_G, ...)` call, whether it clears the metatable with `nil`, swaps in `{}`, or installs hooks, changes what `argv` and `prose` read or lets an assignment to either succeed where the Engine refuses it. Editing the table that `getmetatable(_G)` returns cannot free them either, whether you replace `__index`, add or replace `__newindex`, or clear `__metatable`.
+Because `setmetatable(_G, mt)` records `mt` behind the guard instead of replacing it, no `setmetatable(_G, ...)` call, whether it clears the metatable with `nil`, swaps in `{}`, or installs hooks, changes what `argv`, `prose`, and `messages` read or lets an assignment to any of them succeed where the Engine refuses it. Editing the table that `getmetatable(_G)` returns cannot free them either, whether you replace `__index`, add or replace `__newindex`, or clear `__metatable`.

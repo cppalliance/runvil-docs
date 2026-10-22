@@ -42,8 +42,9 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `assert` | function | Checks a condition, raising its message when false | [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors) |
 | `call` | function | Runs a contained chain at `target`; optional `input` string replaces `args` | [Jump and call at a glance](08-jump-and-call.md#jump-and-call-at-a-glance) |
 | `collectgarbage` | removed | Reads nil; no garbage collector control | [The sandbox](05-lua-environment.md#the-sandbox) |
-| `compactors` | global | Table of shipped compactor policies, holding only `fail` | [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion) |
-| `compactors.fail` | function | Default compactor; always raises `context_exhausted` with the overflow reason | [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion) |
+| `compactors` | global | Table of shipped compactor policies, holding `fail` and `clear` | [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion) |
+| `compactors.clear` | function | Removes every record from `messages`, keeping the rendered tool list; works only inside a compactor | [`compactors.clear`](11-conversations.md#compactorsclear) |
+| `compactors.fail` | function | Default compactor; always raises `context_exhausted` with the reason it is given, any string | [`compactors.fail`](11-conversations.md#compactorsfail) |
 | `coroutine` | removed | Reads nil; no creating coroutines or yielding on your own | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `debug` | not loaded | Never loaded; no stack frame, local, or hook inspection | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `dofile` | removed | Reads nil; no running a Lua file from disk | [The sandbox](05-lua-environment.md#the-sandbox) |
@@ -53,7 +54,7 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `err.kind` | field | Lowercase error kind string, one of thirteen, to branch on | [Error values](05-lua-environment.md#error-values) |
 | `err.message` | field | Message text; `tostring(err)` and `..` give the same text | [Error values](05-lua-environment.md#error-values) |
 | `err.path` | field | Path or pattern as passed; `not_a_directory` may name the blocking file | [When a store call fails](09-the-store.md#when-a-store-call-fails) |
-| `err.reason` | field | Store tag such as `not_found`, or overflow reason `precheck` or `provider` | [When a store call fails](09-the-store.md#when-a-store-call-fails) |
+| `err.reason` | field | Store tag such as `not_found`, or a `context_exhausted` reason such as `precheck` or `provider` | [When a store call fails](09-the-store.md#when-a-store-call-fails) |
 | `err.rule` | field | Broken rule's snake_case tag, such as `traversal` or `wildcard` | [Store paths](09-the-store.md#store-paths) |
 | `err.task` | field | Task id on `task_not_owned`, `task_consumed`, and a cancelled task's error | [Cancelling and listing tasks](15-tasks.md#cancelling-and-listing-tasks) |
 | `err.tasks` | field | On `tasks_live`, leaked task ids in spawn order joined by `, ` | [Ownership, leaked tasks, and abandonment](15-tasks.md#ownership-leaked-tasks-and-abandonment) |
@@ -72,7 +73,7 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `handle.temperature` | field | `temperature` option from `models.use`, or `nil` | [Model handles](10-models.md#model-handles) |
 | `handle.thinking` | field | `true` for `thinking`, `false` for `no-thinking`, `nil` for neither | [Model handles](10-models.md#model-handles) |
 | `handle:infer` | method | Runs one round on the handle's model and returns the reply | [Model handles](10-models.md#model-handles) |
-| `handle:loop` | method | Runs `models.loop` on the handle's model and returns `nil` | [How the loop runs](11-conversations.md#how-the-loop-runs) |
+| `handle:loop` | method | Runs the section's `messages` on the handle's model, optional compactor; returns `nil` | [How the loop runs](11-conversations.md#how-the-loop-runs) |
 | `input.ask` | function | Returns the operator's next message as typed; needs `user-input` declared | [Asking the operator](05-lua-environment.md#asking-the-operator) |
 | `io` | not loaded | Never loaded; no file or stream I/O | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `ipairs` | function | Walks an array table in order | [The sandbox](05-lua-environment.md#the-sandbox) |
@@ -86,7 +87,7 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `json.null` | field | Truthy userdata standing for JSON null; test with `v == json.null` | [Null values and `json.null`](05-lua-environment.md#null-values-and-jsonnull) |
 | `jump` | function | Ends the block and moves the walk to another section | [Jumping to a section](08-jump-and-call.md#jumping-to-a-section) |
 | `kind = "cancelled"` | error kind | Cancelled task delivered by a wait, or a stopped run or call | [Cancelling and listing tasks](15-tasks.md#cancelling-and-listing-tasks) |
-| `kind = "context_exhausted"` | error kind | Request overflows the context window and the compactor does not compact | [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion) |
+| `kind = "context_exhausted"` | error kind | Conversation overflows the context window and compaction does not make it fit, or `compactors.fail` raises | [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion) |
 | `kind = "empty_model_reply"` | error kind | No text or tool calls, except an empty `stop` after tool calls | [Empty replies and finish reasons](11-conversations.md#empty-replies-and-finish-reasons) |
 | `kind = "internal"` | error kind | A failure the prompt cannot fix, such as a transport failure | [Error kinds in Lua and the run error they become](16-limits-and-errors.md#error-kinds-in-lua-and-the-run-error-they-become) |
 | `kind = "lua"` | error kind | An authoring or runtime failure, such as a compile or argument error | [Error values](05-lua-environment.md#error-values) |
@@ -98,26 +99,26 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `kind = "tool"` | error kind | A bound tool fails on a script `tools.call`, invalid structured JSON included | [Tool errors](12-tools.md#tool-errors) |
 | `kind = "tool_loop_exhausted"` | error kind | Loop reaches the round cap without a final reply | [Tool rounds and the round cap](11-conversations.md#tool-rounds-and-the-round-cap) |
 | `kind = "unbound_tool"` | error kind | A script `tools.call` names no bound tool, or a task built-in | [Tool errors](12-tools.md#tool-errors) |
-| `#list` | method | Number of records in the message list | [Reading records](11-conversations.md#reading-records) |
-| `list:append` | method | Appends a record table that names its own `role`, returns the list | [Building a message list](11-conversations.md#building-a-message-list) |
-| `list:assistant` | method | Appends an `assistant` record, optional `tool_calls`, returns the list | [Building a message list](11-conversations.md#building-a-message-list) |
-| `list:replace` | method | Replaces records `first` through `last` with new records, returns the list | [Editing a list with `replace`](11-conversations.md#editing-a-list-with-replace) |
-| `list:system` | method | Appends a `system` record and returns the list | [Building a message list](11-conversations.md#building-a-message-list) |
-| `list:tool` | method | Appends a `tool` record answering a `tool_call_id`, returns the list | [Building a message list](11-conversations.md#building-a-message-list) |
-| `list:user` | method | Appends a `user` record and returns the list | [Building a message list](11-conversations.md#building-a-message-list) |
-| `list[i]` | field | Read-only view of record `i`, or `nil` past the end | [Reading records](11-conversations.md#reading-records) |
 | `load` | removed | Reads nil; no compiling a string into a function | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `loadfile` | removed | Reads nil; no loading a Lua file from disk | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `loadstring` | removed | Reads nil; no loading code from a string | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `log` | function | Records one single-line checkpoint of at most 256 characters | [Logging and lifecycle reports](05-lua-environment.md#logging-and-lifecycle-reports) |
 | `math` | global | Standard `math` library, as in Lua 5.5 | [The sandbox](05-lua-environment.md#the-sandbox) |
-| `messages` | global | Message list namespace whose only member is `new` | [Starting a conversation](11-conversations.md#starting-a-conversation) |
-| `messages.new` | function | Creates an empty message list | [Starting a conversation](11-conversations.md#starting-a-conversation) |
+| `messages` | global | The section's conversation, a message list created empty at each section entry; cannot be reassigned | [`messages` is the section's conversation](11-conversations.md#messages-is-the-sections-conversation) |
+| `#messages` | method | Number of records in the message list | [Reading records](11-conversations.md#reading-records) |
+| `messages:append` | method | Appends a record table that names its own `role`, with optional `meta`; returns the list | [Building a message list](11-conversations.md#building-a-message-list) |
+| `messages:assistant` | method | Appends an `assistant` record, optional `tool_calls` then `meta`; returns the list | [Building a message list](11-conversations.md#building-a-message-list) |
+| `messages:replace` | method | Inside a compactor only, replaces records `first` through `last` with new records; returns the list | [Editing a list with `replace`](11-conversations.md#editing-a-list-with-replace) |
+| `messages:system` | method | Appends a `system` record, optional `meta`; returns the list | [Building a message list](11-conversations.md#building-a-message-list) |
+| `messages:tool` | method | Appends a `tool` record answering a `tool_call_id`, optional `meta`; returns the list | [Building a message list](11-conversations.md#building-a-message-list) |
+| `messages:user` | method | Appends a `user` record, optional `meta`; returns the list | [Building a message list](11-conversations.md#building-a-message-list) |
+| `messages[i]` | field | Read-only view of record `i`, or `nil` past the end | [Reading records](11-conversations.md#reading-records) |
 | `models` | global | Table that selects model roles by label and runs rounds | [Model roles instead of models](10-models.md#model-roles-instead-of-models) |
+| `models.compact` | function | Runs `compactor(reason)` once over `messages` outside any loop, checking the structural rules; returns `nil` | [Compacting on demand with `models.compact`](11-conversations.md#compacting-on-demand-with-modelscompact) |
 | `models.default` | function | Sets the prompt-wide default role and returns its handle | [The prompt-wide default with `models.default`](10-models.md#the-prompt-wide-default-with-modelsdefault) |
 | `models.get` | function | Returns a handle for a role label or raw model id | [Getting handles with `models.get`](10-models.md#getting-handles-with-modelsget) |
 | `models.infer` | function | Runs one round on the section's model and returns the reply | [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer) |
-| `models.loop` | function | Runs a message list to a final reply, appending records; returns `nil` | [Starting a conversation](11-conversations.md#starting-a-conversation) |
+| `models.loop` | function | Runs the section's `messages` to a final reply, appending records, optional compactor; its first round fixes the section's tool list; returns `nil` | [Starting a conversation](11-conversations.md#starting-a-conversation) |
 | `models.use` | function | Selects a role for the current section and returns its handle | [Selecting a role per section with `models.use`](10-models.md#selecting-a-role-per-section-with-modelsuse) |
 | `models.use (max_tokens)` | option | Response token limit, a whole number from 1 to 4294967295 | [Sampling options on `models.use`](10-models.md#sampling-options-on-modelsuse) |
 | `models.use (temperature)` | option | Sampling temperature, a finite number from 0.0 to 2.0 | [Sampling options on `models.use`](10-models.md#sampling-options-on-modelsuse) |
@@ -125,14 +126,14 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `os` | not loaded | Never loaded; no `os.time`, `os.clock`, `os.getenv`, or `os.execute` | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `package` | not loaded | Never loaded; no `package.path`, `package.loaded`, or search paths | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `pairs` | function | Visits keys in a fixed sorted order on every run | [Deterministic table iteration](05-lua-environment.md#deterministic-table-iteration) |
-| `pairs(list)` | method | Visits each record in order with its 1-based position | [Reading records](11-conversations.md#reading-records) |
+| `pairs(messages)` | method | Visits each record in order with its 1-based position | [Reading records](11-conversations.md#reading-records) |
 | `pcall` | function | Catches errors, suspending calls included; Engine failures arrive as error values | [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors) |
 | `pack.name` | field | The Pack's Pack id as a string | [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects) |
 | `pack.tools` | field | Array of the Pack's Tool objects in tool id order | [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects) |
 | `packs` | global | Table of read-only Pack objects with `required`, `extras`, `get`, `offer` | [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects) |
 | `packs.extras` | function | Pack objects for the undeclared `runvil` Packs the run knows, sorted by name | [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects) |
 | `packs.get` | function | Reads one Pack object by Pack id, required or extra | [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects) |
-| `packs.offer` | function | Offers every tool of a Pack given by id, object, or list | [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer) |
+| `packs.offer` | function | Offers every tool of a Pack given by id, object, or list; raises after the first loop round renders the tool list | [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer) |
 | `packs.required` | function | Pack objects of the declared Packs, sorted by name | [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects) |
 | `print` | removed | Reads nil; `log` is the output path instead | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `prompt` | global | Table holding `prompt.section` and `prompt.list` | [Reading sections with `prompt.section` and `prompt.list`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptlist) |
@@ -144,6 +145,7 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `rawlen` | removed | Reads nil; no raw table access | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `rawset` | removed | Reads nil; no raw table access | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `record.content` | field | Record's text, or a non-empty array of content parts | [Message records](11-conversations.md#message-records) |
+| `record.meta` | field | Record's metadata, any JSON data up to 8192 bytes, never sent to the model; `nil` when absent | [Record metadata with `meta`](11-conversations.md#record-metadata-with-meta) |
 | `record.role` | field | Message role: `system`, `user`, `assistant`, or `tool` | [Message records](11-conversations.md#message-records) |
 | `record.tool_call_id` | field | On a `tool` record, the id of the call it answers | [Message records](11-conversations.md#message-records) |
 | `record.tool_calls` | field | Assistant's tool calls, each with `id`, `name`, and `arguments` | [Message records](11-conversations.md#message-records) |
@@ -212,8 +214,8 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `tools.calls` | field | Read-only per-section call counts keyed by tool id or alias | [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls) |
 | `tools.extras` | function | Tool objects of offered tools from undeclared `runvil` Packs, in id order | [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects) |
 | `tools.get` | function | Reads one Tool object by tool id | [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects) |
-| `tools.offer` | function | Puts catalog tools in the section's tool scope | [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer) |
-| `tools.offer_local` | function | Defines a local tool from an alias, description, params, and handler | [Defining local tools with `tools.offer_local`](12-tools.md#defining-local-tools-with-toolsoffer_local) |
+| `tools.offer` | function | Puts catalog tools in the section's tool scope; raises after the first loop round renders the tool list | [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer) |
+| `tools.offer_local` | function | Defines a local tool from an alias, description, params, and handler; raises after the first loop round renders the tool list | [Defining local tools with `tools.offer_local`](12-tools.md#defining-local-tools-with-toolsoffer_local) |
 | `tools.required` | function | Tool objects of offered tools from declared Packs, in id order | [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects) |
 | `tostring` | function | Turns a value such as a number into text | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `type` | function | Returns a value's Lua type name, such as `'table'` | [The sandbox](05-lua-environment.md#the-sandbox) |

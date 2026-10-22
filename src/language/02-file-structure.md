@@ -429,7 +429,7 @@ The `runvil:` key is what marks a Markdown file as a Runvil prompt, and a file w
 
 ### The active Engine major
 
-The active Engine major is the one major version this build of the Engine runs, and it is `0`. The parser accepts `runvil: 0`, and the parsed prompt's frontmatter reports the declared major, `0`. A prompt that declares `runvil: 0` passes the version check and runs normally, and it can combine lazy `prose`, `models.infer`, `models.loop` with tool dispatch over tools offered through `tools.offer`, `messages.new()` builders, and synchronous `call` in one run (see [Starting a conversation](11-conversations.md#starting-a-conversation)).
+The active Engine major is the one major version this build of the Engine runs, and it is `0`. The parser accepts `runvil: 0`, and the parsed prompt's frontmatter reports the declared major, `0`. A prompt that declares `runvil: 0` passes the version check and runs normally, and it can combine lazy `prose`, `models.infer`, `models.loop` with tool dispatch over tools offered through `tools.offer`, `messages` builders, and synchronous `call` in one run (see [Starting a conversation](11-conversations.md#starting-a-conversation)).
 
 The `runvil:` value must be a non-negative integer that fits in 32 bits, `0` through `4294967295`. Any other value makes the frontmatter fail to parse with parse error kind `Frontmatter`.
 

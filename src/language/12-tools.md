@@ -337,29 +337,27 @@ models:
 ```lua
 models.use('writer')
 tools.offer('web/search')
-local msgs = messages.new()
-msgs:user('Search for the latest Lua release.')
-models.loop(msgs)
+messages:user('Search for the latest Lua release.')
+models.loop()
 ```
 
 ## Plain
 
 ```lua
 models.use('writer')
-local msgs = messages.new()
-msgs:user('say hi')
-models.loop(msgs)
-return msgs[#msgs].content
+messages:user('say hi')
+models.loop()
+return messages[#messages].content
 ```
 ````
 
-Each section selects the `writer` model role with `models.use` (see [Selecting a role per section with `models.use`](10-models.md#selecting-a-role-per-section-with-modelsuse)) and runs one conversation. In `## Ask`, every model round of the loop offers the model one tool, `web_search`. `## Ask` returns nothing, so the walk falls through to `## Plain`, which offers nothing: its rounds go out with no tool list at all, and the run result is the model's reply there.
+Each section selects the `writer` model role with `models.use` (see [Selecting a role per section with `models.use`](10-models.md#selecting-a-role-per-section-with-modelsuse)) and runs one conversation over its own `messages` list. In `## Ask`, every model round of the loop offers the model one tool, `web_search`. `## Ask` returns nothing, so the walk falls through to `## Plain`, which offers nothing: its rounds go out with no tool list at all, and the run result is the model's reply there.
 
-A section's tool scope is the set of tools the model is offered in that section's `models.loop` rounds. You fill it by calling `tools.offer` and `packs.offer` in that section (see [Offering tools with `tools.offer` and `packs.offer`](#offering-tools-with-toolsoffer-and-packsoffer)), and each round offers the model the tools in the scope together with the section's local tools.
+A section's tool scope is the set of tools the model is offered in that section's `models.loop` rounds. You fill it by calling `tools.offer` and `packs.offer` in that section before its first loop round (see [Offering tools with `tools.offer` and `packs.offer`](#offering-tools-with-toolsoffer-and-packsoffer)). The first loop round renders the scope together with the section's local tools into the rendered tool list, which every round of the section then offers the model.
 
 ### Every section entry starts empty
 
-Every section entry starts with an empty tool scope and no task allowlist, whether the section is walked into, entered as a task's first section, or is the H1 pass. Each entry runs in a fresh section VM (see [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals)) that shares only the run's tools and models, so calls to `tools.offer`, `packs.offer`, and `tools.allow_tasks` never last from one section entry to the next. That is why `## Plain` sees none of the tools `## Ask` offered.
+Every section entry starts with an empty tool scope and no task allowlist, whether the section is walked into, entered as a task's first section, or is the H1 pass. Each entry runs in a fresh section VM (see [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals)) that shares only the run's tools and models, so calls to `tools.offer`, `packs.offer`, and `tools.allow_tasks` never last from one section entry to the next. The entry's fresh `messages` holds no rendered tool list either, so its first loop round renders its own. That is why `## Plain` sees none of the tools `## Ask` offered.
 
 ### What the scope holds
 
@@ -369,9 +367,9 @@ A section's scope holds three things of its own:
 - the Packs added with `packs.offer`, kept in first-offer order
 - the task allowlist set by the latest `tools.allow_tasks` call
 
-The scope is rebuilt every time a model round is built, so a tool you offer with `tools.offer` or `packs.offer`, or define with `tools.offer_local`, between two `models.loop` calls is offered only to the later call.
+The first loop round in a section that builds its tools renders the rendered tool list from the scope as it stands at that moment, and the list stays fixed for the rest of the section. After the render, `tools.offer`, `packs.offer`, and `tools.offer_local` raise, so make every offer before the first loop, or offer in another section (see [When an offer takes effect](#when-an-offer-takes-effect)). The list is attached to the section's `messages`, so it lasts exactly as long as the section, and compactions never detach it.
 
-A section that offers no tools or Packs, defines no local tools, and never calls `tools.allow_tasks` sends its rounds with no tool list at all, so `models.loop` advertises no tools to the model, and a round with no tools completes normally.
+A section that offers no tools or Packs, defines no local tools, and never calls `tools.allow_tasks` sends its rounds with no tool list at all, so `models.loop` advertises no tools to the model, and a round with no tools completes normally. A first loop round with nothing offered still renders the section's tool list, an empty one, so an offer after that round raises.
 
 Each catalog tool in the scope reaches the model under its wire name, with its catalog description and parameter schema copied unchanged, and the tool keeps its tool id as its identity.
 
@@ -395,10 +393,9 @@ models:
 ```lua
 models.use('writer')
 tools.allow_tasks({ '## Child' })
-local msgs = messages.new()
-msgs:user('go')
-models.loop(msgs)
-return msgs[#msgs].content
+messages:user('go')
+models.loop()
+return messages[#messages].content
 ```
 
 ## Child
@@ -451,10 +448,9 @@ A section that never calls `tools.allow_tasks` advertises no task built-ins to t
 
 ````lua
 models.use('writer')
-local msgs = messages.new()
-msgs:user('go')
-local ok, err = pcall(models.loop, msgs)
-return err.kind .. '|' .. err.name .. '|' .. #msgs
+messages:user('go')
+local ok, err = pcall(models.loop)
+return err.kind .. '|' .. err.name .. '|' .. #messages
 ````
 
 When the model answers `go` with a `task` call targeting `## Child`, the block returns this, and the list still holds only its one `user` record:
@@ -607,7 +603,7 @@ Tool objects are frozen: cannot assign field "description"
 
 The general form is `Tool objects are frozen: cannot assign field "{key}"`.
 
-Errors from `tools.get`, `tools.offer`, `tools.offer_local`, and Tool object assignment are Lua errors that `pcall` catches with `ok == false` (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)), and `tostring(err)` renders the message. After `local ok, err = pcall(tools.get, 42)`, `ok` is `false` and `tostring(err)` contains `tools.get takes a tool id, got integer`.
+Errors from `tools.get`, `tools.offer`, `tools.offer_local`, and Tool object assignment are Lua errors that `pcall` catches with `ok == false` (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)), and `tostring(err)` renders the message. That includes the refusal of an offer made after the section's first loop round rendered its tool list (see [When an offer takes effect](#when-an-offer-takes-effect)). After `local ok, err = pcall(tools.get, 42)`, `ok` is `false` and `tostring(err)` contains `tools.get takes a tool id, got integer`.
 
 ### One object per tool
 
@@ -723,10 +719,9 @@ models:
 models.use('writer')
 local web = packs.get('web')
 if web then tools.offer(web.tools) end
-local msgs = messages.new()
-msgs:user('Find the latest Lua release.')
-models.loop(msgs)
-return msgs[#msgs].content
+messages:user('Find the latest Lua release.')
+models.loop()
+return messages[#messages].content
 ```
 ````
 
@@ -790,7 +785,7 @@ ready
 
 ## Offering tools with `tools.offer` and `packs.offer`
 
-After this section you can put one tool, or every tool of a Pack, in front of the model before a `models.loop`.
+After this section you can put one tool, or every tool of a Pack, in front of the model before a section's first `models.loop`.
 
 ````markdown
 ---
@@ -809,14 +804,13 @@ models:
 ```lua
 models.use('writer')
 tools.offer('web/search')
-local msgs = messages.new()
-msgs:user('Find the latest Lua release and name it.')
-models.loop(msgs)
-return msgs[#msgs].content
+messages:user('Find the latest Lua release and name it.')
+models.loop()
+return messages[#messages].content
 ```
 ````
 
-The run result is the model's final reply. To offer a tool is to put it in the current section's [tool scope](#tool-scope-and-the-task-built-ins), so the model can call it during `models.loop`. `tools.offer('web/search')` adds the `web` Pack's `search` tool to the scope of `## Ask`, so every model round of the loop that follows advertises the tool under its wire name `web_search`, and each call the model makes to `web_search` goes to `web/search`.
+The run result is the model's final reply. To offer a tool is to put it in the current section's [tool scope](#tool-scope-and-the-task-built-ins) before the section's first loop round, so the model can call it during `models.loop`. `tools.offer('web/search')` adds the `web` Pack's `search` tool to the scope of `## Ask`, so every model round of the loop that follows advertises the tool under its wire name `web_search`, and each call the model makes to `web_search` goes to `web/search`.
 
 Offering a tool only makes it available to the model and never calls it. If the model answers without asking for a search, the tool is never called, and a section that offers a tool and never calls it runs normally. Your own Lua needs no offer to call a tool, as [Calling tools from Lua and counting calls](#calling-tools-from-lua-and-counting-calls) shows, because offering controls only what the model sees.
 
@@ -824,7 +818,7 @@ Offering a tool only makes it available to the model and never calls it. If the 
 
 ### Nothing is offered until you offer it
 
-A catalog tool stays out of the model's view until the section offers it, even when the prompt declares its Pack under `uses:`. Declaring `web` in `offer-search` makes `web/fetch` callable from Lua as well, but `## Ask` offers only `web/search`, so its rounds never advertise `web_fetch`. One `tools.offer` call leaves the model with a tool list of exactly that one tool, with no task built-ins added by default (see [Tool scope and the task built-ins](#tool-scope-and-the-task-built-ins)).
+A catalog tool stays out of the model's view until the section offers it, even when the prompt declares its Pack under `uses:`. Declaring `web` in `offer-search` makes `web/fetch` callable from Lua as well, but `## Ask` offers only `web/search`, so its rounds never advertise `web_fetch`. One `tools.offer` call before the first loop round leaves the model with a rendered tool list of exactly that one tool, with no task built-ins added by default (see [Tool scope and the task built-ins](#tool-scope-and-the-task-built-ins)).
 
 A model round in a section entry that offers nothing advertises no tools, even when the run has tools the section could offer. In a run with no catalog tools, a section that offers nothing has an empty tool scope, and with no tools in scope the loop sends its rounds with no tools at all.
 
@@ -835,10 +829,9 @@ A model round in a section entry that offers nothing advertises no tools, even w
 ````lua
 models.use('writer')
 packs.offer('web')
-local msgs = messages.new()
-msgs:user('Find the latest Lua release and quote its announcement.')
-models.loop(msgs)
-return msgs[#msgs].content
+messages:user('Find the latest Lua release and quote its announcement.')
+models.loop()
+return messages[#messages].content
 ````
 
 Every round of this loop advertises both `web_fetch` and `web_search`. `packs.offer` takes its tools from the run's offering, the full set of catalog tools a section can offer from, and matches them by the Pack part of each tool id, so `packs.offer('web')` brings in every tool of the offering whose id starts with `web/`. In the same way, `packs.offer('user-input')` offers the model the ask tool.
@@ -851,7 +844,7 @@ Every round of this loop advertises both `web_fetch` and `web_search`. `packs.of
 
 The array form reads only the table's sequence part, so keyed entries are ignored, and an empty array offers nothing and raises no error. `packs.offer` returns no value.
 
-Each Pack enters a section's scope once, by Pack id, in first-offer order, so offering the same Pack again changes nothing and the scope keeps its first-offer order. Several section entries in one run can each offer the same Pack without error. `packs.offer` also accepts a usable Pack that has no tools, but offering it adds nothing to the model's tool list.
+Each Pack enters a section's scope once, by Pack id, in first-offer order, so offering the same Pack again before the first loop round changes nothing and the scope keeps its first-offer order. After the section's first loop round renders its tool list, offering it again raises, even though the offer is identical (see [When an offer takes effect](#when-an-offer-takes-effect)). Several section entries in one run can each offer the same Pack without error. `packs.offer` also accepts a usable Pack that has no tools, but offering it adds nothing to the model's tool list.
 
 `packs.offer` scopes a Pack as a whole, by its Pack id. That is the difference from `tools.offer(packs.get('web').tools)`, which adds the Pack's tools one by one to the list that `tools.offer` builds. [Repeated offers and the order the model sees](#repeated-offers-and-the-order-the-model-sees) shows where each kind of offer lands in the model's tool list.
 
@@ -892,9 +885,9 @@ tools.offer(tools.extras())
 
 ### Repeated offers and the order the model sees
 
-Successive offers in one section add to the same scope rather than replacing it, and each call appends its new tools after the ones already in scope. A tool already in scope is not added again: each offered tool enters the scope once, under its wire name, at the place of its first offer. That holds whether the tool is offered by repeated `tools.offer` calls or both directly and through its Pack with `packs.offer`, so a repeat offer neither duplicates the tool nor moves it.
+Successive offers in one section before its first loop round add to the same scope rather than replacing it, and each call appends its new tools after the ones already in scope. A tool already in scope is not added again: each offered tool enters the scope once, under its wire name, at the place of its first offer. That holds whether the tool is offered by repeated `tools.offer` calls or both directly and through its Pack with `packs.offer`, so a repeat offer before the render neither duplicates the tool nor moves it. After the render, every offer raises, a repeat of an earlier offer included.
 
-The tool list the model receives in a section is built in this order:
+The rendered tool list the model receives in a section is built in this order:
 
 1. the tools that `tools.offer` put in scope, listed by wire name in the order each was first offered
 2. the tools of each Pack passed to `packs.offer`, with the Packs in first-offer order and each Pack's tools in tool id order
@@ -907,10 +900,9 @@ models.use('writer')
 packs.offer('web')
 tools.offer('web/search')
 tools.offer({ 'web/search' })
-local msgs = messages.new()
-msgs:user('Find the latest Lua release and quote its announcement.')
-models.loop(msgs)
-return msgs[#msgs].content
+messages:user('Find the latest Lua release and quote its announcement.')
+models.loop()
+return messages[#messages].content
 ````
 
 Each round advertises `web_search` first and then `web_fetch`. The `tools.offer` tools come first even though `packs.offer` ran earlier, the second `tools.offer` adds nothing because `web/search` is already in scope, and the `web` Pack then contributes its tools in id order, `web/fetch` and `web/search`, of which only `web_fetch` is new.
@@ -921,14 +913,24 @@ Offered tools reach the model in the order the prompt offers them, not the order
 
 An offer lasts for the rest of the section. A tool offered in one block stays in the section's scope through every later block, and an offer made inside a function that a later block calls counts the same as one made at top level. A loop in a later block of the same section advertises the tool and sends the model's calls to it.
 
-The section's effective tool set is rebuilt at each model operation and read when each round is sent, so every `tools.offer`, `packs.offer`, and `tools.offer_local` call made since the last model operation, including calls in an earlier block, shapes the next model round. Each round offers the model the section's scope as it stands at the moment that round is sent, together with the local tools.
+The first loop round in the section that builds its tools renders the section's tool list, the rendered tool list: the tools `tools.offer` and `packs.offer` put in scope and the section's local tools, as they stand at that moment, including offers made in earlier blocks. The render happens before that round's message list is checked and before the context precheck (see [The context precheck](11-conversations.md#the-context-precheck)), so a first round the precheck refuses still fixes the list. A round refused before the build renders nothing, so offers still work after it: a round over an empty `messages`, a round with no model to run on, and a round whose tool build fails.
 
-So the tools you offer before a `models.loop` are already advertised in its first round, and they stay advertised on every round of that loop, including the round after the model's tool call. Each `models.loop` call advertises the tools offered at the moment it runs, so an offer between two loops reaches only the later loop, and one section can run loops with different tool sets:
+Every later round in the section sends the same tool schemas, whether it belongs to the same loop or a later one, and that includes the retry after a compaction and rounds on another model. The scope gate checks the model's calls against the same names, and the `TOOL_SCOPE_VALIDATION_*` events fire once, at the render (see [The tool scope check and section names](#the-tool-scope-check-and-section-names)). The list is attached to the section's `messages`, so it lasts exactly as long as the section, and compactions, restores, and `compactors.clear` never detach it. `models.infer` sends no tools at all.
+
+After the render, `tools.offer`, `packs.offer`, and `tools.offer_local` raise, even for an offer identical to an earlier one. The message starts with the name of the function you called:
+
+````text
+tools.offer: the section's tool list is fixed at its first models.loop round; make every offer before the first loop, or offer in another section
+````
+
+`packs.offer:` and `tools.offer_local:` start the same text with their own names. The refusal is checked before the arguments, it is a `lua`-kind error that `pcall` catches, and it leaves the rendered tool list as it was. A local tool's handler that runs inside `models.loop` cannot offer either, because the round that called it already rendered the list.
+
+So the tools you offer before the first `models.loop` are advertised in its first round, and they stay advertised on every round of every loop in the section, including the round after the model's tool call. To run loops with different tool sets, put each loop in its own section:
 
 ````markdown
 ---
 name: two-loops
-description: Runs two loops with different tool sets in one section.
+description: Runs two loops with different tool sets in two sections.
 runvil: 0
 uses: [web]
 models:
@@ -937,22 +939,27 @@ models:
 
 # Two loops
 
-## Ask
+## Recall
 
 ```lua
 models.use('writer')
-local first = messages.new()
-first:user('Say which Lua version you know best.')
-models.loop(first)
+messages:user('Say which Lua version you know best.')
+models.loop()
+var.known = messages[#messages].content
+```
+
+## Search
+
+```lua
+models.use('writer')
 tools.offer('web/search')
-local second = messages.new()
-second:user('Now search for the latest Lua release and name it.')
-models.loop(second)
-return second[#second].content
+messages:user('You said: ' .. var.known .. ' Now search for the latest Lua release and name it.')
+models.loop()
+return messages[#messages].content
 ```
 ````
 
-The first loop's rounds advertise no tools, and the second loop's rounds advertise `web_search`. A list of Tool objects works the same way: after `tools.offer(list)`, each round of the next `models.loop` advertises exactly those tools under their wire names.
+`## Recall` offers nothing, so its first round renders an empty tool list and its rounds advertise no tools. `## Search` is a new section entry with its own scope and its own empty `messages`, so its rounds advertise `web_search`, and the first answer reaches it through `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)). A list of Tool objects works the same way: after `tools.offer(list)` before the first loop round, each round of the section advertises exactly those tools under their wire names.
 
 ### Which section entries an offer reaches
 
@@ -984,9 +991,8 @@ models:
 models.use('writer')
 tools.offer('web/search')
 require '## offers'
-local msgs = messages.new()
-msgs:user('Find the latest Lua release.')
-models.loop(msgs)
+messages:user('Find the latest Lua release.')
+models.loop()
 ```
 
 ## Check
@@ -994,10 +1000,9 @@ models.loop(msgs)
 ```lua
 models.use('writer')
 require '## offers'
-local msgs = messages.new()
-msgs:user('Fetch the Lua home page and quote its first line.')
-models.loop(msgs)
-return msgs[#msgs].content
+messages:user('Fetch the Lua home page and quote its first line.')
+models.loop()
+return messages[#messages].content
 ```
 
 ## offers
@@ -1011,7 +1016,13 @@ packs.offer('web')
 
 ### Errors from `tools.offer`
 
-`tools.offer` checks each entry at the moment it is called. Every entry must name a catalog tool that the run offers, by its canonical tool id or by its Tool object, and an entry that does not raises a Lua error that names the entry:
+`tools.offer` first checks that the section's tool list is not yet rendered. Called after the section's first loop round rendered it, `tools.offer` raises this before it looks at its arguments, even for a tool already offered:
+
+````text
+tools.offer: the section's tool list is fixed at its first models.loop round; make every offer before the first loop, or offer in another section
+````
+
+Before the render, `tools.offer` checks each entry at the moment it is called. Every entry must name a catalog tool that the run offers, by its canonical tool id or by its Tool object, and an entry that does not raises a Lua error that names the entry:
 
 ````text
 tools.offer: "<name>" is not a catalog tool in this run
@@ -1027,7 +1038,7 @@ This one error covers every entry that is not a catalog tool in the run:
 
 A catalog tool that the run's offering cannot hold is left out of the offering without stopping the run, and the remaining tools are still offered. That happens to a catalog tool whose wire name is a task built-in name, to one whose parameters are not a JSON object, and to one whose wire name another catalog tool already holds. `tools.offer` refuses a left-out id with the same not-a-catalog-tool error.
 
-Because the check runs when `tools.offer` is called, an unknown id raises on that line while the section's Lua runs, before the section's tool scope closes, and the tool never reaches any model round. A failed `tools.offer` in a section's prologue, the Lua before its prose, stops the run before the section's prose reaches a model. The error reads the same wherever in the prompt's Lua the offer runs, and left uncaught it fails the run with run error kind `Lua` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)).
+Because the check runs when `tools.offer` is called, an unknown id raises on that line while the section's Lua runs, before the first loop round renders the section's tool list, and the tool never reaches any model round. A failed `tools.offer` in a section's prologue, the Lua before its prose, stops the run before the section's prose reaches a model. The error reads the same wherever in the prompt's Lua the offer runs, and left uncaught it fails the run with run error kind `Lua` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)).
 
 You can catch the error with `pcall`. This block offers a local tool's alias next to a real tool id. Put it in the `## Ask` section of `offer-search` in place of the first one:
 
@@ -1043,7 +1054,7 @@ lua|tools.offer: "pick" is not a catalog tool in this run
 
 A failing `tools.offer` caught by `pcall` yields an error value of kind `lua`, not a plain string, and `tostring` of it gives the error message (see [Error values](05-lua-environment.md#error-values)). Errors from `tools.offer`, `tools.offer_local`, `tools.allow_tasks`, and `tools.calls` are all raised as Lua runtime errors inside the call, so they surface like any other Lua error and `pcall` catches them (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)).
 
-Every entry of one `tools.offer` call is checked before any is recorded, so a call that refuses any entry offers nothing, the valid entries in the same call included, and leaves the section's scope unchanged. In the block above, `web/search` is not offered either, because an array offer is all or nothing. A refused call leaves the offers the section already made in place, and a section that catches the failure with `pcall` is free to keep offering, so a later valid offer still records.
+Every entry of one `tools.offer` call is checked before any is recorded, so a call that refuses any entry offers nothing, the valid entries in the same call included, and leaves the section's scope unchanged. In the block above, `web/search` is not offered either, because an array offer is all or nothing. A refused call leaves the offers the section already made in place, and a section that catches the failure with `pcall` is free to keep offering before the first loop round, so a later valid offer still records.
 
 `tools.offer` also checks the shape of its arguments. Every shape error begins with the name of the function you called, as in `tools.offer takes`:
 
@@ -1052,11 +1063,17 @@ Every entry of one `tools.offer` call is checked before any is recorded, so a ca
 - An array nested inside the array gets that error ending `got table`, because each element must itself be a string or a Tool object.
 - A Pack object gets that error ending `got userdata`, because `tools.offer` takes only tool ids and Tool objects. To offer a Pack's tools, pass its `tools` array or call `packs.offer`.
 
-A shape error refuses the whole call too, so a `tools.offer` refused for an extra argument records nothing, and a later valid offer of the same tool still lands.
+A shape error refuses the whole call too, so a `tools.offer` refused for an extra argument records nothing, and a later valid offer of the same tool before the first loop round still lands.
 
 ### Errors from `packs.offer`
 
-`packs.offer` checks every entry of an array before it records any, so a refused call offers nothing, not even the valid Packs listed before the bad entry, and the section's earlier offers stay in place. Its shape errors name the type of the value it received:
+Called after the section's first loop round rendered its tool list, `packs.offer` raises this before it looks at its arguments, even for a Pack already offered:
+
+````text
+packs.offer: the section's tool list is fixed at its first models.loop round; make every offer before the first loop, or offer in another section
+````
+
+Before the render, `packs.offer` checks every entry of an array before it records any, so a refused call offers nothing, not even the valid Packs listed before the bad entry, and the section's earlier offers stay in place. Its shape errors name the type of the value it received:
 
 - More than one argument raises `packs.offer takes one Pack or a list of them, got extra {type}`, naming the type of the first extra argument, so a list is the way to offer several Packs in one call.
 - `nil`, or no argument at all, raises `packs.offer takes a Pack id, a Pack object, or a list of them, got nil`.
@@ -1165,7 +1182,7 @@ Every one of these errors comes back as the call's own answer, so it raises at t
 
 A call your Lua makes with `tools.call` is a script call, and a call the model makes inside `models.loop` is a model tool call (see [Tool rounds and the round cap](11-conversations.md#tool-rounds-and-the-round-cap)). Both reach a catalog tool the same way, as one tool call request whose origin names either the script or the model as the caller. Only the model's tool calls inside `models.loop` have a model call id, and every `tools.call` you write runs as a script call with no call id.
 
-Calling a tool is not offering it. `tools.call` neither offers a tool nor advertises it to the model, so a `models.loop` that runs after script calls but before any `tools.offer` advertises no tools, and a tool the script called but never offered stays unadvertised even after another tool is offered. The other way round, the tool scope limits only what the model is offered and never restricts your own Lua, so a script call reaches any catalog tool in the run, including a declared Pack's tool such as `web/search` that the section never offered. A script `tools.call` that runs before a `models.infer` in the same section leaves the section's tool scope in place for that later round.
+Calling a tool is not offering it. `tools.call` neither offers a tool nor advertises it to the model, so a `models.loop` that runs after script calls but before any `tools.offer` advertises no tools and renders an empty tool list, and a tool the script called but never offered stays unadvertised even after another tool is offered before the first loop round. The other way round, the tool scope limits only what the model is offered and never restricts your own Lua, so a script call reaches any catalog tool in the run, including a declared Pack's tool such as `web/search` that the section never offered. A script `tools.call` that runs before a `models.infer` in the same section leaves the section's tool scope in place for that later round.
 
 A call made from Lua is a script call wherever the code sits. A Pack prelude helper that calls `tools.call`, such as `input.ask`, makes a script call attributed to the section whose code called the helper, and not a model tool call, so it has no model call id (see [Pack preludes](#pack-preludes)).
 
@@ -1206,9 +1223,8 @@ models:
 ```lua
 models.use('writer')
 tools.offer('web/fetch')
-local msgs = messages.new()
-msgs:user('Fetch the Lua home page if you need it, then name the latest release.')
-models.loop(msgs)
+messages:user('Fetch the Lua home page if you need it, then name the latest release.')
+models.loop()
 local pages = tools.calls and tools.calls['web/fetch'] or 0
 return 'pages fetched: ' .. pages
 ```
@@ -1221,7 +1237,7 @@ The first tool call in a section, whether a script call or a model tool call ins
 After that, `tools.calls` has a key for each tool offered in the section and each catalog tool the script dispatched with `tools.call`, and each key reads its live count:
 
 - A tool that had no entry when the counts were set up gets one on its first dispatch, starting at 0 and then counting that dispatch.
-- Each tool call picks up the section's current scope, so a tool offered after the section's latest tool call has no count until the section's next tool call.
+- Each tool call picks up the section's current scope, so a tool offered before the first loop round but after the section's latest tool call has no count until the section's next tool call.
 - A local tool's alias gets a count only with its own first call, because the seeding covers only the catalog tools offered with `tools.offer` and `packs.offer`.
 - A name that was never seeded and never dispatched has no entry at all, rather than a 0 count.
 
@@ -1421,10 +1437,9 @@ models.use('writer')
 tools.offer_local('grab', 'Grab a value', { value = 'string' }, function(args)
   return 'got ' .. args.value
 end)
-local msgs = messages.new()
-msgs:user('Use the grab tool on the value b, then repeat what it said.')
-models.loop(msgs)
-return msgs[#msgs].content
+messages:user('Use the grab tool on the value b, then repeat what it said.')
+models.loop()
+return messages[#messages].content
 ```
 ````
 
@@ -1432,7 +1447,7 @@ A local tool is a tool the prompt defines itself, with a Lua handler that runs i
 
 Here the first model request lists one tool named `grab` with the description `Grab a value`. When the model calls `grab` with the arguments `{"value":"b"}`, the handler receives them as the Lua table `args` and returns the tool result, so the model reads `got b` as the tool's answer on its next round. The run result is the model's final reply.
 
-A local tool is in the section's scope as soon as `tools.offer_local` defines it, with no `tools.offer` call, and it needs no `uses:` entry in the frontmatter. `models.loop` offers every local tool under its alias, with your description and the parameter schema built from `params`, and every round of the conversation advertises the tools the section offered plus every local tool, the local tools last (see [Repeated offers and the order the model sees](#repeated-offers-and-the-order-the-model-sees)). The model calls a local tool by the alias given as the first argument to `tools.offer_local`, and that alias appears as the tool call's `name`, so the message list shows a tool call named `grab`.
+A local tool defined before the first loop round is in the section's scope as soon as `tools.offer_local` defines it, with no `tools.offer` call, and it needs no `uses:` entry in the frontmatter. The section's first loop round renders every local tool into the rendered tool list under its alias, with your description and the parameter schema built from `params`, and every round of the section advertises the tools the section offered plus every local tool, the local tools last (see [Repeated offers and the order the model sees](#repeated-offers-and-the-order-the-model-sees)). After that round, `tools.offer_local` raises (see [When an offer takes effect](#when-an-offer-takes-effect)). The model calls a local tool by the alias given as the first argument to `tools.offer_local`, and that alias appears as the tool call's `name`, so the message list shows a tool call named `grab`.
 
 A local tool call runs entirely in the prompt's Lua and never reaches the Harness as tool work, so calling a local tool sends out no request of its own. [How local tool handlers run](#how-local-tool-handlers-run) covers what the handler can do and what its return value becomes.
 
@@ -1512,9 +1527,8 @@ tools.offer_local('decide', 'Record the verdict', { choice = 'string' }, functio
   var.verdict = args.choice
   return 'recorded'
 end)
-local msgs = messages.new()
-msgs:user('Choose use_mcp or use_web and record your choice with the decide tool.')
-models.loop(msgs)
+messages:user('Choose use_mcp or use_web and record your choice with the decide tool.')
+models.loop()
 ```
 
 ## Result
@@ -1553,7 +1567,13 @@ The model sees one tool under the name `web_search`, with the local description 
 
 ### Errors from `tools.offer_local`
 
-`tools.offer_local` takes four arguments in order: the alias and the description as strings, `params` as a table, and `handler` as a function. A missing argument, a `params` that is not a table, or a `handler` that is not a function raises a Lua argument error before the tool is defined.
+Called after the section's first loop round rendered its tool list, `tools.offer_local` raises this before it checks any argument:
+
+````text
+tools.offer_local: the section's tool list is fixed at its first models.loop round; make every offer before the first loop, or offer in another section
+````
+
+Before the render, `tools.offer_local` takes four arguments in order: the alias and the description as strings, `params` as a table, and `handler` as a function. A missing argument, a `params` that is not a table, or a `handler` that is not a function raises a Lua argument error before the tool is defined.
 
 The params table becomes the local tool's parameter schema, and a params table that fails the schema check raises an error before the tool is defined:
 
@@ -1614,10 +1634,9 @@ models.use('writer')
 tools.offer_local('grab', 'Grab a value', { value = 'string' }, function(args)
   return 'grabbed ' .. args.value
 end)
-local msgs = messages.new()
-msgs:user('Grab x.')
-models.loop(msgs)
-return msgs[3].content .. '|' .. msgs[3].tool_call_id
+messages:user('Grab x.')
+models.loop()
+return messages[3].content .. '|' .. messages[3].tool_call_id
 ```
 ````
 
@@ -1627,7 +1646,7 @@ When the model calls `grab` as `call_1` with the arguments `{"value":"x"}` and t
 grabbed x|call_1
 ````
 
-[`models.loop`](11-conversations.md#starting-a-conversation) runs the handler itself when the model calls a local tool, so you never dispatch the call by hand. The handler receives the model's JSON arguments as `args`, and the string it returns becomes the content of the `tool` record that answers the call. That record follows the assistant record holding the call and goes back to the model in the next request, and it correlates with its call through `tool_call_id`, the same as a bound tool's result does, so `msgs[3].tool_call_id` is `call_1`.
+[`models.loop`](11-conversations.md#starting-a-conversation) runs the handler itself when the model calls a local tool, so you never dispatch the call by hand. The handler receives the model's JSON arguments as `args`, and the string it returns becomes the content of the `tool` record that answers the call. That record follows the assistant record holding the call and goes back to the model in the next request, and it correlates with its call through `tool_call_id`, the same as a bound tool's result does, so `messages[3].tool_call_id` is `call_1`.
 
 ### The handler's arguments table
 
@@ -1696,6 +1715,8 @@ The results are strings, so a block can join several tool results with `..` into
 
 A handler can also run a model round of its own. A model-called handler that does `return 'inferred ' .. models.infer('inner prompt')` runs a nested [`models.infer`](10-models.md#running-a-round-with-modelsinfer) round, and the loop goes on with the handler's text as the call's result. A note-taking handler can append to the store with `store.append('notes.md', args.text .. '\n')`, and a handler can call `input.ask` (see [Asking the operator](05-lua-environment.md#asking-the-operator)) or [`call`](08-jump-and-call.md#calling-a-section) a section the same way.
 
+A handler that runs inside `models.loop` cannot offer: `tools.offer`, `packs.offer`, and `tools.offer_local` raise there, because the round that called the handler already rendered the section's tool list (see [When an offer takes effect](#when-an-offer-takes-effect)). It cannot start a loop or a compaction either, so `models.loop`, `handle:loop`, and `models.compact` raise inside it (see [Argument errors](11-conversations.md#argument-errors)). `models.infer` and `tools.call` stay allowed, so a handler asks a side question with `models.infer`.
+
 #### A failing bound tool inside a handler
 
 Inside a handler, `tools.call` is a script call, even when the model issued the outer local call. So a bound tool that fails there raises an [error value](05-lua-environment.md#error-values) of kind `tool` at the handler's `tools.call`, instead of becoming text for the model. The handler can catch it with [`pcall`](05-lua-environment.md#raising-and-catching-errors) and read `err.kind`, here around a call to `web/fetch` with no `url`, which the fetch tool refuses:
@@ -1730,15 +1751,14 @@ models:
 models.use('writer')
 local calls = {}
 local seen = {}
-local msgs = messages.new()
-msgs:user('Grab a, then b.')
+messages:user('Grab a, then b.')
 tools.offer_local('grab', 'Grab a value', { value = 'string' }, function(args)
   calls[#calls + 1] = args.value
-  seen[#seen + 1] = #msgs
+  seen[#seen + 1] = #messages
   return 'grabbed ' .. args.value
 end)
-models.loop(msgs)
-return table.concat(calls, ',') .. '|' .. table.concat(seen, ',') .. '|' .. #msgs
+models.loop()
+return table.concat(calls, ',') .. '|' .. table.concat(seen, ',') .. '|' .. #messages
 ```
 ````
 
@@ -1748,7 +1768,7 @@ When the model's one reply calls `grab` as `c1` with `{"value":"a"}` and as `c2`
 a,b|1,1|5
 ````
 
-`models.loop` runs every handler in the reply, in the order the model issued the calls, so `calls` holds `a,b`. A handler the model calls runs before that round's records are appended. A handler that reads the message list sees it as it stood before the round began, with no assistant `tool_calls` record and no `tool` record from that round yet, so both handlers saw `#msgs` as `1`. After the round, the list holds 5 records: the user record, one assistant record whose `tool_calls` are `c1` and `c2`, the results `grabbed a` and `grabbed b` in call order, and the final text. Each local result goes back to the model as its own `tool` message in the next request, so two calls produce two `tool` messages.
+`models.loop` runs every handler in the reply, in the order the model issued the calls, so `calls` holds `a,b`. A handler the model calls runs before that round's records are appended. A handler that reads the message list sees it as it stood before the round began, with no assistant `tool_calls` record and no `tool` record from that round yet, so both handlers saw `#messages` as `1`. After the round, the list holds 5 records: the user record, one assistant record whose `tool_calls` are `c1` and `c2`, the results `grabbed a` and `grabbed b` in call order, and the final text. Each local result goes back to the model as its own `tool` message in the next request, so two calls produce two `tool` messages.
 
 State can also be a counter. A `save_note` handler can raise `local saved = 0` by one on each call and end with `return saved .. ' notes saved'`, so the model reads a running count after every note.
 
@@ -1786,10 +1806,9 @@ tools.offer_local('number', 'Returns a number', {}, function() return 42 end)
 tools.offer_local('pair', 'Returns two values', {}, function()
   return 'first', 'second'
 end)
-local msgs = messages.new()
-msgs:user('Call all three tools.')
-models.loop(msgs)
-return '[' .. msgs[3].content .. ']|' .. msgs[4].content .. '|' .. msgs[5].content
+messages:user('Call all three tools.')
+models.loop()
+return '[' .. messages[3].content .. ']|' .. messages[4].content .. '|' .. messages[5].content
 ```
 ````
 
@@ -1876,11 +1895,10 @@ tools.offer_local('grab', 'Grab a value', { value = 'string' }, function(args)
   if count == 2 then error(own) end
   return 'grabbed ' .. args.value
 end)
-local msgs = messages.new()
-msgs:user('Grab a, then b.')
-local ok, err = pcall(models.loop, msgs)
+messages:user('Grab a, then b.')
+local ok, err = pcall(models.loop)
 return tostring(ok) .. '|' .. tostring(err == own) .. '|' .. count
-  .. '|' .. #msgs .. '|' .. msgs[1].role
+  .. '|' .. #messages .. '|' .. messages[1].role
 ```
 ````
 
@@ -1890,7 +1908,7 @@ When the model's one reply calls `grab` as `c1` with `{"value":"a"}` and as `c2`
 false|true|2|1|user
 ````
 
-The first handler returned `grabbed a`, and the second raised `own`. `pcall(models.loop, msgs)` returned `false` with that same table, so `err == own` holds. None of the round's records were appended: the list stays as it stood before the round, with `#msgs` at `1` and `msgs[1].role` as `user`, and no further round runs.
+The first handler returned `grabbed a`, and the second raised `own`. `pcall(models.loop)` returned `false` with that same table, so `err == own` holds. None of the round's records were appended: the list stays as it stood before the round, with `#messages` at `1` and `messages[1].role` as `user`, and no further round runs.
 
 #### An uncaught handler error
 
@@ -1994,10 +2012,9 @@ models:
 ```lua
 models.use('writer')
 tools.offer('web/search')
-local msgs = messages.new()
-msgs:user('Search for the latest Lua release.')
-models.loop(msgs)
-return msgs[3].role .. '|' .. tostring(tools.calls['web/search'])
+messages:user('Search for the latest Lua release.')
+models.loop()
+return messages[3].role .. '|' .. tostring(tools.calls['web/search'])
 ```
 ````
 
@@ -2032,7 +2049,7 @@ Because the model knows tools only by their wire names, prompt prose that tells 
 
 ### Which tools a round advertises
 
-Each `models.loop` round offers the model the section's current [tool scope](#tool-scope-and-the-task-built-ins), local tools included. The scope is read when the round starts, so every `tools.offer` and `tools.offer_local` call since the last model operation shapes that round's tools. The first round already includes every offered tool, so the model can call one on its first reply, and in the `search-loop` prompt the first round's tool list holds `web_search`. Every later round of the loop advertises the same tools, including the round that follows a tool call.
+Each `models.loop` round offers the model the section's rendered tool list. The section's first loop round that builds its tools renders that list from the section's [tool scope](#tool-scope-and-the-task-built-ins), local tools included, as it stands at that moment, so every `tools.offer`, `packs.offer`, and `tools.offer_local` call made before that round shapes it. The first round already includes every offered tool, so the model can call one on its first reply, and in the `search-loop` prompt the first round's tool list holds `web_search`. Every later round in the section advertises the same tools, whether it is the round that follows a tool call, the retry after a compaction, a round on another model, or a round of a later loop, and the scope gate checks the model's calls against the same names (see [When an offer takes effect](#when-an-offer-takes-effect)).
 
 The tool list puts the bound tools first, in scope order, followed by every local tool in the order you offered them. Each tool enters the scope once, under its wire name, in first-offer order. Local and bound tools mix in one round: a section that offers `web/search` and a local `grab` advertises both together, so the first round's tool list holds 2 tools, and each call goes to its own tool. The local `grab` answers its call with `grabbed x`, while `web/search` answers its call with its search results.
 
@@ -2082,10 +2099,10 @@ Take the `search-loop` prompt. After the model calls `web_search` once and then 
 
 | Record | What it holds |
 |---|---|
-| `msgs[1]` | the user record |
-| `msgs[2]` | the assistant record holding the call, so `msgs[2].tool_calls[1].name` is `web_search` |
-| `msgs[3]` | the `tool` record holding the output, with `msgs[3].tool_call_id` equal to `msgs[2].tool_calls[1].id` |
-| `msgs[4]` | the final assistant reply |
+| `messages[1]` | the user record |
+| `messages[2]` | the assistant record holding the call, so `messages[2].tool_calls[1].name` is `web_search` |
+| `messages[3]` | the `tool` record holding the output, with `messages[3].tool_call_id` equal to `messages[2].tool_calls[1].id` |
+| `messages[4]` | the final assistant reply |
 
 One assistant record holds every call of a reply, and it is followed by one `tool` record per result, linked to its call by `tool_call_id`. All of them are added before the next round. The loop runs each call under the model's own call id, such as `call_7`, and the tool's result answers under that id.
 
@@ -2101,7 +2118,7 @@ Each tool call the model makes inside `models.loop` is dispatched by tool name w
 
 The loop resolves each name in a fixed order. It checks the task built-in names first, then a local tool's name against the section's Lua handlers, and otherwise a wire name against the run's offered tools.
 
-Before any call runs, each tool name the model requests in the round is checked against the names that round advertised. When any name in the round is out of scope, the whole round fails before any of its calls runs, at the first name the round did not advertise. `models.loop` raises an error value of kind `out_of_scope_tool` whose `name` field holds the requested name. In the `search-loop` prompt, a model call to `rogue`, caught with `pcall(models.loop, msgs)`, gives the kind `out_of_scope_tool`, the name `rogue`, and the message:
+Before any call runs, each tool name the model requests in the round is checked against the names that round advertised. When any name in the round is out of scope, the whole round fails before any of its calls runs, at the first name the round did not advertise. `models.loop` raises an error value of kind `out_of_scope_tool` whose `name` field holds the requested name. In the `search-loop` prompt, a model call to `rogue`, caught with `pcall(models.loop)`, gives the kind `out_of_scope_tool`, the name `rogue`, and the message:
 
 ````text
 tool "rogue" is not in this section's scope; in-scope aliases: ["web_search"]
@@ -2115,7 +2132,7 @@ When the model requests tool calls, the loop sends all of the round's unanswered
 
 The catalog calls in a batch are started together instead of one at a time, and they run concurrently, each under its own identity. Both calls of a two-call batch start in the same step, in the order the model listed them, so the call with `one` starts before the call with `two`. The loop then waits for every started call to return before it starts the next model round, even when a later call finishes first.
 
-The model gets one result text per call it made, in the order it made the calls. When the second call of a batch finishes first, the next round still receives the results in call order, `first` then `second`. Once every call has landed, the round is answered with every result text in call order, or with the first failure in call order. The `tool` records also append in the model's call order, so after a four-call batch, `msgs[3]` through `msgs[6]` have the `tool_call_id` values `c1`, `c2`, `c3`, and `c4`.
+The model gets one result text per call it made, in the order it made the calls. When the second call of a batch finishes first, the next round still receives the results in call order, `first` then `second`. Once every call has landed, the round is answered with every result text in call order, or with the first failure in call order. The `tool` records also append in the model's call order, so after a four-call batch, `messages[3]` through `messages[6]` have the `tool_call_id` values `c1`, `c2`, `c3`, and `c4`.
 
 A call that fails to route or to prepare takes its place in the batch as that error and stops the batch.
 
@@ -2145,10 +2162,9 @@ tools.offer('web/search')
 tools.offer_local('grab', 'Grab a value', { value = 'string' }, function(args)
   return 'grabbed ' .. args.value
 end)
-local msgs = messages.new()
-msgs:user('Use every tool.')
-models.loop(msgs)
-return #msgs
+messages:user('Use every tool.')
+models.loop()
+return #messages
 ```
 ````
 
@@ -2164,11 +2180,11 @@ When a batch comes back with only some of its calls answered, the loop sends the
 
 ### When the loop raises instead of answering
 
-A local tool call that runs alone runs your Lua handler with the call's arguments, and `models.loop` answers it itself, so after `models.loop(msgs)` in the `grab-loop` prompt the list has `msgs[3].role == 'tool'`. A few outcomes end the `models.loop` call instead of answering the model:
+A local tool call that runs alone runs your Lua handler with the call's arguments, and `models.loop` answers it itself, so after `models.loop()` in the `grab-loop` prompt the list has `messages[3].role == 'tool'`. A few outcomes end the `models.loop` call instead of answering the model:
 
 - When the run raises an error instead of answering a tool call or a batch, such as a call that failed to route, the loop raises that error unchanged, and the `models.loop` call ends.
 - When a local handler's return value cannot be reported as tool text, `models.loop` raises the error from that report.
-- When a local tool's handler raises, the run reports a failed tool call, the loop raises the handler's own value unchanged, and none of that round's records are added to the list. In the `grab-raise-loop` prompt from [When a handler raises](#when-a-handler-raises), the second `grab` handler raises `own`, so `pcall(models.loop, msgs)` returns `false` with the raised value `own`, `#msgs` stays 1 with only the user record, and a `tool_call_failed` event is recorded.
+- When a local tool's handler raises, the run reports a failed tool call, the loop raises the handler's own value unchanged, and none of that round's records are added to the list. In the `grab-raise-loop` prompt from [When a handler raises](#when-a-handler-raises), the second `grab` handler raises `own`, so `pcall(models.loop)` returns `false` with the raised value `own`, `#messages` stays 1 with only the user record, and a `tool_call_failed` event is recorded.
 - When the run is being cancelled and a local handler raises, `models.loop` raises the handler's error directly, without reporting the call.
 
 ### Events from the model's tool calls
@@ -2181,7 +2197,7 @@ A model-issued call whose bound tool fails still reports a `tool_result` event u
 
 #### The tool scope check and section names
 
-Every `models.loop` round checks its tool scope before the model round is sent. It reports `tool_scope_validation_started`, then `tool_scope_validation_succeeded`, then the round's `model_turn_completed`, and this triple repeats once per round. A tool call refused as out of scope reports a `tool_call_failed` event.
+The section's first loop round that builds its tools checks the tool scope as it renders the section's tool list, before the model round is sent. It reports `tool_scope_validation_started`, then `tool_scope_validation_succeeded`, then the round's `model_turn_completed`. The validation events fire once per section: later rounds send the same rendered tool list and report only their own `model_turn_completed`. A tool call refused as out of scope reports a `tool_call_failed` event.
 
 Every event names the section that reported it in its `section` field, so the tool call and tool result events from a block name the section that made the call, and a failed model-issued tool call reports its `tool_call_failed` event on that section.
 
@@ -2253,10 +2269,9 @@ models:
 ```lua
 models.use('writer')
 tools.offer('web/fetch')
-local msgs = messages.new()
-msgs:user('Fetch the Lua home page.')
-models.loop(msgs)
-return msgs[3].role .. '|' .. tools.calls['web/fetch'] .. '|' .. msgs[#msgs].content
+messages:user('Fetch the Lua home page.')
+models.loop()
+return messages[3].role .. '|' .. tools.calls['web/fetch'] .. '|' .. messages[#messages].content
 ```
 ````
 
@@ -2266,7 +2281,7 @@ When the model calls `web_fetch` once with `{}`, leaving out the `url`, and then
 tool|1|final answer
 ````
 
-`models.loop` returns without raising. The failure message is nonce-wrapped as untrusted text between `<untrusted_input_` and `</untrusted_input_` tags (see the [untrusted envelope](#what-a-tool-returns)), and it becomes that call's result and its `tool` record, so `msgs[3].content` holds `web_fetch: missing url argument` inside those tags. The same holds when the call is one of several in a batch: the call still counts as answered, and the round goes on. The run reports a `tool_call_failed` event followed by a second `model_turn_completed`.
+`models.loop` returns without raising. The failure message is nonce-wrapped as untrusted text between `<untrusted_input_` and `</untrusted_input_` tags (see the [untrusted envelope](#what-a-tool-returns)), and it becomes that call's result and its `tool` record, so `messages[3].content` holds `web_fetch: missing url argument` inside those tags. The same holds when the call is one of several in a batch: the call still counts as answered, and the round goes on. The run reports a `tool_call_failed` event followed by a second `model_turn_completed`.
 
 Nothing in the run retries a failed tool call, so a prompt that wants another attempt makes it itself. A tool that fails inside `models.loop` is attempted once, and the [call count](#calling-tools-from-lua-and-counting-calls) records one call, so `tools.calls['web/fetch']` reads `1`.
 
@@ -2276,7 +2291,7 @@ A model-safe error message is a tool's own short failure text, written so it can
 
 #### Failures that end `models.loop`
 
-Only a bound tool's own failure goes back to the model as a result. A local tool handler's error, a cancellation, or any other failure during the call ends `models.loop` instead. A handler that calls `error('handler exploded')` becomes the run's error, the model never sees it, and no further model round is sent. A handler that raises its own table partway through a batch makes `pcall(models.loop, msgs)` return `false` with that same table, and no round follows the raise (see [When a handler raises](#when-a-handler-raises)).
+Only a bound tool's own failure goes back to the model as a result. A local tool handler's error, a cancellation, or any other failure during the call ends `models.loop` instead. A handler that calls `error('handler exploded')` becomes the run's error, the model never sees it, and no further model round is sent. A handler that raises its own table partway through a batch makes `pcall(models.loop)` return `false` with that same table, and no round follows the raise (see [When a handler raises](#when-a-handler-raises)).
 
 ### A bound tool fails in a script call
 
@@ -2336,7 +2351,7 @@ tool "missing" is not a tool in this run; catalog tools: ["user-input/ask", "web
 
 ### The `out_of_scope_tool` error
 
-`out_of_scope_tool` is the error kind for a model call to a tool name outside the section's advertised scope. Every tool call outside the allowed tool scope surfaces as this kind, and `models.loop` raises it at its call site, so you catch it with `local ok, err = pcall(models.loop, msgs)`:
+`out_of_scope_tool` is the error kind for a model call to a tool name outside the section's advertised scope. Every tool call outside the allowed tool scope surfaces as this kind, and `models.loop` raises it at its call site, so you catch it with `local ok, err = pcall(models.loop)`:
 
 ````markdown
 ---
@@ -2356,13 +2371,12 @@ models.use('writer')
 tools.offer_local('echo', 'Echo a value', { value = 'string' }, function(args)
   return args.value
 end)
-local msgs = messages.new()
-msgs:user('Use your tools.')
-local ok, err = pcall(models.loop, msgs)
+messages:user('Use your tools.')
+local ok, err = pcall(models.loop)
 if not ok and err.kind == 'out_of_scope_tool' then
-  return 'the model asked for ' .. err.name .. ': ' .. tostring(err) .. ' (' .. #msgs .. ')'
+  return 'the model asked for ' .. err.name .. ': ' .. tostring(err) .. ' (' .. #messages .. ')'
 end
-return msgs[#msgs].content
+return messages[#messages].content
 ```
 ````
 
@@ -2376,10 +2390,10 @@ The error is a hard error. It records the requested name, whether that name is t
 
 - The `name` field holds the tool name exactly as the model called it, whether that is `rogue`, `web_search`, `web/search`, or `nonexistent`. It is `task` when the model calls that task built-in in a round that did not advertise it.
 - The message names the requested tool and lists the in-scope tools by their wire names, not their tool ids, each in double quotes, and it ends with that list written as a bracketed list of quoted names, such as `["echo"]`.
-- None of the round's calls run, so the round appends nothing, and `#msgs` is unchanged after `pcall(models.loop, msgs)` fails, which is why the result above ends with `(1)`.
+- None of the round's calls run, so the round appends nothing, and `#messages` is unchanged after `pcall(models.loop)` fails, which is why the result above ends with `(1)`.
 - The round that holds the out-of-scope call is the last model request of the loop, so the model gets no further round to retry with a valid name.
 
-Uncaught, it ends the section and fails the run with run error kind `Tool`, so a section with a bare `models.loop(msgs)` never reaches a later `return 'unreachable'` line.
+Uncaught, it ends the section and fails the run with run error kind `Tool`, so a section with a bare `models.loop()` never reaches a later `return 'unreachable'` line.
 
 #### The not-offered hint
 

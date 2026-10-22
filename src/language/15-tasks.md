@@ -198,7 +198,7 @@ You can spawn the same section more than once. Each spawn runs as its own task, 
 
 ### What a task section returns
 
-A task's target section runs ordinary Lua as the task body. It can call a tool with [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls), and the task stays live while that call is outstanding, so a wait on the task lasts until the call returns and the section finishes. It can [offer](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer) its own tools and run its own model loop, as a block does that runs `tools.offer('web/search')` in a prompt that declares the `web` Pack, builds a message list `msgs` with `messages.new()` and `msgs:user('go')`, and calls `models.loop(msgs)`. It also sees every [Pack prelude](12-tools.md#pack-preludes) global, so in a prompt that declares the `user-input` Pack, a `## Child` task can call `input.ask()` to wait for the operator.
+A task's target section runs ordinary Lua as the task body. It can call a tool with [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls), and the task stays live while that call is outstanding, so a wait on the task lasts until the call returns and the section finishes. It can [offer](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer) its own tools and run its own model loop, as a block does that runs `tools.offer('web/search')` in a prompt that declares the `web` Pack, adds `messages:user('go')` to its own `messages` list, and calls `models.loop()`. It also sees every [Pack prelude](12-tools.md#pack-preludes) global, so in a prompt that declares the `user-input` Pack, a `## Child` task can call `input.ask()` to wait for the operator.
 
 The section hands back its result with an ordinary `return`, such as `return 'child result'`. A task can return the text of `models.infer`: a task section doing `return models.infer('slow please')`, answered with the reply `slow answer`, gives its owner's wait `ok` and the result `slow answer`. A task that runs off its last section without returning gives the empty string as its result, the same as a fanout arm.
 
@@ -2069,10 +2069,9 @@ models:
 ```lua
 models.use('writer')
 tools.allow_tasks({ '## Child' })
-local msgs = messages.new()
-msgs:user('go')
-models.loop(msgs)
-return msgs[#msgs].content
+messages:user('go')
+models.loop()
+return messages[#messages].content
 ```
 
 ## Child
@@ -2086,7 +2085,7 @@ The run result is the model's final reply. `models.loop` runs the conversation (
 
 A model task is a task the model starts. It runs beside the model, and its result reaches the model as a task notice when it ends: a `user` message that starts `Task id=0.0 (## Child) completed: ` and holds the task's result. [`await_tasks` and task notices](#await_tasks-and-task-notices) covers notices in full.
 
-`## Plan` writes no code to handle the model's task calls. Inside `models.loop`, the Engine answers the model's `task`, `task_status`, and `task_cancel` calls itself. Apart from `models.use`, the section holds only `tools.allow_tasks`, `messages.new()`, `msgs:user('go')`, `models.loop(msgs)`, and a `return`, and that is enough for its model's task calls to be answered.
+`## Plan` writes no code to handle the model's task calls. Inside `models.loop`, the Engine answers the model's `task`, `task_status`, and `task_cancel` calls itself. Apart from `models.use`, the section holds only `tools.allow_tasks`, `messages:user('go')`, `models.loop()`, and a `return`, and that is enough for its model's task calls to be answered.
 
 ### The four task built-ins
 
@@ -2137,10 +2136,9 @@ A successful `task` call returns at once with `Task id={id} started`, such as `T
 ````lua
 models.use('writer')
 tools.allow_tasks({ '## Child' })
-local msgs = messages.new()
-msgs:user('go')
-models.loop(msgs)
-return msgs[3].content .. '|' .. msgs[3].tool_call_id .. '|' .. msgs[5].tool_call_id
+messages:user('go')
+models.loop()
+return messages[3].content .. '|' .. messages[3].tool_call_id .. '|' .. messages[5].tool_call_id
 ````
 
 When the model calls `task` with `{"target":"## Child"}` under the call id `call_1` in round 1, calls `task_status` with `{"id":"0.0"}` under the call id `call_2` in round 2, and replies with text in round 3, the block returns:
@@ -2197,10 +2195,9 @@ models:
 ```lua
 models.use('writer')
 tools.allow_tasks({ '## Child' })
-local msgs = messages.new()
-msgs:user('go')
-models.loop(msgs)
-return msgs[#msgs].content
+messages:user('go')
+models.loop()
+return messages[#messages].content
 ```
 
 ## Child
@@ -2227,7 +2224,7 @@ The rules match the calls your Lua makes. `await_tasks` waits on the same kind o
 
 Every task built-in answer is text the model reads: a started task's id, a cancel confirmation, a status line, a wait's drained notices, or a refusal naming what was wrong. Every answer, each `await_tasks` answer included, is the Engine's own text, so it reaches the model as trusted tool output (see [What a tool returns](12-tools.md#what-a-tool-returns)).
 
-While the task built-ins are in scope, a bad call to any of them comes back to the model as the tool result text. `models.loop` raises no error, the model reads the refusal and can try again, and the run continues. After `models.loop(msgs)` returns, you can read each refusal from `msgs`.
+While the task built-ins are in scope, a bad call to any of them comes back to the model as the tool result text. `models.loop` raises no error, the model reads the refusal and can try again, and the run continues. After `models.loop()` returns, you can read each refusal from `messages`.
 
 ### When a `task` call is refused
 
@@ -2263,10 +2260,9 @@ A section that has not run `tools.allow_tasks` offered no task built-ins, so a m
 
 ````lua
 models.use('writer')
-local msgs = messages.new()
-msgs:user('go')
-local ok, err = pcall(models.loop, msgs)
-return err.kind .. '|' .. err.name .. '|' .. #msgs
+messages:user('go')
+local ok, err = pcall(models.loop)
+return err.kind .. '|' .. err.name .. '|' .. #messages
 ````
 
 When the model answers `go` with a `task` call, the block returns:
@@ -2282,9 +2278,8 @@ You adopt the model's tasks by passing `tasks.pending({ origin = 'model' })` str
 ````lua
 models.use('writer')
 tools.allow_tasks({ '## Child' })
-local msgs = messages.new()
-msgs:user('go')
-models.loop(msgs)
+messages:user('go')
+models.loop()
 local adopted = tasks.pending({ origin = 'model' })
 local results = tasks.join(adopted)
 return tostring(results[1].ok) .. '|' .. results[1].result
@@ -2313,10 +2308,9 @@ Put this block in the `## Plan` section of `model-tasks` in place of the first o
 ````lua
 models.use('writer')
 tools.allow_tasks({ '## Child' })
-local msgs = messages.new()
-msgs:user('go')
-models.loop(msgs)
-return msgs[5].content
+messages:user('go')
+models.loop()
+return messages[5].content
 ````
 
 When the model starts `## Child` in round 1 and calls `task_status` with `{"id":"0.0"}` in round 2, the block returns the status line that answered the call:
@@ -2375,9 +2369,8 @@ Put this block in the `## Plan` section of `model-tasks-wait` in place of the fi
 ````lua
 models.use('writer')
 tools.allow_tasks({ '## Child' })
-local msgs = messages.new()
-msgs:user('go')
-models.loop(msgs)
+messages:user('go')
+models.loop()
 assert(#tasks.pending() == 0, 'nothing is live after the cancel')
 return 'ok'
 ````
@@ -2424,11 +2417,10 @@ The model sees only its own tasks. Put this block in the `## Plan` section of `m
 models.use('writer')
 tools.allow_tasks({ '## Child' })
 local mine = tasks.spawn('## Child')
-local msgs = messages.new()
-msgs:user('go')
-models.loop(msgs)
+messages:user('go')
+models.loop()
 tasks.join({ mine })
-return msgs[3].content
+return messages[3].content
 ````
 
 Your `tasks.spawn` call gets task `0.0`. When the model calls `task_status` with `{"id":"0.0"}` in round 1, the author's task is invisible to it, and the block returns:
@@ -2446,10 +2438,9 @@ Put this block in the `## Plan` section of `model-tasks` in place of the first o
 ````lua
 models.use('writer')
 tools.allow_tasks({ '## Child' })
-local msgs = messages.new()
-msgs:user('go')
-models.loop(msgs)
-return msgs[5].content
+messages:user('go')
+models.loop()
+return messages[5].content
 ````
 
 When the model starts `## Child` in round 1 and calls `await_tasks` with `{}` in round 2, the block returns the task notice that answered the wait, where `{nonce}` stands for the run's nonce:
@@ -2487,26 +2478,6 @@ When a model task finishes, its notice carries the task's reply text on success 
 
 When the owner ends while its model task is still live, the task is abandoned (see [Ownership, leaked tasks, and abandonment](#ownership-leaked-tasks-and-abandonment)), and the notice reads `Task id={task} (## {target}) was abandoned: {why}`, giving the abandon reason's phrase (see [Abandon reasons](#abandon-reasons)). When the owner section returns while a model task is still running, exactly one notice reads `Task id=0.0 (## Child) was abandoned: the section ended`. A task abandoned at the walk's end gets the same notice text as one abandoned by an owner return, and the notice reports under the walk's last section. An abandoned model task still gets its notice queued and recorded in the run log, though no model ever reads it, because its owner has already ended.
 
-You can cancel a live model task with `tasks.cancel`, such as `tasks.cancel(tasks.pending({ origin = 'model' })[1])`, which queues a cancellation notice for the model at once. The model gets exactly `Task id=0.0 (## Child) was canceled: the author cancelled it`, with the spellings `was canceled` and `cancelled it` exactly as shown, and the notice arrives as a `user` message in whichever list the owner section's next `models.loop` round runs over. Put this block in the `## Plan` section of `model-tasks-wait` in place of the first one:
-
-````lua
-models.use('writer')
-tools.allow_tasks({ '## Child' })
-local msgs = messages.new()
-msgs:user('go')
-models.loop(msgs)
-tasks.cancel(tasks.pending({ origin = 'model' })[1])
-local fresh = messages.new()
-models.loop(fresh)
-return #fresh .. '|' .. fresh[1].role .. ':' .. fresh[1].content
-````
-
-When the model starts `## Child`, replies while the task waits for the operator, and then answers the notice with text, the block returns:
-
-````text
-2|user:Task id=0.0 (## Child) was canceled: the author cancelled it
-````
-
 A task the model cancels itself with `task_cancel` queues no notice, because the model already read the cancel confirmation `Task id={task} cancelled`.
 
 ### The task result inside a completed notice
@@ -2534,14 +2505,14 @@ When a model task ends, the model receives its notice as one `user` record added
 - A notice joins the first round that gathers notices after its task ends, so a notice queued just after a round was sent misses that round and arrives in the following one.
 - Notices delivered in one round land in the order their tasks ended, not in task id or start order.
 - A round with nothing new appends no notice records.
-- A notice can fill an empty list. `models.loop` over an empty `messages.new()` list raises `messages must not be empty` only when no notice is waiting, and with one waiting the round runs over the notice alone, as the cancel example above shows.
-- A pending notice stays queued through loop calls that `models.loop` refuses because they were not given a real message list, which raise the list error and send no request (see [Loop arguments and errors](11-conversations.md#loop-arguments-and-errors)). It reaches the model only on the next round over a real message list.
+- A notice can fill an empty list. `models.loop` over an empty `messages` raises `messages must not be empty` only when no notice is waiting, and with one waiting the round runs over the notice alone.
+- A pending notice stays queued through loop calls that `models.loop` refuses for a bad argument, which raise before any round and send no request (see [Loop arguments and errors](11-conversations.md#loop-arguments-and-errors)). It reaches the model only on the next round.
 
-Task notices appended to the message list stay there whatever the round's outcome, so you find them afterward as `user` records like any other record in the list. A delivered notice is a `user` record whose content starts with `Task id=`, so this loop logs every notice in `msgs` (see [Logging and lifecycle reports](05-lua-environment.md#logging-and-lifecycle-reports)):
+Task notices appended to the message list stay there whatever the round's outcome, so you find them afterward as `user` records like any other record in the list. A delivered notice is a `user` record whose content starts with `Task id=`, so this loop logs every notice in `messages` (see [Logging and lifecycle reports](05-lua-environment.md#logging-and-lifecycle-reports)):
 
 ````lua
-for i = 1, #msgs do
-  local m = msgs[i]
+for i = 1, #messages do
+  local m = messages[i]
   if m.role == 'user' and string.find(m.content, 'Task id=', 1, true) == 1 then log(m.content) end
 end
 ````
@@ -2566,7 +2537,7 @@ Because each call answers with whichever task finishes next, calling `await_task
 
 A wait answers exactly once, and a task that ends during the wait produces exactly one notice, which the wait reads. Each notice is delivered exactly once, in arrival order, by whichever takes it first, a `models.loop` round or `await_tasks`. A notice that `await_tasks` returned is removed from the section's queue and never delivered again, neither by a later wait nor ahead of a later round, which is why the run above holds the notice only in the wait's `tool` record.
 
-The `await_tasks` answer is the queued notice, delivered as the `tool` record whose `tool_call_id` matches the `await_tasks` call. Its text begins `Task id=`, names the task id and its target heading, says the task completed, and then gives the task's result, as in `Task id=0.1 (## Quick) completed: ` followed by `quick result`. After two `task` calls and one `await_tasks` call, `msgs[7]` is the wait's answer, and `msgs[7].content:match('^Task id=(%S+)')` reads the id of the task that ended.
+The `await_tasks` answer is the queued notice, delivered as the `tool` record whose `tool_call_id` matches the `await_tasks` call. Its text begins `Task id=`, names the task id and its target heading, says the task completed, and then gives the task's result, as in `Task id=0.1 (## Quick) completed: ` followed by `quick result`. After two `task` calls and one `await_tasks` call, `messages[7]` is the wait's answer, and `messages[7].content:match('^Task id=(%S+)')` reads the id of the task that ended.
 
 The notice a model gets from `await_tasks` is byte-identical to the notice delivered ahead of a round, because the result is wrapped once when the task ends rather than per delivery path. `await_tasks` returns its own text as trusted Engine text, while each task result inside a notice stays in the untrusted envelope, exactly as the next round would have received it.
 
@@ -2579,10 +2550,9 @@ A model task whose completion notice reached the model, whether ahead of a round
 ````lua
 models.use('writer')
 tools.allow_tasks({ '## Child' })
-local msgs = messages.new()
-msgs:user('go')
-models.loop(msgs)
-return msgs[5].content
+messages:user('go')
+models.loop()
+return messages[5].content
 ````
 
 When the model starts `## Child` in round 1 and calls `await_tasks` with `{"timeout": 0.1}` in round 2 while the task waits for the operator, the block returns:

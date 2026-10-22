@@ -1137,7 +1137,7 @@ A call input is the string you pass as the second argument to `call`, as in `cal
 
 A [placeholder](07-substitution.md#placeholders-in-prose) `{{ args }}` inside a called chain renders the call input instead of the run's argument string. In a run started with the argument string `run-args`, `call('## Sub', 'chain-args')` makes the chain's model round receive `chain-args` and not `run-args`. A `call` with a call input leaves the caller's own `args` unchanged, so the calling section's `args` still holds its own argument string after the call.
 
-You build a pipeline by passing a string one section produced as the next section's call input, as `## Main` does above with `return call('## Deliver', draft)`. The run's own argument string makes no difference: when `## Refine` ends with `return call('## Deliver', msgs[#msgs].content)`, the run's result is `delivered: refined text`, even though the run itself started with the argument string `quantum`.
+You build a pipeline by passing a string one section produced as the next section's call input, as `## Main` does above with `return call('## Deliver', draft)`. The run's own argument string makes no difference: when `## Refine` ends with `return call('## Deliver', messages[#messages].content)`, the run's result is `delivered: refined text`, even though the run itself started with the argument string `quantum`.
 
 ### Inheriting the caller's arguments
 

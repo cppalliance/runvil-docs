@@ -44,7 +44,7 @@ Prepare never reads the Host's model catalog. It hands every role the Host's one
 
 The `models` global is the table your Lua uses to work with the run's model roles. Every section has it, the H1 section included, and it selects among the run's roles by label. It is reserved as an [Engine global](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals), and you can reach it from the Lua of every section, from the blocks of the H1 body, and from a [library](03-blocks-and-prose.md#sharing-code-with-require).
 
-The table holds five functions. `models.use` and `models.default` select a role, `models.get` returns a model handle, `models.infer` runs one model round, and `models.loop` is taught with conversations:
+The table holds six functions. `models.use` and `models.default` select a role, `models.get` returns a model handle, `models.infer` runs one model round, and `models.loop` and `models.compact` are taught with conversations:
 
 | Function | Where it is taught |
 |---|---|
@@ -53,6 +53,7 @@ The table holds five functions. `models.use` and `models.default` select a role,
 | `models.get` | [Getting handles with `models.get`](#getting-handles-with-modelsget) |
 | `models.infer` | [Running a round with `models.infer`](#running-a-round-with-modelsinfer) |
 | `models.loop` | [Starting a conversation](11-conversations.md#starting-a-conversation) |
+| `models.compact` | [Compacting on demand with `models.compact`](11-conversations.md#compacting-on-demand-with-modelscompact) |
 
 The `models` table is in place with the other Engine globals before any block runs, so any block, its top-level statements included, calls it directly with no `require` and no setup line. Both blocks in `hello` use it that way.
 
@@ -530,7 +531,7 @@ The H1 body makes `writer` the default and ignores the handle that `models.defau
 
 The prompt-wide default is the role that a round naming no model runs on, in every section that has not picked its own role. `models.default(label)` takes the label of a role declared under `models:` and bound at prepare, makes that role the prompt-wide default for the whole run rather than just the section that calls it, and returns that role's model handle, as in `local writer = models.default('writer')`.
 
-Once `models.default` names a role, a bare `models.infer(text)` or `models.loop(msgs)` that passes no model handle runs on that role in every section that has not picked its own role with `models.use`, even when the code ignores the handle that `models.default` returns. Model requests made under the default role use that role's bound model id and its thinking setting, so a default role declared with `keywords: [no-thinking]` sends its requests with thinking turned off.
+Once `models.default` names a role, a bare `models.infer(text)` or `models.loop()` that passes no model handle runs on that role in every section that has not picked its own role with `models.use`, even when the code ignores the handle that `models.default` returns. Model requests made under the default role use that role's bound model id and its thinking setting, so a default role declared with `keywords: [no-thinking]` sends its requests with thinking turned off.
 
 Declaring roles under `models:` sets no default, so a run has no default role until Lua calls `models.default`.
 
@@ -987,7 +988,7 @@ return type(h) .. '|' .. type(h.infer) .. '|' .. type(h.loop)
 userdata|function|function
 ````
 
-Every model handle has `infer` and `loop` fields, and reading either one gives a function value. You call them with a colon, which passes the handle as the first argument, as in `return analyst:infer(prose)`, `return models.get('analyst'):infer('ping')`, or `other:loop(msgs)`. `h:infer(prompt)` runs one model round on the handle's model and returns the reply (see [Running a round with `models.infer`](#running-a-round-with-modelsinfer)), and `h:loop` starts a conversation on it (see [Starting a conversation](11-conversations.md#starting-a-conversation)).
+Every model handle has `infer` and `loop` fields, and reading either one gives a function value. You call them with a colon, which passes the handle as the first argument, as in `return analyst:infer(prose)`, `return models.get('analyst'):infer('ping')`, or `other:loop()`. `h:infer(prompt)` runs one model round on the handle's model and returns the reply (see [Running a round with `models.infer`](#running-a-round-with-modelsinfer)), and `h:loop` starts a conversation on it (see [Starting a conversation](11-conversations.md#starting-a-conversation)).
 
 Calling `h:infer` or `h:loop` can pause the running Lua code while the model call is in progress. Reading one of the handle's data fields never does.
 
@@ -1020,7 +1021,7 @@ return models.get('analyst'):infer('ping')
 
 `writer` is the prompt-wide default, so a round in `## Check` that names no model would run on `writer`. The round on the `analyst` handle still sends its request to the model bound to `analyst`.
 
-A model handle holds a frozen binding: the role binding fixed when the handle was made. Its fields report the values fixed then and read the same every time during the run. Its requests go to the concrete model its role is bound to, so a `writer` handle bound to `claude-sonnet-4-6` sends its requests to `claude-sonnet-4-6`. Later changes to the section's model never change which model a handle uses, and repeated rounds on one handle use the same model, as when two `other:loop(msgs)` calls both send their requests to the model bound to `other`.
+A model handle holds a frozen binding: the role binding fixed when the handle was made. Its fields report the values fixed then and read the same every time during the run. Its requests go to the concrete model its role is bound to, so a `writer` handle bound to `claude-sonnet-4-6` sends its requests to `claude-sonnet-4-6`. Later changes to the section's model never change which model a handle uses, and repeated rounds on one handle use the same model, as when two `other:loop()` calls both send their requests to the model bound to `other`.
 
 ### Read-only handle fields
 
@@ -1087,7 +1088,7 @@ return analyst:infer('Name the weakest claim in this summary: ' .. summary)
 
 The handle describes the role's own settings, whatever the section has selected, so it never carries the sampling options of a `models.use` call (see [The effective model](#the-effective-model)).
 
-`models.get` returns the same kind of model handle as `models.use` and `models.default`, a Lua userdata, so `type(models.get('writer'))` is `'userdata'`. You can store it and run several rounds on it, as in `local other = models.get('other')` followed by `other:loop(msgs)`. Model roles are reachable through `models.get` from a walked section, from a section run through `call` (see [Calling a section](08-jump-and-call.md#calling-a-section)), and from fanout arms (see [What an arm sees](14-fanout.md#what-an-arm-sees)) alike.
+`models.get` returns the same kind of model handle as `models.use` and `models.default`, a Lua userdata, so `type(models.get('writer'))` is `'userdata'`. You can store it and run several rounds on it, as in `local other = models.get('other')` followed by `other:loop()`. Model roles are reachable through `models.get` from a walked section, from a section run through `call` (see [Calling a section](08-jump-and-call.md#calling-a-section)), and from fanout arms (see [What an arm sees](14-fanout.md#what-an-arm-sees)) alike.
 
 ### Catching an unknown role label
 
@@ -1241,7 +1242,7 @@ return models.infer(prose)
 
 `return models.infer(prose)` sends the section's prose, the rendered Markdown above the block (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)), to the model in one round and makes the reply the section's result. In this one-section prompt, the run result is whatever the model replies.
 
-Each `models.infer` or `h:infer` call is one infer round: a model round on a fresh conversation whose only message is the prompt, sent as a single message with the `user` message role. Nothing from earlier rounds or from the rest of the section reaches the model.
+Each `models.infer` or `h:infer` call is one infer round: a model round on a fresh conversation whose only message is the prompt, sent as a single message with the `user` message role. Nothing from earlier rounds or from the rest of the section reaches the model. An infer round never reads or changes the section's `messages` list (see [Starting a conversation](11-conversations.md#starting-a-conversation)), sends no tools, and works inside a loop's tool handlers and compactors, where a loop cannot start.
 
 ### Which model an infer round uses
 
@@ -1360,7 +1361,7 @@ In the prompt message, `{type}` is the Lua type name of the value given, so a mi
 
 `models.infer` takes no handle and always runs on the section's model, so to run on a model handle you call `handle:infer(prompt)`. It also takes the prompt alone, so sampling options for a round go on `models.use` (see [Sampling options on `models.use`](#sampling-options-on-modelsuse)). Any argument after the prompt raises `models.infer takes (prompt)` at the call site rather than being ignored.
 
-`models.loop` and `handle:loop` check their arguments the same way (see [Starting a conversation](11-conversations.md#starting-a-conversation)). A trailing `nil` counts there too, so an extra `nil` after the compactor raises `models.loop takes (messages, compactor?)` or `handle:loop takes (messages, compactor?)`. A model handle as the first argument to `models.loop` raises `models.loop takes (messages, compactor?); call handle:loop(messages, compactor?) to run on a model handle`, which names the method to call instead, just as `models.infer` does.
+`models.loop` and `handle:loop` check their arguments the same way (see [Starting a conversation](11-conversations.md#starting-a-conversation)). A trailing `nil` counts there too, so an extra `nil` after the compactor raises `models.loop takes (compactor?)` or `handle:loop takes (compactor?)`. A model handle as the argument to `models.loop` raises `models.loop takes (compactor?); call handle:loop(compactor?) to run on a model handle`, which names the method to call instead, just as `models.infer` does.
 
 ### Errors from the model backend
 

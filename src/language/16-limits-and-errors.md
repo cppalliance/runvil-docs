@@ -89,13 +89,12 @@ models:
 ```lua
 models.use('writer')
 tools.offer('web/search')
-local msgs = messages.new()
-msgs:user('Find the tallest building in Paris, then answer in one sentence.')
-local ok, err = pcall(models.loop, msgs)
+messages:user('Find the tallest building in Paris, then answer in one sentence.')
+local ok, err = pcall(models.loop)
 if not ok then
   return err.kind .. ': ' .. err.message
 end
-return msgs[#msgs].content
+return messages[#messages].content
 ```
 ````
 
@@ -807,7 +806,7 @@ A failed run reports one run error kind from a fixed set of twelve:
 | `Determinism` | a store call meets a claims conflict |
 | `Lua` | a section's Lua fails at run time or returns an unusable value, or a Pack prelude cannot install |
 | `Quota` | a log quota runs out, or a call nests past the call depth cap |
-| `ContextExhausted` | a request overflows the model's context window and the compactor leaves it over |
+| `ContextExhausted` | a request overflows the model's context window and compaction does not make it fit |
 | `Internal` | an Engine invariant breaks |
 | `RequirementsUnmet` | the environment falls short of a requirement the prompt states |
 
@@ -866,7 +865,7 @@ A `tasks.spawn` past the cap reports as `call`, because it shares `call`'s cap. 
 
 ### `ContextExhausted`, `Internal`, and `RequirementsUnmet`
 
-A run fails with kind `ContextExhausted` when a request overflows the model's context window, either on the check before sending or at the provider, and the selected [compactor](11-conversations.md#compactors-and-context-exhaustion) leaves it over the limit. The message is `context exhausted: {reason}`.
+A run fails with kind `ContextExhausted` when a request overflows the model's context window, either on the check before sending or at the provider, and the selected [compactor](11-conversations.md#compactors-and-context-exhaustion) does not make it fit, or when an uncaught `context_exhausted` error from `compactors.fail` carries a reason of your own. The message is `context exhausted: {detail}`, where the detail is the overflow reason in words for `precheck` and `provider`, and the reason itself otherwise.
 
 Run error kind `Internal` means an Engine invariant breaks, a fault in the Engine rather than in the prompt. That includes Harness mistakes such as an answer of the wrong kind, an answer for an id never issued, or a second answer to one effect. The message starts with `internal invariant violated: {message}`, and the location names an Engine source file and line rather than a place in the prompt.
 

@@ -616,10 +616,9 @@ Use `web_fetch` to read `https://example.com/` and summarize the page in three s
 ```lua
 tools.offer('web/fetch')
 models.use('researcher')
-local msgs = messages.new()
-msgs:user(prose)
-models.loop(msgs)
-return msgs[#msgs].content
+messages:user(prose)
+models.loop()
+return messages[#messages].content
 ```
 ````
 
@@ -648,10 +647,9 @@ Find out what Ada Lovelace is known for. Run several targeted `web_search` queri
 ```lua
 tools.offer({"web/search", "web/fetch"})
 models.use('researcher')
-local msgs = messages.new()
-msgs:user(prose)
-models.loop(msgs)
-return msgs[#msgs].content
+messages:user(prose)
+models.loop()
+return messages[#messages].content
 ```
 ````
 
