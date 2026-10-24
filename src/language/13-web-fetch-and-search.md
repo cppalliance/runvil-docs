@@ -91,7 +91,7 @@ The web Pack needs no per-run service, so a prompt that declares it is never ref
 
 ### How a call reaches each tool
 
-The web Pack always has exactly two tools, `fetch` then `search`. They make up its Pack object's `tools` list in that order, because that list holds the Pack's Tool objects in tool id order (see [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects)).
+The web Pack always has exactly two tools, `fetch` then `search`. They make up its Pack object's `tools` list in that order, because that list holds the Pack's Tool objects in tool id order (see [Pack objects](12-tools.md#pack-objects)).
 
 A tool call reaches the web tool that its tool name names, the last segment of the tool id. Calling `web/fetch` runs the fetch tool with the call's arguments, passed through as JSON, and calling `web/search` runs the search tool with the call's arguments the same way.
 
@@ -123,16 +123,16 @@ Each setup problem has its own reason:
 
 The web Pack takes no configuration, so it accepts `{}` as well as `null`. When the Pack has several setup problems at once, its reason names only the first, in the order of the table: a bad configuration comes before a missing search provider, and a missing search provider comes before a missing Tokio runtime service.
 
-When the web Pack is unavailable and the prompt does not declare it, offering the whole Pack fails the run (see [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer)):
+When the web Pack is unavailable and the prompt does not declare it, offering the whole Pack fails the run (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)):
 
 ````lua
-packs.offer('web')
+tools.offer('web')
 ````
 
-The message starts `packs.offer: the web Pack is unavailable in this run:` and ends with the Pack's reason, so on a Host that provides no search provider it reads:
+The message has the form `tools.offer: the {name} Pack is unavailable in this run: {reason}`, where `{reason}` is the Pack's reason, so on a Host that provides no search provider it reads:
 
 ````text
-packs.offer: the web Pack is unavailable in this run: web needs runvil/search-provider, and this host provides none
+tools.offer: the web Pack is unavailable in this run: web needs runvil/search-provider, and this host provides none
 ````
 
 ## Fetching a page
@@ -663,7 +663,7 @@ Inside `models.loop`, soft and hard fetch failures alike reach the model as the 
 
 ### Tool objects for the web tools
 
-`tools.get('web/fetch')` returns the fetch tool's Tool object (see [Tool objects and Pack objects](12-tools.md#tool-objects-and-pack-objects)). This `## Fetch` section replaces the one in `fetch-page`:
+`tools.get('web/fetch')` returns the fetch tool's Tool object (see [Finding a tool with `tools.get`](12-tools.md#finding-a-tool-with-toolsget)). This `## Fetch` section replaces the one in `fetch-page`:
 
 ````markdown
 ## Fetch
@@ -1380,7 +1380,7 @@ Your Lua sees every `web/search` failure, whatever its tool error kind, as an er
 
 ### Search error messages and kinds
 
-Every error message from `web/search`, argument errors and failed searches alike, begins with `web_search: `, whatever id or alias the tool is bound to. Every argument error has tool error kind `InvalidArguments`, and apart from `web_search: invalid arguments`, each argument error message names the offending argument and the rule it broke. A failed search has tool error kind `Transport` or `Backend`, as [When the search provider fails](#when-the-search-provider-fails) explains.
+Every error message from `web/search`, argument errors and failed searches alike, begins with `web_search: `, whether a script calls the tool by its id or a model calls it by its wire name. Every argument error has tool error kind `InvalidArguments`, and apart from `web_search: invalid arguments`, each argument error message names the offending argument and the rule it broke. A failed search has tool error kind `Transport` or `Backend`, as [When the search provider fails](#when-the-search-provider-fails) explains.
 
 ### The eight search arguments
 

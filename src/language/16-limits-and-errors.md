@@ -446,7 +446,7 @@ uses:
 invalid frontmatter: Pack id web is declared more than once under uses
 ````
 
-A frontmatter key or value the prompt contract rejects fails with `Frontmatter` and that key's own message, with the line and column. That covers an unknown entry field, a bad arg name, type, or default, a malformed `uses:` entry, an unknown model keyword, a role label outside the [prompt-local alias grammar](02-file-structure.md#the-name-grammar-for-role-labels-arg-names-and-local-tool-aliases), a zero `min_context`, and an out-of-range `max_tool_iterations`.
+A frontmatter key or value the prompt contract rejects fails with `Frontmatter` and that key's own message, with the line and column. That covers an unknown entry field, a bad arg name, type, or default, a malformed `uses:` entry, an unknown model keyword, a role label outside the [prompt-local alias grammar](02-file-structure.md#the-name-grammar-for-role-labels-arg-names-and-adhoc-tool-names), a zero `min_context`, and an out-of-range `max_tool_iterations`.
 
 A file whose frontmatter has no `runvil:` key still parses, but running it fails before any section runs, with run error kind `Parse` and this message:
 
@@ -830,7 +830,7 @@ A run fails with kind `Binding` when a section calls [`models.infer`](10-models.
 
 A run fails with kind `Completion` when a model call fails at the transport, backend, or decode layer, such as an overloaded backend, or when an `empty_model_reply` error goes uncaught, and the message is the model call's own error text. [Model request limits and failures](#model-request-limits-and-failures) lists those messages.
 
-A run fails with kind `Tool` when a dispatched tool fails, the model calls a tool outside the section's [tool scope](12-tools.md#tool-scope-and-the-task-built-ins), a `tools.call` names no local tool and no tool in the run's catalog, or the tool-call loop reaches its round cap before the model gives a final reply (see [Tool errors](12-tools.md#tool-errors)).
+A run fails with kind `Tool` when a dispatched tool fails, the model calls a tool outside the section's [tool scope](12-tools.md#tool-scope), a `tools.call` names an id that is neither a defined adhoc tool nor a tool in the run's catalog, or the tool-call loop reaches its round cap before the model gives a final reply (see [Tool errors](12-tools.md#tool-errors)).
 
 ### `Vfs` and `Determinism`
 
@@ -1386,7 +1386,7 @@ On cancellation, the model reply in flight is dropped and never returns to Lua, 
 
 A running `models.loop` stays cancellable, because the loop runs as Lua inside the block and the instruction check keeps running while it does. A `models.loop` round cut short by a stop raises an error value of kind `cancelled` and appends nothing to the message list, and a later `models.loop` call runs as usual.
 
-A tool call in flight during a cancel is not waited out: its answer is dropped and the run ends promptly with the cancelled outcome, even when the tool itself would never finish, both for a `tools.call` from Lua and for a call the model makes in a loop. Cancelling a run interrupts a [local tool](12-tools.md#defining-local-tools-with-toolsoffer_local) handler even when it is stuck in an endless Lua loop such as `while true do end`, and the run ends promptly with the cancelled outcome. Cancelling a run while a compactor is stuck in an endless Lua loop also ends the run promptly with the cancelled outcome.
+A tool call in flight during a cancel is not waited out: its answer is dropped and the run ends promptly with the cancelled outcome, even when the tool itself would never finish, both for a `tools.call` from Lua and for a call the model makes in a loop. Cancelling a run interrupts an [adhoc tool](12-tools.md#adhoc-tools-with-toolsadhoc) handler even when it is stuck in an endless Lua loop such as `while true do end`, and the run ends promptly with the cancelled outcome. Cancelling a run while a compactor is stuck in an endless Lua loop also ends the run promptly with the cancelled outcome.
 
 A run cancelled before a fanout (`tasks.fanout`) begins ends with the cancelled outcome without running any arms. Cancelling a run while [fanout arms](14-fanout.md#what-an-arm-sees) are suspended on model calls ends the run with the cancelled outcome.
 

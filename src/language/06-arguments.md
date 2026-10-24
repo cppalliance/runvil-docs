@@ -149,7 +149,7 @@ A required argument is an arg whose declaration has no `optional:` key, because 
 
 ### Arg names
 
-The `args:` key holds a set of named arg declarations, one entry per arg name. Each [arg name](02-file-structure.md#the-name-grammar-for-role-labels-arg-names-and-local-tool-aliases) follows the frontmatter name grammar `[A-Za-z][A-Za-z0-9_-]{0,63}`: a letter, then up to 63 letters, digits, `_`, or `-`, so a name is 1 to 64 characters long. `query`, `use_mcp`, and `limit` all fit. A name outside the grammar, such as `'1bad'` in `args: { '1bad': { type: string } }`, fails to parse with parse error kind `Frontmatter` and a message containing this text, with the name in place of `{key}`:
+The `args:` key holds a set of named arg declarations, one entry per arg name. Each [arg name](02-file-structure.md#the-name-grammar-for-role-labels-arg-names-and-adhoc-tool-names) follows the frontmatter name grammar `[A-Za-z][A-Za-z0-9_-]{0,63}`: a letter, then up to 63 letters, digits, `_`, or `-`, so a name is 1 to 64 characters long. `query`, `use_mcp`, and `limit` all fit. A name outside the grammar, such as `'1bad'` in `args: { '1bad': { type: string } }`, fails to parse with parse error kind `Frontmatter` and a message containing this text, with the name in place of `{key}`:
 
 ````text
 invalid arg name `{key}`: expected [A-Za-z][A-Za-z0-9_-]{0,63}

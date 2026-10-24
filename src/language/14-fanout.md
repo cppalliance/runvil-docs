@@ -1339,8 +1339,6 @@ Each fanout arm is an ordinary task (see [Starting a task with `tasks.spawn`](15
 
 Because each arm starts the way a `tasks.spawn` task starts, it gets `call`'s target resolution and depth cap, and the same refusal of a list section as the target, so `tasks.fanout('### Items', {'x'})` over a list section fails with ``section `{name}` is a list section, not a worker template``. A fanout whose arms would pass the depth cap fails with `tasks.fanout recursion exceeded cap of 8`, naming `tasks.fanout`, where a `tasks.spawn` task past the cap names `call` instead. The difference comes from `tasks.fanout` marking each arm's start as a fanout arm, while a plain `tasks.spawn` carries no such mark.
 
-Because `tasks.fanout` is built on `tasks.spawn`, every arm starts with origin `author` (see [Task events and task errors](15-tasks.md#task-events-and-task-errors)), so the first arm of `tasks.fanout('### Worker', {'a', 'b'})` starts with that origin.
-
 A task that an arm starts with `tasks.spawn` is a child of the arm's chain, so the first spawn from arm `0.0` is task `0.0.0`. In `pcall(tasks.fanout, '## Worker', {'spawner', 'boom'})`, the first arm runs `tasks.spawn('## Child')`, and that child is task `0.0.0`.
 
 ### Arm ids

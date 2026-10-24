@@ -1629,7 +1629,7 @@ Tools and the prompt share one set of files. A file a section writes with `store
 
 Two tool calls in flight at once each run under their own identity, forked from the calling section's, so they never share one sequence of store operations (see [How the model's tool calls run](12-tools.md#how-the-models-tool-calls-run)). When the store refuses to fork a tool call's identity, the call fails at its caller with a store error, and the attempt still counts toward the tool-call counts already taken.
 
-A local tool handler, a Lua function registered with `tools.offer_local` for Lua or a model to call (see [Defining local tools with `tools.offer_local`](12-tools.md#defining-local-tools-with-toolsoffer_local)), can use `store`, and a store call made there is an ordinary store operation. A handler whose body runs `store.write('grab.txt', 'kept ' .. args.value)` and then `return store.read('grab.txt')` returns `kept hi` when it is called with the value `hi`.
+An adhoc tool handler, the Lua function given to `tools.adhoc` for Lua or a model to call (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)), can use `store`, and a store call made there is an ordinary store operation. A handler whose body runs `store.write('grab.txt', 'kept ' .. args.value)` and then `return store.read('grab.txt')` returns `kept hi` when it is called with the value `hi`.
 
 A tool called from inside a task reads the task's own earlier writes, and the owner reads what that tool wrote once it joins the task. What a tool wrote stays readable by the calling section even when `tools.call` fails with error kind `cancelled` because the call's answer was dropped.
 
@@ -2351,9 +2351,9 @@ The escaping protects the envelope even when the content knows or guesses the no
 
 ### Text that arrives already wrapped
 
-The same encoding applies to text that arrives already wrapped: untrusted tool results, and the result in the notice that tells a model a [task](15-tasks.md#starting-a-task-with-tasksspawn) has completed. That notice reads `{head} completed: ` followed by the task's result wrapped with the run nonce.
+The same encoding applies to untrusted tool results, which arrive already wrapped.
 
-Only `untrusted` content, untrusted tool results, and task results in those notices get this guard sweep. Trusted tool results, the model's own earlier replies replayed to it, and tool-call payloads go out unchanged, because they are model-generated structure the chat template renders again, and changing them would break the wire format.
+Only `untrusted` content and untrusted tool results get this guard sweep. Trusted tool results, the model's own earlier replies replayed to it, and tool-call payloads go out unchanged, because they are model-generated structure the chat template renders again, and changing them would break the wire format.
 
 ## How store calls run and what they report
 

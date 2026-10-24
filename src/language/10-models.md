@@ -36,7 +36,7 @@ The frontmatter declares one model role, `writer`, under the `models:` key. The 
 
 A model role is a need a prompt declares under `models:` in place of a concrete model. Each role stands for one model the prompt needs, and [prepare](04-how-a-prompt-runs.md#preparing-the-run) binds every role to the [Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host)'s current model before the run starts. The prompt never says which model that is, so the same prompt runs on whatever model the Host selects. With one current model, two roles such as `scout` and `sprinter` both bind to that same model.
 
-You declare each model the prompt needs as a role label of its own, such as `writer`, under `models:`. A role label is the key that names a model role, and it follows the prompt-local name grammar (see [The name grammar for role labels, arg names, and local tool aliases](02-file-structure.md#the-name-grammar-for-role-labels-arg-names-and-local-tool-aliases)). A role declaration accepts only three fields, `keywords`, `min_context`, and `description`, and none of them names a concrete model. [Declaring roles under `models:`](#declaring-roles-under-models) covers each field.
+You declare each model the prompt needs as a role label of its own, such as `writer`, under `models:`. A role label is the key that names a model role, and it follows the prompt-local name grammar (see [The name grammar for role labels, arg names, and adhoc tool names](02-file-structure.md#the-name-grammar-for-role-labels-arg-names-and-adhoc-tool-names)). A role declaration accepts only three fields, `keywords`, `min_context`, and `description`, and none of them names a concrete model. [Declaring roles under `models:`](#declaring-roles-under-models) covers each field.
 
 Prepare never reads the Host's model catalog. It hands every role the Host's one current model, so a prompt's roles never draw on the rest of the Host's models, and the Host's list of models stays with the Host. [How prepare binds and checks roles](#how-prepare-binds-and-checks-roles) explains the model catalog and the current model.
 
@@ -168,7 +168,7 @@ The `models` key itself is optional. Leaving `models:` out of the frontmatter de
 
 ### Role labels
 
-Each key under `models:` is a role label. A label starts with an ASCII letter followed by up to 63 ASCII letters, digits, `_`, or `-`, the grammar `[A-Za-z][A-Za-z0-9_-]{0,63}` that a local tool alias also follows, such as `analyst`. Lua code refers to the role by that exact label, as in `models.use('analyst')`.
+Each key under `models:` is a role label. A label starts with an ASCII letter followed by up to 63 ASCII letters, digits, `_`, or `-`, the grammar `[A-Za-z][A-Za-z0-9_-]{0,63}` that an adhoc tool's name also follows, such as `analyst`. Lua code refers to the role by that exact label, as in `models.use('analyst')`.
 
 A label is local to the prompt that declares it. The same label in another prompt names an unrelated role, and a run binds models only for the roles that the prompt being run declares.
 
@@ -1176,7 +1176,7 @@ Raw model ids follow these rules:
 
 ### `models.get` errors and check order
 
-Without a Host-state snapshot, a name that matches no bound role fails `models.get` with an error value of kind `lua` and the message `models.get alias "{alias}" is not a bound model role`, where `{alias}` is the name passed. The message reads the same wherever the call runs: on the main walk, inside a fanout arm, or in a run with no current model. A name outside the role label grammar `[A-Za-z][A-Za-z0-9_-]{0,63}` (see [The name grammar for role labels, arg names, and local tool aliases](02-file-structure.md#the-name-grammar-for-role-labels-arg-names-and-local-tool-aliases)) fails with `invalid alias "{alias}": expected [A-Za-z][A-Za-z0-9_-]{0,63}` instead.
+Without a Host-state snapshot, a name that matches no bound role fails `models.get` with an error value of kind `lua` and the message `models.get alias "{alias}" is not a bound model role`, where `{alias}` is the name passed. The message reads the same wherever the call runs: on the main walk, inside a fanout arm, or in a run with no current model. A name outside the role label grammar `[A-Za-z][A-Za-z0-9_-]{0,63}` (see [The name grammar for role labels, arg names, and adhoc tool names](02-file-structure.md#the-name-grammar-for-role-labels-arg-names-and-adhoc-tool-names)) fails with `invalid alias "{alias}": expected [A-Za-z][A-Za-z0-9_-]{0,63}` instead.
 
 The three functions check a name in different orders:
 

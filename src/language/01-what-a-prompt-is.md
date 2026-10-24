@@ -305,16 +305,16 @@ The shipped `greet.md` prompt has this shape, with setup Lua under `# Greet` and
 
 ### Calling a tool from a section
 
-A prompt with frontmatter, an H1 title, and one `##` section holding a Lua block is complete, and that block can call a tool with `tools.call` (see [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls)). The tool can be one the section defines itself with `tools.offer_local` (see [Defining local tools with `tools.offer_local`](12-tools.md#defining-local-tools-with-toolsoffer_local)). A greeter prompt with a `# Greeter` title and a `## Greet` section ends its block with these lines, where `reply` holds a model's reply:
+A prompt with frontmatter, an H1 title, and one `##` section holding a Lua block is complete, and that block can call a tool with `tools.call` (see [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls)). The tool can be an adhoc tool, one the section defines itself with `tools.adhoc` (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)). A greeter prompt with a `# Greeter` title and a `## Greet` section ends its block with these lines, where `reply` holds a model's reply:
 
 ````lua
-tools.offer_local('shout', 'Returns the text in capital letters.', { text = 'string' }, function(args)
+local shout = tools.adhoc({ name = 'shout', description = 'Returns the text in capital letters.', parameters = { text = 'string' } }, function(args)
   return string.upper(args.text)
 end)
-return tools.call('shout', { text = reply })
+return tools.call(shout, { text = reply })
 ````
 
-The first call defines a tool named `shout` that answers with its `text` argument in capital letters, and the last line passes the model's reply to it. When the model replies `hi there`, the run ends with:
+The `tools.adhoc` call defines a tool named `shout` that answers with its `text` argument in capital letters, and it returns the tool's object, which the block keeps in `shout`. The last line passes that object and the model's reply to `tools.call`. The block never offers `shout` to a model, because only its own Lua calls the tool. When the model replies `hi there`, the run ends with:
 
 ````text
 HI THERE
@@ -403,10 +403,10 @@ One block can combine store calls, a model round, and a tool call to produce its
 store.write('note.md', 'hello')
 models.use('writer')
 local reply = models.infer(store.read('note.md'))
-tools.offer_local('shout', 'Returns the text in capital letters.', { text = 'string' }, function(args)
+local shout = tools.adhoc({ name = 'shout', description = 'Returns the text in capital letters.', parameters = { text = 'string' } }, function(args)
   return string.upper(args.text)
 end)
-return tools.call('shout', { text = reply })
+return tools.call(shout, { text = reply })
 ````
 
 When the model replies `hi there`, the run ends with:
@@ -415,7 +415,7 @@ When the model replies `hi there`, the run ends with:
 HI THERE
 ````
 
-The block writes `hello` to `note.md` in the store, selects the `writer` role with `models.use` (see [Selecting a role per section with `models.use`](10-models.md#selecting-a-role-per-section-with-modelsuse)), sends the note's text to the model with `models.infer`, defines the `shout` tool, and passes the reply to it. The tool's answer, the model's reply in capital letters, is the run result.
+The block writes `hello` to `note.md` in the store, selects the `writer` role with `models.use` (see [Selecting a role per section with `models.use`](10-models.md#selecting-a-role-per-section-with-modelsuse)), sends the note's text to the model with `models.infer`, defines the adhoc tool `shout` with `tools.adhoc`, and passes the reply to it with `tools.call`. No model sees `shout`, since the block calls it from Lua and never offers it. The tool's answer, the model's reply in capital letters, is the run result.
 
 ### A helper section and a nested section
 
@@ -608,7 +608,7 @@ The Harness answers every effect exactly once, either with its result or with it
 
 Everything else a block does, such as computing and returning a value, is plain Lua that needs no Harness work. The greeter prompt from [A section holding Lua](#a-section-holding-lua), whose `## Say hi` block is `return 'hello'`, ends with `hello` without issuing any effect.
 
-A call to a local tool needs no Harness work either. A local tool is a Lua function that a section defines with `tools.offer_local` (see [Defining local tools with `tools.offer_local`](12-tools.md#defining-local-tools-with-toolsoffer_local)). The Engine runs its handler inside the calling block, so in a prompt whose local tool `grab` answers `got ` followed by its `value` argument, the call `tools.call('grab', { value = 'hi' })` returns `got hi` and the run issues zero effects.
+A call to an adhoc tool needs no Harness work either. An adhoc tool is a Lua function that a section defines with `tools.adhoc` (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)). The Engine runs its handler inside the calling block, so in a prompt whose adhoc tool `grab` answers `got ` followed by its `value` argument, the call `tools.call('adhoc/grab', { value = 'hi' })` returns `got hi` and the run issues zero effects.
 
 ## Shipped example prompts
 
@@ -633,6 +633,6 @@ Every prompt shipped in the repository's `prompts` directory, including the prom
 - `greet.md` builds a greeting from its argument with `var.greeting = "Hello, " .. args .. "!"` and has the model repeat it through `{{ var.greeting }}` in its prose; [Placeholders in prose](07-substitution.md#placeholders-in-prose) teaches placeholders.
 - `analyst-example.md` declares an `analyst` model role under `models:` and calls `models.use("analyst")` before `return models.infer(prose)`; [Model roles instead of models](10-models.md#model-roles-instead-of-models) teaches model roles.
 
-Runvil also ships `research-person.md`, which researches a person. Its `## Research` section calls `tools.offer({"web/search", "web/fetch"})` (see [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer)), and the prompt runs end to end to a factual summary. [What the web Pack gives a prompt](13-web-fetch-and-search.md#what-the-web-pack-gives-a-prompt) teaches `web/search` and `web/fetch`.
+Runvil also ships `research-person.md`, which researches a person. Its `## Research` section calls `tools.offer({"web/search", "web/fetch"})` (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)), and the prompt runs end to end to a factual summary. [What the web Pack gives a prompt](13-web-fetch-and-search.md#what-the-web-pack-gives-a-prompt) teaches `web/search` and `web/fetch`.
 
 The research prompt takes the person to research as its argument. Its prose puts `{{ args }}` after the line `Your input is a request about a person:`, so a run given the argument `Ada Lovelace` places that name into the prose right after that line.

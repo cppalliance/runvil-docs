@@ -744,7 +744,7 @@ C saw ok=false
 | A non-string target | the `jump` call raises | `section target must be a string, got {type}` |
 | A heading outside the visible set | the run fails after the block ends | the not-found error |
 | A malformed heading reference | the run fails after the block ends | the matching heading-format error |
-| Inside a local tool handler | `jump` is refused | the local tool handler refusal |
+| Inside an adhoc tool handler | `jump` is refused | the adhoc tool handler refusal |
 | While a library loads | `jump` is refused | the message in [Jumps while a library loads](#jumps-while-a-library-loads) |
 
 ### Catching a jump with `pcall`
@@ -764,23 +764,23 @@ A `jump` whose heading matches no visible section fails the run with the not-fou
 
 A `jump` whose heading reference is malformed, such as a bare name, a heading made only of `#` markers, or markers with no whitespace after them, also fails the run after the jumping block has ended, with the matching message from [Malformed heading references](#malformed-heading-references). Every failed `jump` lookup has run error kind `Lua`.
 
-### The local tool handler refusal
+### The adhoc tool handler refusal
 
-A [local tool](12-tools.md#how-local-tool-handlers-run)'s handler cannot jump. Calling `jump` inside a local tool handler raises a Lua error with this message, the local tool handler refusal:
+An [adhoc tool](12-tools.md#how-adhoc-tool-handlers-run)'s handler cannot jump. Calling `jump` inside an adhoc tool handler raises a Lua error with this message, the adhoc tool handler refusal:
 
 ````text
-jump is unavailable inside a local tool handler: return a value from the handler and call jump from the block after the tool call returns
+jump is unavailable inside an adhoc tool handler: return a value from the handler and call jump from the block after the tool call returns
 ````
 
 So the handler returns a value, and the block calls `jump` after the tool call returns. The run fails if nothing catches the refusal. The rules around it:
 
-- `jump` is refused while a local tool's handler runs, whether you called the tool with [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls) or the model called it during [`models.loop`](11-conversations.md#starting-a-conversation), and no jump lands in either case.
-- The refusal holds even when the handler calls `jump` through a reference saved before the local tool was offered, such as `local j = jump` followed by `j('## Other')`. The error still begins `jump is unavailable inside a local tool handler`.
+- `jump` is refused while an adhoc tool's handler runs, whether you called the tool with [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls) or the model called it during [`models.loop`](11-conversations.md#starting-a-conversation), and no jump lands in either case.
+- The refusal holds even when the handler calls `jump` through a reference saved before the adhoc tool was defined, such as `local j = jump` followed by `j('## Other')`. The error still begins `jump is unavailable inside an adhoc tool handler`.
 - A refusal the handler does not catch fails the handler and is raised where the tool was called. So `pcall(tools.call, ...)` in the block catches it, returns `false` with the refusal text, and the block keeps running.
-- `jump` stays refused in an outer handler after a nested handler it called has returned. After the outer handler's `tools.call('inner', {})` returns, where `inner` is another local tool, `pcall(jump, '## Other')` inside the outer handler still fails with the refusal message.
-- `jump` works again in the block once the outermost local tool handler returns or fails, whether the handlers ran under `tools.call` or `models.loop`, including after `pcall(tools.call, ...)` has caught the handler's own error.
+- `jump` stays refused in an outer handler after a nested handler it called has returned. After the outer handler's `tools.call('adhoc/inner', {})` returns, where `adhoc/inner` is the id of another adhoc tool, named `inner`, `pcall(jump, '## Other')` inside the outer handler still fails with the refusal message.
+- `jump` works again in the block once the outermost adhoc tool handler returns or fails, whether the handlers ran under `tools.call` or `models.loop`, including after `pcall(tools.call, ...)` has caught the handler's own error.
 
-Here the block offers a local tool, `grab`, with [`tools.offer_local`](12-tools.md#defining-local-tools-with-toolsoffer_local). Its handler calls `jump`, and the block catches the refusal and then jumps on its own:
+Here the block defines an adhoc tool, `grab`, with [`tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc). Its handler calls `jump`, and the block catches the refusal and then jumps on its own:
 
 ````markdown
 ---
@@ -794,8 +794,8 @@ runvil: 0
 ## Main
 
 ```lua
-tools.offer_local('grab', 'Grab a value', {}, function() jump('## Other') end)
-local ok, err = pcall(tools.call, 'grab', {})
+local grab = tools.adhoc({ name = 'grab', description = 'Grab a value' }, function() jump('## Other') end)
+local ok, err = pcall(tools.call, grab, {})
 jump('## Other')
 ```
 
@@ -1590,7 +1590,7 @@ When a `jump` from the H1 block names a heading that matches no top-level sectio
 
 ## Jump and call in arms, tasks, and tool handlers
 
-After this section you can use `jump` and `call` inside fanout arms, tasks, and local tool handlers, and know which sections each one can name.
+After this section you can use `jump` and `call` inside fanout arms, tasks, and adhoc tool handlers, and know which sections each one can name.
 
 ````markdown
 ---
@@ -1729,8 +1729,8 @@ A section run with `call` starts with the same [concurrency limit](14-fanout.md#
 
 A `call` made after a fanout takes the caller's next child number after the arms, because called sections and spawned tasks share one child counter. In the main walk after a two-arm fanout, the arms are children 0 and 1, the called section is child 2, and a `## Sub` that returns `sys.id` returns `0.2.0`.
 
-### Calling from tasks and local tool handlers
+### Calling from tasks and adhoc tool handlers
 
 A section running as a spawned task can use `call` to run its own subsection, as when `### Caller`, which runs only as a task started with [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn), runs `call('#### Leaf')` on its own `#### Leaf` child. A section can also pass its own `###` subsection to `tasks.spawn`, as when `## Main` runs `tasks.spawn('### Caller')` on its own `### Caller` child, and both spawned tasks complete with `r(a)|r(b)`.
 
-You can use `call` inside a [local tool](12-tools.md#how-local-tool-handlers-run) handler, and it works there exactly as it does in a block. `jump` is the one control function a handler cannot use, as [The local tool handler refusal](#the-local-tool-handler-refusal) describes.
+You can use `call` inside an [adhoc tool](12-tools.md#how-adhoc-tool-handlers-run) handler, and it works there exactly as it does in a block. `jump` is the one control function a handler cannot use, as [The adhoc tool handler refusal](#the-adhoc-tool-handler-refusal) describes.

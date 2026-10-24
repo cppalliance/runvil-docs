@@ -682,9 +682,9 @@ A missing output file is not a run failure. A prompt that declares an `output:` 
 the run completed without writing its declared output file `{path}`
 ````
 
-## The name grammar for role labels, arg names, and local tool aliases
+## The name grammar for role labels, arg names, and adhoc tool names
 
-After this section you can choose names for role labels, arg names, and local tool aliases that both the parser and the Engine accept.
+After this section you can choose names for role labels, arg names, and adhoc tool names that both the parser and the Engine accept.
 
 ````markdown
 ---
@@ -698,11 +698,11 @@ models: { analyst: {}, triage: {}, fast-model: {} }
 # Contract Names
 ````
 
-This frontmatter parses. The keys under `models:` are role labels, and the keys under `args:` are arg names. A role label is the key that names a model role, such as `analyst`. An arg name is the key that names one argument, and the argument reaches Lua as a field of `argv`. Both follow the same name grammar as a local tool alias, which is the name Lua code gives a local tool (see [Effects and Harness work](01-what-a-prompt-is.md#effects-and-harness-work)) as the first argument of `tools.offer_local` (see [Defining local tools with `tools.offer_local`](12-tools.md#defining-local-tools-with-toolsoffer_local)).
+This frontmatter parses. The keys under `models:` are role labels, and the keys under `args:` are arg names. A role label is the key that names a model role, such as `analyst`. An arg name is the key that names one argument, and the argument reaches Lua as a field of `argv`. Both follow the same name grammar as an adhoc tool name, which is the `name` Lua code gives an adhoc tool (see [Effects and Harness work](01-what-a-prompt-is.md#effects-and-harness-work)) in the attrs table of `tools.adhoc` (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)).
 
 ### The prompt-local alias grammar
 
-Every role label, arg name, and local tool alias follows the prompt-local alias grammar:
+Every role label, arg name, and adhoc tool name follows the prompt-local alias grammar:
 
 ````text
 [A-Za-z][A-Za-z0-9_-]{0,63}
@@ -715,7 +715,7 @@ In words, a name is 1 to 64 ASCII characters: a letter first, then letters, digi
 - Later characters: ASCII letters, ASCII digits, `_`, and `-` only. Every character of a name is ASCII, so its letters are `A` to `Z` and `a` to `z` in every position.
 - Digits, underscores, and hyphens: these appear only after the first letter, as in `search1`, `web-fetch2`, `web_search`, or `web-search`.
 - Joining words: you join words with `_` or `-`, as in `web_fetch` or `web-fetch`, because spaces and dots are not name characters.
-- No slash: a name is a single plain name with no `/`, which keeps a local tool alias distinct from a tool id such as `web/fetch` (see [Pack ids, tool ids, and wire names](12-tools.md#pack-ids-tool-ids-and-wire-names)).
+- No slash: a name is a single plain name with no `/`, which keeps an adhoc tool name distinct from a tool id such as `web/fetch`, and from the adhoc tool's own id, `adhoc/<name lowercased>` (see [Pack ids, tool ids, and wire names](12-tools.md#pack-ids-tool-ids-and-wire-names)).
 
 Within those rules, any style works. Names in uppercase, lowercase, mixed case, snake_case, or kebab-case, with trailing digits, or of a single letter are all valid, such as `a`, `A`, `search`, `web_fetch`, `web-fetch2`, and a name of 64 `z` characters. A valid name keeps its exact text as written, including letter case.
 
@@ -727,9 +727,9 @@ At parse time, the grammar applies to every key under `models:` and `args:`, suc
 
 Shipped prompts name each model role with a plain lowercase label, such as `writer` or `researcher`, and Lua code refers to the role by that same string, as in `models.default("writer")` and `models.default("researcher")`.
 
-At run time, the Engine enforces the same grammar, with the same length, first-character, and later-character rules. Role labels and local tool aliases share that one rule, so a name that is valid as one is valid as the other, and `models.use` checks its label with the same rule that `tools.offer_local` applies to its alias. The grammar applies when Lua passes a name to these calls (see [Model roles instead of models](10-models.md#model-roles-instead-of-models)):
+At run time, the Engine enforces the same grammar, with the same length, first-character, and later-character rules. Role labels and adhoc tool names share that one rule, so a name that is valid as one is valid as the other, and `models.use` checks its label with the same rule that `tools.adhoc` applies to its `name`. The grammar applies when Lua passes a name to these calls (see [Model roles instead of models](10-models.md#model-roles-instead-of-models)):
 
-- `tools.offer_local`, for its alias
+- `tools.adhoc`, for its `name`
 - `models.use`, for its label
 - `models.default`, for its label
 - `models.get`, only for a name that matches none of the prompt's model roles, since a declared role's handle comes back first
@@ -796,27 +796,43 @@ Every grammar violation, whether an empty name, a name that is too long, a bad f
 
 ### Run-time name errors
 
-When a role label or local tool alias passed to a Lua call breaks the grammar, the call fails with a `Lua` error. Its message names the rejected alias and the grammar, again in one form for every rule:
+When a role label passed to a Lua call breaks the grammar, the call fails with a `Lua` error. Its message names the rejected alias and the grammar, again in one form for every rule:
 
 ````text
 invalid alias "{alias}": expected [A-Za-z][A-Za-z0-9_-]{0,63}
 ````
 
-The rejected alias appears in double quotes with escaping, so a quote, backslash, or control character in the name appears escaped. One way to hit this error is to pass a tool id where an alias belongs, since a tool id contains `/`. Lua code can catch the error with `pcall` (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)):
+The rejected alias appears in double quotes with escaping, so a quote, backslash, or control character in the name appears escaped.
 
-````lua
-local _, alias = pcall(tools.offer_local, 'web/search', 'x', {}, function() end)
-````
-
-After this line, `tostring(alias)` contains `invalid alias "web/search"`.
-
-Each local tool alias can be offered once. A second `tools.offer_local` call with an alias that is already offered fails with this message:
+When the `name` passed to `tools.adhoc` breaks the grammar, the `tools.adhoc` call fails with a `Lua` error whose message names the rejected name and the grammar, again in one form for every rule:
 
 ````text
-tools.offer_local alias "{alias}" is already registered
+tools.adhoc: invalid name "{name}": expected [A-Za-z][A-Za-z0-9_-]{0,63}
 ````
 
-So offering the alias `gh_search` a second time fails with `tools.offer_local alias "gh_search" is already registered`.
+The rejected name appears in double quotes with the same escaping. One way to hit this error is to pass a tool id where a name belongs, since a tool id contains `/`. Lua code can catch the error with `pcall` (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)):
+
+````lua
+local _, err = pcall(tools.adhoc, { name = 'web/search', description = 'x' }, function() end)
+````
+
+After this line, `tostring(err)` contains `tools.adhoc: invalid name "web/search"`.
+
+Each adhoc tool name can be defined once in a section. A second `tools.adhoc` call with a name that is already defined fails with this message:
+
+````text
+tools.adhoc name "{name}" is already registered
+````
+
+So defining the name `gh_search` a second time fails with `tools.adhoc name "gh_search" is already registered`.
+
+An adhoc tool's id is `adhoc/` followed by its name in lowercase, so two names that differ only in letter case would share one id. The second of them fails with this message, where `{lower}` is the name in lowercase and `{other}` is the name that already holds the id:
+
+````text
+tools.adhoc name "{name}" has the id adhoc/{lower}, which "{other}" already holds
+````
+
+So after `gh_search` is defined, defining `GH_Search` fails with `tools.adhoc name "GH_Search" has the id adhoc/gh_search, which "gh_search" already holds`.
 
 ## The H1 title and H1 body
 

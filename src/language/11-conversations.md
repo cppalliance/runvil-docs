@@ -160,11 +160,11 @@ return #messages
 
 Two user records with a loop after each leave `#messages` at 4. The second call continues the conversation, because its request carries the earlier reply ahead of the new user record: when the first reply was `ok`, the second request holds `{ "role": "assistant", "content": "ok" }` before `second question`.
 
-When the model asks for tools, one `models.loop` call runs a whole multi-round conversation. It sends the list round after round, runs the tools the model asks for (see [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer)), and appends every record back to the list until the model replies with text. A round that ends with the model asking for tools is a tool round, which [Tool rounds and the round cap](#tool-rounds-and-the-round-cap) covers. After two tool rounds and a final text reply of `both done`, one `models.loop()` call leaves `#messages` at 6, counting the user record, the records the two tool rounds added, and the terminal record, with `messages[6].content` equal to `'both done'`. The model received 3 requests, and the last one carried both tool results.
+When the model asks for tools, one `models.loop` call runs a whole multi-round conversation. It sends the list round after round, runs the tools the model asks for (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)), and appends every record back to the list until the model replies with text. A round that ends with the model asking for tools is a tool round, which [Tool rounds and the round cap](#tool-rounds-and-the-round-cap) covers. After two tool rounds and a final text reply of `both done`, one `models.loop()` call leaves `#messages` at 6, counting the user record, the records the two tool rounds added, and the terminal record, with `messages[6].content` equal to `'both done'`. The model received 3 requests, and the last one carried both tool results.
 
 When `models.loop` returns, the terminal record is the last record in the list, after tool rounds as well. `messages[#messages].role` is `'assistant'`, and you read the final answer with `messages[#messages].content`, which after a tool round and a text reply of `final answer` returns `final answer`.
 
-A loop runs to its end before another can start in the same section. A second `models.loop` called while one runs, such as from a local tool's handler, raises an error instead, as [Argument errors](#argument-errors) shows, and so does a loop started inside a compactor. A loop called after an earlier loop returned or raised runs normally.
+A loop runs to its end before another can start in the same section. A second `models.loop` called while one runs, such as from an adhoc tool's handler, raises an error instead, as [Argument errors](#argument-errors) shows, and so does a loop started inside a compactor. A loop called after an earlier loop returned or raised runs normally.
 
 ### Common conversation shapes
 
@@ -364,7 +364,7 @@ return #calls .. '|' .. calls[1].id .. '|' .. calls[2].name .. '|' .. type(calls
 Each entry in `tool_calls` is a table with exactly three fields:
 
 - `id` is a string holding the call id the model assigned, such as `'call_1'`.
-- `name` is a string holding the name the model called the tool by, such as `'web_search'`, which is how the model calls the tool you offer as `web/search` (see [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer)).
+- `name` is a string holding the name the model called the tool by, such as `'web_search'`, which is how the model calls the tool you offer as `web/search` (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)).
 - `arguments` is a table holding the model's JSON arguments, already parsed into a Lua table, so a model that sends `{"query":"hi"}` gives `call.arguments.query == 'hi'`. A JSON list in the arguments arrives as a marked list and a JSON null as `json.null`, just as [`json.decode`](05-lua-environment.md#encoding-and-decoding-json-with-json) gives them.
 
 `arguments` may be left out, set to `nil`, or set to a table, and it can be empty or richer, such as a table holding `path` set to `"notes.txt"` and `limit` set to `3`. A call whose `arguments` is left out or `nil` gets the empty object `{}` and is sent that way, which is why the `clock` call above reads `type(calls[2].arguments)` as `table`. A Lua `arguments` table is stored as a JSON object with the same keys and values, so `arguments = { query = 'hi' }` is stored as `{ "query": "hi" }`, and [Tool exchanges in a request](#tool-exchanges-in-a-request) shows how it reaches the model. An empty table inside it is stored as the empty object `{}`, so write an empty list as `json.array()`, as in `arguments = { tags = json.array() }`, to have it sent as `[]`. It must be a Lua table, not JSON text, or adding the record fails with `messages[N] tool_calls[K] arguments must be a table`.
@@ -793,14 +793,14 @@ user,assistant,tool,assistant|web_search:one|call_1|nil|true
 ````
 
 - `record.role` returns the record's message role as a string, `system`, `user`, `assistant`, or `tool`, as in `messages[#messages].role == 'assistant'`. A system or user record's `role` names who spoke, `"system"` or `"user"`.
-- `record.content` returns a string or a non-empty array of content parts. `messages[i].content` reads a message's text, as in `messages[2].content == 'final answer'` checking a reply, and for a tool result it is the tool's answer text, such as the answer from the `task_status` tool (see [Tool scope and the task built-ins](12-tools.md#tool-scope-and-the-task-built-ins)).
+- `record.content` returns a string or a non-empty array of content parts. `messages[i].content` reads a message's text, as in `messages[2].content == 'final answer'` checking a reply, and for a tool result it is the tool's answer text.
 - `record.tool_calls`, on an `assistant` record that holds tool calls, returns an array of `{ id, name, arguments }` entries, where `arguments` is always a table, `{}` when the call set no `arguments` or set `arguments = nil`. In the block above, `messages[2].tool_calls[1].id == 'call_1'`, `.name == 'web_search'`, and `.arguments.query == 'one'`, and a record the loop writes reads the same way.
 - `record.tool_call_id`, on a `tool` record, returns the string `id` of the call it answers, as in `messages[3].tool_call_id == 'call_1'`.
 - `record.meta` returns the record's [metadata](#record-metadata-with-meta) as a Lua value, such as the table `{ checked = true }` that `messages[4].meta` reads above, or `nil` when the record holds none.
 
 A system or user record built without metadata holds only `role` and `content`, with `content` the text given to the builder method, so `:system('s')` reads as `{ "role": "system", "content": "s" }`, and its `tool_calls`, `tool_call_id`, and `meta` read `nil`. A record without tool calls reads `nil` for `tool_calls`, not an empty list.
 
-A counted loop such as `for i = 1, #messages do roles[i] = messages[i].role end` reads every record's message role, and the message roles a loop leaves are `user`, `assistant`, and `tool`. One run gives the message roles `user,assistant,tool,assistant,tool,user,assistant`, where the second `user` is a task notice the loop appended (see [`await_tasks` and task notices](15-tasks.md#await_tasks-and-task-notices)). Reading such a record as `messages[5].role .. ':' .. messages[5].content` gives text that starts `user:Task id=0.0`.
+A counted loop such as `for i = 1, #messages do roles[i] = messages[i].role end` reads every record's message role, and the message roles a loop leaves are `user`, `assistant`, and `tool`. A run with two tool rounds gives the message roles `user,assistant,tool,assistant,tool,assistant`.
 
 ### Walking a list
 
@@ -1206,13 +1206,13 @@ return select('#', models.loop()) .. '|' .. #messages
 
 `models.loop` and `handle:loop` always run over the section's `messages` list, and that list is the one each round's request sends as its messages. The loop works on the list itself rather than a copy. It appends every record it makes, model replies and tool replies alike, to that list in place, so after the call you read every record of the conversation from `messages`.
 
-Every record added during `models.loop` appears in the list: assistant replies, tool results, and task notices (see [`await_tasks` and task notices](15-tasks.md#await_tasks-and-task-notices)), which arrive as `user` records whose text starts like `Task id=0.0 (## Child) completed: `.
+Every record added during `models.loop` appears in the list: assistant replies and tool results.
 
 ### What each round sends
 
 Each round is one stateless, tool-capable model request over the whole message list as it stands at that moment, including every record that earlier rounds and earlier calls have added. A round after a tool call therefore resends the whole conversation so far, with the message roles `user`, `assistant`, and `tool`. In one call with three one-call tool rounds before the final reply, the four requests hold 1, 3, 5, and 7 messages.
 
-A loop round is the same request a nested `infer` makes (see [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer)), only sent over your conversation together with the section's tool list. The first loop round in the section that builds its tools renders the section's tool list from every offer made so far (see [Tool scope and the task built-ins](12-tools.md#tool-scope-and-the-task-built-ins)), and that rendered tool list is fixed for the rest of the section. The render happens before the round's list is checked and before the context precheck, so a first round the precheck refuses still fixes the list. Every later round, a compacted round's retry and rounds on another model included, sends the same tool schemas, and once the list is rendered, `tools.offer` (see [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer)), `packs.offer`, and `tools.offer_local` (see [Defining local tools with `tools.offer_local`](12-tools.md#defining-local-tools-with-toolsoffer_local)) raise. A round refused before the build renders nothing: one over an empty list, one with no model to run on, and one whose tool build fails. [When an offer takes effect](12-tools.md#when-an-offer-takes-effect) covers the rule.
+A loop round is the same request a nested `infer` makes (see [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer)), only sent over your conversation together with the section's tool list. The first loop round in the section that builds its tools renders the section's tool list from every offer made so far (see [Tool scope](12-tools.md#tool-scope)), and that rendered tool list is fixed for the rest of the section. The render happens before the round's list is checked and before the context precheck, so a first round the precheck refuses still fixes the list. Every later round, a compacted round's retry and rounds on another model included, sends the same tool schemas, and once the list is rendered, `tools.offer` and `tools.offer_dynamic` raise (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)). `tools.adhoc` still defines a tool after the render (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)), but the rendered list never gains it. A round refused before the build renders nothing: one over an empty list, one with no model to run on, and one whose tool build fails. [When an offer takes effect](12-tools.md#when-an-offer-takes-effect) covers the rule.
 
 The model's sampling options (see [Sampling options on `models.use`](10-models.md#sampling-options-on-modelsuse)), such as `temperature`, `max_tokens`, and `thinking`, apply to every round of the loop. Each round is sent with the options of the model it runs on, the conversation so far, and the rendered tool list.
 
@@ -1229,7 +1229,7 @@ Each round that returns an answer ends in exactly one of four outcomes the loop 
 
 Any other answer raises an `empty_model_reply` error. Two more rules shape every call: `models.loop` and `handle:loop` stop at the round cap (see [Setting the round cap](#setting-the-round-cap)), and they use `compactors.fail` when no compactor is passed (see [Choosing a compactor for a call](#choosing-a-compactor-for-a-call)).
 
-While the run is being cancelled, an error that a local tool handler or a compactor raises is raised again at once, unchanged, so the cancellation ends the conversation. A handler that returns normally during the cancellation still has its result reported.
+While the run is being cancelled, an error that an adhoc tool handler or a compactor raises is raised again at once, unchanged, so the cancellation ends the conversation. A handler that returns normally during the cancellation still has its result reported.
 
 ### Running the loop again on the same list
 
@@ -1382,7 +1382,7 @@ Without a `pcall`, a failed `models.loop` ends the block at the call, and the re
 
 `handle:loop(compactor?)` takes the same one argument after the handle, which the colon supplies. Both run over the section's `messages`.
 
-A call that breaks these rules is refused with a `lua`-kind error value whose message is the refusal text, raised at the call, so a `pcall` around the call catches it. A refused call raises before the loop starts, so no model request is sent for it, and it leaves the list unchanged: `#messages` reports the same length after the refusal as before it. A refused call also leaves pending task notices (see [`await_tasks` and task notices](15-tasks.md#await_tasks-and-task-notices)) queued, so the next valid loop call's round delivers them to the list, for example as the user record `Task id=0.0 (## Child) was canceled: the author cancelled it`.
+A call that breaks these rules is refused with a `lua`-kind error value whose message is the refusal text, raised at the call, so a `pcall` around the call catches it. A refused call raises before the loop starts, so no model request is sent for it, and it leaves the list unchanged: `#messages` reports the same length after the refusal as before it.
 
 ### Argument errors
 
@@ -1427,20 +1427,20 @@ compactor must be a function, got integer
 
 The message names an integer `integer` and every other value by Lua's `type()` name. A float reads `number`, a string reads `string`, and a table reads `table`. Any userdata reads `userdata`, including `messages` itself, a record view, and `json.null`, the JSON null that a tool result holds. A model handle reads `userdata` only as the compactor of `handle:loop`, as in `handle:loop(other_handle)`, because `models.loop(handle)` raises the model-handle refusal shown above first.
 
-A loop runs to its end before another can start in the same section. A loop started while a loop or a compactor runs there raises this, whether it starts in a local tool's handler (see [Defining local tools with `tools.offer_local`](12-tools.md#defining-local-tools-with-toolsoffer_local)), in a compactor the loop called for an overflow, or in a compactor `models.compact` runs:
+A loop runs to its end before another can start in the same section. A loop started while a loop or a compactor runs there raises this, whether it starts in an adhoc tool's handler (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)), in a compactor the loop called for an overflow, or in a compactor `models.compact` runs:
 
 ````text
 a loop or a compactor is already running in this section; ask a side question with models.infer(prompt)
 ````
 
-`models.infer` and `tools.call` stay allowed inside handlers and compactors, so a handler that needs a model's answer asks with `models.infer` instead. In this block, the model calls a local tool whose handler tries to start a loop:
+`models.infer` and `tools.call` stay allowed inside handlers and compactors, so a handler that needs a model's answer asks with `models.infer` instead. In this block, the model calls an adhoc tool whose handler tries to start a loop:
 
 ````lua
 models.use('writer')
-tools.offer_local('nested', 'Starts another loop', {}, function()
+tools.offer(tools.adhoc({ name = 'nested', description = 'Starts another loop' }, function()
   local ok, err = pcall(models.loop)
   return tostring(err)
-end)
+end))
 messages:user('Call the nested tool once, then answer done.')
 models.loop()
 return messages[3].content
@@ -1462,7 +1462,7 @@ Any failure while the loop prepares a round is raised at the `models.loop` call,
 
 An error from a model request or a tool call inside the loop reaches you as the Engine's own error value, unchanged. When the model request itself fails, the loop raises that request's error unchanged. A request failure other than a context-window rejection or an empty reply, such as a backend or transport error, is raised as the `models.loop` call's error without calling the compactor.
 
-A failure that the loop's rules decide to raise reaches your block as that same value, with no position prefix added. A string or table that your own compactor or local tool handler raises with `error` reaches the `models.loop` caller unchanged: a string stays that string, and a table is the very same table, with no metatable added.
+A failure that the loop's rules decide to raise reaches your block as that same value, with no position prefix added. A string or table that your own compactor or adhoc tool handler raises with `error` reaches the `models.loop` caller unchanged: a string stays that string, and a table is the very same table, with no metatable added.
 
 A round refused for context overflow adds no records to the list, and records from rounds that have already completed stay in the list. A failed compaction puts back the records it started from (see [When a compaction fails](#when-a-compaction-fails)).
 
@@ -1498,7 +1498,7 @@ return table.concat(roles, ',')
 ```
 ````
 
-The prompt declares the `web` Pack (see [The Engine, the Harness, and the Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host)) and offers its search tool to the model before the loop (see [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer)). When the model makes one search and then answers with text, the run result is:
+The prompt declares the `web` Pack (see [The Engine, the Harness, and the Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host)) and offers its search tool to the model before the loop (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)). When the model makes one search and then answers with text, the run result is:
 
 ````text
 user,assistant,tool,assistant
@@ -1511,7 +1511,7 @@ When tools are in scope for the section, a round can end with the model asking f
 3. Round 2 sends all three records, so the request includes a message whose message role is `tool` and whose content is the search result, and the model replies with text.
 4. The loop appends the terminal record and returns, so the reply is `messages[#messages].content`.
 
-The model can call every tool the section offers with `tools.offer` or `tools.offer_local` before the first loop round (see [Defining local tools with `tools.offer_local`](12-tools.md#defining-local-tools-with-toolsoffer_local)), with both kinds mixed in one loop, and `models.loop()` sends each tool call the model asks for to the matching offered tool. The loop keeps running rounds while the model answers with tool calls: it runs each round's calls, sends the conversation with the tool results back to the model for the next round, and can go through several tool rounds in a row within one call. It stops at the first reply that has plain text and no tool calls, and that text lands as the last record of the list.
+The model can call every tool the section offers with `tools.offer` before the first loop round, catalog tools and adhoc tools alike (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)), with both kinds mixed in one loop, and `models.loop()` sends each tool call the model asks for to the matching offered tool. The loop keeps running rounds while the model answers with tool calls: it runs each round's calls, sends the conversation with the tool results back to the model for the next round, and can go through several tool rounds in a row within one call. It stops at the first reply that has plain text and no tool calls, and that text lands as the last record of the list.
 
 After a tool round is answered, the loop starts the next round with a new request over the updated list. That request includes a `tool` message with each result, and the round after a batch of calls sends the model every result from that batch.
 
@@ -1548,13 +1548,13 @@ One user record, one tool round with one call, and the reply make 4 records: the
 
 When the first round asks for two calls, the list after `models.loop` returns holds the user record, then the assistant's tool-call record, then one `tool` record per call, so `messages[3]` and `messages[4]` hold the first and second call's results. The `tool` records follow the order in which the model issues the calls.
 
-After the loop, the list holds the whole conversation in order: the user record, each assistant call followed by its tool answer, any delivered task notices, and the final assistant reply, as in the message roles `user,assistant,tool,assistant,tool,user,assistant`. You read any tool's answer by index, such as a task tool's answer at `messages[5].content` in that list.
+After the loop, the list holds the whole conversation in order: the user record, each assistant call followed by its tool answer, and the final assistant reply, as in the message roles `user,assistant,tool,assistant,tool,assistant`. You read any tool's answer by index, such as the second tool answer at `messages[5].content` in that list.
 
 ### Batches of tool calls
 
 When a round's answer has tool calls, the loop answers every call before it asks the model again. When one reply requests several tool calls, `models.loop` answers them as one batch, each call with its own arguments, before it asks for the next reply. The calls are issued in the order the model lists them, and the loop runs each call's handler once.
 
-When one reply asks for several bound tools, tools offered with `tools.offer`, the loop issues those calls at once so they run in parallel. A local tool call, from `tools.offer_local`, or a task tool call such as `task_status` (see [Tool scope and the task built-ins](12-tools.md#tool-scope-and-the-task-built-ins)) stops the batch and runs on its own between its neighbors. So a batch of a bound call, a local call, a `task_status` call, and another bound call issues the first call alone, then answers the local call and the `task_status` call, then issues the last call.
+When one reply asks for several catalog tools, the loop issues those calls at once so they run in parallel. An adhoc tool call stops the batch and runs on its own between its neighbors. So a batch of a catalog call, an adhoc call, and another catalog call issues the first call alone, then answers the adhoc call, then issues the last call.
 
 The loop appends a round's records only once every call in the round has its result, and then it appends the whole batch at once: one `assistant` record with empty text whose `tool_calls` holds every call id of the round in the model's order, then one `tool` record per call in the same order, all ahead of the final text reply. The `tool` records follow the order the model lists the calls, not the order they finish in, so a call listed first has its record first even when it finishes second. A round that calls two tools therefore adds three records, and the loop never leaves a half-answered batch: nothing from a tool round reaches the list until every call in that round has an answer. While a batch's handlers run, the list shows none of that batch, so a handler sees the list as it stands before the round.
 
@@ -1562,19 +1562,13 @@ When a bound tool fails during the loop, the loop does not stop. The tool's fail
 
 Some failures end the loop partway through a round, and then none of that round's records land on the list:
 
-- A local tool handler that raises ends `models.loop` with no further round. Neither the assistant tool-call record nor the results of calls that have already returned land on the list.
+- An adhoc tool handler that raises ends `models.loop` with no further round. Neither the assistant tool-call record nor the results of calls that have already returned land on the list.
 - When a tool call the model issues is dropped instead of answered, `models.loop` raises `cancelled` at the call and leaves the list as it was before the round, with no assistant or `tool` record appended.
-- When the model calls a tool outside the section's tool scope (see [Tool scope and the task built-ins](12-tools.md#tool-scope-and-the-task-built-ins)), `models.loop` fails and appends nothing to the list.
+- When the model calls a tool outside the section's tool scope (see [Tool scope](12-tools.md#tool-scope)), `models.loop` fails and appends nothing to the list.
 
-You catch such a failure with `pcall` and read `err.kind` and `err.name`, for example to tell which tool was out of scope. An out-of-scope call to `task` gives `err.kind` as `out_of_scope_tool` and `err.name` as `task`, and a list that held one user record before the call still holds just that record.
+You catch such a failure with `pcall` and read `err.kind` and `err.name`, for example to tell which tool was out of scope. An out-of-scope call to `web_fetch` gives `err.kind` as `out_of_scope_tool` and `err.name` as `web_fetch`, and a list that held one user record before the call still holds just that record.
 
-Once the model gives a text reply, the loop runs no further rounds, even when a task the model has started (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn)) ends later.
-
-### Task notices and task tools in the list
-
-Starting `models.loop` adds nothing to the message list on its own. Any notices for the model are added when a round's request is sent, and after a round that delivers task notices (see [`await_tasks` and task notices](15-tasks.md#await_tasks-and-task-notices)), your list holds one extra `user` record for each notice text. After `models.loop` returns, you read a notice like any other record, through its `role` and `content` fields, for example `user` and a content starting `Task id=0.0 (## Child) completed: `.
-
-Each answer from a task tool (see [Tool scope and the task built-ins](12-tools.md#tool-scope-and-the-task-built-ins)) appears in the list as a `tool` record whose `tool_call_id` matches the `id` of the model's call. After `await_tasks` answers, the loop sends that answer to the model in the next round and keeps going until the model replies with plain text.
+Once the model gives a text reply, the loop runs no further rounds, even when a task the section started (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn)) ends later.
 
 ### Setting the round cap
 
@@ -1644,7 +1638,7 @@ When `tool_loop_exhausted` is raised, the last allowed round's assistant tool-ca
 
 The error value has its `kind` field set to `tool_loop_exhausted`, and it has only its kind and message, with no extra fields. `tostring(err)` gives `tool-call loop did not converge`. You catch it at the call site with `pcall(models.loop)`, which returns `false` and that error value.
 
-Left uncaught, the `tool_loop_exhausted` error ends the block, so the section's later code never runs, and it fails the run with run error kind `Tool` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)) and the message `tool-call loop did not converge`. When the model has started a task in that section, abandoning that task does not replace the `tool_loop_exhausted` error.
+Left uncaught, the `tool_loop_exhausted` error ends the block, so the section's later code never runs, and it fails the run with run error kind `Tool` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)) and the message `tool-call loop did not converge`. When the section has spawned a task that is still live, that task is abandoned, and abandoning it does not replace the `tool_loop_exhausted` error.
 
 ### Valid `max_tool_iterations` values
 
@@ -1911,7 +1905,7 @@ After at least one answered tool call, only the finish reason `stop` ends cleanl
 
 ### The clean exit
 
-The clean exit is how a model ends a conversation on purpose after doing its work through tools: an empty reply with finish reason `stop`, after at least one answered tool call in the same `models.loop` call. In a section that offers the model a tool (see [Offering tools with `tools.offer` and `packs.offer`](12-tools.md#offering-tools-with-toolsoffer-and-packsoffer)), this block reads the list after the loop:
+The clean exit is how a model ends a conversation on purpose after doing its work through tools: an empty reply with finish reason `stop`, after at least one answered tool call in the same `models.loop` call. In a section that offers the model a tool (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)), this block reads the list after the loop:
 
 ````lua
 models.use('writer')
@@ -2034,8 +2028,6 @@ The context precheck is Runvil's own check, before each request leaves, that the
 The precheck runs on every `models.loop` call and before every round. A list that grows past the window between calls is refused before the next request leaves, and the precheck also guards the first request of a list, refusing it before any round runs when the list is already too large.
 
 The precheck uses the context window and `max_tokens` of the model the round goes to. When the round comes from `h:loop`, that is the handle's own (see [Model handles](10-models.md#model-handles)). Otherwise it is the section's current model (see [How prepare binds and checks roles](10-models.md#how-prepare-binds-and-checks-roles)). A handle that `models.get` returns for a raw model id, rather than a declared model role, has a context window of 8192 tokens for the precheck, visible as `h.context`, so `models.get('qwen/qwen3-8b').context` reads `8192` (see [Getting handles with `models.get`](10-models.md#getting-handles-with-modelsget)).
-
-Model-task notices that a round delivers are pushed onto your list as user records before the precheck (see [`await_tasks` and task notices](15-tasks.md#await_tasks-and-task-notices)). They count toward that request, and they stay on the list even when the precheck refuses it.
 
 ### The output reserve
 
@@ -2390,7 +2382,7 @@ The first line removes the last record, and the second empties the list. `models
 1. More than two arguments raise `models.compact takes (compactor, reason)`.
 2. A compactor that is not a function raises `compactor must be a function, got {type}`, so `models.compact(nil, 'why')` names `nil`.
 3. A reason that is not a string raises `reason must be a string, got {type}`, so `models.compact(compactors.clear)` names `nil`.
-4. A compaction started while a loop or a compactor is running in the section, such as from a local tool's handler or from inside another compactor, raises `models.compact cannot start while a loop or a compactor is running in this section`.
+4. A compaction started while a loop or a compactor is running in the section, such as from an adhoc tool's handler or from inside another compactor, raises `models.compact cannot start while a loop or a compactor is running in this section`.
 
 A refused call leaves the list unchanged.
 
