@@ -271,6 +271,7 @@ Each row gives a limit, its default, and who can change it, and the Pack tools t
 | output reserve | `max_tokens`, else one eighth of the window up to 8192 tokens, at most half the window | fixed | [The context precheck](11-conversations.md#the-context-precheck) |
 | recursion depth cap | 8 nested levels, counting each `call`, task, and fanout arm | fixed | [The recursion depth cap](08-jump-and-call.md#the-recursion-depth-cap) |
 | `request_timeout` | 120 seconds per wait for the next part of a model reply | Harness | [Run limits and their defaults](16-limits-and-errors.md#run-limits-and-their-defaults) |
+| `tools.offer` array length | 100,000 entries per `tools.offer` or `tools.offer_dynamic` call | fixed | [Errors from `tools.offer`](12-tools.md#errors-from-toolsoffer) |
 
 ## Parse error kinds
 
