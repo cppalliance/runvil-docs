@@ -43,7 +43,7 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `call` | function | Runs a contained chain at `target`; optional `input` string replaces `args` | [Jump and call at a glance](08-jump-and-call.md#jump-and-call-at-a-glance) |
 | `collectgarbage` | removed | Reads nil; no garbage collector control | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `compactors` | global | Table of shipped compactor policies, holding `fail` and `clear` | [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion) |
-| `compactors.clear` | function | Removes every record from `messages`, keeping the rendered tool list; works only inside a compactor | [`compactors.clear`](11-conversations.md#compactorsclear) |
+| `compactors.clear` | function | Removes every record from `messages`, keeping the Static Set; works only inside a compactor | [`compactors.clear`](11-conversations.md#compactorsclear) |
 | `compactors.fail` | function | Default compactor; always raises `context_exhausted` with the reason it is given, any string | [`compactors.fail`](11-conversations.md#compactorsfail) |
 | `coroutine` | removed | Reads nil; no creating coroutines or yielding on your own | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `debug` | not loaded | Never loaded; no stack frame, local, or hook inspection | [The sandbox](05-lua-environment.md#the-sandbox) |
@@ -209,7 +209,7 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `tools.calls` | field | Read-only per-section call counts keyed by tool id | [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls) |
 | `tools.get` | function | Reads one Tool object by tool id, a catalog tool's or `adhoc/<name>`, or `nil` | [Finding a tool with `tools.get`](12-tools.md#finding-a-tool-with-toolsget) |
 | `tools.offer` | function | Offers a tool or Pack by id or object, or an array of them, to the section's model; raises after the first loop round renders the tool list | [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer) |
-| `tools.offer_dynamic` | function | Records tools and Packs, in the forms `tools.offer` takes, in the section's dynamic list, which the model cannot reach; raises after the first loop round renders the tool list | [The dynamic list with `tools.offer_dynamic`](12-tools.md#the-dynamic-list-with-toolsoffer_dynamic) |
+| `tools.offer_dynamic` | function | Records tools and Packs, in the forms `tools.offer` takes, in the section's Dynamic Set, which the model cannot reach; raises after the first loop round renders the tool list | [The Dynamic Set with `tools.offer_dynamic`](12-tools.md#the-dynamic-set-with-toolsoffer_dynamic) |
 | `tools.packs` | field | Read-only list of the section's Pack objects in name order, the adhoc Pack included, with `get` and `extras` | [Walking Packs with `tools.packs`](12-tools.md#walking-packs-with-toolspacks) |
 | `tools.packs.extras` | function | Returns a fresh array of the usable Pack objects not declared under `uses:`, in name order, never the adhoc Pack | [Extra Packs with `tools.packs.extras`](12-tools.md#extra-packs-with-toolspacksextras) |
 | `tools.packs.get` | function | Reads one Pack object by Pack id, or `nil` when the run has no such Pack | [Finding a Pack with `tools.packs.get`](12-tools.md#finding-a-pack-with-toolspacksget) |
@@ -301,7 +301,7 @@ A failed run reports exactly one run error kind, and a failed `{{ }}` placeholde
 | Name | Type | Meaning | Taught in |
 | --- | --- | --- | --- |
 | `BadPath` | substitution kind | `{{ var }}` or `{{ sys }}` written with no key | [Substitution error kinds](07-substitution.md#substitution-error-kinds) |
-| `Binding` | run error kind | `models.infer` or `models.loop` runs with neither `models.use` nor `models.default` in effect; a tool whose parameter schema is not a JSON object is left out of the offering instead | [Infer errors and the missing-model error](10-models.md#infer-errors-and-the-missing-model-error) |
+| `Binding` | run error kind | `models.infer` or `models.loop` runs with neither `models.use` nor `models.default` in effect, or a section's first loop round fails because the section offers a tool whose parameter schema is not a JSON object, whose wire name is invalid, or whose wire name another offered tool shares, unless an adhoc tool in the same set shadows it | [Infer errors and the missing-model error](10-models.md#infer-errors-and-the-missing-model-error) |
 | `Cancelled` | run error kind | never reported; a run the Host cancels ends with the cancelled outcome, not a failure | [Run error kinds](16-limits-and-errors.md#run-error-kinds) |
 | `Completion` | run error kind | a model call fails at the transport, backend, or decode layer, or an `empty_model_reply` goes uncaught | [Run error kinds](16-limits-and-errors.md#run-error-kinds) |
 | `ContextExhausted` | run error kind | a request overflows the model's context window and the selected compactor leaves it over, or a direct `compactors.fail` call goes uncaught | [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion) |

@@ -285,7 +285,7 @@ A tool resolves only by its whole tool id, so a different id that shares only th
 
 ### Wire names
 
-Each tool a section offers reaches the model under a wire name, the name the model sees, and the Engine chooses every wire name. A catalog tool's wire name is its tool id with each `/` and each `.` replaced by `_`:
+Each tool a section offers reaches the model under a wire name, the name the model sees. A Pack may name a catalog tool itself, and then that name is the tool's wire name. Otherwise, as for each tool below, a catalog tool's wire name is its tool id with each `/` and each `.` replaced by `_`:
 
 | Tool id | Wire name |
 |---|---|
@@ -293,9 +293,9 @@ Each tool a section offers reaches the model under a wire name, the name the mod
 | `web/search` | `web_search` |
 | `user-input/ask` | `user-input_ask` |
 
-So an offered tool `<pack>/<name>` reaches the model as `<pack>_<name>`, with the slash and any dot in the name each turned into an underscore, while a `-` stays as it is. Because every such wire name comes from a valid tool id, it is non-empty and uses only lowercase ASCII letters, digits, `-`, and `_`. A catalog tool whose wire name an earlier tool in tool id order already holds, or whose parameter schema no model round can advertise, is left out of the run's offering (see [What the model sees for each offered tool](#what-the-model-sees-for-each-offered-tool)). An adhoc tool's wire name is the `name` its attrs give, exactly as written (see [Adhoc tool ids and wire names](#adhoc-tool-ids-and-wire-names)).
+So an offered tool `<pack>/<name>` that its Pack does not name reaches the model as `<pack>_<name>`, with the slash and any dot in the name each turned into an underscore, while a `-` stays as it is. Every wire name must match `[A-Za-z][A-Za-z0-9_-]{0,63}`: a letter, then up to 63 letters, digits, `_`, or `-`. A tool id may start with a digit, `-`, `_`, or `.` and has no length limit, so its default wire name can break that rule, as `9lives/fetch` gives `9lives_fetch`, which starts with a digit. A section that offers a tool whose wire name breaks the rule, or two tools that share a wire name, fails its first loop round with an error naming the tool, or both tools for a clash, unless one is an adhoc tool that shadows the other in the same set (see [An adhoc tool that shadows a catalog tool](#an-adhoc-tool-that-shadows-a-catalog-tool)). The tool stays in the run's tool catalog, and a script still calls it by its tool id (see [What the model sees for each offered tool](#what-the-model-sees-for-each-offered-tool)). An adhoc tool's wire name is the `name` its attrs give, exactly as written (see [Adhoc tool ids and wire names](#adhoc-tool-ids-and-wire-names)).
 
-A tool's tool id, like `web/fetch`, differs from the wire name the model calls it by, like `web_fetch`. Your Lua always names a tool by its tool id, never by its wire name, in `tools.offer`, `tools.get`, and `tools.call`, and because the Engine chooses wire names, your prompt's prose names a tool by its tool id too. To `tools.offer`, a string without a slash is a Pack id, so `tools.offer('web_search')` raises the unknown-Pack message, `tools.offer: no Pack named "web_search" in this run; declare it under uses: to require it, or offer it only when tools.packs.get("web_search") returns it`, followed by the hint ` (did you mean 'web/search'?)`. A malformed id takes the message of an unknown one of its shape, so a malformed string with a slash raises the not-a-tool message and one without a slash the unknown-Pack message (see [Errors from `tools.offer`](#errors-from-toolsoffer)).
+A tool's tool id, like `web/fetch`, differs from the wire name the model calls it by, like `web_fetch`. Your Lua always names a tool by its tool id, never by its wire name, in `tools.offer`, `tools.get`, and `tools.call`, and because your prompt never sets a catalog tool's wire name, its prose names a tool by its tool id too. To `tools.offer`, a string without a slash is a Pack id, so `tools.offer('web_search')` raises the unknown-Pack message, `tools.offer: no Pack named "web_search" in this run; declare it under uses: to require it, or offer it only when tools.packs.get("web_search") returns it`, followed by the hint ` (did you mean 'web/search'?)`. A malformed id takes the message of an unknown one of its shape, so a malformed string with a slash raises the not-a-tool message and one without a slash the unknown-Pack message (see [Errors from `tools.offer`](#errors-from-toolsoffer)).
 
 ### Name errors and their reasons
 
@@ -357,17 +357,17 @@ return messages[#messages].content
 
 Each section selects the `writer` model role with `models.use` (see [Selecting a role per section with `models.use`](10-models.md#selecting-a-role-per-section-with-modelsuse)) and runs one conversation over its own `messages` list. In `## Ask`, every model round of the loop offers the model one tool, `web_search`. `## Ask` returns nothing, so the walk falls through to `## Plain`, which offers nothing: its rounds go out with no tool list at all, and the run result is the model's reply there.
 
-A section's tool scope is the set of tools the model is offered in that section's `models.loop` rounds. You fill it by calling `tools.offer` in that section before its first loop round (see [Offering tools and Packs with `tools.offer`](#offering-tools-and-packs-with-toolsoffer)). The first loop round renders the scope into the rendered tool list, which every round of the section then offers the model.
+A section's tool scope is the set of tools the model is offered in that section's `models.loop` rounds. You fill it by calling `tools.offer` in that section before its first loop round (see [Offering tools and Packs with `tools.offer`](#offering-tools-and-packs-with-toolsoffer)). The first loop round renders the scope into the Static Set, which every round of the section then offers the model.
 
 ### Every section entry starts empty
 
-Every section entry starts with an empty tool scope, whether the section is walked into, entered as a task's first section, or is the H1 pass. Each entry runs in a fresh section VM (see [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals)) that shares only the run's tools and models, so calls to `tools.offer`, `tools.offer_dynamic`, and `tools.adhoc` never last from one section entry to the next. The entry's fresh `messages` holds no rendered tool list either, so its first loop round renders its own. That is why `## Plain` sees none of the tools `## Ask` offered.
+Every section entry starts with an empty tool scope, whether the section is walked into, entered as a task's first section, or is the H1 pass. Each entry runs in a fresh section VM (see [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals)) that shares only the run's tools and models, so calls to `tools.offer`, `tools.offer_dynamic`, and `tools.adhoc` never last from one section entry to the next. The entry's fresh `messages` holds no Static Set either, so its first loop round renders its own. That is why `## Plain` sees none of the tools `## Ask` offered.
 
 ### What the scope holds
 
-A section's scope is one ordered list of the offers the section made, in call order. Each offer names a tool or a Pack, and its mode says which list it feeds: an offer made with `tools.offer` feeds the rendered tool list, and one made with `tools.offer_dynamic` feeds the dynamic list (see [The dynamic list with `tools.offer_dynamic`](#the-dynamic-list-with-toolsoffer_dynamic)). An offer the scope already holds, with the same tool or Pack and the same mode, is not added again.
+A section's scope is one ordered list of the offers the section made, in call order. Each offer names a tool or a Pack, and its mode says which set it feeds: an offer made with `tools.offer` feeds the Static Set, and one made with `tools.offer_dynamic` feeds the Dynamic Set (see [The Dynamic Set with `tools.offer_dynamic`](#the-dynamic-set-with-toolsoffer_dynamic)). An offer the scope already holds, with the same tool or Pack and the same mode, is not added again.
 
-The first loop round in a section that builds its tools renders the rendered tool list from the scope as it stands at that moment, and the list stays fixed for the rest of the section. After the render, `tools.offer` and `tools.offer_dynamic` raise, so make every offer before the first loop, or offer in another section (see [When an offer takes effect](#when-an-offer-takes-effect)), while `tools.adhoc` still defines tools. The list is attached to the section's `messages`, so it lasts exactly as long as the section, and compactions never detach it.
+The first loop round in a section that builds its tools renders the Static Set and the Dynamic Set from the scope as it stands at that moment, and both stay fixed for the rest of the section. After the render, `tools.offer` and `tools.offer_dynamic` raise, so make every offer before the first loop, or offer in another section (see [When an offer takes effect](#when-an-offer-takes-effect)), while `tools.adhoc` still defines tools. The two sets are attached to the section's `messages`, so they last exactly as long as the section, and compactions never detach them.
 
 A section that makes no `tools.offer` call sends its rounds with no tool list at all, since a defined adhoc tool that is not offered adds nothing, so `models.loop` advertises no tools to the model, and a round with no tools completes normally. A first loop round with nothing offered still renders the section's tool list, an empty one, so an offer after that round raises.
 
@@ -404,7 +404,7 @@ web/fetch|web|true
 
 ### Tool objects
 
-A Tool object is the Lua value that stands for one tool: a catalog tool the run offers to the prompt, or an adhoc tool the section defined with `tools.adhoc`. It has exactly four fields, and nothing else describes the tool from Lua:
+A Tool object is the Lua value that stands for one tool: a tool in the run's tool catalog, or an adhoc tool the section defined with `tools.adhoc`. It has exactly four fields, and nothing else describes the tool from Lua:
 
 | Field | Reads |
 |---|---|
@@ -423,12 +423,11 @@ You reach a tool only through its Tool object or its tool id. No Lua global exis
 
 ### Finding a tool with `tools.get`
 
-`tools.get(id)` takes a tool id string, such as `'web/search'` or `'user-input/ask'`, and returns that tool's Tool object. It finds any tool in the run's offering, whether or not the frontmatter declares its Pack, so with only `user-input` declared, `tools.get('web/search').id` still reads `web/search`. A third-party Pack's tools are in the run only when the prompt declares that Pack, so only then does `tools.get` find them. It also finds an adhoc tool the section has defined, by its id `adhoc/` followed by the tool's name lowercased, so after `local grab = tools.adhoc({ name = 'grab', description = 'Grab a value' }, function() end)`, `tools.get('adhoc/grab') == grab` is `true`.
+`tools.get(id)` takes a tool id string, such as `'web/search'` or `'user-input/ask'`, and returns that tool's Tool object. It finds any tool in the run's tool catalog, whether or not the frontmatter declares its Pack, so with only `user-input` declared, `tools.get('web/search').id` still reads `web/search`. That includes a catalog tool no model round could advertise, such as one whose wire name is invalid, because such a tool fails only the sections that offer it (see [What the model sees for each offered tool](#what-the-model-sees-for-each-offered-tool)). A third-party Pack's tools are in the run only when the prompt declares that Pack, so only then does `tools.get` find them. It also finds an adhoc tool the section has defined, by its id `adhoc/` followed by the tool's name lowercased, so after `local grab = tools.adhoc({ name = 'grab', description = 'Grab a value' }, function() end)`, `tools.get('adhoc/grab') == grab` is `true`.
 
 `tools.get` returns `nil`, rather than raising an error, for an id that names no tool it can find. It matches the id string exactly, with no case folding, partial match, or name lookup, and it checks no id grammar. So `tools.get` reads `nil` for each of these:
 
 - an id that no catalog tool has and no adhoc tool the section defined holds
-- the id of a catalog tool the run leaves out of its offering, such as one whose parameter schema no model round can advertise or whose wire name an earlier tool in tool id order already holds
 - a wire name, so `tools.get('web_search')` reads `nil` while `tools.get('web/search')` finds the tool, because Lua addresses a tool by its tool id
 - an adhoc tool's name, so `tools.get('grab')` reads `nil` while `tools.get('adhoc/grab')` returns the adhoc tool's object
 - any other string that is not a tool's exact id, well-formed or not
@@ -460,7 +459,7 @@ tools.offer takes tool ids, Pack ids, tool objects, Pack objects, or an array of
 
 ### What kind of value a Tool object is
 
-`tools.get(id)` returns a Tool object, and Lua's `type` reports it as `userdata`, so `type(tools.get('web/fetch'))` is `'userdata'`. A Tool object is a frozen userdata value rather than a table, it is a different kind of userdata from a model handle, and you cannot change its fields. Each tool in the run's offering has exactly one Tool object per section VM, built once when the tools are installed, and each adhoc tool gets its one object when `tools.adhoc` defines it.
+`tools.get(id)` returns a Tool object, and Lua's `type` reports it as `userdata`, so `type(tools.get('web/fetch'))` is `'userdata'`. A Tool object is a frozen userdata value rather than a table, it is a different kind of userdata from a model handle, and you cannot change its fields. Each tool in the run's tool catalog has exactly one Tool object per section VM, built once when the tools are installed, and each adhoc tool gets its one object when `tools.adhoc` defines it.
 
 Tool objects are frozen. Assigning any field, one of the four or a new one, raises a Lua runtime error that names the field in double quotes, so you cannot attach keys of your own to a Tool object. This assignment:
 
@@ -496,7 +495,7 @@ Every tool operation lives in the one Lua table `tools`, the way model operation
 | `tools.call` | calls a tool from Lua |
 | `tools.get` | reads one Tool object by tool id |
 | `tools.offer` | offers tools and Packs to the section's model |
-| `tools.offer_dynamic` | records tools and Packs in the section's dynamic list |
+| `tools.offer_dynamic` | records tools and Packs in the section's Dynamic Set |
 | `tools.packs` | a read-only table of the Pack objects, with the functions `get` and `extras` |
 | `tools.calls` | a read-only table that counts calls, present from the section's first tool call |
 
@@ -684,7 +683,7 @@ Offering a tool only makes it available to the model and never calls it. If the 
 
 ### Nothing is offered until you offer it
 
-A catalog tool stays out of the model's view until the section offers it, even when the prompt declares its Pack under `uses:`, and so does an adhoc tool the section defines. Declaring `web` in `offer-search` makes `web/fetch` callable from Lua as well, but `## Ask` offers only `web/search`, so its rounds never advertise `web_fetch`. One `tools.offer` call before the first loop round leaves the model with a rendered tool list of exactly that one tool, with nothing added by default (see [Tool scope](#tool-scope)).
+A catalog tool stays out of the model's view until the section offers it, even when the prompt declares its Pack under `uses:`, and so does an adhoc tool the section defines. Declaring `web` in `offer-search` makes `web/fetch` callable from Lua as well, but `## Ask` offers only `web/search`, so its rounds never advertise `web_fetch`. One `tools.offer` call before the first loop round leaves the model with a Static Set of exactly that one tool, with nothing added by default (see [Tool scope](#tool-scope)).
 
 A model round in a section entry that offers nothing advertises no tools, even when the run has tools the section could offer. In a run with no catalog tools, a section that offers nothing has an empty tool scope, and with no tools in scope the loop sends its rounds with no tools at all.
 
@@ -734,7 +733,7 @@ models.loop()
 return messages[#messages].content
 ````
 
-Every round of this loop advertises both `web_fetch` and `web_search`. A Pack offer takes its tools from the run's offering, the full set of catalog tools a section can offer from, and matches them by the Pack part of each tool id, so `tools.offer('web')` brings in every tool of the offering whose id starts with `web/`, in tool id order. In the same way, `tools.offer('user-input')` offers the model the ask tool. `tools.offer` also accepts a usable Pack that has no tools, such as `subagents`, but offering it adds nothing to the model's tool list.
+Every round of this loop advertises both `web_fetch` and `web_search`. A Pack offer takes its tools from the run's tool catalog and matches them by the Pack part of each tool id, so `tools.offer('web')` brings in every catalog tool whose id starts with `web/`, in tool id order. In the same way, `tools.offer('user-input')` offers the model the ask tool. `tools.offer` also accepts a usable Pack that has no tools, such as `subagents`, but offering it adds nothing to the model's tool list.
 
 The adhoc Pack is offered the same way, so `tools.offer('adhoc')` and `tools.offer(tools.packs.get('adhoc'))` offer every adhoc tool the section defines before its first loop round.
 
@@ -757,12 +756,14 @@ An undeclared Pack that the run knows is an [extra Pack](#the-tool-catalog-and-e
 
 Successive offers in one section before its first loop round add to the same scope rather than replacing it. Each offer is checked when it is made and only remembered, and an offer identical to one the scope already holds is skipped. After the render, every offer raises, a repeat of an earlier offer included.
 
-The section's first loop round renders the tool list from the remembered offers in these steps:
+The section's first loop round renders the Static Set from the remembered offers in these steps:
 
 1. It walks the offers made with `tools.offer` in the order they were made.
 2. A tool offer adds that tool, and a Pack offer adds the Pack's tools in tool id order, read at the render. The adhoc Pack adds every adhoc tool the section defined before the render.
-3. A tool already in the list is skipped, so each tool appears once, at the place of its first offer.
-4. Last, an offered catalog tool whose wire name equals an offered adhoc tool's wire name is dropped, wherever it was offered (see [An adhoc tool that shadows a catalog tool](#an-adhoc-tool-that-shadows-a-catalog-tool)).
+3. A tool already in the set is skipped, so each tool appears once, at the place of its first offer.
+4. Each Pack's tools then sit together as one block, at the place of that Pack's first tool, in the order the earlier steps gave them. An adhoc tool keeps its own place.
+5. An offered catalog tool whose wire name equals an offered adhoc tool's wire name is dropped, wherever it was offered (see [An adhoc tool that shadows a catalog tool](#an-adhoc-tool-that-shadows-a-catalog-tool)).
+6. Last, the round fails, sending nothing, when two tools left in the set share a wire name, when a tool shares its wire name with a Dynamic Set tool, or when a tool's wire name breaks the wire-name rule or its parameter schema is not a JSON object (see [What the model sees for each offered tool](#what-the-model-sees-for-each-offered-tool)).
 
 So the order of the offers decides the order the model sees. Put this block in the `## Ask` section of `offer-search` in place of the first one:
 
@@ -777,13 +778,15 @@ return messages[#messages].content
 
 Each round advertises `web_fetch` and then `web_search`. The `web` Pack adds its tools in id order, and the later `tools.offer('web/search')` adds nothing, because `web/search` is already in the list. With the two offers the other way round, `tools.offer('web/search')` then `tools.offer('web')`, the rounds advertise `web_search` and then `web_fetch`, because `web/search` takes its place first and the Pack adds only `web/fetch` after it. With an adhoc tool `grab` defined, `tools.offer(grab)` then `tools.offer('web')` advertises `grab`, `web_fetch`, and `web_search`, in that order.
 
-A Pack offer reads its tools at the render, so `tools.offer(tools.packs.get('adhoc'))` includes every adhoc tool defined before the first loop round, even one defined after the offer, while `tools.offer(tools.packs.get('adhoc').tools)` takes only the adhoc tools defined when it is called. The rendered list never changes after the first render.
+A Pack's tools stay together even when another Pack's offer comes between them. In a run whose `kit` Pack holds the tools `kit/a` and `kit/b`, a section that runs `tools.offer('kit/a')`, then `tools.offer('web')`, then `tools.offer('kit')` advertises `kit_a`, `kit_b`, `web_fetch`, and `web_search`, in that order: `kit/b` joins the `kit` block where `kit/a` was offered, ahead of the `web` tools offered before it.
 
-Offered tools reach the model in the order the prompt offers them, not the order the catalog lists them. The run's offering is held in tool id order whatever order the catalog lists its tools in, while the order the model sees comes from the section's offers. So with a catalog that lists `web/fetch` before `web/search`, a section that runs `tools.offer({ 'web/search', 'web/fetch' })` advertises `web_search` and then `web_fetch`.
+A Pack offer reads its tools at the render, so `tools.offer(tools.packs.get('adhoc'))` includes every adhoc tool defined before the first loop round, even one defined after the offer, while `tools.offer(tools.packs.get('adhoc').tools)` takes only the adhoc tools defined when it is called. The Static Set never changes after the first render.
 
-### The dynamic list with `tools.offer_dynamic`
+Offered tools reach the model in the order the prompt offers them, with each Pack's tools together, not the order the catalog lists them. A Pack offer brings in its tools in tool id order whatever order the catalog lists them in, while the order the model sees comes from the section's offers. So with a catalog that lists `web/fetch` before `web/search`, a section that runs `tools.offer({ 'web/search', 'web/fetch' })` advertises `web_search` and then `web_fetch`.
 
-`tools.offer_dynamic` takes the same forms as `tools.offer` and makes the same checks, and its errors carry its own name, but it records its offers into the section's dynamic list rather than the rendered tool list. The first loop round records the dynamic list beside the rendered one: each tool the dynamic offers name, in offer order and once, unless the rendered list holds its id or its wire name. Nothing reads the dynamic list yet, so the model cannot reach a dynamic tool, and dynamic offers never change what the model sees or which calls its rounds accept. With an adhoc tool `grab` defined, each of these lines records into the dynamic list:
+### The Dynamic Set with `tools.offer_dynamic`
+
+`tools.offer_dynamic` takes the same forms as `tools.offer` and makes the same checks, and its errors carry its own name, but it records its offers into the section's Dynamic Set rather than the Static Set. The first loop round records the Dynamic Set beside the Static Set by the same steps, so each tool the dynamic offers name appears once, in offer order, with each Pack's tools together, and an adhoc tool offered dynamically shadows a catalog tool offered dynamically. The Dynamic Set then drops each tool whose id the Static Set holds. Nothing reads the Dynamic Set yet, so the model cannot reach a dynamic tool, and dynamic offers never change what the model sees or which calls its rounds accept. With an adhoc tool `grab` defined, each of these lines records into the Dynamic Set:
 
 ````lua
 tools.offer_dynamic('user-input')
@@ -791,13 +794,13 @@ tools.offer_dynamic(tools.packs.extras())
 tools.offer_dynamic({ 'web', grab })
 ````
 
-The rendered list wins whichever call comes first. A section that runs `tools.offer('web/search')` and `tools.offer_dynamic('web')`, in either order, renders `web_search` for the model and records only `web/fetch` in its dynamic list. Like `tools.offer`, `tools.offer_dynamic` raises once the section's first loop round has rendered its tool list (see [When an offer takes effect](#when-an-offer-takes-effect)).
+The Static Set wins whichever call comes first. A section that runs `tools.offer('web/search')` and `tools.offer_dynamic('web')`, in either order, renders `web_search` for the model and records only `web/fetch` in its Dynamic Set. A dynamic offer can still fail the section's first loop round, because a wire name names one tool across both sets and the round checks every Dynamic Set tool's wire name and parameter schema as it checks the Static Set's. So two tools with different ids that share a wire name fail that round whichever sets they sit in, unless one is an adhoc tool that shadows the other in the same set, as [An adhoc tool that shadows a catalog tool](#an-adhoc-tool-that-shadows-a-catalog-tool) shows. Like `tools.offer`, `tools.offer_dynamic` raises once the section's first loop round has rendered its tool list (see [When an offer takes effect](#when-an-offer-takes-effect)).
 
 ### When an offer takes effect
 
 An offer lasts for the rest of the section. A tool offered in one block stays in the section's scope through every later block, and an offer made inside a function that a later block calls counts the same as one made at top level. A loop in a later block of the same section advertises the tool and sends the model's calls to it.
 
-The first loop round in the section that builds its tools renders the section's tool list, the rendered tool list: the tools the section's offers name, as they stand at that moment, including offers made in earlier blocks. The render happens before that round's message list is checked and before the context precheck (see [The context precheck](11-conversations.md#the-context-precheck)), so a first round the precheck refuses still fixes the list. A round refused before the build renders nothing, so offers still work after it: a round over an empty `messages`, a round with no model to run on, and a round whose tool build fails.
+The first loop round in the section that builds its tools renders the section's tool list, the Static Set: the tools the section's offers name, as they stand at that moment, including offers made in earlier blocks. The render happens before that round's message list is checked and before the context precheck (see [The context precheck](11-conversations.md#the-context-precheck)), so a first round the precheck refuses still fixes the list. A round refused before the build renders nothing, so offers still work after it: a round over an empty `messages`, a round with no model to run on, and a round whose tool build fails, such as one over a wire name two offered catalog tools share.
 
 Every later round in the section sends the same tool schemas, whether it belongs to the same loop or a later one, and that includes the retry after a compaction and rounds on another model. The scope gate checks the model's calls against the same names, and the `TOOL_SCOPE_VALIDATION_*` events fire once, at the render (see [The tool scope check and section names](#the-tool-scope-check-and-section-names)). The list is attached to the section's `messages`, so it lasts exactly as long as the section, and compactions, restores, and `compactors.clear` never detach it. `models.infer` sends no tools at all.
 
@@ -807,7 +810,7 @@ After the render, `tools.offer` and `tools.offer_dynamic` raise, even for an off
 tools.offer: the section's tool list is fixed at its first models.loop round; make every offer before the first loop, or offer in another section
 ````
 
-`tools.offer_dynamic:` starts the same text with its own name. The refusal is checked before the arguments, it is a `lua`-kind error that `pcall` catches, and it leaves the rendered tool list as it was. An adhoc tool's handler that runs inside `models.loop` cannot offer either, because the round that called it already rendered the list, though `tools.adhoc` still defines tools there and `tools.call` still calls them.
+`tools.offer_dynamic:` starts the same text with its own name. The refusal is checked before the arguments, it is a `lua`-kind error that `pcall` catches, and it leaves the Static Set as it was. An adhoc tool's handler that runs inside `models.loop` cannot offer either, because the round that called it already rendered the list, though `tools.adhoc` still defines tools there and `tools.call` still calls them.
 
 So the tools you offer before the first `models.loop` are advertised in its first round, and they stay advertised on every round of every loop in the section, including the round after the model's tool call. To run loops with different tool sets, put each loop in its own section:
 
@@ -908,7 +911,7 @@ tools.offer: the section's tool list is fixed at its first models.loop round; ma
 
 Before the render, `tools.offer` checks its argument when it is called. An entry that names nothing the run has raises a Lua error that quotes the entry, and the message depends on the entry's shape.
 
-A string with a slash that names no tool in the run's offering and no adhoc tool the section has defined raises:
+A string with a slash that names no tool in the run's tool catalog and no adhoc tool the section has defined raises:
 
 ````text
 tools.offer: "<id>" is not a tool in this run
@@ -921,7 +924,7 @@ This one error covers every string with a slash that is not a tool in the run:
 - an `adhoc/` id that no adhoc tool of the section holds, such as `adhoc/grab` before `tools.adhoc` defines `grab`
 - a string with a slash that is not a well-formed tool id, such as `web/Search`, which takes the message of an unknown tool id
 
-So `tools.offer('web/serch')` raises `tools.offer: "web/serch" is not a tool in this run`. A catalog tool that the run's offering cannot hold is left out of the offering without stopping the run, and the remaining tools are still offered. That happens to a catalog tool whose parameters are not a JSON object and to one whose wire name an earlier tool in tool id order already holds, and `tools.offer` refuses a left-out id with the same not-a-tool error.
+So `tools.offer('web/serch')` raises `tools.offer: "web/serch" is not a tool in this run`. `tools.offer` accepts every catalog tool, even one no model round can advertise, such as one whose parameters are not a JSON object, whose wire name is invalid, or whose wire name another offered tool shares. Such an offer fails later, at the section's first loop round, unless an adhoc tool offered into the same set shadows the tool (see [What the model sees for each offered tool](#what-the-model-sees-for-each-offered-tool)).
 
 A string without a slash that names no Pack the run knows raises a message that quotes the name twice and tells you to declare the Pack under `uses:` or guard the offer with `tools.packs.get`:
 
@@ -929,7 +932,7 @@ A string without a slash that names no Pack the run knows raises a message that 
 tools.offer: no Pack named "<x>" in this run; declare it under uses: to require it, or offer it only when tools.packs.get("<x>") returns it
 ````
 
-So `tools.offer('wbe')` raises `tools.offer: no Pack named "wbe" in this run; declare it under uses: to require it, or offer it only when tools.packs.get("wbe") returns it`. A string without a slash that is not a well-formed Pack id, such as `'Web'`, takes the same message. When a tool in the run's offering or an adhoc tool the section has defined has the wire name `<x>`, the message ends with the hint ` (did you mean '<id>'?)`, which names that tool's id. So `tools.offer('web_search')` ends `(did you mean 'web/search'?)`, and with an adhoc tool `grab` defined, `tools.offer('grab')` ends `(did you mean 'adhoc/grab'?)`.
+So `tools.offer('wbe')` raises `tools.offer: no Pack named "wbe" in this run; declare it under uses: to require it, or offer it only when tools.packs.get("wbe") returns it`. A string without a slash that is not a well-formed Pack id, such as `'Web'`, takes the same message. When a tool in the run's tool catalog or an adhoc tool the section has defined has the wire name `<x>`, the message ends with the hint ` (did you mean '<id>'?)`, which names that tool's id. So `tools.offer('web_search')` ends `(did you mean 'web/search'?)`, and with an adhoc tool `grab` defined, `tools.offer('grab')` ends `(did you mean 'adhoc/grab'?)`.
 
 Offering by Pack id a Pack the Host reports as unable to serve the run raises an error that names the Pack and gives the Host's reason, in the form `tools.offer: the {name} Pack is unavailable in this run: {reason}`:
 
@@ -1019,16 +1022,16 @@ A model reply of `latest Lua release` makes the run search the web for that text
 
 The first argument of `tools.call` names the tool in one of two forms, and both are checked in the same place when the call is made:
 
-- A tool id string, such as `'web/fetch'` for a catalog tool or `'adhoc/grab'` for an adhoc tool. The string is taken as the id exactly as written, and the id is looked up first among the section's adhoc tools, then among the tools the run offers, and then in the full catalog.
+- A tool id string, such as `'web/fetch'` for a catalog tool or `'adhoc/grab'` for an adhoc tool. The string is taken as the id exactly as written, and the id is looked up first among the section's adhoc tools and then in the run's tool catalog.
 - A Tool object from `tools.get` or `tools.adhoc`, which stands for the tool's canonical id, such as `web/fetch`, never its wire name, such as `web_fetch`. `tools.call(tools.get('web/fetch'), { url = 'https://www.lua.org/' })` makes exactly the same call as `tools.call('web/fetch', { url = 'https://www.lua.org/' })`, and with an adhoc tool's object in `grab`, `tools.call(grab, { value = 'hi' })` makes the same call as `tools.call('adhoc/grab', { value = 'hi' })`, whether or not the section offered the tool.
 
 A call to a catalog tool goes to the Pack named by the first segment of its tool id, so a call to `web/fetch` goes to the `web` Pack, and a Tool object passed in place of an id delivers the call to that tool's Pack the same way. A Tool object has no methods, only the read-only fields `id`, `description`, `parameters`, and `pack`, so passing it to `tools.call(tool, arguments)` is the only way to call the tool it stands for.
 
-Your Lua can call any tool in the run's catalog directly by its id, with no setup beforehand, even when the run offers nothing:
+Your Lua can call any tool in the run's catalog directly by its id, with no setup beforehand, even when the section offers nothing:
 
 - a declared Pack's tool that the section never offered, such as `web/search`
 - a tool of a `runvil` Pack that the prompt does not declare under `uses:`, such as `tools.call('user-input/ask')` in a prompt that declares only `web`, which returns the operator's answer. A third-party Pack's tools are in the catalog only when the prompt declares that Pack.
-- a catalog tool the run left out of its offering, such as one whose parameter schema no model round can advertise or whose wire name an earlier tool in tool id order already holds, which a `tools.call` by its tool id still runs
+- a catalog tool no model round can advertise, such as one whose parameter schema is not a JSON object or whose wire name is invalid, which fails the first loop round of any section that offers it but still runs when a `tools.call` names its tool id
 
 An id that names neither a defined adhoc tool nor a catalog tool in the run fails as an unbound tool call. The call raises an error value whose `kind` is `unbound_tool` and whose `name` holds the id you passed, so a call to an id that no tool has fails naming that id. A string without a slash is not a tool id, so a wire name such as `web_fetch` or a bare name such as `fetch` never reaches that lookup and raises at the call:
 
@@ -1061,9 +1064,9 @@ A call made from Lua is a script call wherever the code sits. A Pack prelude hel
 
 ### How tool calls are recorded
 
-Each tool call is recorded with whether the model or the script made it, the section it ran in, the tool's canonical id such as `web/fetch`, its wire name such as `web_fetch`, and its arguments. The record's origin names the execution, the section, and the caller, as in `{"execution":"run-1","section":"Chat","caller":"model"}`, and its execution and section match what `sys.execution` and `sys.section_name` report (see [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui)). A script call is attributed to the section that made it, such as `Only` for a section headed `## Only`, with the script recorded as the caller.
+Each tool call is recorded with whether the model or the script made it, the section it ran in, the tool's canonical id such as `web/fetch`, the name the call used, and its arguments. The record's origin names the execution, the section, and the caller, as in `{"execution":"run-1","section":"Chat","caller":"model"}`, and its execution and section match what `sys.execution` and `sys.section_name` report (see [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui)). A script call is attributed to the section that made it, such as `Only` for a section headed `## Only`, with the script recorded as the caller.
 
-When a script calls by id a tool the run offers, the run records the call under the tool's wire name, such as `web_fetch`, alongside its id `web/fetch`. A script call to a catalog tool that the run left out of its offering runs normally and is recorded with the tool's id standing in as its name, since that tool has no usable wire name.
+A model tool call is recorded under the wire name the model called, such as `web_fetch`, alongside the tool's id `web/fetch`. A script call to a catalog tool is recorded under the tool's id, such as `web/fetch`, never its wire name, and its `tool_result` event's `alias` holds that id too. A script call to an adhoc tool reports its `tool_result` event under the tool's `name` instead, so `tools.call('adhoc/grab')` reports the `alias` `grab`.
 
 The tool result event for a script call has no call id, and it holds the section's round count at the moment of the call (see [Run events and records](04-how-a-prompt-runs.md#run-events-and-records)). For a catalog tool it also carries `vendor`, the vendor of the Pack that answered, such as `runvil` for `web/fetch` in a prompt that declares `web`, as a model call's result event does (see [Events from the model's tool calls](#events-from-the-models-tool-calls)). A script call whose tool fails produces no `tool_result` event.
 
@@ -1324,7 +1327,7 @@ local search = tools.adhoc({ name = 'search', description = t.description, param
   return tools.call(t, args)
 end)
 
--- OFFER. Checked when made, remembered, rendered in call order at the first loop round.
+-- OFFER. Checked when made, remembered, rendered in call order, each Pack's tools together, at the first loop round.
 tools.offer('web/search')                              -- a tool by id: a string with a slash
 tools.offer('web')                                     -- a Pack by id: a string without a slash
 tools.offer(grab)                                      -- a tool object
@@ -1338,7 +1341,7 @@ tools.offer(tools.packs)                               -- every Pack the section
 tools.offer()                                          -- no argument, offers nothing
 tools.offer({})                                        -- empty array, offers nothing
 
--- OFFER DYNAMIC. The same forms and checks; recorded into the dynamic list at render, which nothing reads yet.
+-- OFFER DYNAMIC. The same forms and checks; recorded into the Dynamic Set at render, which nothing reads yet.
 tools.offer_dynamic('user-input')
 tools.offer_dynamic(tools.packs.extras())
 tools.offer_dynamic({ 'web', grab })
@@ -1576,7 +1579,7 @@ Each name and each id belongs to one adhoc tool in a section VM. Defining a seco
 
 ### An adhoc tool that shadows a catalog tool
 
-An offered adhoc tool may take the wire name of an offered catalog tool, and then it shadows that tool. In a section of a prompt that declares `uses: [web]`:
+An offered adhoc tool may take the wire name of a catalog tool offered into the same set, and then it shadows that tool. In a section of a prompt that declares `uses: [web]`:
 
 ````lua
 tools.offer('web')
@@ -1585,9 +1588,24 @@ tools.offer(tools.adhoc({ name = 'web_search', description = 'Adhoc search', par
 end))
 ````
 
-The model sees `web_fetch` and one tool under the name `web_search`, with the adhoc description `Adhoc search`, and its calls run the adhoc handler, never the catalog tool. The catalog `web/search` is dropped from the rendered list wherever it was offered, here through the `web` Pack, so the model's calls never reach it, while your Lua still calls it with `tools.call('web/search', { query = 'lua' })`.
+The model sees `web_fetch` and one tool under the name `web_search`, with the adhoc description `Adhoc search`, and its calls run the adhoc handler, never the catalog tool. The catalog `web/search` is dropped from the Static Set wherever it was offered, here through the `web` Pack, so the model's calls never reach it, while your Lua still calls it with `tools.call('web/search', { query = 'lua' })`.
 
 Shadowing needs both tools offered. A defined adhoc tool that the section does not offer shadows nothing, so a section that offers `web/search` and only defines an adhoc `web_search` advertises the catalog tool.
+
+Shadowing works within each set: an adhoc tool offered with `tools.offer` shadows only a catalog tool offered with `tools.offer`, and one offered with `tools.offer_dynamic` shadows only a catalog tool offered with `tools.offer_dynamic`. Across the two sets, the Dynamic Set drops a tool only when the Static Set holds its id, so a wire name the two sets share fails the section's first loop round, even for a static adhoc tool beside a dynamically offered catalog tool of its name:
+
+````lua
+tools.offer(tools.adhoc({ name = 'web_search', description = 'Adhoc search', parameters = { query = 'string' } }, function(args)
+  return 'adhoc ' .. args.query
+end))
+tools.offer_dynamic('web/search')
+````
+
+The section's first `models.loop` fails before it sends a round, raising an error value of kind `internal` with this message:
+
+````text
+the tools adhoc/web_search of the adhoc Pack in the Static Set and web/search of the web Pack in the Dynamic Set share the wire name "web_search", and a wire name names one tool across a section's Static Set and Dynamic Set; offer only one of them
+````
 
 ### Errors from `tools.adhoc`
 
@@ -2062,7 +2080,7 @@ Runvil runs the tool with the call's JSON arguments, appends the call and its re
 
 ### What the model sees for each offered tool
 
-The model sees each offered tool under its wire name, which for a catalog tool is the tool id with every `/` and `.` turned into `_` and for an adhoc tool is its `name` (see [Wire names](#wire-names)), advertised with the tool's own description and its parameter schema as the tool definition. A section that offers `web/search`, `user-input/ask`, and `web/fetch`, by id or as Tool objects from `tools.get`, has the scope `web_search`, `user-input_ask`, `web_fetch`. A model reply that calls `web_search` with `{"query":"latest Lua release"}` calls the tool offered as `web/search`.
+The model sees each offered tool under its wire name, which for a catalog tool is the name its Pack gives it, or else the tool id with every `/` and `.` turned into `_`, and for an adhoc tool is its `name` (see [Wire names](#wire-names)), advertised with the tool's own description and its parameter schema as the tool definition. A section that offers `web/search`, `user-input/ask`, and `web/fetch`, by id or as Tool objects from `tools.get`, has the scope `web_search`, `user-input_ask`, `web_fetch`. A model reply that calls `web_search` with `{"query":"latest Lua release"}` calls the tool offered as `web/search`.
 
 The description is the tool's own, such as `Search the web and return a list of results (title, url, description).` for `web/search`, and the parameter schema goes out as a JSON Schema object, such as the one the adhoc `grab` tool from [Describing parameters](#describing-parameters) sends:
 
@@ -2070,19 +2088,29 @@ The description is the tool's own, such as `Search the web and return a list of 
 {"type":"object","properties":{"value":{"type":"string"}},"required":["value"]}
 ````
 
-Every tool the model is offered has a non-empty wire name made only of letters, digits, `_`, `.`, and `-` (the characters `[A-Za-z0-9_.-]`), and a parameter schema that is a JSON object. Anything else is refused before it reaches the model. A catalog tool whose parameter schema is not a JSON object, such as the bare string `"scalar"`, or whose wire name breaks the rule, is left out of the run's offering, because no model round can advertise it, so the model never sees it under any wire name.
+Every tool the model is offered has a wire name that matches `[A-Za-z][A-Za-z0-9_-]{0,63}`, a letter followed by up to 63 letters, digits, `_`, or `-`, and a parameter schema that is a JSON object. Anything else is refused before it reaches the model. A section that offers a catalog tool whose parameter schema is not a JSON object, such as the bare string `"scalar"`, or whose wire name breaks the rule, such as `9lives_fetch` for the tool id `9lives/fetch`, fails its first loop round, which sends nothing. `models.loop` raises an error value of kind `internal` whose message names the tool by its wire name:
 
-A catalog tool is also left out when an earlier tool in tool id order already holds its wire name, such as when two ids differ only where one has a `.` and the other a `/`: only the first is offered, and the repeat is left out. A block can still call a left-out tool by its id (see [Naming the tool to call](#naming-the-tool-to-call)).
+````text
+model-facing schema build failure for tool alias "9lives_fetch"
+````
+
+Two offered tools that share a wire name, such as two ids that differ only where one has a `.` and the other a `/`, fail the first loop round the same way, unless one is an adhoc tool that shadows the other in the same set (see [An adhoc tool that shadows a catalog tool](#an-adhoc-tool-that-shadows-a-catalog-tool)). With a `dup` Pack that holds `dup/a.b` and `dup/a/b`, which both take the wire name `dup_a_b`, a section that runs `tools.offer('dup')` and then `models.loop` gets an error that names both tools, each with its Pack and its set:
+
+````text
+the tools dup/a/b of the dup Pack in the Static Set and dup/a.b of the dup Pack in the Static Set share the wire name "dup_a_b", and a wire name names one tool across a section's Static Set and Dynamic Set; offer only one of them
+````
+
+Left uncaught, either error fails the run with run error kind `Binding`. Only a section that offers the tool, or both tools of a clash, fails this way, so a section that offers only `dup/a.b` advertises it as `dup_a_b`. The tool stays in the run's tool catalog, so `tools.get` finds it, and a block can still call it by its id (see [Naming the tool to call](#naming-the-tool-to-call)).
 
 Offering one tool advertises exactly that one tool, with nothing else added to the model's tool list, so a section that offers only `web/search` sends the model a list of one tool. The parameter schema the model receives is the one Lua reads as the Tool object's `parameters` field (see [Tool objects](#tool-objects)).
 
-The Engine chooses every wire name, so prompt prose that tells the model which tools to use names each tool by its tool id, never by its wire name. A prompt that offers `web/search` and `web/fetch` can say "Run several targeted `web/search` queries" and "Use `web/fetch` on the few best results".
+Your prompt never sets a catalog tool's wire name, which comes from its Pack or else from its tool id, so prompt prose that tells the model which tools to use names each tool by its tool id, never by its wire name. A prompt that offers `web/search` and `web/fetch` can say "Run several targeted `web/search` queries" and "Use `web/fetch` on the few best results".
 
 ### Which tools a round advertises
 
-Each `models.loop` round offers the model the section's rendered tool list. The section's first loop round that builds its tools renders that list from the section's [tool scope](#tool-scope) as it stands at that moment, so every `tools.offer` call made before that round shapes it. The first round already includes every offered tool, so the model can call one on its first reply, and in the `search-loop` prompt the first round's tool list holds `web_search`. Every later round in the section advertises the same tools, whether it is the round that follows a tool call, the retry after a compaction, a round on another model, or a round of a later loop, and the scope gate checks the model's calls against the same names (see [When an offer takes effect](#when-an-offer-takes-effect)).
+Each `models.loop` round offers the model the section's Static Set. The section's first loop round that builds its tools renders the Static Set from the section's [tool scope](#tool-scope) as it stands at that moment, so every `tools.offer` call made before that round shapes it. The first round already includes every offered tool, so the model can call one on its first reply, and in the `search-loop` prompt the first round's tool list holds `web_search`. Every later round in the section advertises the same tools, whether it is the round that follows a tool call, the retry after a compaction, a round on another model, or a round of a later loop, and the scope gate checks the model's calls against the same names (see [When an offer takes effect](#when-an-offer-takes-effect)).
 
-The render walks the section's offers in call order: a tool offer adds that tool, a Pack offer adds the Pack's tools in tool id order, each tool appears once at the place of its first offer, and last, an offered catalog tool that an offered adhoc tool shadows is dropped (see [Repeated offers and the order the model sees](#repeated-offers-and-the-order-the-model-sees)). Adhoc and catalog tools mix in one round: a section that offers `web/search` and an adhoc `grab` advertises both together, so the first round's tool list holds 2 tools, and each call goes to its own tool. The adhoc `grab` answers its call with `grabbed x`, while `web/search` answers its call with its search results.
+The render walks the section's offers in call order: a tool offer adds that tool, a Pack offer adds the Pack's tools in tool id order, each tool appears once at the place of its first offer, each Pack's tools sit together where that Pack's first tool was offered, an offered catalog tool that an offered adhoc tool shadows is dropped, and last, a wire name two tools share fails the round (see [Repeated offers and the order the model sees](#repeated-offers-and-the-order-the-model-sees)). Adhoc and catalog tools mix in one round: a section that offers `web/search` and an adhoc `grab` advertises both together, so the first round's tool list holds 2 tools, and each call goes to its own tool. The adhoc `grab` answers its call with `grabbed x`, while `web/search` answers its call with its search results.
 
 An offered adhoc tool whose wire name equals an offered catalog tool's wire name takes that name, so the round advertises only the adhoc tool under it, as [An adhoc tool that shadows a catalog tool](#an-adhoc-tool-that-shadows-a-catalog-tool) shows.
 
@@ -2106,7 +2134,7 @@ This returns:
 tools.call: "web_search" is not a tool id|tools.call: "search" is not a tool id
 ````
 
-Each call is recorded under the name it reached the tool by, as [How tool calls are recorded](#how-tool-calls-are-recorded) explains: the wire name when the run offers the tool, a script call by id included, and the full id when the run could not offer it.
+As [How tool calls are recorded](#how-tool-calls-are-recorded) explains, a model call is recorded under the wire name it called, a script call to a catalog tool under the tool's id, never its wire name, and a script call to an adhoc tool under the tool's `name`.
 
 ### The arguments the model sends
 
@@ -2145,7 +2173,7 @@ When the model calls a tool, the run reports a `tool_call_succeeded` event for t
 
 Each tool call the model makes inside `models.loop` is dispatched by tool name with its call id and the model's JSON arguments, in the order the model listed the calls. A model call `call_1` to `web_search` with `{ "query": "lua" }` goes out as the call `web_search` with the id `call_1` and those arguments, tagged with the number of the round that requested it.
 
-The loop resolves each name through the section's rendered tool list. An advertised name that maps to an `adhoc/` id runs that adhoc tool's handler, and any other advertised name runs the catalog tool it maps to.
+The loop resolves each name through the section's Static Set. An advertised name that maps to an `adhoc/` id runs that adhoc tool's handler, and any other advertised name runs the catalog tool it maps to.
 
 Before any call runs, each tool name the model requests in the round is checked against the names that round advertised. When any name in the round is out of scope, the whole round fails before any of its calls runs, at the first name the round did not advertise. `models.loop` raises an error value of kind `out_of_scope_tool` whose `name` field holds the requested name. In the `search-loop` prompt, a model call to `rogue`, caught with `pcall(models.loop)`, gives the kind `out_of_scope_tool`, the name `rogue`, and the message:
 
@@ -2225,7 +2253,7 @@ A model-issued call whose bound tool fails still reports a `tool_result` event u
 
 #### The tool scope check and section names
 
-The section's first loop round that builds its tools checks the tool scope as it renders the section's tool list, before the model round is sent. It reports `tool_scope_validation_started`, then `tool_scope_validation_succeeded`, then the round's `model_turn_completed`. The validation events fire once per section: later rounds send the same rendered tool list and report only their own `model_turn_completed`. A tool call refused as out of scope reports a `tool_call_failed` event.
+The section's first loop round that builds its tools checks the tool scope as it renders the section's tool list, before the model round is sent. It reports `tool_scope_validation_started`, then `tool_scope_validation_succeeded`, then the round's `model_turn_completed`. The validation events fire once per section: later rounds send the same Static Set and report only their own `model_turn_completed`. A render that fails, such as one over a wire name two offered catalog tools share, reports `tool_scope_validation_failed` in place of `tool_scope_validation_succeeded` and sends no round. A tool call refused as out of scope reports a `tool_call_failed` event.
 
 Every event names the section that reported it in its `section` field, so the tool call and tool result events from a block name the section that made the call, and a failed model-issued tool call reports its `tool_call_failed` event on that section.
 
@@ -2368,11 +2396,11 @@ local ok, err = pcall(tools.call, 'web/missing', {})
 return tostring(ok) .. '|' .. err.kind .. ':' .. err.name
 ````
 
-This returns `false|unbound_tool:web/missing`. The error value's `name` field holds the exact id the block passed, and its message reads `tool "{name}" is not a tool in this run; catalog tools: [...]`, listing the ids of the tools the run offers.
+This returns `false|unbound_tool:web/missing`. The error value's `name` field holds the exact id the block passed, and its message reads `tool "{name}" is not a tool in this run; catalog tools: [...]`, listing every tool id in the run's tool catalog.
 
-A script call resolves a tool id such as `web/fetch` against the section's adhoc tools, then the run's offering, and then the whole catalog, so `tools.call('adhoc/grab')` before `grab` is defined gives `unbound_tool` too. A string without a slash, a wire name or a bare tool name included, never reaches that lookup: it raises `tools.call: "web_fetch" is not a tool id` at the call, as [Wire names for the model, tool ids for Lua](#wire-names-for-the-model-tool-ids-for-lua) shows. A failed call of either kind sends out no tool call at all.
+A script call resolves a tool id such as `web/fetch` against the section's adhoc tools and then the run's tool catalog, so `tools.call('adhoc/grab')` before `grab` is defined gives `unbound_tool` too. A string without a slash, a wire name or a bare tool name included, never reaches that lookup: it raises `tools.call: "web_fetch" is not a tool id` at the call, as [Wire names for the model, tool ids for Lua](#wire-names-for-the-model-tool-ids-for-lua) shows. A failed call of either kind sends out no tool call at all.
 
-The id list covers every tool the run offers, not just the tools offered into the current section, so on a Host that serves `user-input` and `web`, a section that offers nothing still lists all three of their tools. The list is in alphabetical order rather than catalog order, so it reads `["user-input/ask", "web/fetch", "web/search"]` whatever order the catalog adds them in. Uncaught, the `tools.call('web/missing', {})` from the block above ends the run with run error kind `Tool` and this message:
+The id list covers every tool in the run's tool catalog, not just the tools offered into the current section, so on a Host that serves `user-input` and `web`, a section that offers nothing still lists all three of their tools. The list is in alphabetical order rather than catalog order, so it reads `["user-input/ask", "web/fetch", "web/search"]` whatever order the catalog adds them in. Uncaught, the `tools.call('web/missing', {})` from the block above ends the run with run error kind `Tool` and this message:
 
 ````text
 tool "web/missing" is not a tool in this run; catalog tools: ["user-input/ask", "web/fetch", "web/search"]
@@ -2415,7 +2443,7 @@ The round advertises one tool, `echo`. When the model calls `rogue` instead, the
 the model asked for rogue: tool "rogue" is not in this section's scope; in-scope aliases: ["echo"] (1)
 ````
 
-The error is a hard error. It records the requested name, whether that name is the wire name of a tool the run offers, and the round's in-scope tools:
+The error is a hard error. It records the requested name, whether that name is the wire name of a tool in the run's tool catalog, and the round's in-scope tools:
 
 - The `name` field holds the tool name exactly as the model called it, whether that is `rogue`, `web_search`, `web/search`, or `nonexistent`.
 - The message names the requested tool and lists the in-scope tools by their wire names, not their tool ids, each in double quotes, and it ends with that list written as a bracketed list of quoted names, such as `["echo"]`.
@@ -2426,7 +2454,7 @@ Uncaught, it ends the section and fails the run with run error kind `Tool`, so a
 
 #### The not-offered hint
 
-The message tells a tool the section forgot to offer apart from a wrong or unknown name. When the model calls the wire name of a tool the run offers but the current section did not offer, the message adds a hint after the in-scope list. In the `scope-check` section, on a Host that serves `web`, the only in-scope tool is the adhoc `echo`, so a model call to `web_search`, the wire name of a catalog tool this section never offered, gives a message ending:
+The message tells a tool the section forgot to offer apart from a wrong or unknown name. When the model calls the wire name of a tool in the run's tool catalog that the current section did not offer, the message adds a hint after the in-scope list. In the `scope-check` section, on a Host that serves `web`, the only in-scope tool is the adhoc `echo`, so a model call to `web_search`, the wire name of a catalog tool this section never offered, gives a message ending:
 
 ````text
 ["echo"] (a catalog tool that was not offered in this section)
@@ -2445,7 +2473,7 @@ Run error kind `Tool` covers four uncaught failures: a dispatched tool's failure
 |---|---|
 | A dispatched tool fails | `tool call failure: {message}` |
 | The model calls a tool outside the round's scope | `tool {name:?} is not in this section's scope; in-scope aliases: {in_scope:?}`, followed by the not-offered hint when it applies |
-| A script call names an id not bound in the run | `tool {name:?} is not a tool in this run; catalog tools: {ids:?}`, listing the ids of the tools the run offers |
+| A script call names an id not bound in the run | `tool {name:?} is not a tool in this run; catalog tools: {ids:?}`, listing every tool id in the run's tool catalog |
 
 In these messages, each `:?` placeholder, such as `{name:?}`, shows the value in double quotes with escapes, so a name renders as `"rogue"` and an in-scope list as `["echo"]`.
 

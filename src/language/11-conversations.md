@@ -1212,9 +1212,9 @@ Every record added during `models.loop` appears in the list: assistant replies a
 
 Each round is one stateless, tool-capable model request over the whole message list as it stands at that moment, including every record that earlier rounds and earlier calls have added. A round after a tool call therefore resends the whole conversation so far, with the message roles `user`, `assistant`, and `tool`. In one call with three one-call tool rounds before the final reply, the four requests hold 1, 3, 5, and 7 messages.
 
-A loop round is the same request a nested `infer` makes (see [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer)), only sent over your conversation together with the section's tool list. The first loop round in the section that builds its tools renders the section's tool list from every offer made so far (see [Tool scope](12-tools.md#tool-scope)), and that rendered tool list is fixed for the rest of the section. The render happens before the round's list is checked and before the context precheck, so a first round the precheck refuses still fixes the list. Every later round, a compacted round's retry and rounds on another model included, sends the same tool schemas, and once the list is rendered, `tools.offer` and `tools.offer_dynamic` raise (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)). `tools.adhoc` still defines a tool after the render (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)), but the rendered list never gains it. A round refused before the build renders nothing: one over an empty list, one with no model to run on, and one whose tool build fails. [When an offer takes effect](12-tools.md#when-an-offer-takes-effect) covers the rule.
+A loop round is the same request a nested `infer` makes (see [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer)), only sent over your conversation together with the section's tool list. The first loop round in the section that builds its tools renders the section's tool list, the Static Set, from every offer made so far (see [Tool scope](12-tools.md#tool-scope)), and the Static Set is fixed for the rest of the section. The render happens before the round's list is checked and before the context precheck, so a first round the precheck refuses still fixes the list. Every later round, a compacted round's retry and rounds on another model included, sends the same tool schemas, and once the list is rendered, `tools.offer` and `tools.offer_dynamic` raise (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)). `tools.adhoc` still defines a tool after the render (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)), but the Static Set never gains it. A round refused before the build renders nothing: one over an empty list, one with no model to run on, and one whose tool build fails. [When an offer takes effect](12-tools.md#when-an-offer-takes-effect) covers the rule.
 
-The model's sampling options (see [Sampling options on `models.use`](10-models.md#sampling-options-on-modelsuse)), such as `temperature`, `max_tokens`, and `thinking`, apply to every round of the loop. Each round is sent with the options of the model it runs on, the conversation so far, and the rendered tool list.
+The model's sampling options (see [Sampling options on `models.use`](10-models.md#sampling-options-on-modelsuse)), such as `temperature`, `max_tokens`, and `thinking`, apply to every round of the loop. Each round is sent with the options of the model it runs on, the conversation so far, and the Static Set.
 
 Before every round, the loop checks the whole list again against the [cross-record rules](#checking-and-composing-before-each-request), such as no duplicate tool-call id, no orphan tool record, and no assistant tool call without a result. It then builds the request from the records the list holds at that moment, so a list you edit between calls is checked each time. The per-record checks that a builder method such as `messages:user` runs when it adds a record do not run again.
 
@@ -1268,7 +1268,7 @@ return messages[#messages].content
 ```
 ````
 
-The first loop's round runs on the model bound to `writer`, and the second loop's round runs on the model bound to `reviewer`, because `models.use('reviewer')` changes the section's current model before the second call sends its round. The second request includes the first reply, so the reviewer sees the paragraph it comments on, and the run result is the reviewer's reply. The rendered tool list stays the same across the change too, so both models are offered the same tools.
+The first loop's round runs on the model bound to `writer`, and the second loop's round runs on the model bound to `reviewer`, because `models.use('reviewer')` changes the section's current model before the second call sends its round. The second request includes the first reply, so the reviewer sees the paragraph it comments on, and the run result is the reviewer's reply. The Static Set stays the same across the change too, so both models are offered the same tools.
 
 `models.loop()` runs on the section's current model even when other model handles are in scope, such as one from `local other = models.get('reviewer')`. With neither `models.use` nor `models.default` in effect, `models.loop` fails with the same missing-model error that `models.infer` raises (see [Infer errors and the missing-model error](10-models.md#infer-errors-and-the-missing-model-error)), because both pick the section's current model the same way.
 
@@ -2222,7 +2222,7 @@ The function passed to `models.loop` is the compactor for this call. The call go
 4. The loop checks the compacted list against the rules in [The rules a compaction must pass](#the-rules-a-compaction-must-pass), then retries the round once, without counting the retry against the round cap.
 5. The retried round fits, the model replies, and the loop appends the reply as the terminal record, so the list ends with 2 records.
 
-`messages` is the same list before and after the compaction, and a view read before it still shows the record it was read from, such as the oversized notes. The rendered tool list stays attached through the compaction, so the retry sends the same tool schemas as the round that overflowed.
+`messages` is the same list before and after the compaction, and a view read before it still shows the record it was read from, such as the oversized notes. The Static Set stays attached through the compaction, so the retry sends the same tool schemas as the round that overflowed.
 
 ### Trimming the list after an overflow
 
@@ -2344,7 +2344,7 @@ When the provider rejects a sent request for exceeding its context, for example 
 
 ### `compactors.clear`
 
-`compactors.clear(reason)` removes every record from `messages` and leaves the rendered tool list attached. It works only inside a compactor, so `models.compact(compactors.clear, reason)` starts the conversation over without leaving the section. Put this block in the `## Chat` section of `first-chat`:
+`compactors.clear(reason)` removes every record from `messages` and leaves the Static Set attached. It works only inside a compactor, so `models.compact(compactors.clear, reason)` starts the conversation over without leaving the section. Put this block in the `## Chat` section of `first-chat`:
 
 ````lua
 models.use('writer')
