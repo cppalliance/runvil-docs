@@ -249,10 +249,10 @@ A prompt the environment cannot satisfy is refused before any of its blocks run.
 - the Host has no Pack, from any vendor, for a bare entry the prompt declares
 - a declared Pack is unavailable, because the Host has it but it cannot serve, for example because it failed to build, or because the Host lacks a declared `vendor/name` entry, or has a bare entry's Pack id only from other vendors
 - a declared Pack needs a service the run lacks
-- a tool in the run's catalog or a Pack in its roster has the Pack id `adhoc`
+- a tool in the run's catalog or a Pack in its roster has a Pack id the Engine reserves, `adhoc` or `dynamic`
 - the current model falls short of a declared role's context minimum or one of its hard keywords
 
-An unavailable Pack is one the Host has that cannot serve the run, a declared `vendor/name` entry the Host lacks, or a bare entry whose reason tells you which vendor's Pack to write instead. The run proceeds only when every model role requirement is met, the Host has every required Pack, each one can serve and has the services it needs, and nothing in the run takes the Pack id `adhoc`. [Packs at prepare](#packs-at-prepare) shows each Pack case.
+An unavailable Pack is one the Host has that cannot serve the run, a declared `vendor/name` entry the Host lacks, or a bare entry whose reason tells you which vendor's Pack to write instead. The run proceeds only when every model role requirement is met, the Host has every required Pack, each one can serve and has the services it needs, and nothing in the run takes a reserved Pack id. [Packs at prepare](#packs-at-prepare) shows each Pack case.
 
 The refusal comes after the Pack report and the model report are merged into one, and before the run is built. So when the Harness cannot provide what the prompt requires, such as a model with a large enough context window for one of its roles, no section runs, no Lua runs, and nothing in the prompt can catch the refusal. The refusal's message is the notice text, line for line. The notice opens with the line `the environment cannot satisfy this prompt:` and then gives one `- ` line per gap, in this order, with each `{...}` standing for the value the line names:
 
@@ -261,7 +261,7 @@ the environment cannot satisfy this prompt:
 - missing required Pack: {name}
 - {pack} needs {service}, and the environment provides none
 - {pack} is unavailable: {reason}
-- the run's tool catalog or Pack roster names the Pack id adhoc, which holds a section's own tools
+- the run's tool catalog or Pack roster names the Pack id {id}, which the Engine reserves
 - role '{role}': requires a context of at least {n} tokens; the current model provides {m}
 - role '{role}': requires '{keyword}'; the current model's thinking capability is {mode}
 ````
@@ -549,7 +549,7 @@ The notice is written for a model to read: concise, factual, and self-contained.
 | `- missing required Pack: {name}` | a bare entry whose Pack id no Pack of the Host has, from any vendor |
 | `- {pack} needs {service}, and the environment provides none` | a declared Pack whose service the run lacks |
 | `- {pack} is unavailable: {reason}` | a declared Pack that the Host has but that cannot serve, a declared `vendor/name` entry the Host lacks, or a bare entry whose Pack id only other vendors' Packs have |
-| `- the run's tool catalog or Pack roster names the Pack id adhoc, which holds a section's own tools` | a catalog tool or a roster Pack under the Pack id `adhoc` |
+| `- the run's tool catalog or Pack roster names the Pack id {id}, which the Engine reserves` | a catalog tool or a roster Pack under a reserved Pack id, `adhoc` or `dynamic` |
 | `- role '{label}': requires a context of at least {min} tokens; the current model provides {actual}` | a role whose `min_context` is above the current model's window |
 | `- role '{label}': requires '{keyword}'; the current model's thinking capability is {mode}` | a role whose hard keyword the current model fails |
 | `- the H1 gate failed` | an uncaught Lua error in the H1 pass |
@@ -564,7 +564,7 @@ A declared Pack that the Host has but that cannot serve, for example because it 
 
 A declared entry the Host has no Pack for appears the same way, unless it is a bare entry that no vendor has. A bare Pack id that only other vendors' Packs have gives `- poop is unavailable: poop means runvil/poop, which is not installed; write acme/poop to use that Pack`, and a `vendor/name` the Host lacks gives `- poop is unavailable: acme/poop is not installed`, whether or not any vendor has that Pack id.
 
-The Pack id `adhoc` holds a section's own tools (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)), so a run whose tool catalog holds a tool under the Pack id `adhoc`, or whose roster holds a Pack with that id, usable or not, is refused with the line `- the run's tool catalog or Pack roster names the Pack id adhoc, which holds a section's own tools`. The line appears once, however many such tools or Packs the run has.
+The Engine reserves two Pack ids, `adhoc` for a section's own tools (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)) and `dynamic` for its discovery tools (see [Finding and calling dynamic tools](12-tools.md#finding-and-calling-dynamic-tools)), so a run whose tool catalog holds a tool under a reserved Pack id, or whose roster holds a Pack with one, usable or not, is refused with the line `- the run's tool catalog or Pack roster names the Pack id {id}, which the Engine reserves`, such as `- the run's tool catalog or Pack roster names the Pack id adhoc, which the Engine reserves`. Each reserved Pack id the run names gets one line, however many such tools or Packs the run has, and a run that names both gets the `adhoc` line first.
 
 Each Pack appears under its real cause only. A Pack that lacks a host service is reported only under that service gap, never also as a missing required Pack, whichever check finds it first. A Pack that the Host has but that fails to build or activate is reported only as unavailable, with its reason, never as a missing required Pack. So when a declared Pack lacks a service or is unavailable, the notice leaves out its `missing required Pack` line and names only the real cause.
 
@@ -584,20 +584,20 @@ The `- the H1 gate failed` line does not come from a refusal. An uncaught Lua er
 
 ### The order of the lines
 
-Notice lines appear in a fixed order: missing Packs first, then missing services, then unavailable Packs, then the line for the Pack id `adhoc`, then unmet model role requirements. Missing required Packs come before Packs that lack a host service, no matter which gap was found first. Within each kind of gap, the notice keeps the order in which the gaps were found. Role lines are listed in sorted label order, and within a role the context line comes first, then the keyword lines in the order the keywords are declared.
+Notice lines appear in a fixed order: missing Packs first, then missing services, then unavailable Packs, then the lines for reserved Pack ids, in sorted order, then unmet model role requirements. Missing required Packs come before Packs that lack a host service, no matter which gap was found first. Within each kind of gap, the notice keeps the order in which the gaps were found. Role lines are listed in sorted label order, and within a role the context line comes first, then the keyword lines in the order the keywords are declared.
 
 Each gap appears once. A Pack gap that more than one merged report names appears only once in the notice. Each Pack and missing service pair appears once even when it is reported twice, and every distinct pair is listed. Each unavailable Pack appears once even when more than one check reports it, and every distinct unavailable Pack is listed with its own reason.
 
 ### The requirements report
 
-The requirements report is the preflight check behind the notice, made before the prompt starts. It combines the Harness's check that each declared Pack can serve, made when the Harness takes its snapshot of the run's Packs, with the model role checks made while the run context is prepared, so one refusal names every gap. It names missing required Packs, declared Packs that lack a host service, declared Packs that are unavailable, whether the run's catalog or roster takes the Pack id `adhoc`, and unmet requirements.
+The requirements report is the preflight check behind the notice, made before the prompt starts. It combines the Harness's check that each declared Pack can serve, made when the Harness takes its snapshot of the run's Packs, with the model role checks made while the run context is prepared, so one refusal names every gap. It names missing required Packs, declared Packs that lack a host service, declared Packs that are unavailable, the reserved Pack ids the run's catalog or roster takes, and unmet requirements.
 
 Unmet requirements do not make prepare itself fail. Prepare still produces a requirements report, marked as not satisfied, and when prepare refuses to start the run, its refusal text is the notice built from that report. The report keeps one record per kind of gap:
 
 - missing required Packs
 - missing services, one entry for each Pack and missing service
 - unavailable Packs, each with its reason
-- a flag set when a catalog tool or a roster Pack has the Pack id `adhoc`
+- the reserved Pack ids that a catalog tool or a roster Pack has, sorted, each once
 - unmet requirements, one entry for each failed model role check
 
 The report keeps unmet role checks apart from its list of missing required Packs, which stays empty when only a role check fails. Each unmet role entry records:

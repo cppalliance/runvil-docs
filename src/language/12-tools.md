@@ -163,11 +163,13 @@ invalid frontmatter: Pack id {id} is declared more than once under uses
 
 The vendors do not matter, because a run holds one Pack per Pack id, so `uses: [web, acme/web]` fails naming `web`, and so does `uses: [web, runvil/web]`. When the list repeats several Pack ids, the message names the Pack id whose second appearance comes first in the list, so `[web, user-input, user-input, web]` names `user-input`.
 
-The Pack id `adhoc` holds a section's own tools (see [Pack ids](#pack-ids)), so it is never declared. A `uses:` entry `adhoc` or `<vendor>/adhoc`, such as `runvil/adhoc` or `acme/adhoc`, fails to parse with this message, which like the repeated-entry message reports no line or column:
+The Engine reserves the Pack ids `adhoc`, which holds a section's own tools, and `dynamic`, which holds its discovery tools (see [Pack ids](#pack-ids)), so neither is ever declared. A `uses:` entry with either Pack id, from any vendor, such as `adhoc`, `runvil/adhoc`, or `acme/dynamic`, fails to parse with this message, which names the reserved Pack id and, like the repeated-entry message, reports no line or column:
 
 ````text
-invalid frontmatter: adhoc holds a section's own tools and is never declared under uses
+invalid frontmatter: Pack id {id} is reserved by the Engine and is never declared under uses
 ````
+
+When the list names both reserved Pack ids, the message names the one that comes first, so `uses: [dynamic, adhoc]` names `dynamic`.
 
 ## Pack ids, tool ids, and wire names
 
@@ -233,7 +235,7 @@ Three name shapes are easy to mix up:
 
 The first two go under `uses:`. A bare Pack id means the `runvil` Pack of that id, and a fully qualified name names the vendor as well, so `web` and `runvil/web` are the same entry and `acme/web` is another vendor's Pack. A tool id has the same two-segment shape as a fully qualified name, so `web/fetch` under `uses:` reads as the Pack `fetch` of a vendor named `web`, and unless the Host has such a Pack, the run is refused at prepare with `- fetch is unavailable: web/fetch is not installed`. Everywhere else a Pack id is one segment, so `tools.packs.get('acme/web')` reads `nil`, and `tools.offer('acme/web')`, a string with a slash, is read as a tool id and raises `tools.offer: "acme/web" is not a tool in this run`.
 
-The Pack id `adhoc` holds a section's own tools, the tools a prompt defines with `tools.adhoc` (see [Adhoc tools with `tools.adhoc`](#adhoc-tools-with-toolsadhoc)), so no Pack of any vendor takes it. The Host's Pack registry refuses a Pack whose Pack id is `adhoc` when a Plugin adds it, with ``Pack `{fqn}` cannot take the Pack id adhoc, which holds a section's own tools``, where `{fqn}` is the Pack's fully qualified name, such as `acme/adhoc`. A run whose tool catalog or Pack roster still names the Pack id `adhoc` is refused before it starts, and its requirements notice holds the line `- the run's tool catalog or Pack roster names the Pack id adhoc, which holds a section's own tools` (see [The requirements notice](04-how-a-prompt-runs.md#the-requirements-notice)).
+The Engine reserves two Pack ids, so no Pack of any vendor takes either: `adhoc` holds a section's own tools, the tools a prompt defines with `tools.adhoc` (see [Adhoc tools with `tools.adhoc`](#adhoc-tools-with-toolsadhoc)), and `dynamic` holds the Engine's two discovery tools (see [Finding and calling dynamic tools](#finding-and-calling-dynamic-tools)). The Host's Pack registry refuses a Pack whose Pack id is reserved when a Plugin adds it, with ``Pack `{fqn}` cannot take the Pack id {id}, which the Engine reserves``, where `{fqn}` is the Pack's fully qualified name, such as `acme/adhoc`, and `{id}` is the reserved Pack id, such as `adhoc`. A run whose tool catalog or Pack roster still names a reserved Pack id is refused before it starts, and its requirements notice holds the line `- the run's tool catalog or Pack roster names the Pack id {id}, which the Engine reserves` once for each reserved Pack id it names (see [The requirements notice](04-how-a-prompt-runs.md#the-requirements-notice)).
 
 ### Tool ids
 
@@ -786,7 +788,7 @@ Offered tools reach the model in the order the prompt offers them, with each Pac
 
 ### The Dynamic Set with `tools.offer_dynamic`
 
-`tools.offer_dynamic` takes the same forms as `tools.offer` and makes the same checks, and its errors carry its own name, but it records its offers into the section's Dynamic Set rather than the Static Set. The first loop round records the Dynamic Set beside the Static Set by the same steps, so each tool the dynamic offers name appears once, in offer order, with each Pack's tools together, and an adhoc tool offered dynamically shadows a catalog tool offered dynamically. The Dynamic Set then drops each tool whose id the Static Set holds. Nothing reads the Dynamic Set yet, so the model cannot reach a dynamic tool, and dynamic offers never change what the model sees or which calls its rounds accept. With an adhoc tool `grab` defined, each of these lines records into the Dynamic Set:
+`tools.offer_dynamic` takes the same forms as `tools.offer` and makes the same checks, and its errors carry its own name, but it records its offers into the section's Dynamic Set rather than the Static Set. The first loop round records the Dynamic Set beside the Static Set by the same steps, so each tool the dynamic offers name appears once, in offer order, with each Pack's tools together, and an adhoc tool offered dynamically shadows a catalog tool offered dynamically. The Dynamic Set then drops each tool whose id the Static Set holds. No round advertises a Dynamic Set tool. Instead, when the Dynamic Set still holds a tool after that drop, the Static Set ends with the Engine's two discovery tools: `GetDynamicTools`, which lists, searches, and describes the Dynamic Set, and `CallDynamicTool`, which calls one of its tools. So the model sees two tools in place of the whole Dynamic Set, and finds and calls a dynamic tool through them (see [Finding and calling dynamic tools](#finding-and-calling-dynamic-tools)). With an adhoc tool `grab` defined, each of these lines records into the Dynamic Set:
 
 ````lua
 tools.offer_dynamic('user-input')
@@ -794,7 +796,102 @@ tools.offer_dynamic(tools.packs.extras())
 tools.offer_dynamic({ 'web', grab })
 ````
 
-The Static Set wins whichever call comes first. A section that runs `tools.offer('web/search')` and `tools.offer_dynamic('web')`, in either order, renders `web_search` for the model and records only `web/fetch` in its Dynamic Set. A dynamic offer can still fail the section's first loop round, because a wire name names one tool across both sets and the round checks every Dynamic Set tool's wire name and parameter schema as it checks the Static Set's. So two tools with different ids that share a wire name fail that round whichever sets they sit in, unless one is an adhoc tool that shadows the other in the same set, as [An adhoc tool that shadows a catalog tool](#an-adhoc-tool-that-shadows-a-catalog-tool) shows. Like `tools.offer`, `tools.offer_dynamic` raises once the section's first loop round has rendered its tool list (see [When an offer takes effect](#when-an-offer-takes-effect)).
+The Static Set wins whichever call comes first. A section that runs `tools.offer('web/search')` and `tools.offer_dynamic('web')`, in either order, records only `web/fetch` in its Dynamic Set and renders `web_search`, `GetDynamicTools`, and `CallDynamicTool` for the model. A dynamic offer can still fail the section's first loop round, because a wire name names one tool across both sets and the round checks every Dynamic Set tool's wire name and parameter schema as it checks the Static Set's. So two tools with different ids that share a wire name fail that round whichever sets they sit in, unless one is an adhoc tool that shadows the other in the same set, as [An adhoc tool that shadows a catalog tool](#an-adhoc-tool-that-shadows-a-catalog-tool) shows. Like `tools.offer`, `tools.offer_dynamic` raises once the section's first loop round has rendered its tool list (see [When an offer takes effect](#when-an-offer-takes-effect)).
+
+### Finding and calling dynamic tools
+
+A section whose Dynamic Set holds a tool advertises two more tools after every tool it offers: `GetDynamicTools` and then `CallDynamicTool`. They are the Engine's discovery tools, and their tool ids are `dynamic/search` and `dynamic/call`, under the Pack id `dynamic`, which the Engine reserves, so no Pack and no `uses:` entry may take it (see [Pack ids](#pack-ids)). A section whose Dynamic Set ends up empty, such as one that made no dynamic offer or one whose Static Set holds every tool its dynamic offers name, advertises neither. In a section of a prompt that declares `uses: [web]`:
+
+````lua
+models.use('writer')
+tools.offer('web/search')
+tools.offer_dynamic(tools.adhoc({ name = 'grab', description = 'Grab a value', parameters = { value = 'string' } }, function(args)
+  return 'grabbed ' .. args.value
+end))
+messages:user('Find a tool that grabs a value, and grab x with it.')
+models.loop()
+return messages[#messages].content
+````
+
+Every round of this loop advertises `web_search`, `GetDynamicTools`, and `CallDynamicTool`, in that order, and never `grab`. The model learns the Dynamic Set's names from the description of `GetDynamicTools`, which starts with this text:
+
+````text
+Lists and searches the dynamic tools, which CallDynamicTool calls: pass toolName for one tool's description and input schema, pattern for a regex search of their names, or neither to list them all
+````
+
+A space and the Dynamic Set's wire names follow it, sorted in byte order, comma-separated, and in parentheses, so in this section the description ends with ` (grab)`. The list names at most 100 tools. A longer Dynamic Set lists its first 100 names and then `and {n} more; call GetDynamicTools to search`, where `{n}` counts the rest, so the description for a Dynamic Set of 105 tools ends `, and 5 more; call GetDynamicTools to search)`. `CallDynamicTool` always has this description:
+
+````text
+Calls a dynamic tool: pass its name from GetDynamicTools as toolName and its arguments as arguments.
+````
+
+Both descriptions stay the same for every round of the section, because the section's tool list is fixed at its first loop round. The two tools take these parameters:
+
+| Tool | Parameter | Type | Required | Parameter description |
+|---|---|---|---|---|
+| `GetDynamicTools` | `toolName` | string | no | `A dynamic tool's name, for its description and input schema.` |
+| `GetDynamicTools` | `pattern` | string | no | `A regex of at most 256 characters matched against dynamic tool names; (?i) makes it case-insensitive.` |
+| `CallDynamicTool` | `toolName` | string | yes | `The dynamic tool's name, from GetDynamicTools.` |
+| `CallDynamicTool` | `arguments` | object | no | `The tool's arguments, as its input schema describes them.` |
+
+#### Searching with `GetDynamicTools`
+
+`GetDynamicTools` answers from the section's Dynamic Set in one of three ways:
+
+- With `toolName`, it looks that tool up and returns one JSON object holding the tool's wire name as `tool`, its whole description as `description`, and its parameter schema as `inputSchema`. `toolName` wins over `pattern`, so a call that passes both looks the tool up and never reads the pattern.
+- With `pattern` and no `toolName`, it returns a JSON array holding `tool` and `description` for each Dynamic Set tool whose wire name the pattern matches, in Dynamic Set order, or `[]` when none matches.
+- With neither, it returns that array for every Dynamic Set tool.
+
+The pattern is a regular expression in the syntax of Rust's `regex` crate, at most 256 characters long, counting characters rather than bytes. It matches anywhere in a wire name unless it anchors itself with `^` or `$`, so `ra` matches `grab`, and it is case-sensitive unless it starts with `(?i)`, so `(?i)GRAB` matches `grab` too. In an array, a description longer than 200 characters keeps its first 200 characters followed by `... [truncated]`, while a lookup returns the description whole. The tool reads no other key, so a call that also passes `namespace`, or any other key, gets the same answer as one without it.
+
+A listing is untrusted tool output, because the descriptions in it can come from Packs, so the model reads it inside the untrusted envelope (see [The untrusted envelope](#the-untrusted-envelope)), and the call reports `tool_call_succeeded` and a `tool_result` event with `trusted` set to `false`. In the section above, a model call to `GetDynamicTools` with `{}` or with `{"pattern":"(?i)GRAB"}` gets this listing inside the envelope:
+
+````text
+[{"tool":"grab","description":"Grab a value"}]
+````
+
+A call with `{"toolName":"grab"}` gets this one:
+
+````text
+{"tool":"grab","description":"Grab a value","inputSchema":{"properties":{"value":{"type":"string"}},"required":["value"],"type":"object"}}
+````
+
+#### Calling with `CallDynamicTool`
+
+`CallDynamicTool` runs the Dynamic Set tool its `toolName` names, a catalog tool or an adhoc tool, with `arguments` as that tool's arguments, or `{}` when the call leaves `arguments` out. The tool then runs the way an offered tool runs when the model calls it, under the `CallDynamicTool` call's id: a catalog tool's call reaches the Harness under its own tool id and wire name, with the model as the caller, and an adhoc tool's handler runs. From there on the call is that tool's own: its result, with its trust level, answers the `CallDynamicTool` call, a failure behaves as that tool's failure does (see [Tool errors](#tool-errors)), and its `tool_result` event names that tool, with its wire name in `alias` and its tool id in `tool`. In the section above, a model call to `CallDynamicTool` with `{"toolName":"grab","arguments":{"value":"x"}}` runs the `grab` handler, and the model reads `grabbed x`.
+
+A call to a discovery tool runs alone, as an adhoc tool's call does: a batch stops at a call to `GetDynamicTools` or `CallDynamicTool`, and at a direct call to a Dynamic Set tool, and the model still gets the round's results in the order it made the calls (see [Calls that run alone](#calls-that-run-alone)). The round's `assistant_tool_calls` event names a call to a discovery tool by the tool id `dynamic/search` or `dynamic/call`, with the vendor `runvil`, and the `tool_result` event of a listing or a refusal names the tool the model called the same way.
+
+#### Mistakes the model gets back as text
+
+A call the discovery tools refuse does not fail the round. The model gets refusal text as that call's result, saying what was wrong and what to do next, and the loop goes on to its next round. Each mistake has its own text:
+
+| Mistake | Text the model gets |
+|---|---|
+| A `toolName` that no Dynamic Set tool has | `{tool}: no dynamic tool is named "{name}"; call GetDynamicTools with a pattern or no arguments to find the names` |
+| A `toolName` from the Static Set, a discovery tool's own name included | `{tool}: "{name}" is in your tool list, not a dynamic tool; call it directly` |
+| A `toolName` that is not a string, or a `GetDynamicTools` `pattern` that is not one | `{tool}: {key} must be a string, got {type}` |
+| A `pattern` longer than 256 characters | `GetDynamicTools: pattern is {n} characters, over the limit of 256; shorten it` |
+| A `pattern` that is not a valid regular expression | `GetDynamicTools: pattern "{pattern}" is not a valid regex: {reason}; fix it, or omit it to list every tool` |
+| A `CallDynamicTool` call with no `toolName` | `CallDynamicTool: toolName is required; pass a name from GetDynamicTools` |
+| An `arguments` that is not a JSON object | `CallDynamicTool: arguments must be an object of the tool's arguments, got {type}` |
+| A direct call to a Dynamic Set tool by its wire name | `"{name}" is a dynamic tool; call it through CallDynamicTool with toolName "{name}"` |
+
+Here `{tool}` is `GetDynamicTools` or `CallDynamicTool`, whichever the model called, `{key}` is the key that held the value, `{type}` is the JSON type of that value, such as `number`, `array`, or `null`, and `{reason}` is the regex parser's own reason, such as `unclosed group` for the pattern `(`. A quoted name or pattern shows in double quotes with escapes. So in the section above, a model call to `grab` by its own name runs nothing and gets `"grab" is a dynamic tool; call it through CallDynamicTool with toolName "grab"`.
+
+A refusal is Engine text, so the model reads it as is, outside the envelope, and its `tool_result` event reports `trusted` as `true`. A refused call runs no tool, and the run reports it as a failed tool call with a `tool_call_failed` event. A name in neither set still fails the round: a model call to a name that neither the Static Set nor the Dynamic Set holds raises `out_of_scope_tool` (see [The `out_of_scope_tool` error](#the-out_of_scope_tool-error)), and that error's in-scope list names only the Static Set's tools, `GetDynamicTools` and `CallDynamicTool` included.
+
+#### Names the discovery tools take
+
+The discovery tools are for the model alone. They are not in the run's tool catalog, so a script's `tools.call('dynamic/call', { toolName = 'grab' })` fails with `unbound_tool`, as any id the run does not hold does (see [The `unbound_tool` error](#the-unbound_tool-error)). `tools.adhoc` refuses the names `GetDynamicTools` and `CallDynamicTool` (see [Errors from `tools.adhoc`](#errors-from-toolsadhoc)), though a name that differs only in case, such as `getdynamictools`, is free.
+
+A Pack tool whose wire name is `GetDynamicTools` or `CallDynamicTool` fails the first loop round of any section that offers it and keeps a tool in its Dynamic Set, because a wire name names one tool across both sets, and it fails the way any wire-name clash does (see [What the model sees for each offered tool](#what-the-model-sees-for-each-offered-tool)). With a `kit` Pack whose tool `kit/discover` takes the wire name `GetDynamicTools`, a section that runs `tools.offer('kit/discover')` and keeps any other tool in its Dynamic Set fails its first loop round with this message:
+
+````text
+the tools kit/discover of the kit Pack in the Static Set and dynamic/search of the dynamic Pack in the Static Set share the wire name "GetDynamicTools", and a wire name names one tool across a section's Static Set and Dynamic Set; offer only one of them
+````
+
+A section that keeps no tool in its Dynamic Set advertises no discovery tool, so the same Pack tool goes out under its own name there.
 
 ### When an offer takes effect
 
@@ -1341,7 +1438,7 @@ tools.offer(tools.packs)                               -- every Pack the section
 tools.offer()                                          -- no argument, offers nothing
 tools.offer({})                                        -- empty array, offers nothing
 
--- OFFER DYNAMIC. The same forms and checks; recorded into the Dynamic Set at render, which nothing reads yet.
+-- OFFER DYNAMIC. The same forms and checks; recorded into the Dynamic Set at render, which the model reaches through GetDynamicTools and CallDynamicTool.
 tools.offer_dynamic('user-input')
 tools.offer_dynamic(tools.packs.extras())
 tools.offer_dynamic({ 'web', grab })
@@ -1621,6 +1718,7 @@ The attrs hold only `name`, `description`, and `parameters`:
 - A missing `name` or `description` raises `tools.adhoc: "{k}" is required`, as in `tools.adhoc: "name" is required`.
 - A `name` or `description` that is not a string raises `tools.adhoc: "{k}" must be a string, got {type}`.
 - A `name` outside the name grammar raises `tools.adhoc: invalid name "{name}": expected [A-Za-z][A-Za-z0-9_-]{0,63}`.
+- A `name` of `GetDynamicTools` or `CallDynamicTool`, the discovery tools' wire names, raises `tools.adhoc: the name "{name}" is reserved for a discovery tool; pick another name` (see [Finding and calling dynamic tools](#finding-and-calling-dynamic-tools)).
 - A taken name raises `tools.adhoc name "{name}" is already registered`, and a name whose id another adhoc tool holds raises `tools.adhoc name "{name}" has the id {id}, which "{other}" already holds` (see [Adhoc tool ids and wire names](#adhoc-tool-ids-and-wire-names)).
 - A `parameters` that is not a table raises `tools.adhoc: parameters must be a table, got {type}`, so `parameters = 'string'` reports `got string`.
 
@@ -2116,7 +2214,7 @@ An offered adhoc tool whose wire name equals an offered catalog tool's wire name
 
 ### Wire names for the model, tool ids for Lua
 
-The model sees only wire names and calls a tool by one, while Lua names a tool by its canonical tool id, such as `web/fetch` or `adhoc/grab`, or by its Tool object. A model reaches a tool only by a wire name its current round advertised, never by the tool's id, and a tool call the model makes resolves only against the wire names of that round. Wherever Lua names a tool, a wire name, a malformed id, or an adhoc tool's bare name is refused.
+The model sees only wire names and calls a tool by one, while Lua names a tool by its canonical tool id, such as `web/fetch` or `adhoc/grab`, or by its Tool object. A model reaches a tool only by its wire name, never by its tool id: by calling a name its current round advertised, or by passing a Dynamic Set tool's name to `CallDynamicTool` (see [Finding and calling dynamic tools](#finding-and-calling-dynamic-tools)). Wherever Lua names a tool, a wire name, a malformed id, or an adhoc tool's bare name is refused.
 
 When the model calls an offered tool by its wire name, the run calls the tool that wire name stands for, by its canonical id, with the model's JSON arguments, exactly once. The call goes to the tool the offer bound in the run's tool catalog. A model call to `web_search` with `{"query":"lua"}` runs `web/search` with `{"query": "lua"}`, with the model recorded as the caller. The tool receives the model's arguments as its own, so that call reaches the tool with `query` set to `lua`.
 
@@ -2173,9 +2271,9 @@ When the model calls a tool, the run reports a `tool_call_succeeded` event for t
 
 Each tool call the model makes inside `models.loop` is dispatched by tool name with its call id and the model's JSON arguments, in the order the model listed the calls. A model call `call_1` to `web_search` with `{ "query": "lua" }` goes out as the call `web_search` with the id `call_1` and those arguments, tagged with the number of the round that requested it.
 
-The loop resolves each name through the section's Static Set. An advertised name that maps to an `adhoc/` id runs that adhoc tool's handler, and any other advertised name runs the catalog tool it maps to.
+The loop resolves each name through the section's Static Set. An advertised name that maps to an `adhoc/` id runs that adhoc tool's handler, the Engine answers `GetDynamicTools` and `CallDynamicTool` itself (see [Finding and calling dynamic tools](#finding-and-calling-dynamic-tools)), and any other advertised name runs the catalog tool it maps to.
 
-Before any call runs, each tool name the model requests in the round is checked against the names that round advertised. When any name in the round is out of scope, the whole round fails before any of its calls runs, at the first name the round did not advertise. `models.loop` raises an error value of kind `out_of_scope_tool` whose `name` field holds the requested name. In the `search-loop` prompt, a model call to `rogue`, caught with `pcall(models.loop)`, gives the kind `out_of_scope_tool`, the name `rogue`, and the message:
+Before any call runs, each tool name the model requests in the round is checked against the names that round advertised and the names in the section's Dynamic Set, though a direct call to a Dynamic Set tool only gets refusal text (see [Mistakes the model gets back as text](#mistakes-the-model-gets-back-as-text)). A name in neither is out of scope, and when any name in the round is out of scope, the whole round fails before any of its calls runs, at the first such name. `models.loop` raises an error value of kind `out_of_scope_tool` whose `name` field holds the requested name. In the `search-loop` prompt, a model call to `rogue`, caught with `pcall(models.loop)`, gives the kind `out_of_scope_tool`, the name `rogue`, and the message:
 
 ````text
 tool "rogue" is not in this section's scope; in-scope aliases: ["web_search"]
@@ -2195,7 +2293,7 @@ A call that fails to route or to prepare takes its place in the batch as that er
 
 #### Calls that run alone
 
-The run decides which of a round's calls run together, so how a call runs never depends on how many other calls share its round. A batch stops at the first call to an adhoc tool. The catalog calls before that call start first, the call itself runs alone once they have landed, as an ordinary single tool call, and the calls after it go out together as a new batch:
+The run decides which of a round's calls run together, so how a call runs never depends on how many other calls share its round. A batch stops at the first call to an adhoc tool, and in the same way at a call to a discovery tool or a direct call to a Dynamic Set tool (see [Calling with `CallDynamicTool`](#calling-with-calldynamictool)). The catalog calls before that call start first, the call itself runs alone once they have landed, as an ordinary single tool call, and the calls after it go out together as a new batch:
 
 ````markdown
 ---
@@ -2408,7 +2506,7 @@ tool "web/missing" is not a tool in this run; catalog tools: ["user-input/ask", 
 
 ### The `out_of_scope_tool` error
 
-`out_of_scope_tool` is the error kind for a model call to a tool name outside the section's advertised scope. Every tool call outside the allowed tool scope surfaces as this kind, and `models.loop` raises it at its call site, so you catch it with `local ok, err = pcall(models.loop)`:
+`out_of_scope_tool` is the error kind for a model call to a tool name outside the section's advertised scope and its Dynamic Set. Every tool call outside the allowed tool scope surfaces as this kind, and `models.loop` raises it at its call site, so you catch it with `local ok, err = pcall(models.loop)`:
 
 ````markdown
 ---
