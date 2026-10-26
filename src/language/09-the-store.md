@@ -145,7 +145,7 @@ handoff text
 
 `## Writer` writes `note.txt` and does not return, so the walk falls through to `## Reader` (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)), which reads the file back and returns its text. A section that writes a store file and does not return hands that file to the next section this way, so the store hands state across fall-through.
 
-Every section of a run shares one store. Each section starts in a fresh Lua VM and its context clears on the transition (see [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals)), but the store stays: a file that one section writes or appends is readable, and can be extended, in any later section. [Appending to a file](#appending-to-a-file) shows a file that grows by one line per section.
+Every section of a run shares one store. Each section entry starts in a fresh Lua VM and its context clears on the transition (see [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals)), but the store stays: a file that one section writes or appends is readable, and can be extended, in any later section. [Appending to a file](#appending-to-a-file) shows a file that grows by one line per section.
 
 ### The store in the H1 body
 
@@ -2211,7 +2211,7 @@ Ship on Friday.
 
 ### What `untrusted` accepts
 
-`untrusted` is a reserved [Engine global](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals) the Engine installs in every section's Lua VM and in the H1 block's VM. It is defined as soon as each section VM is built, ahead of every later setup step, and it stays defined for the section's whole lifecycle, so every block in the section can call it.
+`untrusted` is a reserved [Engine global](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals) the Engine installs in every section entry's Lua VM and in the H1 block's VM. It is defined as soon as each section VM is built, ahead of every later setup step, and it stays defined for the entry's whole lifecycle, so every block in the entry can call it.
 
 `untrusted` accepts any UTF-8 string, of any content and length, including the empty string, and always returns an envelope. `untrusted('')` gives an envelope with an empty body and the usual two live tags:
 
@@ -2392,7 +2392,7 @@ The library under `## loader` writes `lib.md` and reads it back while `require` 
 
 ### The `store` global in every VM
 
-`store` is the reserved Engine global from [The `store` table](#the-store-table), which the Engine installs in the Lua VM of every section and of the H1, so it is always there for you to call. A section's `store` table is installed once, when the section's Lua VM is set up, and stays in place for the section's whole lifetime, so the same `store` table keeps working in every Lua block the section runs.
+`store` is the reserved Engine global from [The `store` table](#the-store-table), which the Engine installs in the Lua VM of every section entry and of the H1, so it is always there for you to call. A section entry's `store` table is installed once, when the entry's Lua VM is set up, and stays in place for the entry's whole lifetime, so the same `store` table keeps working in every Lua block the entry runs.
 
 Store calls work in three places: in a section's blocks, in the blocks under the H1 during the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass), and in library code while `require` loads it. In all three, a call runs the same way and gives the same results, the same store errors, and the same [line-range](#reading-line-ranges-and-numbered-lines) rules, so an H1 block that runs `return store.read('missing.txt')` ends the run with run error kind `Vfs`, exactly as a section would (see [The store in the H1 body](#the-store-in-the-h1-body)).
 

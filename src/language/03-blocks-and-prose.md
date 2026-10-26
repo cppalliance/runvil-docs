@@ -315,9 +315,9 @@ The prologue sets `var.city`, and the middle fence sends `Name one landmark in L
 
 The H1 body works the same way: it can hold several Lua blocks interleaved with prose blocks, and they run in file order as one H1 pass (see [The H1 pass](04-how-a-prompt-runs.md#the-h1-pass)).
 
-### One section VM per section
+### One section VM per section entry
 
-Each section, the H1 body's blocks, and every fanout arm (see [What an arm sees](14-fanout.md#what-an-arm-sees)) run in a section VM, a fresh Lua instance of its own. Several Lua blocks in one section run one after another on the same section VM, so a bare global that one Lua block assigns, called a section global, stays visible to later Lua blocks of the same section:
+Each section entry, the H1 body's blocks, and every fanout arm (see [What an arm sees](14-fanout.md#what-an-arm-sees)) run in a section VM, a fresh Lua instance of its own. Several Lua blocks in one section entry run one after another on the same section VM, so a bare global that one Lua block assigns, called a section global, stays visible to later Lua blocks of the same section entry:
 
 ````markdown
 ---
@@ -345,7 +345,7 @@ return greeting .. ', ' .. prose
 hello, world
 ````
 
-Other state persists from one fence to the next in the same section too, such as the tools an earlier fence offers and the call counts in `tools.stats` (see [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls)).
+Other state persists from one fence to the next in the same section entry too, such as the tools an earlier fence offers and the call counts in `tools.stats` (see [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls)).
 
 ### What a prologue and an epilog can do
 
@@ -542,7 +542,7 @@ The prompt asks `Name one planet.` first, during the H1 pass, and then `Name one
 
 Pending prose resets at three points: the nearest preceding heading, `lua` fence, or thematic break (`---`). Text above a `---`, such as `Draft notes.`, never reaches the next fence's `prose`, and the `---` itself is not part of it either. [Thematic breaks and setext headings](#thematic-breaks-and-setext-headings) covers breaks in full.
 
-A heading ends the pending prose, and each section starts with empty pending prose, so prose one section leaves unread never reaches the next section's first fence:
+A heading ends the pending prose, and each section entry starts with empty pending prose, so prose one section leaves unread never reaches the next section's first fence:
 
 ````markdown
 ---
@@ -2019,7 +2019,7 @@ A library loads successfully whether its code ends in a `return` value or is pla
 
 ### Library code runs in the caller's environment
 
-Library blocks run in the requiring section's one Lua environment, its [section VM](#one-section-vm-per-section). Globals the library sets are visible to the caller afterward, while the library's `local` variables stay inside the library:
+Library blocks run in the requiring section entry's one Lua environment, its [section VM](#one-section-vm-per-section-entry). Globals the library sets are visible to the caller afterward, while the library's `local` variables stay inside the library:
 
 ````markdown
 ---
@@ -2099,7 +2099,7 @@ end
 
 ### Effects a library makes belong to the caller
 
-Code in a section loaded with `require` runs as part of the calling section, so every store, model, and tool call it makes while it loads is issued on the caller's behalf. A [`store.write`](09-the-store.md#writing-and-reading-files) lands exactly as if the caller had made it, and a [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls) returns the tool's result.
+Code in a section loaded with `require` runs as part of the calling section entry, so every store, model, and tool call it makes while it loads is issued on the caller's behalf. A [`store.write`](09-the-store.md#writing-and-reading-files) lands exactly as if the caller had made it, and a [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls) returns the tool's result.
 
 A library's top-level code runs at load time with every global the Engine provides already installed, so `args`, `store`, `log`, and the `tools` and `models` tables all work while it loads. A library loaded with `require` also sees the globals a [Pack prelude](12-tools.md#pack-preludes) installs, including while its top-level code runs at load time.
 
@@ -2301,7 +2301,7 @@ The caller's `prose` comes back the same way however the load ends. After a `req
 
 ### `require` belongs to the Engine
 
-`require` is Runvil's own section loader, not the Lua base library's `require`. The Engine installs it as a global for each section's whole lifetime, so it is available in every section's Lua and any block can call it, and `type(require)` is `function`. The Engine finds the named library section and renders its prose for it. Author code that rebinds `error`, `setmetatable`, or `table.concat` does not change how `require` behaves.
+`require` is Runvil's own section loader, not the Lua base library's `require`. The Engine installs it as a global for each section entry's whole lifetime, so it is available in every section's Lua and any block can call it, and `type(require)` is `function`. The Engine finds the named library section and renders its prose for it. Author code that rebinds `error`, `setmetatable`, or `table.concat` does not change how `require` behaves.
 
 Because `require` is reserved as one of the Engine's own globals, a [Pack prelude](12-tools.md#pack-preludes) cannot define its own `require`, and trying fails with an error containing `which is reserved as an Engine global`. A Pack prelude cannot call `require` while it installs either, because the Engine installs `require` after the preludes. That call fails the run with a message that starts `` Pack `{pack}`: its prelude failed to load: `` and contains `attempt to call a nil value (global 'require')`, where `{pack}` is the Pack id.
 
@@ -2585,15 +2585,15 @@ return { count = loads }
 true:1
 ````
 
-Every `require` of one library within a section gets the same saved value, so a table the library returns is the same table each time, and a change one caller in that section makes to it is seen by later callers in the same section. A library that returns `false` is saved like any other value, so a second `require` returns `false` again from the cache without rerunning the library. A `require` of a library that already loaded successfully reuses the saved value, runs nothing, and emits no library-load report.
+Every `require` of one library within a section entry gets the same saved value, so a table the library returns is the same table each time, and a change one caller in that entry makes to it is seen by later callers in the same entry. A library that returns `false` is saved like any other value, so a second `require` returns `false` again from the cache without rerunning the library. A `require` of a library that already loaded successfully reuses the saved value, runs nothing, and emits no library-load report.
 
-A library's saved value lasts as long as the [section VM](#one-section-vm-per-section) of the section that loaded it, so every `require` in that section shares one cache. That includes the requires a library makes while it loads, so a library that the section or another library already loaded hands back its saved value without rerunning or reporting, whichever of the two loaded it first. A library's own code can call `require` to load another library, and the inner library finishes loading before the outer one does.
+A library's saved value lasts as long as the [section VM](#one-section-vm-per-section-entry) of the section entry that loaded it, so every `require` in that entry shares one cache. That includes the requires a library makes while it loads, so a library that the entry or another library already loaded hands back its saved value without rerunning or reporting, whichever of the two loaded it first. A library's own code can call `require` to load another library, and the inner library finishes loading before the outer one does.
 
 `require` keys each library by its section's position in the document, never by heading text. The same heading written from two places can name two different sections, and each position loads as its own library that runs once and keeps its own saved value, as the two `### helpers` sections in the earlier example do.
 
 ### Each section loads its own libraries
 
-A library saved in one section is not reused by a later section. Each section that requires the library runs it again on its first `require`, repeating its top-level calls and recording a new library-load start and success. Several places in one run, such as the H1, a parent section and its child, a section entered with `call`, a fanout arm's section, or a later section, can each `require` the same library section without error, and each section that uses the library calls `require` for it itself.
+A library saved in one section entry is not reused by a later entry, the same section entered again included. Each section entry that requires the library runs it again on its first `require`, repeating its top-level calls and recording a new library-load start and success. Several places in one run, such as the H1, a parent section and its child, a section entered with `call`, a fanout arm's section, or a later section, can each `require` the same library section without error, and each section that uses the library calls `require` for it itself.
 
 Global functions a library defines exist only in the sections that ran it, so a later section that never required the library sees them as `nil`. A child section entered with [`call`](08-jump-and-call.md#calling-a-section) starts without its parent's libraries and loads them itself with its own `require`. That is why `### Child` in the `require_reach` prompt reads `greet` as `nil` until its own `require '## lib'` runs.
 

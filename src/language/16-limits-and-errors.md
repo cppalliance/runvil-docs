@@ -139,7 +139,7 @@ The concurrency limit caps how many tasks run at once across the whole run, 8 by
 
 Each model reply may be at most 16 MiB by default, and only the Harness can change that cap. Each wait for the next piece of a model reply times out after 120 seconds by default, and only the Harness can change that timeout. [Model request limits and failures](#model-request-limits-and-failures) shows how both bound a model round.
 
-The memory ceiling and the log event quota bound each section's Lua, and [Lua memory and log quotas](#lua-memory-and-log-quotas) covers them.
+The memory ceiling and the log event quota bound each section entry's Lua, and [Lua memory and log quotas](#lua-memory-and-log-quotas) covers them.
 
 ### The call depth cap is not a run limit
 
@@ -177,7 +177,7 @@ The run result is:
 lua: lua log event budget exceeded
 ````
 
-Each [`log`](05-lua-environment.md#logging-and-lifecycle-reports) call records one checkpoint, and each section VM records up to 1024 of them by default. The loop asks for 2000, so the 1025th call is refused. The refusal raises an error value of kind `lua` with the message `lua log event budget exceeded`, `pcall` catches it, and the block returns `err.kind .. ': ' .. err.message`. A section VM is the fresh Lua state that one section's blocks run in, and every limit in this section is counted per section VM.
+Each [`log`](05-lua-environment.md#logging-and-lifecycle-reports) call records one checkpoint, and each section VM records up to 1024 of them by default. The loop asks for 2000, so the 1025th call is refused. The refusal raises an error value of kind `lua` with the message `lua log event budget exceeded`, `pcall` catches it, and the block returns `err.kind .. ': ' .. err.message`. A section VM is the fresh Lua state that one section entry's blocks run in, and every limit in this section is counted per section VM.
 
 ### The memory ceiling
 
@@ -193,7 +193,7 @@ The log byte quota bounds the total size of those messages. Each section VM has 
 
 ### Each section VM gets its own limits
 
-The memory ceiling and the log quotas apply to each section VM, not to the whole run, because every section builds a fresh VM and applies the limits to it. A section that spends most of its log events leaves the next section's allowance untouched.
+The memory ceiling and the log quotas apply to each section VM, not to the whole run, because every section entry builds a fresh VM and applies the limits to it. A section entry that spends most of its log events leaves the next entry's allowance untouched.
 
 ### No instruction limit
 
@@ -833,7 +833,7 @@ A run fails with kind `Binding` when a section calls [`models.infer`](10-models.
 
 A run fails with kind `Completion` when a model call fails at the transport, backend, or decode layer, such as an overloaded backend, or when an `empty_model_reply` error goes uncaught, and the message is the model call's own error text. [Model request limits and failures](#model-request-limits-and-failures) lists those messages.
 
-A run fails with kind `Tool` when a dispatched tool fails, the model calls a tool outside the section's [tool scope](12-tools.md#tool-scope), a `tools.call` names an id that is neither a defined adhoc tool nor a tool in the run's catalog, or the tool-call loop reaches its round cap before the model gives a final reply (see [Tool errors](12-tools.md#tool-errors)).
+A run fails with kind `Tool` when a dispatched tool fails, the model calls a tool outside the section entry's [tool scope](12-tools.md#tool-scope), a `tools.call` names an id that is neither a defined adhoc tool nor a tool in the run's catalog, or the tool-call loop reaches its round cap before the model gives a final reply (see [Tool errors](12-tools.md#tool-errors)).
 
 ### `Vfs` and `Determinism`
 
@@ -855,7 +855,7 @@ Run error kind `Lua` means a section's Lua fails at run time or returns an unusa
 
 A [Pack prelude](12-tools.md#pack-preludes) that cannot install also fails the run with `Lua`, before any section code runs.
 
-A run fails with kind `Quota` when a section's Lua runs out its `log` event quota or its `log` byte quota, or when a `call`, `tasks.spawn`, or `tasks.fanout` arm would nest past the call depth cap. No instruction-count quota runs out in practice. A `Quota` failure's message is one of these:
+A run fails with kind `Quota` when a section entry's Lua runs out its `log` event quota or its `log` byte quota, or when a `call`, `tasks.spawn`, or `tasks.fanout` arm would nest past the call depth cap. No instruction-count quota runs out in practice. A `Quota` failure's message is one of these:
 
 ````text
 lua log event quota exceeded
@@ -1283,7 +1283,7 @@ while true do n = n + 1 end
 ```
 ````
 
-Nothing in `spinner` ends the loop, and no limit would. When the Host cancels the run, the section's Lua instruction hook sees the cancel as the code runs, the loop is aborted, and the run ends with the cancelled outcome.
+Nothing in `spinner` ends the loop, and no limit would. When the Host cancels the run, the section entry's Lua instruction hook sees the cancel as the code runs, the loop is aborted, and the run ends with the cancelled outcome.
 
 ### Cancelling a run
 
@@ -1297,7 +1297,7 @@ Once a run is cancelled, it issues no further model rounds or tool calls. Its ou
 
 The cancel flag is the one signal a cancel sets. One cancel flag is shared by the Lua instruction hook in every section VM, by every activated [Pack](12-tools.md#tools-packs-and-the-uses-key), and by the run itself, so one cancel reaches them all. A cancel stops a run even in the middle of a running Lua block, because the Engine checks the cancel flag between chain steps and from the Lua instruction hook.
 
-A Host cancel stops a running Lua block promptly, even a tight endless loop such as `while true do n = n + 1 end` that nothing in the prompt and no limit would end, because the section's Lua instruction hook checks for cancellation as the code runs, and the run ends with the cancelled outcome, as `spinner` shows. Cancelling a run aborts a Lua block that is still running, even a tight `while true do end` loop, and even when the run is cancelled before the block starts; the block ends with the interrupted error.
+A Host cancel stops a running Lua block promptly, even a tight endless loop such as `while true do n = n + 1 end` that nothing in the prompt and no limit would end, because the section entry's Lua instruction hook checks for cancellation as the code runs, and the run ends with the cancelled outcome, as `spinner` shows. Cancelling a run aborts a Lua block that is still running, even a tight `while true do end` loop, and even when the run is cancelled before the block starts; the block ends with the interrupted error.
 
 ### What a cancel does to waiting calls
 

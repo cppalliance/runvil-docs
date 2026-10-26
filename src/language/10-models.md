@@ -48,7 +48,7 @@ The table holds six functions. `models.use` and `models.default` select a role, 
 
 | Function | Where it is taught |
 |---|---|
-| `models.use` | [Selecting a role per section with `models.use`](#selecting-a-role-per-section-with-modelsuse) |
+| `models.use` | [Selecting a role per section entry with `models.use`](#selecting-a-role-per-section-entry-with-modelsuse) |
 | `models.default` | [The prompt-wide default with `models.default`](#the-prompt-wide-default-with-modelsdefault) |
 | `models.get` | [Getting handles with `models.get`](#getting-handles-with-modelsget) |
 | `models.infer` | [Running a round with `models.infer`](#running-a-round-with-modelsinfer) |
@@ -61,7 +61,7 @@ Roles come only from the `models:` frontmatter, and Lua never creates or binds o
 
 ### When a prompt needs a role
 
-A round that names no model, such as `models.infer(prose)`, needs a selected role. The role comes either from `models.use` in the section or from `models.default` for the whole prompt. This prompt declares `writer` but selects it neither way:
+A round that names no model, such as `models.infer(prose)`, needs a selected role. The role comes either from `models.use` in the section entry or from `models.default` for the whole prompt. This prompt declares `writer` but selects it neither way:
 
 ````markdown
 ---
@@ -596,7 +596,7 @@ So `models.default('ghost')`, in a prompt that declares no `ghost` role, fails w
 
 A `models.default` label that breaks the role label grammar fails with the grammar error whose message starts `invalid alias`, the same one `models.use` raises (see [Rejected calls](#rejected-calls)).
 
-## Selecting a role per section with `models.use`
+## Selecting a role per section entry with `models.use`
 
 After this section you can run one section, or one part of a section, on a different role from the rest of the prompt.
 
@@ -639,7 +639,7 @@ return models.infer(prose)
 
 `## Draft` makes no selection of its own, so its round runs on the prompt-wide default, `writer`. `## Critique` calls `models.use('critic')` in its first block, so the round in its last block runs on `critic`, and the critique becomes the run result.
 
-`models.use(label)` selects a bound model role for the current section, naming the role by its label as a string, and returns a model handle for that role. The role a section has chosen this way, together with any options passed with it, is the section's `models.use` selection. After `models.use(label)`, the rounds that follow in the section, such as `models.infer`, run on the selected role's model. So with `writer` as the prompt-wide default, `models.use('analyst')` sends the next `models.infer('ping')` to the model bound to `analyst`.
+`models.use(label)` selects a bound model role for the current section entry, naming the role by its label as a string, and returns a model handle for that role. The role a section entry has chosen this way, together with any options passed with it, is the entry's `models.use` selection. After `models.use(label)`, the rounds that follow in the entry, such as `models.infer`, run on the selected role's model. So with `writer` as the prompt-wide default, `models.use('analyst')` sends the next `models.infer('ping')` to the model bound to `analyst`.
 
 `models.use` takes effect as a plain statement, so you can write it alone in its own `lua` block before the prose and the round it governs, without keeping its return value, as `## Critique` does. When you keep the handle, its `label` and `name` fields describe the role:
 
@@ -668,9 +668,9 @@ writer|writer
 
 Roles are bound before a section's Lua runs, and `models.use` and `models.default` choose among those already-bound bindings by label.
 
-### Changing the selection within a section
+### Changing the selection within a section entry
 
-Each section keeps its own `models.use` selection. Calling `models.use` again partway through the section succeeds and replaces the earlier label and options, because the selection is read when each round starts. In `tagline`, this one section could replace `## Draft` and `## Critique`:
+Each section entry keeps its own `models.use` selection. Calling `models.use` again partway through the entry succeeds and replaces the earlier label and options, because the selection is read when each round starts. In `tagline`, this one section could replace `## Draft` and `## Critique`:
 
 ````markdown
 ## Review
@@ -689,21 +689,21 @@ Selecting the same label again is allowed, and a plain re-selection clears the e
 
 ### Which model a round uses
 
-A round that names no model runs on the section's model, picked in a fixed order:
+A round that names no model runs on the section entry's model, picked in a fixed order:
 
-1. The section's latest `models.use` selection.
+1. The section entry's latest `models.use` selection.
 2. Otherwise, the prompt-wide default set with `models.default`.
 3. Otherwise, no model at all.
 
-So a section that never calls `models.use` runs on the prompt-wide default role when one is set, and after `models.default('writer')` the section's model is the `writer` role. Binding a role does not select it, so a section that never calls `models.use`, in a prompt with no `models.default`, has no model for its rounds even when roles are bound. [When a prompt needs a role](#when-a-prompt-needs-a-role) shows that case.
+So a section that never calls `models.use` runs on the prompt-wide default role when one is set, and after `models.default('writer')` the section entry's model is the `writer` role. Binding a role does not select it, so a section that never calls `models.use`, in a prompt with no `models.default`, has no model for its rounds even when roles are bound. [When a prompt needs a role](#when-a-prompt-needs-a-role) shows that case.
 
-A `models.use` selection applies only to the section whose Lua makes the call, and it overrides the prompt-wide default there. Every section starts with no selection, so a selection never reaches past its own section, and a later section on the prompt-wide default sends none of the options, such as `temperature` and `max_tokens`, that an earlier section passed.
+A `models.use` selection applies only to the section entry whose Lua makes the call, and it overrides the prompt-wide default there. Every section entry starts with no selection, the same section entered again with `jump` included, so a selection never reaches past its own entry, and a later entry on the prompt-wide default sends none of the options, such as `temperature` and `max_tokens`, that an earlier entry passed.
 
-The H1 body runs as a pass of its own with its own section state, so a `models.use` call in the H1 body selects a role only for rounds in the H1 pass, and the first section after the H1 still starts with no selection. To choose a role for every section, use `models.default`.
+The H1 body runs as a pass of its own with its own section VM, so a `models.use` call in the H1 body selects a role only for rounds in the H1 pass, and the first section entry after the H1 still starts with no selection. To choose a role for every section, use `models.default`.
 
 ### The effective model
 
-When a section has a `models.use` selection, its effective model is the selected role's binding with the `models.use` options applied on top. The options shape only that section's rounds, and the role itself stays unchanged, so after `models.use('writer', { temperature = 0.5, max_tokens = 64 })`, `models.get('writer')` still reads `temperature` and `max_tokens` as `nil`.
+When a section entry has a `models.use` selection, its effective model is the selected role's binding with the `models.use` options applied on top. The options shape only that entry's rounds, and the role itself stays unchanged, so after `models.use('writer', { temperature = 0.5, max_tokens = 64 })`, `models.get('writer')` still reads `temperature` and `max_tokens` as `nil`.
 
 `models.use` takes at most two arguments: a label and an optional options table such as `{ temperature = 0, max_tokens = 256 }`. Leaving the table out, or passing `nil`, gives a selection with no sampling overrides. [Sampling options on `models.use`](#sampling-options-on-modelsuse) covers each option.
 
@@ -746,7 +746,7 @@ lua|models.use label "ghost" is not a bound model role
 
 The grammar error comes from `models.use`, `models.default`, and `models.get` alike, and for a name that starts with a digit the message quotes that name. In `models.use` the grammar check runs before any role lookup. A call with a third argument after the options table gives `models.use takes at most 2 arguments, got 3`.
 
-`models.use` runs its label and option checks before it records the selection, checking the label first, so an unknown label is reported even when the options are also bad, and a rejected call leaves the section's earlier selection unchanged.
+`models.use` runs its label and option checks before it records the selection, checking the label first, so an unknown label is reported even when the options are also bad, and a rejected call leaves the section entry's earlier selection unchanged.
 
 An uncaught `models.use` or `models.default` rejection ends the run with run error kind `Lua`, like any other Lua failure, except in a `lua` fence of the H1 body, where an uncaught Lua failure becomes a `RequirementsUnmet` refusal that keeps the rejection as its cause (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)).
 
@@ -830,13 +830,13 @@ return careful:infer('Write a slogan for a bakery.')
 ```
 ````
 
-The second `models.use` call selects `writer` again with no options, so the section's selection now has none. The round on `careful` still asks for a temperature of 0, because a handle keeps the options it was made with.
+The second `models.use` call selects `writer` again with no options, so the section entry's selection now has none. The round on `careful` still asks for a temperature of 0, because a handle keeps the options it was made with.
 
 Sampling options follow these rules:
 
-- The options stay on the section's selection. They apply to every following model round in the section that names no model, such as `models.infer(prose)` and each round of a `models.loop` conversation (see [Starting a conversation](11-conversations.md#starting-a-conversation)), until another `models.use` call replaces the selection.
+- The options stay on the section entry's selection. They apply to every following model round in the entry that names no model, such as `models.infer(prose)` and each round of a `models.loop` conversation (see [Starting a conversation](11-conversations.md#starting-a-conversation)), until another `models.use` call replaces the selection.
 - A later plain `models.use(label)` with no options clears the options an earlier call set. The handle from `models.use('writer')` reads `nil` for both `temperature` and `max_tokens`, and the section's following rounds send neither.
-- The handle a `models.use` call returns keeps that call's options for every round on it, `h:infer` and each round of `h:loop`, even after a later `models.use` changes the section's selection.
+- The handle a `models.use` call returns keeps that call's options for every round on it, `h:infer` and each round of `h:loop`, even after a later `models.use` changes the section entry's selection.
 - The options never apply to rounds on the prompt-wide default or on a handle from `models.get`, because they shape only the section's effective model (see [The effective model](#the-effective-model)). A round on the prompt-wide default sends no temperature and no token cap, only the role's thinking switch (see [Keywords and thinking](#keywords-and-thinking)).
 
 ### Sampling option values
@@ -848,7 +848,7 @@ The options table names only `temperature` and `max_tokens`, written as string k
 | `temperature` | A finite number from 0.0 to 2.0 inclusive, such as `0`, `0.7`, or `2.0` | The sampling temperature | `h.temperature`, a number |
 | `max_tokens` | A whole number from 1 to 4294967295, written as a Lua integer or an integral float such as `1024.0` | The response token limit | `h.max_tokens`, a positive integer |
 
-The `temperature` value goes out as the sampling temperature on the section's model requests, so `temperature = 0` asks the model for a temperature of 0. The `max_tokens` value goes out as the response token limit, so `max_tokens = 256` caps the reply at 256 generated tokens.
+The `temperature` value goes out as the sampling temperature on the section entry's model requests, so `temperature = 0` asks the model for a temperature of 0. The `max_tokens` value goes out as the response token limit, so `max_tokens = 256` caps the reply at 256 generated tokens.
 
 ### Sampling option errors
 
@@ -1021,7 +1021,7 @@ return models.get('analyst'):infer('ping')
 
 `writer` is the prompt-wide default, so a round in `## Check` that names no model would run on `writer`. The round on the `analyst` handle still sends its request to the model bound to `analyst`.
 
-A model handle holds a frozen binding: the role binding fixed when the handle was made. Its fields report the values fixed then and read the same every time during the run. Its requests go to the concrete model its role is bound to, so a `writer` handle bound to `gateway/claude-sonnet-4-6` sends its requests to that model, naming it `claude-sonnet-4-6`. Later changes to the section's model never change which model a handle uses, and repeated rounds on one handle use the same model, as when two `other:loop()` calls both send their requests to the model bound to `other`.
+A model handle holds a frozen binding: the role binding fixed when the handle was made. Its fields report the values fixed then and read the same every time during the run. Its requests go to the concrete model its role is bound to, so a `writer` handle bound to `gateway/claude-sonnet-4-6` sends its requests to that model, naming it `claude-sonnet-4-6`. Later changes to the section entry's model never change which model a handle uses, and repeated rounds on one handle use the same model, as when two `other:loop()` calls both send their requests to the model bound to `other`.
 
 ### Read-only handle fields
 
@@ -1031,7 +1031,7 @@ A model handle is Lua userdata, not a table, so `type(h)` returns `'userdata'`. 
 
 ## Getting handles with `models.get`
 
-You can get the model handle for any declared role, or with a Host-state snapshot for a gateway model by its name, without changing the section's selection.
+You can get the model handle for any declared role, or with a Host-state snapshot for a gateway model by its name, without changing the section entry's selection.
 
 ````markdown
 ---
@@ -1053,7 +1053,7 @@ return models.get('analyst'):infer('ping')
 
 `models.get(label)` returns the model handle for a role declared under `models:`, so you reach the model bound to a role by passing its role label. Here the handle runs one round on the `analyst` role's model, and the reply is the run result. The call is chained without storing the handle, a common way to run one round on a role.
 
-`## Ask` has no `models.use` call and the prompt has no `models.default`, so the section has no model for its rounds. The round still works, because a handle's round runs on its own frozen binding rather than the section's model.
+`## Ask` has no `models.use` call and the prompt has no `models.default`, so the section entry has no model for its rounds. The round still works, because a handle's round runs on its own frozen binding rather than the entry's model.
 
 ### `models.get` keeps the selection
 
@@ -1084,7 +1084,7 @@ return analyst:infer('Name the weakest claim in this summary: ' .. summary)
 ```
 ````
 
-`models.get` returns a role's handle without selecting it. It changes neither the section's selection nor the prompt-wide default, so `models.infer(prose)` after it still goes to the section's model, here `writer`, and only the round on `analyst` uses the `analyst` role.
+`models.get` returns a role's handle without selecting it. It changes neither the section entry's selection nor the prompt-wide default, so `models.infer(prose)` after it still goes to the entry's model, here `writer`, and only the round on `analyst` uses the `analyst` role.
 
 The handle describes the role's own settings, whatever the section has selected, so it never carries the sampling options of a `models.use` call (see [The effective model](#the-effective-model)).
 
@@ -1242,11 +1242,11 @@ return models.infer(prose)
 
 `return models.infer(prose)` sends the section's prose, the rendered Markdown above the block (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)), to the model in one round and makes the reply the section's result. In this one-section prompt, the run result is whatever the model replies.
 
-Each `models.infer` or `h:infer` call is one infer round: a model round on a fresh conversation whose only message is the prompt, sent as a single message with the `user` message role. Nothing from earlier rounds or from the rest of the section reaches the model. An infer round never reads or changes the section's `messages` list (see [Starting a conversation](11-conversations.md#starting-a-conversation)), sends no tools, and works inside a loop's tool handlers and compactors, where a loop cannot start.
+Each `models.infer` or `h:infer` call is one infer round: a model round on a fresh conversation whose only message is the prompt, sent as a single message with the `user` message role. Nothing from earlier rounds or from the rest of the section reaches the model. An infer round never reads or changes the section entry's `messages` list (see [Starting a conversation](11-conversations.md#starting-a-conversation)), sends no tools, and works inside a loop's tool handlers and compactors, where a loop cannot start.
 
 ### Which model an infer round uses
 
-`models.infer(prompt)` runs on the section's model, which it looks up when the call runs, in the order [Which model a round uses](#which-model-a-round-uses) gives. In `bakery`, that is `writer`, the prompt-wide default.
+`models.infer(prompt)` runs on the section entry's model, which it looks up when the call runs, in the order [Which model a round uses](#which-model-a-round-uses) gives. In `bakery`, that is `writer`, the prompt-wide default.
 
 `h:infer(prompt)` sends the prompt to the handle's own model instead, using the frozen binding the handle got when you obtained it, so the request has that handle's role label and model:
 
@@ -1359,7 +1359,7 @@ Each infer form checks its arguments before any model request is made, and a bad
 
 In the prompt message, `{type}` is the Lua type name of the value given, so a missing prompt gives `prompt must be a string, got nil` and a number gives `got integer`.
 
-`models.infer` takes no handle and always runs on the section's model, so to run on a model handle you call `handle:infer(prompt)`. It also takes the prompt alone, so sampling options for a round go on `models.use` (see [Sampling options on `models.use`](#sampling-options-on-modelsuse)). Any argument after the prompt raises `models.infer takes (prompt)` at the call site rather than being ignored.
+`models.infer` takes no handle and always runs on the section entry's model, so to run on a model handle you call `handle:infer(prompt)`. It also takes the prompt alone, so sampling options for a round go on `models.use` (see [Sampling options on `models.use`](#sampling-options-on-modelsuse)). Any argument after the prompt raises `models.infer takes (prompt)` at the call site rather than being ignored.
 
 `models.loop` and `handle:loop` check their arguments the same way (see [Starting a conversation](11-conversations.md#starting-a-conversation)). A trailing `nil` counts there too, so an extra `nil` after the compactor raises `models.loop takes (compactor?)` or `handle:loop takes (compactor?)`. A model handle as the argument to `models.loop` raises `models.loop takes (compactor?); call handle:loop(compactor?) to run on a model handle`, which names the method to call instead, just as `models.infer` does.
 
@@ -1385,11 +1385,11 @@ The missing-model error reaches the call as its answer, so `pcall` catches it as
 skipped (internal)
 ````
 
-`models.loop` in a section with neither `models.use` nor `models.default` in effect fails with the same missing-model error naming the section, which `pcall` also catches as kind `internal`.
+`models.loop` in a section entry with neither `models.use` nor `models.default` in effect fails with the same missing-model error naming the section, which `pcall` also catches as kind `internal`.
 
 Only an explicit model call such as `models.infer(prose)` can raise the missing-model error, so prose that no block sends to a model needs no `models.use` or `models.default`, in the H1 body or in a section, just as it needs no model at all (see [When a prompt needs a role](#when-a-prompt-needs-a-role)).
 
-`handle:infer(prompt)` runs on the handle's own model, so it works in a section with no `models.use` selection and no `models.default`, where `models.infer` would fail with the missing-model error. In the `review` prompt that declares only `analyst` and sets no default, `models.get('analyst'):infer('ping')` succeeds.
+`handle:infer(prompt)` runs on the handle's own model, so it works in a section entry with no `models.use` selection and no `models.default`, where `models.infer` would fail with the missing-model error. In the `review` prompt that declares only `analyst` and sets no default, `models.get('analyst'):infer('ping')` succeeds.
 
 ## What an infer round reports
 

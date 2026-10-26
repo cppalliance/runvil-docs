@@ -1813,7 +1813,7 @@ The same numbering holds everywhere a chain starts children:
 - A task spawned in the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) takes the same numbering as a spawn from the walk, starting at `0.0`, and it keeps its id for the rest of the run, because the section walk continues the pass's child counter.
 - Each wait with a valid timeout takes one index for its timer (see [The timer behind a time limit](#the-timer-behind-a-time-limit)).
 
-Ids depend only on the spawner's own order of calls, not on how the scheduler interleaves work. Two runs of the same prompt with the same inputs give the same tasks the same ids, however their chains interleave. Likewise, the `sys.id` of the section that owns a set of tasks does not change with the order in which those tasks finish.
+Ids depend only on the spawner's own order of calls, not on how the scheduler interleaves work. Two runs of the same prompt with the same inputs give the same tasks the same ids, however their chains interleave. Likewise, the `sys.id` of the section entry that owns a set of tasks does not change with the order in which those tasks finish.
 
 ### Spawn order and sorting ids
 

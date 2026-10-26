@@ -753,7 +753,7 @@ The parser checks each key against the grammar first and for uniqueness second, 
 
 ### Reserved names
 
-A reserved name is a name that is already taken in a section's Lua environment, such as the global `store`, the Lua function `pairs`, or the keyword `end` (see [The sandbox](05-lua-environment.md#the-sandbox)). Role labels and arg names are not checked against reserved names, because neither becomes a Lua global: an arg is a field of `argv`, and Lua code reaches a role through `models.get(label)`. So every reserved name the grammar allows works as a role label, and `prose`, `store`, and `end` work as arg names:
+A reserved name is a name that is already taken in a section entry's Lua environment, such as the global `store`, the Lua function `pairs`, or the keyword `end` (see [The sandbox](05-lua-environment.md#the-sandbox)). Role labels and arg names are not checked against reserved names, because neither becomes a Lua global: an arg is a field of `argv`, and Lua code reaches a role through `models.get(label)`. So every reserved name the grammar allows works as a role label, and `prose`, `store`, and `end` work as arg names:
 
 ````markdown
 ---
@@ -818,7 +818,7 @@ local _, err = pcall(tools.adhoc, { name = 'web/search', description = 'x' }, fu
 
 After this line, `tostring(err)` contains `tools.adhoc: invalid name "web/search"`.
 
-Each adhoc tool name can be defined once in a section. A second `tools.adhoc` call with a name that is already defined fails with this message:
+Each adhoc tool name can be defined once in a section entry. A second `tools.adhoc` call with a name that is already defined fails with this message:
 
 ````text
 tools.adhoc name "{name}" is already registered

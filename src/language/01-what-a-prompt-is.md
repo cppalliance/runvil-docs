@@ -415,7 +415,7 @@ When the model replies `hi there`, the run ends with:
 HI THERE
 ````
 
-The block writes `hello` to `note.md` in the store, selects the `writer` role with `models.use` (see [Selecting a role per section with `models.use`](10-models.md#selecting-a-role-per-section-with-modelsuse)), sends the note's text to the model with `models.infer`, defines the adhoc tool `shout` with `tools.adhoc`, and passes the reply to it with `tools.call`. No model sees `shout`, since the block calls it from Lua and never offers it. The tool's answer, the model's reply in capital letters, is the run result.
+The block writes `hello` to `note.md` in the store, selects the `writer` role with `models.use` (see [Selecting a role per section entry with `models.use`](10-models.md#selecting-a-role-per-section-entry-with-modelsuse)), sends the note's text to the model with `models.infer`, defines the adhoc tool `shout` with `tools.adhoc`, and passes the reply to it with `tools.call`. No model sees `shout`, since the block calls it from Lua and never offers it. The tool's answer, the model's reply in capital letters, is the run result.
 
 ### A helper section and a nested section
 

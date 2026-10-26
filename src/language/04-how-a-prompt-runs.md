@@ -296,7 +296,7 @@ Input staging happens during prepare, before the run starts. The launch's input 
 
 Before a run starts, the Harness picks the run's Packs: each Pack the prompt declares under `uses:`, plus every `runvil` Pack whose Pack id no declared Pack takes. It then waits until each of those Packs is ready or the run is cancelled, so a Pack outside the run, such as an undeclared third-party Pack, never delays it. A Pack whose readiness check fails is unavailable to the run, with its error as the reason, so a prompt that declares it is refused. Cancelling a run while Packs are still starting ends the wait, and each Pack is taken as it stands at that moment. A refusal that follows the cancel, such as one for a declared Pack that was still starting, ends the run as cancelled rather than failed.
 
-After the wait, each run takes one snapshot of its Packs. That snapshot supplies the tool catalog the run offers, the object for each Pack in the run's Lua (see [Tool objects, Pack objects, and `tools.packs`](12-tools.md#tool-objects-pack-objects-and-toolspacks)), and the preludes that go to every section's Lua (see [Pack preludes](12-tools.md#pack-preludes)).
+After the wait, each run takes one snapshot of its Packs. That snapshot supplies the tool catalog the run offers, the object for each Pack in the run's Lua (see [Tool objects, Pack objects, and `tools.packs`](12-tools.md#tool-objects-pack-objects-and-toolspacks)), and the preludes that go to every section entry's Lua (see [Pack preludes](12-tools.md#pack-preludes)).
 
 ### Binding model roles
 
@@ -342,7 +342,7 @@ Every Pack a prompt lists under the `uses:` key (see [Tools, Packs, and the `use
 
 A declared Pack counts as present when the Host has it and it can serve, even if it offers no tools, so declaring a Pack that has no tools never refuses the run. A Pack the frontmatter declares, and any Pack listed as able to serve, still has a Pack object in Lua when it offers no tool. The Pack check is the Harness's part of prepare. The Engine's own part checks model roles only, so it finds nothing missing in `uses: [web]` even when the catalog holds no `web` tool.
 
-Each declared Pack's prelude runs in every section's section VM, in the order the prompt declares the Packs, after the Engine globals are installed and before any block runs. An undeclared Pack's prelude never runs, even when the prompt calls that Pack's tools.
+Each declared Pack's prelude runs in every section entry's VM, in the order the prompt declares the Packs, after the Engine globals are installed and before any block runs. An undeclared Pack's prelude never runs, even when the prompt calls that Pack's tools.
 
 A prompt that declares no Packs has no Pack requirements, so it prepares and runs even on a Host with no Packs, as `no-requirements` does in [Preparing the run](#preparing-the-run).
 
@@ -565,7 +565,7 @@ A declared Pack that the Host has but that cannot serve, for example because it 
 
 A declared entry the Host has no Pack for appears the same way, unless it is a bare entry that no vendor has. A bare Pack id that only other vendors' Packs have gives `- poop is unavailable: poop means runvil/poop, which is not installed; write acme/poop to use that Pack`, and a `vendor/name` the Host lacks gives `- poop is unavailable: acme/poop is not installed`, whether or not any vendor has that Pack id.
 
-The Engine reserves two Pack ids, `adhoc` for a section's own tools (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)) and `dynamic` for its discovery tools (see [Finding and calling dynamic tools](12-tools.md#finding-and-calling-dynamic-tools)), so a run whose tool catalog holds a tool under a reserved Pack id, or whose roster holds a Pack with one, usable or not, is refused with the line `- the run's tool catalog or Pack roster names the Pack id {id}, which the Engine reserves`, such as `- the run's tool catalog or Pack roster names the Pack id adhoc, which the Engine reserves`. Each reserved Pack id the run names gets one line, however many such tools or Packs the run has, and a run that names both gets the `adhoc` line first.
+The Engine reserves two Pack ids, `adhoc` for a section entry's own tools (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)) and `dynamic` for its discovery tools (see [Finding and calling dynamic tools](12-tools.md#finding-and-calling-dynamic-tools)), so a run whose tool catalog holds a tool under a reserved Pack id, or whose roster holds a Pack with one, usable or not, is refused with the line `- the run's tool catalog or Pack roster names the Pack id {id}, which the Engine reserves`, such as `- the run's tool catalog or Pack roster names the Pack id adhoc, which the Engine reserves`. Each reserved Pack id the run names gets one line, however many such tools or Packs the run has, and a run that names both gets the `adhoc` line first.
 
 Each Pack appears under its real cause only. A Pack that lacks a host service is reported only under that service gap, never also as a missing required Pack, whichever check finds it first. A Pack that the Host has but that fails to build or activate is reported only as unavailable, with its reason, never as a missing required Pack. So when a declared Pack lacks a service or is unavailable, the notice leaves out its `missing required Pack` line and names only the real cause.
 
@@ -718,7 +718,7 @@ return 'ok'
 ok
 ````
 
-Each section entry starts with its own section VM, the fresh Lua instance a section's blocks run in (see [Prologue, prose, and epilog](03-blocks-and-prose.md#prologue-prose-and-epilog)). The move between sections tears down the old section VM and clears its state, so a plain global such as `reply`, or a function such as `greet` defined in a `## helpers` section, is `nil` in a later section. Each section runs in its own frame, built when the section is entered and torn down when the section ends. What a section leaves on `var`, and what it writes with `store`, outlives the move: `## C` in the `walk` prompt reads both values set before it, and `## Second` in the `handoff` prompt reads the file `## First` wrote.
+Each section entry starts with its own section VM, the fresh Lua instance a section's blocks run in (see [Prologue, prose, and epilog](03-blocks-and-prose.md#prologue-prose-and-epilog)). The move between sections tears down the old section VM and clears its state, so a plain global such as `reply`, or a function such as `greet` defined in a `## helpers` section, is `nil` in a later section. Each section entry runs in its own frame, built when the section is entered and torn down when the entry ends. What a section leaves on `var`, and what it writes with `store`, outlives the move: `## C` in the `walk` prompt reads both values set before it, and `## Second` in the `handoff` prompt reads the file `## First` wrote.
 
 Prose that a section leaves unconsumed at its end is discarded without being evaluated, and it never reaches the next section:
 
@@ -1528,7 +1528,7 @@ The run's result comes only from a `return` in the H1 pass, a `return` on the ma
 
 The rule holds at every heading level the main walk reaches: when the top-level chain ends with `return 'x-value'` in a section `### X`, the run's final text is `x-value`.
 
-A section's `return` value becomes the run result, not the model's last reply. A section that ends with `return 'ok'` after the model's final reply `done` gives the result `ok`. A section that calls a model without returning the reply adds nothing to the run's result, and only a reply that a block returns, such as `return models.infer(prose)` in the last block, becomes the result. Running [`models.loop`](11-conversations.md#starting-a-conversation) on the section's `messages` list and then returning `messages[#messages].content` makes the model's final text reply from the loop the run result, which is how the last block of the [shipped](01-what-a-prompt-is.md#shipped-example-prompts) `research-person` prompt ends.
+A section's `return` value becomes the run result, not the model's last reply. A section that ends with `return 'ok'` after the model's final reply `done` gives the result `ok`. A section that calls a model without returning the reply adds nothing to the run's result, and only a reply that a block returns, such as `return models.infer(prose)` in the last block, becomes the result. Running [`models.loop`](11-conversations.md#starting-a-conversation) on the section entry's `messages` list and then returning `messages[#messages].content` makes the model's final text reply from the loop the run result, which is how the last block of the [shipped](01-what-a-prompt-is.md#shipped-example-prompts) `research-person` prompt ends.
 
 Returns from other chains go back to the code that started them instead. A value returned inside a section reached through `call('## S1')` goes back to the caller as the value of `call`. A section started with `tasks.spawn` hands its `return` value back as that task's result, and the section that started the tasks reads those values as `results[1].result` and `results[2].result`. When two `## Reply` tasks each return `hi there`, the run result is `hi there hi there` only because `## Greet`, the entry section, returns that text after waiting on both tasks. A called section or task that ends without returning gives back empty text, not `done`.
 
@@ -1679,7 +1679,7 @@ A section that ends the walk with `return` still finishes normally, as at a fall
 
 ### Events from a failing section
 
-A walked section that raises an uncaught error, such as `error('expected failure')`, reports `section_started` and `lua_chunk_failed` but never `section_finished`. Earlier sections have already finished normally. The failing section's VM is still torn down exactly once, with one `lua_teardown_started` and `lua_teardown_succeeded` pair, and then the run reports `run_failed`.
+A walked section that raises an uncaught error, such as `error('expected failure')`, reports `section_started` and `lua_chunk_failed` but never `section_finished`. Earlier sections have already finished normally. The failing section entry's VM is still torn down exactly once, with one `lua_teardown_started` and `lua_teardown_succeeded` pair, and then the run reports `run_failed`.
 
 In `second_fails`, that means `First` reports everything through its `section_finished`, then `Second` reports `section_started`, `lua_chunk_started`, `lua_chunk_failed`, and one teardown pair, and the run ends with `run_failed` under `Second fails`.
 

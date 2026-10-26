@@ -73,7 +73,7 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `handle.temperature` | field | `temperature` option from `models.use`, or `nil` | [Model handles](10-models.md#model-handles) |
 | `handle.thinking` | field | `true` for `thinking`, `false` for `no-thinking`, `nil` for neither | [Model handles](10-models.md#model-handles) |
 | `handle:infer` | method | Runs one round on the handle's model and returns the reply | [Model handles](10-models.md#model-handles) |
-| `handle:loop` | method | Runs the section's `messages` on the handle's model, optional compactor; returns `nil` | [How the loop runs](11-conversations.md#how-the-loop-runs) |
+| `handle:loop` | method | Runs the section entry's `messages` on the handle's model, optional compactor; returns `nil` | [How the loop runs](11-conversations.md#how-the-loop-runs) |
 | `input.ask` | function | Returns the operator's next message as typed; needs `user-input` declared | [Asking the operator](05-lua-environment.md#asking-the-operator) |
 | `io` | not loaded | Never loaded; no file or stream I/O | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `ipairs` | function | Walks an array table in order | [The sandbox](05-lua-environment.md#the-sandbox) |
@@ -104,7 +104,7 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `loadstring` | removed | Reads nil; no loading code from a string | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `log` | function | Records one single-line checkpoint of at most 256 characters | [Logging and lifecycle reports](05-lua-environment.md#logging-and-lifecycle-reports) |
 | `math` | global | Standard `math` library, as in Lua 5.5 | [The sandbox](05-lua-environment.md#the-sandbox) |
-| `messages` | global | The section's conversation, a message list created empty at each section entry; cannot be reassigned | [`messages` is the section's conversation](11-conversations.md#messages-is-the-sections-conversation) |
+| `messages` | global | The section entry's conversation, a message list created empty at each entry; cannot be reassigned | [`messages` is the section entry's conversation](11-conversations.md#messages-is-the-section-entrys-conversation) |
 | `#messages` | method | Number of records in the message list | [Reading records](11-conversations.md#reading-records) |
 | `messages:append` | method | Appends a record table that names its own `role`, with optional `meta`; returns the list | [Building a message list](11-conversations.md#building-a-message-list) |
 | `messages:assistant` | method | Appends an `assistant` record, optional `tool_calls` then `meta`; returns the list | [Building a message list](11-conversations.md#building-a-message-list) |
@@ -117,9 +117,9 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `models.compact` | function | Runs `compactor(reason)` once over `messages` outside any loop, checking the structural rules; returns `nil` | [Compacting on demand with `models.compact`](11-conversations.md#compacting-on-demand-with-modelscompact) |
 | `models.default` | function | Sets the prompt-wide default role and returns its handle | [The prompt-wide default with `models.default`](10-models.md#the-prompt-wide-default-with-modelsdefault) |
 | `models.get` | function | Returns a handle for a role label or raw model id | [Getting handles with `models.get`](10-models.md#getting-handles-with-modelsget) |
-| `models.infer` | function | Runs one round on the section's model and returns the reply | [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer) |
-| `models.loop` | function | Runs the section's `messages` to a final reply, appending records, optional compactor; its first round fixes the section entry's tool list; returns `nil` | [Starting a conversation](11-conversations.md#starting-a-conversation) |
-| `models.use` | function | Selects a role for the current section and returns its handle | [Selecting a role per section with `models.use`](10-models.md#selecting-a-role-per-section-with-modelsuse) |
+| `models.infer` | function | Runs one round on the section entry's model and returns the reply | [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer) |
+| `models.loop` | function | Runs the section entry's `messages` to a final reply, appending records, optional compactor; its first round fixes the section entry's tool list; returns `nil` | [Starting a conversation](11-conversations.md#starting-a-conversation) |
+| `models.use` | function | Selects a role for the current section entry and returns its handle | [Selecting a role per section entry with `models.use`](10-models.md#selecting-a-role-per-section-entry-with-modelsuse) |
 | `models.use (max_tokens)` | option | Response token limit, a whole number from 1 to 4294967295 | [Sampling options on `models.use`](10-models.md#sampling-options-on-modelsuse) |
 | `models.use (temperature)` | option | Sampling temperature, a finite number from 0.0 to 2.0 | [Sampling options on `models.use`](10-models.md#sampling-options-on-modelsuse) |
 | `next` | function | Steps through keys in the same fixed order as `pairs` | [Deterministic table iteration](05-lua-environment.md#deterministic-table-iteration) |
@@ -176,7 +176,7 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `sys.execution` | field | The run's name, which the Harness assigns | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
 | `sys.id` | field | Current section entry id, such as `0.1` | [Section entry ids](05-lua-environment.md#section-entry-ids) |
 | `sys.index` | field | An arm's 1-based position in collection order, or a task's `index` seed | [What an arm sees](14-fanout.md#what-an-arm-sees) |
-| `sys.model` | field | Name part of the bound model's model id, such as `fast` for `gateway/fast`, readable after the section's first tool call | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
+| `sys.model` | field | Name part of the bound model's model id, such as `fast` for `gateway/fast`, readable after the section entry's first tool call | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
 | `sys.section_count` | field | Number of top-level sections in the prompt | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
 | `sys.section_name` | field | Running section's name; the H1 title in the H1 pass | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
 | `sys.taskid` | field | Nearest enclosing task's id, `'0'` on the main walk | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
@@ -207,15 +207,15 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `tools.adhoc` | function | Defines an adhoc tool from `name`, `description`, and optional `parameters` attrs and a function; returns its Tool object and offers nothing | [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc) |
 | `tools.call` | function | Calls a tool from Lua by tool id or Tool object and returns its output | [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls) |
 | `tools.get` | function | Reads one Tool object by tool id, a catalog tool's or `adhoc/<name>`, or `nil` | [Finding a tool with `tools.get`](12-tools.md#finding-a-tool-with-toolsget) |
-| `tools.offer` | function | Offers a tool or Pack by id or object, or an array of them, to the section's model; raises after the first loop round freezes the tool list | [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer) |
+| `tools.offer` | function | Offers a tool or Pack by id or object, or an array of them, to the section entry's model; raises after the first loop round freezes the tool list | [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer) |
 | `tools.offer_dynamic` | function | Records tools and Packs, in the forms `tools.offer` takes, in the section entry's Dynamic Set, which the model searches with `GetDynamicTools` and calls through `CallDynamicTool`; raises after the first loop round freezes the tool list | [The Dynamic Set with `tools.offer_dynamic`](12-tools.md#the-dynamic-set-with-toolsoffer_dynamic) |
-| `tools.packs` | field | Read-only list of the section's Pack objects in name order, the adhoc Pack included, with `get` and `extras` | [Walking Packs with `tools.packs`](12-tools.md#walking-packs-with-toolspacks) |
+| `tools.packs` | field | Read-only list of the section entry's Pack objects in name order, the adhoc Pack included, with `get` and `extras` | [Walking Packs with `tools.packs`](12-tools.md#walking-packs-with-toolspacks) |
 | `tools.packs.extras` | function | Returns a fresh array of the usable Pack objects not declared under `uses:`, in name order, never the adhoc Pack | [Extra Packs with `tools.packs.extras`](12-tools.md#extra-packs-with-toolspacksextras) |
 | `tools.packs.get` | function | Reads one Pack object by Pack id, or `nil` when the run has no such Pack | [Finding a Pack with `tools.packs.get`](12-tools.md#finding-a-pack-with-toolspacksget) |
-| `tools.stats` | field | Read-only per-section call counts holding exactly `total`, `packs`, and `tools`; present from the section's first tool call | [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls) |
+| `tools.stats` | field | Read-only call counts of the section entry, holding exactly `total`, `packs`, and `tools`; present from the entry's first tool call | [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls) |
 | `tools.stats.packs` | field | Read-only call counts keyed by Pack id; `GetDynamicTools` calls and discovery refusals count under `dynamic` | [Counting calls with `tools.stats`](12-tools.md#counting-calls-with-toolsstats) |
 | `tools.stats.tools` | field | Read-only call counts keyed by catalog or adhoc tool id | [Counting calls with `tools.stats`](12-tools.md#counting-calls-with-toolsstats) |
-| `tools.stats.total` | field | Every tool call the section has made, counted at dispatch | [Counting calls with `tools.stats`](12-tools.md#counting-calls-with-toolsstats) |
+| `tools.stats.total` | field | Every tool call the section entry has made, counted at dispatch | [Counting calls with `tools.stats`](12-tools.md#counting-calls-with-toolsstats) |
 | `tostring` | function | Turns a value such as a number into text | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `type` | function | Returns a value's Lua type name, such as `'table'` | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `ui` | function | Returns the Host's run-start snapshot table, when the run has one | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
@@ -238,7 +238,7 @@ Each form goes in a section's prose and takes effect when a Lua block reads `pro
 | `{{ argv }}` | The whole parsed arguments, with an object or array as compact JSON | [Inserting arguments with `args` and `argv`](07-substitution.md#inserting-arguments-with-args-and-argv) |
 | `{{ argv.key }}` | One field of the parsed arguments, at any depth | [Inserting arguments with `args` and `argv`](07-substitution.md#inserting-arguments-with-args-and-argv) |
 | `{{ item }}` | The item seeded into a fanout arm or a task, rendered by its type | [Inserting the fanout or task `item`](07-substitution.md#inserting-the-fanout-or-task-item) |
-| `{{ name }}` | The whole value of the section-local Lua global by that name | [Inserting Lua globals by bare name](07-substitution.md#inserting-lua-globals-by-bare-name) |
+| `{{ name }}` | The whole value of the Lua global by that name in the section entry | [Inserting Lua globals by bare name](07-substitution.md#inserting-lua-globals-by-bare-name) |
 | `{{ path }}` | A live value from the run, named by the trimmed path | [Placeholders in prose](07-substitution.md#placeholders-in-prose) |
 | `{{ prose }}` | Rejected as recursive, so the `prose` read fails with substitution kind `Serialize` | [Substitution error kinds](07-substitution.md#substitution-error-kinds) |
 | `{{ sys.key }}` | A field of `sys`, such as `sys.id` or `sys.when` | [Inserting `var` and `sys` values](07-substitution.md#inserting-var-and-sys-values) |

@@ -679,7 +679,7 @@ An arm inherits its caller's context whole, so the run's models and tools work i
 
 A [`models.default`](10-models.md#the-prompt-wide-default-with-modelsdefault) call in the H1 body sets the prompt-wide default role, and that default holds in every arm. With `writer: {}` declared under `models:` in the frontmatter and `models.default('writer')` in the H1 body, as in the `replies` prompt, an arm's `return models.infer(prose)` reaches the model.
 
-Worker section Lua can also call the model directly through a [model handle](10-models.md#model-handles) with `handle:infer(...)`. Each arm runs in its own section VM with its own empty [`messages`](11-conversations.md#messages-is-the-sections-conversation) list, which it fills and drives with [`models.loop`](11-conversations.md#starting-a-conversation), so the arms' conversations stay separate and each arm opens its own first round.
+Worker section Lua can also call the model directly through a [model handle](10-models.md#model-handles) with `handle:infer(...)`. Each arm runs in its own section VM with its own empty [`messages`](11-conversations.md#messages-is-the-section-entrys-conversation) list, which it fills and drives with [`models.loop`](11-conversations.md#starting-a-conversation), so the arms' conversations stay separate and each arm opens its own first round.
 
 A fanout arm can call the run's bound tools with [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls), such as `tools.call('web/search', { query = item })` in a prompt that declares `uses: [web]`. Inside an arm, [`sys.model`](05-lua-environment.md#run-facts-in-sys-and-ui) reads the name part of the selected model's id, without the server namespace, once the arm's first `tools.call` has run, as in any section, so a worker section that runs `tools.call('web/search', { query = item })` and then `return sys.model .. ':' .. item` gives a text such as `claude-sonnet-4-6:a` when that model's id is `gateway/claude-sonnet-4-6`.
 
@@ -1387,7 +1387,7 @@ The arms are the caller's children `0.0` and `0.1`, the called chain is child `0
 
 ### `sys.id` inside arms
 
-Inside an arm, [`sys.id`](05-lua-environment.md#section-entry-ids) is the id of the section the arm is running, and the worker section is the first section of the arm's chain. So for a fanout from the main walk, the worker section of arm K, counting arms from 0, reads `sys.id` as `0.K.0`, and a worker section logging `sys.id .. ':' .. sys.index` writes `0.0.0:1` in the first arm and `0.1.0:2` in the second. The calling section keeps its own `sys.id` before and after `tasks.fanout`, so `## Parent` reads `0.1` both times.
+Inside an arm, [`sys.id`](05-lua-environment.md#section-entry-ids) is the id of the section entry the arm is running, and the worker section is the first section of the arm's chain. So for a fanout from the main walk, the worker section of arm K, counting arms from 0, reads `sys.id` as `0.K.0`, and a worker section logging `sys.id .. ':' .. sys.index` writes `0.0.0:1` in the first arm and `0.1.0:2` in the second. The calling section entry keeps its own `sys.id` before and after `tasks.fanout`, so `## Parent` reads `0.1` both times.
 
 Nested arms are children of the outer arm's chain, so inner arm J of outer arm K has task id `0.K.J`, and its worker section reads `sys.id` as `0.K.J.0`:
 

@@ -4,7 +4,7 @@ Every Lua block in a prompt runs in a sandboxed section VM that already holds th
 
 ## Lua blocks, section VMs, and Engine globals
 
-After this section you can write Lua blocks that use the Engine globals, and you know which state lasts from one block or section to the next.
+After this section you can write Lua blocks that use the Engine globals, and you know which state lasts from one block or section entry to the next.
 
 ````markdown
 ---
@@ -75,7 +75,7 @@ local results = tasks.join({ a, b })
 return results[1].result .. '|' .. results[2].result
 ````
 
-Statements in a block run top to bottom. In a block that runs a `store.write`, then switches model role with [`models.use`](10-models.md#selecting-a-role-per-section-with-modelsuse), then calls [`models.infer`](10-models.md#running-a-round-with-modelsinfer), the three happen in that order, and a `store.read` after the write sees what was written (see [Writing and reading files](09-the-store.md#writing-and-reading-files)).
+Statements in a block run top to bottom. In a block that runs a `store.write`, then switches model role with [`models.use`](10-models.md#selecting-a-role-per-section-entry-with-modelsuse), then calls [`models.infer`](10-models.md#running-a-round-with-modelsinfer), the three happen in that order, and a `store.read` after the write sees what was written (see [Writing and reading files](09-the-store.md#writing-and-reading-files)).
 
 A block can also loop without end, as in `local n = 0` followed by `while true do n = n + 1 end`. Such a block still compiles and loads normally, because nothing rejects an unbounded loop before it runs.
 
@@ -83,7 +83,7 @@ The parser compiles each Lua region when the prompt file is parsed, and compilin
 
 ### A fresh section VM for every section entry
 
-Each section's Lua runs in a section VM, the fresh Lua instance a section's blocks share (see [Prologue, prose, and epilog](03-blocks-and-prose.md#prologue-prose-and-epilog)). This prompt shows what lasts inside one section VM and what ends with it:
+Each section entry's Lua runs in a section VM, the fresh Lua instance the entry's blocks share (see [Prologue, prose, and epilog](03-blocks-and-prose.md#prologue-prose-and-epilog)). This prompt shows what lasts inside one section VM and what ends with it:
 
 ````markdown
 ---
@@ -125,13 +125,13 @@ The run result is:
 fresh VM
 ````
 
-Inside one section, every `lua` block runs in the same Lua environment, so a global set in an earlier block is readable in every later block of that section. Here `note`, set in the first block of `## First`, is still there in the second block, even with a prose block between the two. A function defined in one block, such as `decorate`, can be called from any later block in that section. The same holds for fields set on `var` (see [Keeping state in `var`](#keeping-state-in-var)), such as `var.decorated`, and for saved references to Engine globals.
+Inside one section entry, every `lua` block runs in the same Lua environment, so a global set in an earlier block is readable in every later block of that entry. Here `note`, set in the first block of `## First`, is still there in the second block, even with a prose block between the two. A function defined in one block, such as `decorate`, can be called from any later block in that entry. The same holds for fields set on `var` (see [Keeping state in `var`](#keeping-state-in-var)), such as `var.decorated`, and for saved references to Engine globals.
 
-That one Lua environment serves every block in the section, and the Engine globals in it stay live for the section's whole lifecycle, so a later block sees the same `log` and `store` as an earlier one. A first block can run `saved_log = log`, and a later block of the same section can call `saved_log('still here')`.
+That one Lua environment serves every block in the section entry, and the Engine globals in it stay live for the entry's whole lifecycle, so a later block sees the same `log` and `store` as an earlier one. A first block can run `saved_log = log`, and a later block of the same entry can call `saved_log('still here')`.
 
-Every section entry gets a brand-new section VM, created for that section by name, and the H1 pass gets one too (see [The H1 pass](04-how-a-prompt-runs.md#the-h1-pass)). That holds whether the walk reaches the section by fall-through, by [`jump`](08-jump-and-call.md#jumping-to-a-section), or by [`call`](08-jump-and-call.md#calling-a-section). The section VM is torn down when the section ends.
+Every section entry gets a brand-new section VM, created for that section by name, and the H1 pass gets one too (see [The H1 pass](04-how-a-prompt-runs.md#the-h1-pass)). That holds whether the walk reaches the section by fall-through, by [`jump`](08-jump-and-call.md#jumping-to-a-section), or by [`call`](08-jump-and-call.md#calling-a-section). The section VM is torn down when the section entry ends.
 
-So a plain global assigned in one section reads as nil when the next section runs, because globals live in that section's own Lua VM. After `note` is set in `## First`, `assert(note == nil)` passes in `## Second`, and the same goes for any plain global, such as `reply` after `reply = 'custom'`. Each section gets its own fresh Lua environment, so globals created or changed in one section never appear in another. When a `counter` global in one section VM has counted up to `2`, a `counter` global in a second section VM starts over at `1`.
+So a plain global assigned in one section entry reads as nil when the next entry runs, because globals live in that entry's own Lua VM. After `note` is set in `## First`, `assert(note == nil)` passes in `## Second`, and the same goes for any plain global, such as `reply` after `reply = 'custom'`. Each section entry gets its own fresh Lua environment, so globals created or changed in one entry never appear in another. When a `counter` global in one section VM has counted up to `2`, a `counter` global in a second section VM starts over at `1`.
 
 Functions follow the same rule. A function such as `greet` that one section defines through [`require`](03-blocks-and-prose.md#sharing-code-with-require) reads as nil in a later section, where `tostring(greet)` is `nil`, because a library's globals stay in each VM that ran it.
 
@@ -172,7 +172,7 @@ Every section VM, in the H1 pass and in walked sections alike, starts with these
 
 Two more Engine globals are installed only in some section VMs. `ui` is installed when the run has an application-state snapshot (see [Run facts in `sys` and `ui`](#run-facts-in-sys-and-ui)), and `item` is installed in a spawned chain, such as a fanout arm (see [What an arm sees](14-fanout.md#what-an-arm-sees)). That makes 20 Engine globals in all.
 
-Together they give every section's Lua logging through `log` (see [Logging and lifecycle reports](#logging-and-lifecycle-reports)), tool scoping through `tools`, store operations through `store`, and the `var` and `argv` globals, all inside the sandboxed section VM. `prose` is the global that reads pending prose (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)), `prompt` holds the section reads (see [Reading sections with `prompt.section` and `prompt.list`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptlist)), and `models` holds [`models.infer`](10-models.md#running-a-round-with-modelsinfer). The rest are taught where they are used: `args` in [The argument string in `args`](06-arguments.md#the-argument-string-in-args), `argv` in [Reading parsed input from `argv`](06-arguments.md#reading-parsed-input-from-argv), `store` in [What the store is](09-the-store.md#what-the-store-is), `untrusted` in [Handing store text to a model with `untrusted`](09-the-store.md#handing-store-text-to-a-model-with-untrusted), `json` in [Encoding and decoding JSON with `json`](#encoding-and-decoding-json-with-json), `messages`, the section's own conversation that each new section VM starts empty, in [`messages` is the section's conversation](11-conversations.md#messages-is-the-sections-conversation), `compactors` in [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion), `tools` in [The members of `tools`](12-tools.md#the-members-of-tools), and `tasks` in [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn).
+Together they give every section's Lua logging through `log` (see [Logging and lifecycle reports](#logging-and-lifecycle-reports)), tool scoping through `tools`, store operations through `store`, and the `var` and `argv` globals, all inside the sandboxed section VM. `prose` is the global that reads pending prose (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)), `prompt` holds the section reads (see [Reading sections with `prompt.section` and `prompt.list`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptlist)), and `models` holds [`models.infer`](10-models.md#running-a-round-with-modelsinfer). The rest are taught where they are used: `args` in [The argument string in `args`](06-arguments.md#the-argument-string-in-args), `argv` in [Reading parsed input from `argv`](06-arguments.md#reading-parsed-input-from-argv), `store` in [What the store is](09-the-store.md#what-the-store-is), `untrusted` in [Handing store text to a model with `untrusted`](09-the-store.md#handing-store-text-to-a-model-with-untrusted), `json` in [Encoding and decoding JSON with `json`](#encoding-and-decoding-json-with-json), `messages`, the section entry's own conversation that each new section VM starts empty, in [`messages` is the section entry's conversation](11-conversations.md#messages-is-the-section-entrys-conversation), `compactors` in [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion), `tools` in [The members of `tools`](12-tools.md#the-members-of-tools), and `tasks` in [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn).
 
 The Engine installs no global beyond these 20. Fanout is `tasks.fanout`, a function on the `tasks` table (see [Fanout in one call](14-fanout.md#fanout-in-one-call)), and reading a list section goes through `prompt.list`.
 
@@ -180,7 +180,7 @@ The H1 pass and every walked section see the same set of globals. The one differ
 
 The role label of a declared [model role](10-models.md#model-roles-instead-of-models) and an offered tool never become globals of their own. With the role `writer` bound, `type(writer)` is `nil`. You read a role's model handle with [`models.get(label)`](10-models.md#getting-handles-with-modelsget), so `models.get('writer').name` reads `writer`, and you read a tool with [`tools.get(id)`](12-tools.md#tool-objects-pack-objects-and-toolspacks), so in a prompt that declares `web`, `tools.get('web/search').id` reads `web/search`.
 
-Every section VM is set up in one fixed order. The same order applies to every section, the H1 pass, every fanout arm, and every spawned task chain:
+Every section VM is set up in one fixed order. The same order applies to every section entry, the H1 pass, every fanout arm, and every spawned task chain:
 
 1. `args`, `argv`, `sys`, and `var`
 2. `log`, `store`, and `json`
@@ -197,9 +197,9 @@ Every section VM is set up in one fixed order. The same order applies to every s
 
 The Engine reserves the name of every global it installs in a section VM, and its reserved-name list matches that set exactly. The list holds 62 names: the 20 Engine globals, the 19 Lua globals the sandbox keeps (listed in [The sandbox](#the-sandbox)), and the 23 Lua 5.5 keywords. It classes each name as an Engine global, a Lua global, or a Lua keyword.
 
-The 23 Lua 5.5 keywords in prompt Lua are `and`, `break`, `do`, `else`, `elseif`, `end`, `false`, `for`, `function`, `global`, `goto`, `if`, `in`, `local`, `nil`, `not`, `or`, `repeat`, `return`, `then`, `true`, `until`, and `while`. A Lua keyword never reads as a global. Every Engine global and Lua global on the list reads non-nil in a section once its conditional bindings apply, such as `ui` with a snapshot and `item` in a spawned chain.
+The 23 Lua 5.5 keywords in prompt Lua are `and`, `break`, `do`, `else`, `elseif`, `end`, `false`, `for`, `function`, `global`, `goto`, `if`, `in`, `local`, `nil`, `not`, `or`, `repeat`, `return`, `then`, `true`, `until`, and `while`. A Lua keyword never reads as a global. Every Engine global and Lua global on the list reads non-nil in a section entry once its conditional bindings apply, such as `ui` with a snapshot and `item` in a spawned chain.
 
-Apart from what a Pack prelude adds, every global a section's `_G` holds is either an Engine global or a Lua global on the reserved-name list. With no prelude, `_G` holds exactly what the Engine installs.
+Apart from what a Pack prelude adds, every global a section entry's `_G` holds is either an Engine global or a Lua global on the reserved-name list. With no prelude, `_G` holds exactly what the Engine installs.
 
 `global` is a contextual keyword. `global declared` compiles as a global declaration, while `local global = 1` still compiles. The prompt Lua lexer reads `global` as a contextual keyword rather than a reserved word, because the built-in Lua 5.5 uses its compatibility build for `global`, though the language reserves the name all the same. The other 22 keywords cannot be local names, as in any Lua. Reserved global names can: `store` and `pairs` compile as ordinary local names, as in `local store = 1`.
 
@@ -294,11 +294,11 @@ function,function,function
 
 The `user-input` prelude defines the global `input`, so `type(input.ask)` reads `function`. A prelude global sits beside the Engine's globals without replacing them, so `type(store.read)` and `type(tools.call)` still give `function` when `user-input` is declared. Your code still sees the `ui`, `argv`, `sys`, and `models` globals when Pack preludes are installed.
 
-A prelude can add any globals to a section's `_G` beyond the ones the Engine installs. A prelude that runs `answer = 42`, `label = 'kit'`, and `function shout(text) ... end` makes `answer`, `label`, and `shout` readable from your blocks.
+A prelude can add any globals to a section entry's `_G` beyond the ones the Engine installs. A prelude that runs `answer = 42`, `label = 'kit'`, and `function shout(text) ... end` makes `answer`, `label`, and `shout` readable from your blocks.
 
 A prelude can also define a table global holding fields and functions. `input` is one: the `user-input` prelude creates the `input` table and defines `input.ask` as a function on it, so a block calls `input.ask()` like any other global function.
 
-Preludes install when each section VM is set up, before that VM runs its first block, the H1 block included. Every Lua global a prelude defines is therefore available to every block of every section in the run, fanout arms and spawned task chains included, and to every library a block loads with `require`. In a prompt that declares `user-input`, a required library, a fanout arm, and a spawned task can each call `input.ask()`.
+Preludes install when each section VM is set up, before that VM runs its first block, the H1 block included. Every Lua global a prelude defines is therefore available to every block of every section entry in the run, fanout arms and spawned task chains included, and to every library a block loads with `require`. In a prompt that declares `user-input`, a required library, a fanout arm, and a spawned task can each call `input.ask()`.
 
 Preludes install in the order the prompt's `uses:` list declares their Packs.
 
@@ -941,7 +941,7 @@ hi there
 
 ### From one section to the next
 
-A plain global lasts only as long as its section, and `var` is the only thing that passes your values from one section to the next:
+A plain global lasts only as long as its section entry, and `var` is the only thing that passes your values from one section entry to the next:
 
 ````markdown
 ---
@@ -1019,7 +1019,7 @@ return var.phase .. '-epilog'
 prologue-epilog
 ````
 
-The blocks of one section share one section VM, as [A fresh section VM for every section entry](#a-fresh-section-vm-for-every-section-entry) shows. The prose between the two blocks is never read, so it is dropped.
+The blocks of one section entry share one section VM, as [A fresh section VM for every section entry](#a-fresh-section-vm-for-every-section-entry) shows. The prose between the two blocks is never read, so it is dropped.
 
 ### `var` in the H1 pass
 
@@ -1244,7 +1244,7 @@ Change `var` only through its fields, and keep the `var` global itself in place.
 the `var` global was reassigned; write `var.<field>` instead
 ````
 
-The run error kind is `Lua`. When a section has reassigned the `var` global, the read-back at the section's end or at its `jump` fails the run, and the section does not count as completed. In the H1 pass the run error kind stays `Lua` rather than `RequirementsUnmet` (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)), even when the H1 pass returns a scalar, because the read-back still runs before the scalar becomes the run result.
+The run error kind is `Lua`. When a section entry has reassigned the `var` global, the read-back at the entry's end or at its `jump` fails the run, and the entry does not count as completed. In the H1 pass the run error kind stays `Lua` rather than `RequirementsUnmet` (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)), even when the H1 pass returns a scalar, because the read-back still runs before the scalar becomes the run result.
 
 ## Encoding and decoding JSON with `json`
 
@@ -1679,11 +1679,11 @@ return sys.section_name .. ' ' .. sys.id .. ' of ' .. sys.section_count
 Only 0.1 of 1
 ````
 
-`sys` is an Engine global that the Engine installs in every section and in the H1 pass: a table of runtime values the run supplies, which a Lua block reads run metadata from. `sys` is a sealed, read-only table, and you read a field by name with dot or bracket syntax, as in `sys.id` or `sys['when']`.
+`sys` is an Engine global that the Engine installs in every section entry and in the H1 pass: a table of runtime values the run supplies, which a Lua block reads run metadata from. `sys` is a sealed, read-only table, and you read a field by name with dot or bracket syntax, as in `sys.id` or `sys['when']`.
 
 ### The `sys` fields
 
-Every section and every fanout arm gets six `sys` fields: `sys.when`, `sys.id`, `sys.taskid`, `sys.section_name`, `sys.execution`, and `sys.section_count`. Two more fields, `sys.model` and `sys.index`, appear only in some section entries:
+Every section entry, each fanout arm's included, gets six `sys` fields: `sys.when`, `sys.id`, `sys.taskid`, `sys.section_name`, `sys.execution`, and `sys.section_count`. Two more fields, `sys.model` and `sys.index`, appear only in some section entries:
 
 | Field | Type | Example value | Present |
 |---|---|---|---|
@@ -1693,7 +1693,7 @@ Every section and every fanout arm gets six `sys` fields: `sys.when`, `sys.id`, 
 | `sys.section_name` | string | `Alpha` | always |
 | `sys.execution` | string | `execute-test` | always |
 | `sys.section_count` | number | `2` | always |
-| `sys.model` | string | `claude-sonnet-4-6` | after the section's first tool call |
+| `sys.model` | string | `claude-sonnet-4-6` | after the section entry's first tool call |
 | `sys.index` | number | `7` | on a task's first section entry, when its spawn supplied one |
 
 A present `sys` field reads as a plain Lua value converted from its JSON value. `when`, `id`, `taskid`, `section_name`, `execution`, and `model` arrive as Lua strings, and `section_count` and `index` arrive as Lua numbers, so `sys.section_name == 'Alpha'` compares as a string and `sys.section_count == 2` as a number. The rest of this section takes the fields one at a time, and [Section entry ids](#section-entry-ids) covers `sys.id` in full.
@@ -1929,13 +1929,13 @@ The H1 block makes `writer` the prompt-wide default (see [The prompt-wide defaul
 no tool call yet / Model name is claude-sonnet-4-6.
 ````
 
-`sys.model` is a string holding the name part of the bound model's model id, without the server namespace, so it reads `fast` for a model whose id is `gateway/fast`, and `claude-sonnet-4-6` for `writer` above, bound to `gateway/claude-sonnet-4-6`. It is the same name that role's model handle reads as `model_id` (see [Model handles](10-models.md#model-handles)), never the alias or role label the prompt uses for that model. It becomes readable only after the section's first tool call, and only when the section has a model. Here the first tool call is the [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls) to the ask tool from [Asking the operator](#asking-the-operator), so the `pcall` before it finds no field and the placeholder after it renders the name.
+`sys.model` is a string holding the name part of the bound model's model id, without the server namespace, so it reads `fast` for a model whose id is `gateway/fast`, and `claude-sonnet-4-6` for `writer` above, bound to `gateway/claude-sonnet-4-6`. It is the same name that role's model handle reads as `model_id` (see [Model handles](10-models.md#model-handles)), never the alias or role label the prompt uses for that model. It becomes readable only after the section entry's first tool call, and only when the entry has a model. Here the first tool call is the [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls) to the ask tool from [Asking the operator](#asking-the-operator), so the `pcall` before it finds no field and the placeholder after it renders the name.
 
-At the section's first tool call, `sys.model` takes the section's model, the model the section selected for itself or else the prompt-wide default, and stays fixed for the rest of the section. From that call on, later `{{ sys.model }}` prose placeholders and later Lua blocks alike read that same name, so a later `return sys.model` returns `claude-sonnet-4-6` too.
+At the section entry's first tool call, `sys.model` takes the entry's model, the model the entry selected for itself or else the prompt-wide default, and stays fixed for the rest of the section entry. A section entered again with `jump`, a fanout arm, a task, and a section run with `call` each start without the field and fill it at their own first tool call. From that call on, later `{{ sys.model }}` prose placeholders and later Lua blocks alike read that same name, so a later `return sys.model` returns `claude-sonnet-4-6` too.
 
-`sys.model` appears at the section's first call to a catalog tool or an adhoc tool, whether a Lua block makes it with `tools.call` or the model makes it during a conversation, such as a tool call inside [`models.loop`](11-conversations.md#starting-a-conversation). A model round, one request to a model and its reply, never sets `sys.model` by itself, so a [`models.infer`](10-models.md#running-a-round-with-modelsinfer) or `models.loop` round with no tool call leaves it unreadable. A section that makes no tool call, or has no model when its first tool call runs, never gets the field.
+`sys.model` appears at the section entry's first call to a catalog tool or an adhoc tool, whether a Lua block makes it with `tools.call` or the model makes it during a conversation, such as a tool call inside [`models.loop`](11-conversations.md#starting-a-conversation). A model round, one request to a model and its reply, never sets `sys.model` by itself, so a [`models.infer`](10-models.md#running-a-round-with-modelsinfer) or `models.loop` round with no tool call leaves it unreadable. A section entry that makes no tool call, or has no model when its first tool call runs, never gets the field.
 
-Reading `sys.model` before the section's first tool call raises an error whose message reads `unknown sys field 'model'`, even when the H1 pass set a prompt-wide default such as `models.default('writer')`. That holds whether the read is in the section's opening Lua block or inside a function from a library the section loads with [`require`](03-blocks-and-prose.md#sharing-code-with-require), as in `require '## sys_reader'` followed by `return read_sys_model()`.
+Reading `sys.model` before the section entry's first tool call raises an error whose message reads `unknown sys field 'model'`, even when the H1 pass set a prompt-wide default such as `models.default('writer')`. That holds whether the read is in the section's opening Lua block or inside a function from a library the section loads with [`require`](03-blocks-and-prose.md#sharing-code-with-require), as in `require '## sys_reader'` followed by `return read_sys_model()`.
 
 Inside a fanout arm, once the arm's first tool call has been dispatched, `sys.model` reads the name part of the selected model's id in the same way, so an arm for the member `a` that returns `sys.model .. ':' .. item` gives `claude-sonnet-4-6:a`.
 
@@ -2130,7 +2130,7 @@ return var.ids .. ',' .. sys.id
 
 Each fanout arm is a new child chain of the caller's chain, numbered by the caller's next child slot, so its worker section reads `sys.id` as that chain id followed by `.0`. Here the first `call` took `0.0`, so the three arms read `0.1.0`, `0.2.0`, and `0.3.0`, and the second `call` takes the next slot, `0.4.0`. With no earlier children, three arms from the main walk read `0.0.0`, `0.1.0`, and `0.2.0`. Fanout arms take their ids in collection order when the fanout dispatches, so the ids never depend on which arm finishes first.
 
-`tasks.fanout`, alone or followed by a `call`, leaves the calling section's `sys.id` unchanged, so `## Main` still reads `0.1` after its arms return. Dispatching calls and fanout arms does not advance the walk's own entry count either, so after `## Main` makes two calls and a three-arm fanout, `## Last` still reads `0.2`.
+`tasks.fanout`, alone or followed by a `call`, leaves the calling section entry's `sys.id` unchanged, so `## Main` still reads `0.1` after its arms return. Dispatching calls and fanout arms does not advance the walk's own entry count either, so after `## Main` makes two calls and a three-arm fanout, `## Last` still reads `0.2`.
 
 Ids nest the same way at every depth:
 
@@ -2231,7 +2231,7 @@ A log checkpoint is a short progress message your Lua records by calling `log(me
 
 `log` is an Engine global, always present in every section VM, the H1 VM included. You can call `log(message)` to record checkpoints from any Lua block: in any section, in a fanout arm, in the H1 pass, and in prologues and epilogs alike.
 
-`log` stays defined for the section's whole lifecycle, so every block in the section can call it. It is an ordinary function value that you can assign to a variable and call through that variable, as in `saved_log = log`, and a saved reference keeps working in later blocks of the same section (see [A fresh section VM for every section entry](#a-fresh-section-vm-for-every-section-entry)). A library section's top-level code can call `log` while [`require`](03-blocks-and-prose.md#sharing-code-with-require) loads it, because section setup installs `log` before it installs `require`.
+`log` stays defined for the section entry's whole lifecycle, so every block in the entry can call it. It is an ordinary function value that you can assign to a variable and call through that variable, as in `saved_log = log`, and a saved reference keeps working in later blocks of the same entry (see [A fresh section VM for every section entry](#a-fresh-section-vm-for-every-section-entry)). A library section's top-level code can call `log` while [`require`](03-blocks-and-prose.md#sharing-code-with-require) loads it, because section setup installs `log` before it installs `require`.
 
 No section VM has `print` or `warn` (see [Names that read nil](#names-that-read-nil)), whether in a library section's code, a prologue, an epilog, or a lone block, so `assert(print == nil)` and `assert(warn == nil)` pass everywhere, and `log` is the only way your Lua reports progress.
 
@@ -2344,7 +2344,7 @@ Each `log` call spends one event from the log event quota, so with a quota of 1,
 
 All `log` calls in a section VM share a cumulative log byte quota of 256 bytes per allowed checkpoint, so the byte quota follows the event quota: 262,144 bytes by default, and 1024 bytes with a 4-event quota. Each message that passes the other checks spends its length in UTF-8 bytes from that shared quota, so multibyte text uses it up faster, and a 200-character message of two-byte characters such as `é` costs 400 bytes. That way many small messages cannot emit unbounded total log volume.
 
-Both quotas span every block in the section rather than resetting per block. Every `log` call counts against the section VM's log quotas, including calls a library section makes while `require` loads it, because a library loads into the requiring section's one environment. The next section starts with full `log` quotas.
+Both quotas span every block in the section entry rather than resetting per block. Every `log` call counts against the section VM's log quotas, including calls a library section makes while `require` loads it, because a library loads into the requiring section entry's one environment. The next section entry starts with full `log` quotas.
 
 A call past either quota raises one of these messages:
 
@@ -2370,7 +2370,7 @@ Each call costs 400 bytes, so exactly two checkpoints are recorded. A `log` call
 
 ### Lifecycle reports
 
-A lifecycle report is a run report that shows one stage of a section's Lua lifecycle. Lifecycle reports hold the section name and never any values, such as a shared global's value or the text the run was given.
+A lifecycle report is a run report that shows one stage of a section entry's Lua lifecycle. Lifecycle reports hold the section name and never any values, such as a shared global's value or the text the run was given.
 
 For one section with two blocks, the lifecycle reports come in this order:
 
@@ -2383,7 +2383,7 @@ For one section with two blocks, the lifecycle reports come in this order:
 
 Each Lua block's `log` checkpoints sit between that block's chunk started and chunk succeeded reports, and so do its store reports: a block reports chunk started before its store reports, and chunk succeeded after them when it finishes cleanly. In the `log-checkpoints` prompt, `prepare started` falls inside the first block's pair in `Prepare` and `prepare finished` inside the second.
 
-When a section's Lua VM shuts down, the event stream shows teardown started followed by teardown succeeded, tagged with that section. A block that raises reports chunk started and then chunk failed, and the section's teardown still reports started and succeeded. When a section VM's setup fails after the VM is built, for example when a [Pack prelude](#lua-blocks-section-vms-and-engine-globals) fails to load, the VM is torn down, reporting teardown started and teardown succeeded, before the error is reported.
+When a section entry's Lua VM shuts down, the event stream shows teardown started followed by teardown succeeded, tagged with that section. A block that raises reports chunk started and then chunk failed, and the entry's teardown still reports started and succeeded. When a section VM's setup fails after the VM is built, for example when a [Pack prelude](#lua-blocks-section-vms-and-engine-globals) fails to load, the VM is torn down, reporting teardown started and teardown succeeded, before the error is reported.
 
 Two more kinds of lifecycle report come from compiling and loading:
 
@@ -2419,7 +2419,7 @@ When the operator sends `kept`, the run result is:
 kept
 ````
 
-The operator is the person who answers during a run. The `runvil/user-input` Pack lets a prompt ask the operator: a prompt that declares it in its frontmatter runs the Pack's Lua prelude, which defines an `input` global table in every section, so any section can call `input.ask()` to wait for the operator's next message. The declaration also brings the ask tool, `user-input/ask`.
+The operator is the person who answers during a run. The `runvil/user-input` Pack lets a prompt ask the operator: a prompt that declares it in its frontmatter runs the Pack's Lua prelude, which defines an `input` global table in every section entry, so any section can call `input.ask()` to wait for the operator's next message. The declaration also brings the ask tool, `user-input/ask`.
 
 `input.ask()` takes no arguments, as in `local text = input.ask()`. It pauses the section until the operator's next message and returns that message's text as a string, byte for byte as the operator sent it. Leading and trailing spaces, newlines, and tabs are kept, with no trimming or re-encoding, so a message with two leading spaces, a newline and a tab inside it, and two trailing spaces comes back exactly as typed. The operator's text is trusted, so it never arrives wrapped in the untrusted `<untrusted_input_...>` markers.
 
@@ -2458,7 +2458,7 @@ The ask tool is visible only in a run that has an operator input broker, because
 
 ### While the section waits
 
-The section's Lua VM state survives an `input.ask()` wait, however long the operator takes. With this block as the Lua block of `## Main` in the `ask-once` prompt, an operator who sends `kept` gets the run result `41 kept`:
+The section entry's Lua VM state survives an `input.ask()` wait, however long the operator takes. With this block as the Lua block of `## Main` in the `ask-once` prompt, an operator who sends `kept` gets the run result `41 kept`:
 
 ````lua
 local before = 41
@@ -2596,7 +2596,7 @@ Messages you meet through `tostring(err)` include `models.infer takes (prompt)`,
 
 Because `kind` is a string and `tostring` gives the message, one expression can report a failure in full:
 
-- `err.kind .. '|' .. err.name .. '|' .. tostring(err)`, after a model calls a tool that is not offered in its section, gives text that starts `out_of_scope_tool|rogue|tool "rogue" is not in this section's scope;`.
+- `err.kind .. '|' .. err.name .. '|' .. tostring(err)`, after a model calls a tool that is not offered in its section entry, gives text that starts `out_of_scope_tool|rogue|tool "rogue" is not in this section's scope;`.
 - `err.kind .. '|' .. tostring(err)`, after a tool-call loop that never settles, gives `tool_loop_exhausted|tool-call loop did not converge`.
 - `err.kind .. '|' .. tostring(err.finish_reason) .. '|' .. tostring(err)` reports an `empty_model_reply` failure with its finish reason.
 - `err.kind .. '|' .. err.tasks .. '|' .. tostring(err)` reports a `tasks_live` failure with its `tasks` field.
@@ -3171,7 +3171,7 @@ return captured.plain
 
 This block returns `y`. The hook intercepts the assignment, so the value never lands in `_G`, and a later edit to `__newindex` on your metatable takes effect immediately. A `__newindex` table receives new globals instead, so the value lands in that table rather than in `_G`. With no metatable, or one without `__newindex`, assigning a global that does not exist yet stores it in `_G`.
 
-The Engine sets its own globals, such as `args`, before any of your code runs, so a `__newindex` hook never captures them and sees only your own new globals, while `args` still reads normally. A library loaded with `require` can install the hook with `setmetatable(_G, { __newindex = ... })`, and the hook keeps capturing ordinary global assignments in the section that required it.
+The Engine sets its own globals, such as `args`, before any of your code runs, so a `__newindex` hook never captures them and sees only your own new globals, while `args` still reads normally. A library loaded with `require` can install the hook with `setmetatable(_G, { __newindex = ... })`, and the hook keeps capturing ordinary global assignments in the section entry that required it.
 
 ### Other metamethods on `_G`
 
@@ -3239,7 +3239,7 @@ return table.concat(names, ',')
 
 ### What the Engine guard on `_G` still blocks
 
-The Engine guard on `_G` serves three names that your metatable never touches: `prose`, `messages`, and `argv` outside the H1 pass. Your code reads them as globals, even though a raw read of any of them from `_G` gives `nil`. The guard handles `argv`, `prose`, and `messages` before your metatable, so reads and assignments of those names never reach your `__index` or `__newindex`, an `argv` assignment in the H1 pass included, whatever metatable you set, clear, or change. An assignment to `messages` always raises the refusal that [`messages` is the section's conversation](11-conversations.md#messages-is-the-sections-conversation) shows.
+The Engine guard on `_G` serves three names that your metatable never touches: `prose`, `messages`, and `argv` outside the H1 pass. Your code reads them as globals, even though a raw read of any of them from `_G` gives `nil`. The guard handles `argv`, `prose`, and `messages` before your metatable, so reads and assignments of those names never reach your `__index` or `__newindex`, an `argv` assignment in the H1 pass included, whatever metatable you set, clear, or change. An assignment to `messages` always raises the refusal that [`messages` is the section entry's conversation](11-conversations.md#messages-is-the-section-entrys-conversation) shows.
 
 In an epilog that follows the prose `Hi.`, this block returns `Hi.` even though its `__index` raises for every undefined global and its `__newindex` records every new one:
 

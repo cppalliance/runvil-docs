@@ -333,7 +333,7 @@ The placeholder resolves against values set by Lua blocks that already ran. A va
 
 ### Values from earlier on the walk
 
-A `var` placeholder can insert a value that the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) or an earlier section on the walk wrote, because each section starts with the walk's current `var` and the render reads that table:
+A `var` placeholder can insert a value that the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) or an earlier section on the walk wrote, because each section entry starts with the walk's current `var` and the render reads that table:
 
 ````markdown
 ---
@@ -398,11 +398,11 @@ id {{ sys.id }} at {{ sys.when }}
 
 The run decides which `sys` fields exist. A placeholder that names a field that does not exist, such as `{{ sys.bogus }}`, fails like any missing key, with substitution kind `MissingKey` and a message that repeats the placeholder after `missing`, here `missing {{ sys.bogus }}`.
 
-Once the section has made its first tool call (see [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls)), `{{ sys.model }}` inserts the name part of the model id of the section's model, without the server namespace, such as `fast` for a model whose id is `gateway/fast` (see [The bound model in `sys.model`](05-lua-environment.md#the-bound-model-in-sysmodel)). Before that call `sys` has no `model` field, so a Lua block that reads `sys.model` first fails with `unknown sys field 'model'`, and the placeholder fails like any missing `sys` field.
+Once the section entry has made its first tool call (see [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls)), `{{ sys.model }}` inserts the name part of the model id of the entry's model, without the server namespace, such as `fast` for a model whose id is `gateway/fast` (see [The bound model in `sys.model`](05-lua-environment.md#the-bound-model-in-sysmodel)). Before that call `sys` has no `model` field, so a Lua block that reads `sys.model` first fails with `unknown sys field 'model'`, and the placeholder fails like any missing `sys` field.
 
 ### The moment `var` and `sys` are read
 
-When a block reads `prose`, each `var` placeholder renders from the section's own `var` table as it stands at the first read, so a later change such as `var.word = 'changed'` does not change the text that later reads return. `sys` is read as it stands at that same moment, and the read sees the live `sys`, so a `sys` field the run adds after the Lua block starts but before that first read, such as `sys.model` after a tool call, is visible in the rendered text. [When substitution happens](#when-substitution-happens) covers this timing in full.
+When a block reads `prose`, each `var` placeholder renders from the section entry's own `var` table as it stands at the first read, so a later change such as `var.word = 'changed'` does not change the text that later reads return. `sys` is read as it stands at that same moment, and the read sees the live `sys`, so a `sys` field the run adds after the Lua block starts but before that first read, such as `sys.model` after a tool call, is visible in the rendered text. [When substitution happens](#when-substitution-happens) covers this timing in full.
 
 ### `var` in H1 body prose
 
@@ -850,16 +850,16 @@ A bare global that holds data, meaning a string, number, boolean, or table, is c
 
 ### When the global is set
 
-The global a bare name reads can be set in an earlier Lua block of the same section, as in the `globals` prompt, earlier in the block that reads `prose`, or by a library that block loads with `require` before the read. A bare name reads the section's global of that name as it stands at the moment of the `prose` read. The first read of `prose` renders the text, and later reads reuse that rendering.
+The global a bare name reads can be set in an earlier Lua block of the same section entry, as in the `globals` prompt, earlier in the block that reads `prose`, or by a library that block loads with `require` before the read. A bare name reads the section entry's global of that name as it stands at the moment of the `prose` read. The first read of `prose` renders the text, and later reads reuse that rendering.
 
 ### Bare names in library prose
 
-A library section that a Lua block loads with `require` renders the bare names in its own prose from the calling section's globals:
+A library section that a Lua block loads with `require` renders the bare names in its own prose from the calling section entry's globals:
 
 ````markdown
 ---
 name: style
-description: Renders a library's prose with the calling section's globals
+description: Renders a library's prose with the calling section entry's globals
 runvil: 0
 ---
 
@@ -923,7 +923,7 @@ return prose
 
 The run fails with an error containing `global 'f' in {{ f }} is not JSON data`. The message does not name the Lua type, so when you see it, check what the global holds. The error text holds only the message, the substitution kind, and the byte offset, in the form `{message} [Serialize at byte {offset}]`.
 
-The section's `messages` list, and each [message record](11-conversations.md#message-records) read from it, are userdata, so a bare name whose global holds one fails under the same rule. After `messages:user('u')`, with `list = messages` and `record = messages[1]`, both `{{ list }}` and `{{ record }}` fail with substitution kind `Serialize`. A global holding `json.null` fails with substitution kind `NullValue` instead, as [Which values a bare global can hold](#which-values-a-bare-global-can-hold) describes. Under a strict `_G` metatable whose `__index` raises an error for unknown names, a bare name with no global fails at the `prose` read with substitution kind `Serialize` and the `is not JSON data` message, not `UnknownNamespace`, because the raised error comes back as a failed lookup.
+The section entry's `messages` list, and each [message record](11-conversations.md#message-records) read from it, are userdata, so a bare name whose global holds one fails under the same rule. After `messages:user('u')`, with `list = messages` and `record = messages[1]`, both `{{ list }}` and `{{ record }}` fail with substitution kind `Serialize`. A global holding `json.null` fails with substitution kind `NullValue` instead, as [Which values a bare global can hold](#which-values-a-bare-global-can-hold) describes. Under a strict `_G` metatable whose `__index` raises an error for unknown names, a bare name with no global fails at the `prose` read with substitution kind `Serialize` and the `is not JSON data` message, not `UnknownNamespace`, because the raised error comes back as a failed lookup.
 
 Both bare-global failures, substitution kinds `UnknownNamespace` and `Serialize`, are raised at the `prose` read inside the section's Lua as ordinary Lua errors that [`pcall`](05-lua-environment.md#raising-and-catching-errors) can catch. Uncaught, they fail the run with run error kind `Lua`, as the prose `{{ ghost }} here.` does.
 
@@ -1036,7 +1036,7 @@ return prose
 ```
 ````
 
-A block can read `prose` any number of times and always gets the same string, rendered against the section's `var`, `sys`, and globals as they stood at the first read. A value assigned only after that read, like `var.word = 'two'` here, never appears in the rendered text.
+A block can read `prose` any number of times and always gets the same string, rendered against the section entry's `var`, `sys`, and globals as they stood at the first read. A value assigned only after that read, like `var.word = 'two'` here, never appears in the rendered text.
 
 ### Each prose and Lua pair renders on its own
 

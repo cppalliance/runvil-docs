@@ -1,10 +1,10 @@
 # Conversations
 
-A conversation is the section's `messages` list, which you run with `models.loop`, which keeps running model rounds, each one a request to a model and its reply, and dispatching any tool calls the model makes until it can return a reply. This chapter shows you how to fill the list, what each record in it holds, and how to read records back, so you can send a model instructions, earlier messages, and tool results together instead of a single piece of prose. It then follows the loop round by round, covers every error it raises, and shows how a compactor rewrites the list when it outgrows the model's context window.
+A conversation is the section entry's `messages` list, which you run with `models.loop`, which keeps running model rounds, each one a request to a model and its reply, and dispatching any tool calls the model makes until it can return a reply. This chapter shows you how to fill the list, what each record in it holds, and how to read records back, so you can send a model instructions, earlier messages, and tool results together instead of a single piece of prose. It then follows the loop round by round, covers every error it raises, and shows how a compactor rewrites the list when it outgrows the model's context window.
 
 ## Starting a conversation
 
-Here you add one `user` record to the section's `messages` list, run it with `models.loop`, and read the reply the loop leaves at its end.
+Here you add one `user` record to the section entry's `messages` list, run it with `models.loop`, and read the reply the loop leaves at its end.
 
 ````markdown
 ---
@@ -29,8 +29,8 @@ return messages[#messages].content
 
 The run result is the model's reply to `hello`. The block does four things:
 
-1. `models.use('writer')` selects the `writer` model role for the section (see [Selecting a role per section with `models.use`](10-models.md#selecting-a-role-per-section-with-modelsuse)).
-2. `messages` is the section's conversation, a message list the Engine creates empty when the section starts. A message list is the ordered list of message records a conversation sends to the model, and a message record is one message in it, written as a Lua table holding a `role` and a `content` (see [Message records](#message-records)).
+1. `models.use('writer')` selects the `writer` model role for the section entry (see [Selecting a role per section entry with `models.use`](10-models.md#selecting-a-role-per-section-entry-with-modelsuse)).
+2. `messages` is the section entry's conversation, a message list the Engine creates empty when the entry starts. A message list is the ordered list of message records a conversation sends to the model, and a message record is one message in it, written as a Lua table holding a `role` and a `content` (see [Message records](#message-records)).
 3. `messages:user('hello')` appends the user record `{ role = 'user', content = 'hello' }` at the end of the list, so `#messages` is 1 and `messages[1].role` is `'user'`. When `models.loop` runs, the first message the model receives has the `user` message role and `hello` as its content.
 4. `models.loop()` sends the list to the model and appends the model's text reply to the same list as a new `assistant` record. That record is the terminal record, the model's final reply, which the loop always leaves last in the list, so `return messages[#messages].content` reads its text.
 
@@ -40,16 +40,16 @@ This is the shortest loop pattern: add a user message, run the loop, and return 
 
 `#messages` gives the list's length, and `messages[i]` reads the record at 1-based position `i`. You read a record's fields, such as `messages[i].role` and `messages[i].content`, directly, so `messages[#messages]` is the last record and `messages[#messages].content` is its text. A key that is neither a whole-number position nor a method name reads `nil`. [Reading records](#reading-records) covers every way to read the list.
 
-### `messages` is the section's conversation
+### `messages` is the section entry's conversation
 
-`messages` is an Engine global, so a prompt's Lua uses it with no import or declaration (see [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals)). It holds the section's conversation, a message list the Engine creates with the section's VM, and that one list is what `models.loop` and `handle:loop` run over. You fill it with builder methods, the list methods that append records, such as `messages:system(...)` and `messages:user(...)`.
+`messages` is an Engine global, so a prompt's Lua uses it with no import or declaration (see [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals)). It holds the section entry's conversation, a message list the Engine creates with the entry's VM, and that one list is what `models.loop` and `handle:loop` run over. You fill it with builder methods, the list methods that append records, such as `messages:system(...)` and `messages:user(...)`.
 
-Every section entry gets a fresh, empty list, because every entry gets a fresh VM: each walked section, each `jump` target, each section a `call` chain runs, each task chain, and each fan-out arm. The H1 body's blocks get one too during [the H1 pass](04-how-a-prompt-runs.md#the-h1-pass), and that list drops with the H1 VM when the pass ends. A library loaded with `require` (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)) runs in the requiring section's VM, so it sees that section's list. Two sections show the fresh start:
+Every section entry gets a fresh, empty list, because every entry gets a fresh VM: each walked section, each `jump` target, each section a `call` chain runs, each task chain, and each fan-out arm. The H1 body's blocks get one too during [the H1 pass](04-how-a-prompt-runs.md#the-h1-pass), and that list drops with the H1 VM when the pass ends. A library loaded with `require` (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)) runs in the requiring section entry's VM, so it sees that entry's list. Two sections show the fresh start:
 
 ````markdown
 ---
 name: fresh-lists
-description: Shows that each section starts with an empty conversation.
+description: Shows that each section entry starts with an empty conversation.
 runvil: 0
 ---
 
@@ -75,7 +75,7 @@ return var.first .. '|' .. #messages .. '|' .. type(messages)
 
 `## First` leaves one record in its list, and `## Second` starts with an empty one. History clears with the section by design, so a conversation that must reach a later section travels as data, such as text kept in `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)). To start over without leaving the section, call `models.compact(compactors.clear, reason)` (see [`compactors.clear`](#compactorsclear)). The list is a userdata value, so `type(messages)` reports `'userdata'` rather than `'table'`.
 
-`messages` keeps its identity for the section's whole life, compactions included, so a value read from it earlier, such as `local same = messages`, is still the same list later. The list has no fields other than its methods and its records, so a key such as `new` reads `nil`, like any other key that is neither a method name nor a record position.
+`messages` keeps its identity for the section entry's whole life, compactions included, so a value read from it earlier, such as `local same = messages`, is still the same list later. The list has no fields other than its methods and its records, so a key such as `new` reads `nil`, like any other key that is neither a method name nor a record position.
 
 The list is a value the Engine owns, not a plain Lua table, and its methods are the only way to change it. Assigning to the global itself, as in `messages = {}`, raises this error and leaves the global holding the same list:
 
@@ -110,7 +110,7 @@ The list and its records work inside [the sandbox](05-lua-environment.md#the-san
 
 ### Running the list with `models.loop`
 
-`models.loop(compactor?)` is a plain function that runs the section's `messages` list and takes one optional argument, a compactor. `models.loop()` passes nothing, which selects the default compactor, `compactors.fail`. [Choosing a compactor for a call](#choosing-a-compactor-for-a-call) covers the argument, and [Compactors and context exhaustion](#compactors-and-context-exhaustion) explains what a compactor does.
+`models.loop(compactor?)` is a plain function that runs the section entry's `messages` list and takes one optional argument, a compactor. `models.loop()` passes nothing, which selects the default compactor, `compactors.fail`. [Choosing a compactor for a call](#choosing-a-compactor-for-a-call) covers the argument, and [Compactors and context exhaustion](#compactors-and-context-exhaustion) explains what a compactor does.
 
 `models.loop()` returns `nil`. What it produces is the records it appends to `messages`. This version of the `## Chat` block in `first-chat` checks both:
 
@@ -1105,7 +1105,7 @@ records read from messages are read-only; rewrite history with models.compact(co
 
 The same error comes from assigning a record field (`role`, `content`, `tool_calls`, `tool_call_id`, or `meta`), a key that is not a record field such as `extra`, or `nil`, so you cannot attach data to a view. Set a record's [`meta`](#record-metadata-with-meta) when you add or replace it instead. A refused assignment to a view leaves the list unchanged.
 
-The list itself takes no assignment either. Assigning to any index or field of the list, including `messages[#messages] = nil`, raises the error [`messages` is the section's conversation](#messages-is-the-sections-conversation) shows, which points you to `append` and `models.compact`. Assigning `nil` is refused like any other value, and a refused assignment leaves the list unchanged. To drop the last record, run a compactor that calls `messages:replace(#messages, #messages)`.
+The list itself takes no assignment either. Assigning to any index or field of the list, including `messages[#messages] = nil`, raises the error [`messages` is the section entry's conversation](#messages-is-the-section-entrys-conversation) shows, which points you to `append` and `models.compact`. Assigning `nil` is refused like any other value, and a refused assignment leaves the list unchanged. To drop the last record, run a compactor that calls `messages:replace(#messages, #messages)`.
 
 ### The `replace` range rule
 
@@ -1177,7 +1177,7 @@ return #messages .. ': ' .. messages[1].role .. ', ' .. messages[2].role
 2: user, assistant
 ````
 
-In a section, you call `models.loop` to run a model-tool loop over the section's `messages` list. The loop runs the conversation as a series of rounds: each round sends the message list to the model, and the loop judges the answer until it can return or must raise an error such as `empty_model_reply` (see [Empty replies and finish reasons](#empty-replies-and-finish-reasons)). This call goes through these steps:
+In a section, you call `models.loop` to run a model-tool loop over the section entry's `messages` list. The loop runs the conversation as a series of rounds: each round sends the message list to the model, and the loop judges the answer until it can return or must raise an error such as `empty_model_reply` (see [Empty replies and finish reasons](#empty-replies-and-finish-reasons)). This call goes through these steps:
 
 1. A valid call opens by sending the message list to the model, so the first thing the loop does is send a round.
 2. No tools are in scope for the section entry, so the loop offers the model no tools. This first round still freezes the entry's tool list, an empty one, so an offer after it raises.
@@ -1204,7 +1204,7 @@ return select('#', models.loop()) .. '|' .. #messages
 
 ### The loop appends to `messages`
 
-`models.loop` and `handle:loop` always run over the section's `messages` list, and that list is the one each round's request sends as its messages. The loop works on the list itself rather than a copy. It appends every record it makes, model replies and tool replies alike, to that list in place, so after the call you read every record of the conversation from `messages`.
+`models.loop` and `handle:loop` always run over the section entry's `messages` list, and that list is the one each round's request sends as its messages. The loop works on the list itself rather than a copy. It appends every record it makes, model replies and tool replies alike, to that list in place, so after the call you read every record of the conversation from `messages`.
 
 Every record added during `models.loop` appears in the list: assistant replies and tool results.
 
@@ -1241,7 +1241,7 @@ When every reply is plain text with no tool calls, each `models.loop` call makes
 
 ### Which model a loop round runs on
 
-`models.loop(compactor?)`, called with no model handle, runs each round on the section's current model. That is the model role selected with `models.use` (see [Selecting a role per section with `models.use`](10-models.md#selecting-a-role-per-section-with-modelsuse)), or else the prompt-wide default set with `models.default` (see [The prompt-wide default with `models.default`](10-models.md#the-prompt-wide-default-with-modelsdefault)). The loop looks the section's current model up again each time it sends a round, and the list survives a model change, so one conversation can move between models:
+`models.loop(compactor?)`, called with no model handle, runs each round on the section entry's current model. That is the model role selected with `models.use` (see [Selecting a role per section entry with `models.use`](10-models.md#selecting-a-role-per-section-entry-with-modelsuse)), or else the prompt-wide default set with `models.default` (see [The prompt-wide default with `models.default`](10-models.md#the-prompt-wide-default-with-modelsdefault)). The loop looks the entry's current model up again each time it sends a round, and the list survives a model change, so one conversation can move between models:
 
 ````markdown
 ---
@@ -1268,9 +1268,9 @@ return messages[#messages].content
 ```
 ````
 
-The first loop's round runs on the model bound to `writer`, and the second loop's round runs on the model bound to `reviewer`, because `models.use('reviewer')` changes the section's current model before the second call sends its round. The second request includes the first reply, so the reviewer sees the paragraph it comments on, and the run result is the reviewer's reply. The Static Set stays the same across the change too, so both models are offered the same tools.
+The first loop's round runs on the model bound to `writer`, and the second loop's round runs on the model bound to `reviewer`, because `models.use('reviewer')` changes the section entry's current model before the second call sends its round. The second request includes the first reply, so the reviewer sees the paragraph it comments on, and the run result is the reviewer's reply. The Static Set stays the same across the change too, so both models are offered the same tools.
 
-`models.loop()` runs on the section's current model even when other model handles are in scope, such as one from `local other = models.get('reviewer')`. With neither `models.use` nor `models.default` in effect, `models.loop` fails with the same missing-model error that `models.infer` raises (see [Infer errors and the missing-model error](10-models.md#infer-errors-and-the-missing-model-error)), because both pick the section's current model the same way.
+`models.loop()` runs on the section entry's current model even when other model handles are in scope, such as one from `local other = models.get('reviewer')`. With neither `models.use` nor `models.default` in effect, `models.loop` fails with the same missing-model error that `models.infer` raises (see [Infer errors and the missing-model error](10-models.md#infer-errors-and-the-missing-model-error)), because both pick the entry's current model the same way.
 
 ### Running on a model handle with `handle:loop`
 
@@ -1311,7 +1311,7 @@ return messages[#messages].content
 
 `## Draft` runs on the prompt-wide default, `writer`, and keeps the draft in `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)). `## Review` starts with its own empty list and calls `h:loop(compactor?)` on the handle that `models.get('reviewer')` returns, so every round of that call runs on the `reviewer` model, and the run result is the review.
 
-A model handle (see [Model handles](10-models.md#model-handles)) has a `loop` method that runs the loop on that handle's model. You call it as `handle:loop(compactor?)`, or as `handle.loop(handle, compactor?)` with the handle passed first. `handle:loop` uses the same `messages` list that `models.loop` uses. Every round of a `handle:loop` call, at any point in the section, runs on the handle's own fixed model instead of the section's current model that `models.loop` uses. Every request `handle:loop` sends names that model handle, while `models.loop` sends its rounds with no handle, and both send the section's message list.
+A model handle (see [Model handles](10-models.md#model-handles)) has a `loop` method that runs the loop on that handle's model. You call it as `handle:loop(compactor?)`, or as `handle.loop(handle, compactor?)` with the handle passed first. `handle:loop` uses the same `messages` list that `models.loop` uses. Every round of a `handle:loop` call, at any point in the section entry, runs on the handle's own fixed model instead of the entry's current model that `models.loop` uses. Every request `handle:loop` sends names that model handle, while `models.loop` sends its rounds with no handle, and both send the entry's message list.
 
 The compactor is optional in both forms and follows the same rules on a handle, where it sets what happens when a round overflows the model's context window (see [Choosing a compactor for a call](#choosing-a-compactor-for-a-call)). Pass it as the one argument, as in `handle:loop(compactor)` or `other:loop(compactors.fail)`, or pass an explicit `nil`, as in `handle:loop(nil)`, for the default.
 
@@ -1380,7 +1380,7 @@ Without a `pcall`, a failed `models.loop` ends the block at the call, and the re
 
 - `compactor`, optional: a function, which the loop uses as given, or `nil` for `compactors.fail` (see [Choosing a compactor for a call](#choosing-a-compactor-for-a-call)).
 
-`handle:loop(compactor?)` takes the same one argument after the handle, which the colon supplies. Both run over the section's `messages`.
+`handle:loop(compactor?)` takes the same one argument after the handle, which the colon supplies. Both run over the section entry's `messages`.
 
 A call that breaks these rules is refused with a `lua`-kind error value whose message is the refusal text, raised at the call, so a `pcall` around the call catches it. A refused call raises before the loop starts, so no model request is sent for it, and it leaves the list unchanged: `#messages` reports the same length after the refusal as before it.
 
@@ -1391,7 +1391,7 @@ Each loop entry checks its arguments in a fixed order and reports only the first
 1. `models.loop` refuses a model handle as its argument, and `handle:loop` refuses a call with no model handle as its receiver.
 2. Both check the argument count.
 3. Both check the compactor's type.
-4. Both check whether a loop or a compactor is already running in the section.
+4. Both check whether a loop or a compactor is already running in the section entry.
 
 So `models.loop(1, 5)` reports the count error, and `models.loop(1)` reports the compactor error, even when another loop is running.
 
@@ -1767,7 +1767,7 @@ messages[{index}] is a system message with content parts; only plain text system
 
 Sending a list never changes it. Composing system records and merging same-role records happen on a copy and change only what the model receives. The list keeps its own records, count, and order, so `#messages` counts the records as you appended them rather than the merged messages the model receives, and the list stays the conversation's continuity state. In the first example the model received two messages, yet `#messages` read 5.
 
-Each round composes the list again for whichever model that round runs on, so the same list can go to different models on later calls. One `models.loop` call can run on the default model, and a later call on the same list can run after `models.use('other')` selects another model role (see [Selecting a role per section with `models.use`](10-models.md#selecting-a-role-per-section-with-modelsuse)).
+Each round composes the list again for whichever model that round runs on, so the same list can go to different models on later calls. One `models.loop` call can run on the default model, and a later call on the same list can run after `models.use('other')` selects another model role (see [Selecting a role per section entry with `models.use`](10-models.md#selecting-a-role-per-section-entry-with-modelsuse)).
 
 ### Tool exchanges in a request
 
@@ -2027,7 +2027,7 @@ The context precheck is Runvil's own check, before each request leaves, that the
 
 The precheck runs on every `models.loop` call and before every round. A list that grows past the window between calls is refused before the next request leaves, and the precheck also guards the first request of a list, refusing it before any round runs when the list is already too large.
 
-The precheck uses the context window and `max_tokens` of the model the round goes to. When the round comes from `h:loop`, that is the handle's own (see [Model handles](10-models.md#model-handles)). Otherwise it is the section's current model (see [How prepare binds and checks roles](10-models.md#how-prepare-binds-and-checks-roles)). A handle that `models.get` returns for a raw model id, rather than a declared model role, has a context window of 8192 tokens for the precheck, visible as `h.context`, so `models.get('qwen/qwen3-8b').context` reads `8192` (see [Getting handles with `models.get`](10-models.md#getting-handles-with-modelsget)).
+The precheck uses the context window and `max_tokens` of the model the round goes to. When the round comes from `h:loop`, that is the handle's own (see [Model handles](10-models.md#model-handles)). Otherwise it is the section entry's current model (see [How prepare binds and checks roles](10-models.md#how-prepare-binds-and-checks-roles)). A handle that `models.get` returns for a raw model id, rather than a declared model role, has a context window of 8192 tokens for the precheck, visible as `h.context`, so `models.get('qwen/qwen3-8b').context` reads `8192` (see [Getting handles with `models.get`](10-models.md#getting-handles-with-modelsget)).
 
 ### The output reserve
 
@@ -2269,7 +2269,7 @@ The compactor edits `messages` in place:
 - It may add records with the builders and `append`, and empty the list with `compactors.clear`.
 - It may call `models.infer` and `tools.call`, which suspend and resume inside the compaction like any other suspending call.
 
-`models.loop`, `handle:loop`, and `models.compact` raise inside a compactor, because a compactor is running in the section (see [Argument errors](#argument-errors)). Whatever the compactor returns is ignored: what counts is the list it leaves.
+`models.loop`, `handle:loop`, and `models.compact` raise inside a compactor, because a compactor is running in the section entry (see [Argument errors](#argument-errors)). Whatever the compactor returns is ignored: what counts is the list it leaves.
 
 ### The rules a compaction must pass
 
@@ -2382,7 +2382,7 @@ The first line removes the last record, and the second empties the list. `models
 1. More than two arguments raise `models.compact takes (compactor, reason)`.
 2. A compactor that is not a function raises `compactor must be a function, got {type}`, so `models.compact(nil, 'why')` names `nil`.
 3. A reason that is not a string raises `reason must be a string, got {type}`, so `models.compact(compactors.clear)` names `nil`.
-4. A compaction started while a loop or a compactor is running in the section, such as from an adhoc tool's handler or from inside another compactor, raises `models.compact cannot start while a loop or a compactor is running in this section`.
+4. A compaction started while a loop or a compactor is running in the section entry, such as from an adhoc tool's handler or from inside another compactor, raises `models.compact cannot start while a loop or a compactor is running in this section`.
 
 A refused call leaves the list unchanged.
 

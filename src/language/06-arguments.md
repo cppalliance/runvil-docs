@@ -638,7 +638,7 @@ early result
 
 ### Reading `args` from a library
 
-A library section loaded with [`require`](03-blocks-and-prose.md#sharing-code-with-require) can read `args` both while it loads and later from a library function a section calls. A library loads into the requiring section's environment with every Engine global installed, so its top-level code may use `args` at load, and so may the functions it defines:
+A library section loaded with [`require`](03-blocks-and-prose.md#sharing-code-with-require) can read `args` both while it loads and later from a library function a section calls. A library loads into the requiring section entry's environment with every Engine global installed, so its top-level code may use `args` at load, and so may the functions it defines:
 
 ````markdown
 ---

@@ -76,7 +76,7 @@ Each entry is a plain string with no settings of its own. A Pack's configuration
 
 ### What declaring a Pack does
 
-Listing a Pack under `uses:` declares that the prompt needs it and makes the Pack's prelude run in every section (see [Pack preludes](#pack-preludes)). Every listed Pack is a required Pack, one the run cannot start without (see [Packs at prepare](04-how-a-prompt-runs.md#packs-at-prepare)).
+Listing a Pack under `uses:` declares that the prompt needs it and makes the Pack's prelude run in every section entry (see [Pack preludes](#pack-preludes)). Every listed Pack is a required Pack, one the run cannot start without (see [Packs at prepare](04-how-a-prompt-runs.md#packs-at-prepare)).
 
 Declaring a Pack does not install it. A Host calls Plugins, each Plugin adds its Packs, zero or more, to the Host's Pack registry, and every registered Pack is built when the Host sets up, so a prompt can only declare Packs the Host already has. The Host never installs a Pack itself, never picks which Packs to build, and never picks a Pack id. A Pack id is always the second segment of the Pack's fully qualified name, so `runvil/web` has the Pack id `web`, and that Pack id prefixes its tools, as in `web/fetch`. A Pack id has no version part, so the entry `web` names exactly the Pack `runvil/web`.
 
@@ -102,7 +102,7 @@ An undeclared Pack that cannot serve never refuses the run, and its tools are le
 
 The tools a prompt can call or offer come from the run's tool catalog, the set of tool descriptions the Host supplies (see [The Engine, the Harness, and the Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host)), so a prompt can reach only the catalog tools that the running Host provides. Each catalog tool's id starts with the Pack id of the Pack that contributed it, so the tool `web/fetch` comes from the Pack `web`. When the Host supplies no tool catalog, the catalog is empty and the run has no catalog tools to call or offer.
 
-A run's catalog holds the tools of every `runvil` Pack the Host can serve, declared or not, but the tools of a Pack from any other vendor only when the prompt declares it. A run holds one Pack per Pack id, so a declared third-party Pack replaces the `runvil` Pack of the same id in that run: with `acme/web` declared, `runvil/web` is not in the run, and `web/fetch` names a tool of `acme/web`. An extra Pack is a Pack the run knows that the prompt does not declare under `uses:`, other than the adhoc Pack that holds a section's own tools, so every extra Pack is a `runvil` Pack. You can call or offer an extra Pack's tool by its tool id just as you can a declared Pack's, and declaring a `runvil` Pack neither adds tools to the catalog nor narrows it. On a Host that has `runvil/web`, this prompt has no `uses:` key and still reaches the fetch tool:
+A run's catalog holds the tools of every `runvil` Pack the Host can serve, declared or not, but the tools of a Pack from any other vendor only when the prompt declares it. A run holds one Pack per Pack id, so a declared third-party Pack replaces the `runvil` Pack of the same id in that run: with `acme/web` declared, `runvil/web` is not in the run, and `web/fetch` names a tool of `acme/web`. An extra Pack is a Pack the run knows that the prompt does not declare under `uses:`, other than the adhoc Pack that holds a section entry's own tools, so every extra Pack is a `runvil` Pack. You can call or offer an extra Pack's tool by its tool id just as you can a declared Pack's, and declaring a `runvil` Pack neither adds tools to the catalog nor narrows it. On a Host that has `runvil/web`, this prompt has no `uses:` key and still reaches the fetch tool:
 
 ````markdown
 ---
@@ -163,7 +163,7 @@ invalid frontmatter: Pack id {id} is declared more than once under uses
 
 The vendors do not matter, because a run holds one Pack per Pack id, so `uses: [web, acme/web]` fails naming `web`, and so does `uses: [web, runvil/web]`. When the list repeats several Pack ids, the message names the Pack id whose second appearance comes first in the list, so `[web, user-input, user-input, web]` names `user-input`.
 
-The Engine reserves the Pack ids `adhoc`, which holds a section's own tools, and `dynamic`, which holds its discovery tools (see [Pack ids](#pack-ids)), so neither is ever declared. A `uses:` entry with either Pack id, from any vendor, such as `adhoc`, `runvil/adhoc`, or `acme/dynamic`, fails to parse with this message, which names the reserved Pack id and, like the repeated-entry message, reports no line or column:
+The Engine reserves the Pack ids `adhoc`, which holds a section entry's own tools, and `dynamic`, which holds its discovery tools (see [Pack ids](#pack-ids)), so neither is ever declared. A `uses:` entry with either Pack id, from any vendor, such as `adhoc`, `runvil/adhoc`, or `acme/dynamic`, fails to parse with this message, which names the reserved Pack id and, like the repeated-entry message, reports no line or column:
 
 ````text
 invalid frontmatter: Pack id {id} is reserved by the Engine and is never declared under uses
@@ -235,7 +235,7 @@ Three name shapes are easy to mix up:
 
 The first two go under `uses:`. A bare Pack id means the `runvil` Pack of that id, and a fully qualified name names the vendor as well, so `web` and `runvil/web` are the same entry and `acme/web` is another vendor's Pack. A tool id has the same two-segment shape as a fully qualified name, so `web/fetch` under `uses:` reads as the Pack `fetch` of a vendor named `web`, and unless the Host has such a Pack, the run is refused at prepare with `- fetch is unavailable: web/fetch is not installed`. Everywhere else a Pack id is one segment, so `tools.packs.get('acme/web')` reads `nil`, and `tools.offer('acme/web')`, a string with a slash, is read as a tool id and raises `tools.offer: "acme/web" is not a tool in this run`.
 
-The Engine reserves two Pack ids, so no Pack of any vendor takes either: `adhoc` holds a section's own tools, the tools a prompt defines with `tools.adhoc` (see [Adhoc tools with `tools.adhoc`](#adhoc-tools-with-toolsadhoc)), and `dynamic` holds the Engine's two discovery tools (see [Finding and calling dynamic tools](#finding-and-calling-dynamic-tools)). The Host's Pack registry refuses a Pack whose Pack id is reserved when a Plugin adds it, with ``Pack `{fqn}` cannot take the Pack id {id}, which the Engine reserves``, where `{fqn}` is the Pack's fully qualified name, such as `acme/adhoc`, and `{id}` is the reserved Pack id, such as `adhoc`. A run whose tool catalog or Pack roster still names a reserved Pack id is refused before it starts, and its requirements notice holds the line `- the run's tool catalog or Pack roster names the Pack id {id}, which the Engine reserves` once for each reserved Pack id it names (see [The requirements notice](04-how-a-prompt-runs.md#the-requirements-notice)).
+The Engine reserves two Pack ids, so no Pack of any vendor takes either: `adhoc` holds a section entry's own tools, the tools a prompt defines with `tools.adhoc` (see [Adhoc tools with `tools.adhoc`](#adhoc-tools-with-toolsadhoc)), and `dynamic` holds the Engine's two discovery tools (see [Finding and calling dynamic tools](#finding-and-calling-dynamic-tools)). The Host's Pack registry refuses a Pack whose Pack id is reserved when a Plugin adds it, with ``Pack `{fqn}` cannot take the Pack id {id}, which the Engine reserves``, where `{fqn}` is the Pack's fully qualified name, such as `acme/adhoc`, and `{id}` is the reserved Pack id, such as `adhoc`. A run whose tool catalog or Pack roster still names a reserved Pack id is refused before it starts, and its requirements notice holds the line `- the run's tool catalog or Pack roster names the Pack id {id}, which the Engine reserves` once for each reserved Pack id it names (see [The requirements notice](04-how-a-prompt-runs.md#the-requirements-notice)).
 
 ### Tool ids
 
@@ -324,7 +324,7 @@ The parse error puts the reason in its message, after `invalid frontmatter: `, a
 
 ## Tool scope
 
-After this section you can choose which tools each section's model is offered.
+After this section you can choose which tools each section entry's model is offered.
 
 ````markdown
 ---
@@ -357,7 +357,7 @@ return messages[#messages].content
 ```
 ````
 
-Each section selects the `writer` model role with `models.use` (see [Selecting a role per section with `models.use`](10-models.md#selecting-a-role-per-section-with-modelsuse)) and runs one conversation over its own `messages` list. In `## Ask`, every model round of the loop offers the model one tool, `web_search`. `## Ask` returns nothing, so the walk falls through to `## Plain`, which offers nothing: its rounds go out with no tool list at all, and the run result is the model's reply there.
+Each section selects the `writer` model role with `models.use` (see [Selecting a role per section entry with `models.use`](10-models.md#selecting-a-role-per-section-entry-with-modelsuse)) and runs one conversation over its own `messages` list. In `## Ask`, every model round of the loop offers the model one tool, `web_search`. `## Ask` returns nothing, so the walk falls through to `## Plain`, which offers nothing: its rounds go out with no tool list at all, and the run result is the model's reply there.
 
 A section entry's tool scope is the set of tools the model is offered in that entry's `models.loop` rounds. You fill it by calling `tools.offer` in that entry before its first loop round (see [Offering tools and Packs with `tools.offer`](#offering-tools-and-packs-with-toolsoffer)). The first loop round freezes the scope into the Static Set, which every round of the section entry then offers the model.
 
@@ -496,12 +496,12 @@ Every tool operation lives in the one Lua table `tools`, the way model operation
 | `tools.adhoc` | defines an adhoc tool from a Lua function and returns its Tool object |
 | `tools.call` | calls a tool from Lua |
 | `tools.get` | reads one Tool object by tool id |
-| `tools.offer` | offers tools and Packs to the section's model |
+| `tools.offer` | offers tools and Packs to the section entry's model |
 | `tools.offer_dynamic` | records tools and Packs in the section entry's Dynamic Set |
 | `tools.packs` | a read-only table of the Pack objects, with the functions `get` and `extras` |
-| `tools.stats` | a read-only table that counts the section's tool calls in total, per Pack, and per tool, present from the section's first tool call |
+| `tools.stats` | a read-only table that counts the section entry's tool calls in total, per Pack, and per tool, present from the entry's first tool call |
 
-The table holds exactly `adhoc`, `call`, `get`, `offer`, `offer_dynamic`, and `packs`, and `stats` joins them at the section's first tool call (see [When `tools.stats` appears](#when-toolsstats-appears)). `adhoc`, `call`, `get`, `offer`, and `offer_dynamic` are functions, so `type(tools[name])` is `'function'` for each of those names, and `type(tools.packs)` is `'table'`. [Offering tools and Packs with `tools.offer`](#offering-tools-and-packs-with-toolsoffer), [Calling tools from Lua and counting calls](#calling-tools-from-lua-and-counting-calls), and [Adhoc tools with `tools.adhoc`](#adhoc-tools-with-toolsadhoc) cover the members this section does not.
+The table holds exactly `adhoc`, `call`, `get`, `offer`, `offer_dynamic`, and `packs`, and `stats` joins them at the section entry's first tool call (see [When `tools.stats` appears](#when-toolsstats-appears)). `adhoc`, `call`, `get`, `offer`, and `offer_dynamic` are functions, so `type(tools[name])` is `'function'` for each of those names, and `type(tools.packs)` is `'table'`. [Offering tools and Packs with `tools.offer`](#offering-tools-and-packs-with-toolsoffer), [Calling tools from Lua and counting calls](#calling-tools-from-lua-and-counting-calls), and [Adhoc tools with `tools.adhoc`](#adhoc-tools-with-toolsadhoc) cover the members this section does not.
 
 ### No tool is a global
 
@@ -599,7 +599,7 @@ On a Host that serves `runvil/web`, the model is offered `web_fetch` and `web_se
 
 With `uses: [user-input]` declared and `web/search` in the catalog, `tools.packs.extras()[1].name` reads `subagents`, `tools.packs.extras()[2].name` reads `web`, and `tools.packs.get('user-input').required` reads `true`. Each Pack object lists its own tools, so `tools.packs.extras()[2].tools[2].id` reads `web/search`.
 
-Using extras is each section's own opt-in, and it is off by default: no extra Pack's tool reaches a section's model until that section offers it. `tools.offer(tools.packs.extras())` offers every extra Pack at once (see [Offering a whole Pack](#offering-a-whole-pack)).
+Using extras is each section entry's own opt-in, and it is off by default: no extra Pack's tool reaches a section entry's model until that entry offers it. `tools.offer(tools.packs.extras())` offers every extra Pack at once (see [Offering a whole Pack](#offering-a-whole-pack)).
 
 `tools.packs.extras()`, `tools.packs.get`, the walk of `tools.packs`, and a Tool object's `pack` field all hand out the same object for a given Pack, so you can compare them with `==`. `tools.packs.get` returns the same object on every call, so `tools.packs.get('web') == tools.packs.get('web')` is `true`. A Tool object's `pack` field returns the object of the Pack that owns the tool, so `tools.get('web/search').pack == tools.packs.get('web')` is `true`, as `look-up` showed for `web/fetch`. Each call to `tools.packs.extras()` returns a fresh array table, though, so arrays from two calls are never `==` even though they hold the same Pack objects.
 
@@ -756,7 +756,7 @@ An undeclared Pack that the run knows is an [extra Pack](#the-tool-catalog-and-e
 
 ### Repeated offers and the order the model sees
 
-Successive offers in one section before its first loop round add to the same scope rather than replacing it. Each offer is checked when it is made and only remembered, and an offer identical to one the scope already holds is skipped. After the freeze, every offer raises, a repeat of an earlier offer included.
+Successive offers in one section entry before its first loop round add to the same scope rather than replacing it. Each offer is checked when it is made and only remembered, and an offer identical to one the scope already holds is skipped. After the freeze, every offer raises, a repeat of an earlier offer included.
 
 The section entry's first loop round freezes the Static Set from the remembered offers in these steps:
 
@@ -954,7 +954,7 @@ Each section entry sees its own scoped tool set, built from the tools and Packs 
 - A section entered again with `jump` is a new entry, so it starts with nothing offered, whatever its earlier entry offered, and freezes its own sets (see [Jumping to a section](08-jump-and-call.md#jumping-to-a-section)).
 - Offers made in the H1 block do not reach the sections the walk enters afterward (see [The H1 pass](04-how-a-prompt-runs.md#the-h1-pass)).
 - A section entered with `call` starts with no tools offered, even when the calling section has offers in effect (see [Calling a section](08-jump-and-call.md#calling-a-section)).
-- A task started with `tasks.spawn` does not inherit the spawning section's offers and sees only the offers its own section makes (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn)).
+- A task started with `tasks.spawn` does not inherit the spawning section entry's offers and sees only the offers its own entry makes (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn)).
 - An arm makes its own offers, so `tools.offer('web/search')` inside an arm offers that tool to the arm's `models.loop`, which then sends the model's calls to it (see [What an arm sees](14-fanout.md#what-an-arm-sees)).
 
 A library loaded with `require` runs inside the entry that requires it (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)), so a `tools.offer` in a library counts as the requiring entry's own offer and applies to that entry's later model rounds:
@@ -1020,7 +1020,7 @@ This one error covers every string with a slash that is not a tool in the run:
 
 - an id that no catalog tool has, and any catalog id at all when the run's catalog is empty
 - an id whose Pack is active but that the Pack does not contribute, such as any `web/` id other than `web/fetch` and `web/search`, even when the prompt declares that Pack
-- an `adhoc/` id that no adhoc tool of the section holds, such as `adhoc/grab` before `tools.adhoc` defines `grab`
+- an `adhoc/` id that no adhoc tool of the section entry holds, such as `adhoc/grab` before `tools.adhoc` defines `grab`
 - a string with a slash that is not a well-formed tool id, such as `web/Search`, which takes the message of an unknown tool id
 
 So `tools.offer('web/serch')` raises `tools.offer: "web/serch" is not a tool in this run`. `tools.offer` accepts every catalog tool, even one no model round can advertise, such as one whose parameters are not a JSON object, whose wire name is invalid, or whose wire name another offered tool shares. Such an offer fails later, at the section's first loop round, unless an adhoc tool offered into the same set shadows the tool (see [What the model sees for each offered tool](#what-the-model-sees-for-each-offered-tool)).
@@ -1121,7 +1121,7 @@ A model reply of `latest Lua release` makes the run search the web for that text
 
 The first argument of `tools.call` names the tool in one of two forms, and both are checked in the same place when the call is made:
 
-- A tool id string, such as `'web/fetch'` for a catalog tool or `'adhoc/grab'` for an adhoc tool. The string is taken as the id exactly as written, and the id is looked up first among the section's adhoc tools and then in the run's tool catalog.
+- A tool id string, such as `'web/fetch'` for a catalog tool or `'adhoc/grab'` for an adhoc tool. The string is taken as the id exactly as written, and the id is looked up first among the section entry's adhoc tools and then in the run's tool catalog.
 - A Tool object from `tools.get` or `tools.adhoc`, which stands for the tool's canonical id, such as `web/fetch`, never its wire name, such as `web_fetch`. `tools.call(tools.get('web/fetch'), { url = 'https://www.lua.org/' })` makes exactly the same call as `tools.call('web/fetch', { url = 'https://www.lua.org/' })`, and with an adhoc tool's object in `grab`, `tools.call(grab, { value = 'hi' })` makes the same call as `tools.call('adhoc/grab', { value = 'hi' })`, whether or not the section offered the tool.
 
 A call to a catalog tool goes to the Pack named by the first segment of its tool id, so a call to `web/fetch` goes to the `web` Pack, and a Tool object passed in place of an id delivers the call to that tool's Pack the same way. A Tool object has no methods, only the read-only fields `id`, `description`, `parameters`, and `pack`, so passing it to `tools.call(tool, arguments)` is the only way to call the tool it stands for.
@@ -1163,33 +1163,33 @@ A call made from Lua is a script call wherever the code sits. A Pack prelude hel
 
 ### How tool calls are recorded
 
-Each call to a catalog tool is recorded with the tool's canonical id such as `web/fetch`, the name the call used, its arguments, and its origin, which says who made the call and where. Every origin names the execution, the section, the caller, `model` or `script`, and the section entry that made the call, and a model call's origin also names the model of the round that requested the call. The origin's `execution`, `section`, and `entry` match what `sys.execution`, `sys.section_name`, and `sys.id` read in the section entry that made the call (see [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui)), so two entries of one section, such as a section entered twice or two fanout arms of one worker section, record the same `section` with different `entry` values (see [Section entry ids](05-lua-environment.md#section-entry-ids)). A model call's `model` is the name part of the model id its round was bound to, without the server namespace, so a round bound to `gateway/fast` gives `fast`, the name its request sent (see [Binding every role to the current model](10-models.md#binding-every-role-to-the-current-model)). That is always the requesting round's model, never the section's current selection: after `models.use` switches models between two `models.loop` calls, each loop's calls name that loop's model, and an adhoc tool's handler that switches models or runs an infer round on another model does not change the model the same round's later calls name. A model call from `## Chat`, the first walked section of a run named `run-1`, requested by a round bound to `gateway/fast`, has the origin `{"execution":"run-1","section":"Chat","caller":"model","entry":"0.1","model":"fast"}`.
+Each call to a catalog tool is recorded with the tool's canonical id such as `web/fetch`, the name the call used, its arguments, and its origin, which says who made the call and where. Every origin names the execution, the section, the caller, `model` or `script`, and the section entry that made the call, and a model call's origin also names the model of the round that requested the call. The origin's `execution`, `section`, and `entry` match what `sys.execution`, `sys.section_name`, and `sys.id` read in the section entry that made the call (see [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui)), so two entries of one section, such as a section entered twice or two fanout arms of one worker section, record the same `section` with different `entry` values (see [Section entry ids](05-lua-environment.md#section-entry-ids)). A model call's `model` is the name part of the model id its round was bound to, without the server namespace, so a round bound to `gateway/fast` gives `fast`, the name its request sent (see [Binding every role to the current model](10-models.md#binding-every-role-to-the-current-model)). That is always the requesting round's model, never the section entry's current selection: after `models.use` switches models between two `models.loop` calls, each loop's calls name that loop's model, and an adhoc tool's handler that switches models or runs an infer round on another model does not change the model the same round's later calls name. A model call from `## Chat`, the first walked section of a run named `run-1`, requested by a round bound to `gateway/fast`, has the origin `{"execution":"run-1","section":"Chat","caller":"model","entry":"0.1","model":"fast"}`.
 
 A script call is attributed to the section that made it, such as `Only` for a section headed `## Only`, with the script recorded as the caller. Its origin has no `model` key, even when the section ran a model round before the call, so a script call from `## Only`, the first walked section of a run named `run-1`, has the origin `{"execution":"run-1","section":"Only","caller":"script","entry":"0.1"}`.
 
 A model tool call is recorded under the wire name the model called, such as `web_fetch`, alongside the tool's id `web/fetch`. A script call to a catalog tool is recorded under the tool's id, such as `web/fetch`, never its wire name, and its `tool_result` event's `alias` holds that id too. A script call to an adhoc tool reports its `tool_result` event under the tool's `name` instead, so `tools.call('adhoc/grab')` reports the `alias` `grab`.
 
-The tool result event for a script call has no call id, and it holds the section's round count at the moment of the call (see [Run events and records](04-how-a-prompt-runs.md#run-events-and-records)). For a catalog tool it also carries `vendor`, the vendor of the Pack that answered, such as `runvil` for `web/fetch` in a prompt that declares `web`, as a model call's result event does (see [Events from the model's tool calls](#events-from-the-models-tool-calls)). A script call whose tool fails produces no `tool_result` event.
+The tool result event for a script call has no call id, and it holds the round count at the moment of the call, from the run's round counter or, inside a spawned task, the task's own (see [Run events and records](04-how-a-prompt-runs.md#run-events-and-records)). For a catalog tool it also carries `vendor`, the vendor of the Pack that answered, such as `runvil` for `web/fetch` in a prompt that declares `web`, as a model call's result event does (see [Events from the model's tool calls](#events-from-the-models-tool-calls)). A script call whose tool fails produces no `tool_result` event.
 
 ### Counting calls with `tools.stats`
 
-`tools.stats` is a read-only table of the current section's tool-call counts, and it holds exactly three keys:
+`tools.stats` is a read-only table of the current section entry's tool-call counts, and it holds exactly three keys:
 
-- `total`, the number of tool calls the section has made so far
+- `total`, the number of tool calls the section entry has made so far
 - `packs`, a table that counts calls per Pack, keyed by Pack id, as in `tools.stats.packs.web` or `tools.stats.packs['user-input']`
 - `tools`, a table that counts calls per catalog tool or adhoc tool, keyed by tool id and read with brackets, as in `tools.stats.tools['web/fetch']` for a catalog tool and `tools.stats.tools['adhoc/grab']` for an adhoc tool
 
-A tool's call count is the number of calls made to it so far in the current section, and you read it as `tools.stats.tools[id]`. A call to a catalog tool or an adhoc tool counts in all three: toward `total`, under its Pack in `packs`, and under its tool id in `tools`, so the calls to `adhoc/grab` count under `packs.adhoc`. Each count is a non-negative whole number that starts at 0 and only grows, and each read returns the count at the moment of the read, so a later read sees the calls made since.
+A tool's call count is the number of calls made to it so far in the current section entry, and you read it as `tools.stats.tools[id]`. A call to a catalog tool or an adhoc tool counts in all three: toward `total`, under its Pack in `packs`, and under its tool id in `tools`, so the calls to `adhoc/grab` count under `packs.adhoc`. Each count is a non-negative whole number that starts at 0 and only grows, and each read returns the count at the moment of the read, so a later read sees the calls made since.
 
 Script calls and model tool calls count in the same table. One model call and one script call to `web/fetch` make `tools.stats.tools['web/fetch']` read `2`. The model calls an offered tool by its wire name, and `tools.stats` counts that call under the tool's id, in the same counter as script calls made by id, because every tool call counts under its tool's id and never under the name it was called by. The wire name the model sees is not a key.
 
-The counts go up each time the run attempts to dispatch a tool, before the tool runs, so a call counts even when the tool then fails, and a cancelled call still counts. An adhoc tool call counts under its id when it is dispatched, before its handler runs, so a handler that then fails still counts. A script call to a catalog tool outside the section entry's scope counts as an attempt for that tool too, which is why `fetch-count` reads `1` with no `tools.offer` at all. A call refused before its count is taken stays out of every counter: a `tools.call` to an id no tool has, which fails with `unbound_tool` (see [The `unbound_tool` error](#the-unbound_tool-error)), a section's first tool call that fails while setting up the section's counts, and a model call to a name neither of the section entry's sets holds, which fails with `out_of_scope_tool` (see [The `out_of_scope_tool` error](#the-out_of_scope_tool-error)).
+The counts go up each time the run attempts to dispatch a tool, before the tool runs, so a call counts even when the tool then fails, and a cancelled call still counts. An adhoc tool call counts under its id when it is dispatched, before its handler runs, so a handler that then fails still counts. A script call to a catalog tool outside the section entry's scope counts as an attempt for that tool too, which is why `fetch-count` reads `1` with no `tools.offer` at all. A call refused before its count is taken stays out of every counter: a `tools.call` to an id no tool has, which fails with `unbound_tool` (see [The `unbound_tool` error](#the-unbound_tool-error)), a section entry's first tool call that fails while setting up the entry's counts, and a model call to a name neither of the section entry's sets holds, which fails with `out_of_scope_tool` (see [The `out_of_scope_tool` error](#the-out_of_scope_tool-error)).
 
 The Engine's discovery tools count under the Pack id `dynamic` (see [Finding and calling dynamic tools](#finding-and-calling-dynamic-tools)). A `CallDynamicTool` call that reaches a Dynamic Set tool counts once, under the tool it calls, so after the model runs an adhoc `grab` through `CallDynamicTool` and makes no other call, `tools.stats.tools['adhoc/grab']` and `tools.stats.packs.adhoc` each read `1` and `tools.stats.packs.dynamic` reads `0`. A `GetDynamicTools` call, whatever it answers, and every refusal the discovery tools give, a direct call to a Dynamic Set tool by its wire name included (see [Mistakes the model gets back as text](#mistakes-the-model-gets-back-as-text)), count under `packs.dynamic` instead. All of them count toward `total`. `tools` never holds the discovery tools' ids, `dynamic/search` and `dynamic/call`, so a `GetDynamicTools` call or a discovery refusal shows in `total` and `packs.dynamic` but in no entry of `tools`.
 
 ### When `tools.stats` appears
 
-`tools.stats` is set up by the section's first tool call, so before that call it is `nil`. Count with a guard when the model may call no tool at all:
+`tools.stats` is set up by the section entry's first tool call, so before that call it is `nil`. Count with a guard when the model may call no tool at all:
 
 ````markdown
 ---
@@ -1217,18 +1217,18 @@ return 'pages fetched: ' .. pages
 
 If the model fetches the page once, the run result is `pages fetched: 1`, and if it answers without fetching, the result is `pages fetched: 0`. Indexing `tools.stats` while it is `nil` raises an ordinary Lua error, and the guard `tools.stats and ... or 0` covers a model that called no tool at all.
 
-The first tool call in a section, whether a script call or a model tool call inside `models.loop`, and whether to a catalog tool or an adhoc tool, sets up the section's counts at 0. `tools` starts with an entry for each catalog tool and adhoc tool in the section entry's two sets, the Static Set and the Dynamic Set, as the entry's offers stand at that call, and `packs` starts with an entry for each of their Packs, plus `dynamic` when the entry's tool list holds the discovery tools. So an offered tool that was never called reads `0`, whether `tools.offer` or `tools.offer_dynamic` offered it, and that includes an offered adhoc tool and each tool of a Pack offered with `tools.offer('web')`, which start at 0 just like a tool offered by its id. With `uses: [web]` declared and an adhoc tool in `grab`, a section that runs `tools.offer('web/search')` and `tools.offer_dynamic({ 'web/fetch', grab })` and whose model calls only `web_search` ends with `tools.stats.packs` holding `adhoc`, `dynamic`, and `web`, reading `0`, `0`, and `1`, and `tools.stats.tools` holding `adhoc/grab`, `web/fetch`, and `web/search`, reading `0`, `0`, and `1`.
+The first tool call in a section entry, whether a script call or a model tool call inside `models.loop`, and whether to a catalog tool or an adhoc tool, sets up the entry's counts at 0. `tools` starts with an entry for each catalog tool and adhoc tool in the section entry's two sets, the Static Set and the Dynamic Set, as the entry's offers stand at that call, and `packs` starts with an entry for each of their Packs, plus `dynamic` when the entry's tool list holds the discovery tools. So an offered tool that was never called reads `0`, whether `tools.offer` or `tools.offer_dynamic` offered it, and that includes an offered adhoc tool and each tool of a Pack offered with `tools.offer('web')`, which start at 0 just like a tool offered by its id. With `uses: [web]` declared and an adhoc tool in `grab`, a section that runs `tools.offer('web/search')` and `tools.offer_dynamic({ 'web/fetch', grab })` and whose model calls only `web_search` ends with `tools.stats.packs` holding `adhoc`, `dynamic`, and `web`, reading `0`, `0`, and `1`, and `tools.stats.tools` holding `adhoc/grab`, `web/fetch`, and `web/search`, reading `0`, `0`, and `1`.
 
-After that, `tools.stats.tools` has a key for each tool the section entry's offers name and each tool the script dispatched with `tools.call`, `tools.stats.packs` has a key for the Pack of every tool the section counts, and each key reads its live count:
+After that, `tools.stats.tools` has a key for each tool the section entry's offers name and each tool the script dispatched with `tools.call`, `tools.stats.packs` has a key for the Pack of every tool the section entry counts, and each key reads its live count:
 
 - A tool that had no entry when the counts were set up gets one on its first dispatch, starting at 0 and then counting that dispatch, and its Pack gets one in `packs` the same way.
-- Each tool call picks up the section's current offers, so a tool offered before the first loop round but after the section's latest tool call has no count until the section's next tool call. In the same way, `packs.dynamic` appears at the section's first tool call after its first loop round has added the discovery tools to its tool list.
-- A defined adhoc tool that the section did not offer gets its count only with its own first call, because the seeding covers only the tools the section entry's offers name.
+- Each tool call picks up the section entry's current offers, so a tool offered before the first loop round but after the entry's latest tool call has no count until the entry's next tool call. In the same way, `packs.dynamic` appears at the entry's first tool call after its first loop round has added the discovery tools to its tool list.
+- A defined adhoc tool that the section entry did not offer gets its count only with its own first call, because the seeding covers only the tools the section entry's offers name.
 - A name that was never seeded and never dispatched has no entry at all, rather than a 0 count.
 
-An adhoc tool call and the catalog call its handler makes each count once. After one call to an adhoc `grab` whose handler calls `web/fetch`, `tostring(tools.stats.tools['adhoc/grab']) .. '|' .. tostring(tools.stats.tools['web/fetch'])` renders `1|1`, with each count read by bracket indexing on its tool id, and with no other call in the section, `tools.stats.total` reads `2`.
+An adhoc tool call and the catalog call its handler makes each count once. After one call to an adhoc `grab` whose handler calls `web/fetch`, `tostring(tools.stats.tools['adhoc/grab']) .. '|' .. tostring(tools.stats.tools['web/fetch'])` renders `1|1`, with each count read by bracket indexing on its tool id, and with no other call in the section entry, `tools.stats.total` reads `2`.
 
-Each section keeps its own `tools.stats` counts, set up by that section's first tool call, so counts never pass from one section to the next.
+Each section entry keeps its own `tools.stats` counts, set up by that entry's first tool call, so counts never pass from one section entry to the next: a section entered again with `jump`, a fanout arm, a task, and a section run with `call` each count from 0.
 
 ### Reading a count that does not exist
 
@@ -1478,7 +1478,7 @@ tool.pack                                              -- tools.packs.get('web')
 tools.call('web/search', { query = 'lua' })            -- by id
 tools.call(grab, { value = 'hi' })                     -- by tool object, offered or not
 tools.call('adhoc/grab', { value = 'hi' })
-tools.stats.tools['adhoc/grab']                        -- calls so far, by id; tools.stats appears at the section's first tool call
+tools.stats.tools['adhoc/grab']                        -- calls so far, by id; tools.stats appears at the section entry's first tool call
 tools.stats.packs.web                                  -- calls so far to the web Pack's tools; GetDynamicTools calls and discovery refusals count under packs.dynamic
 tools.stats.total                                      -- every call the section made
 for id, n in pairs(tools.stats.tools) do end           -- every tool count, in id order
@@ -1544,7 +1544,7 @@ return messages[#messages].content
 ```
 ````
 
-An adhoc tool is a tool the prompt defines itself, with a Lua function that runs inside the run (see [Effects and Harness work](01-what-a-prompt-is.md#effects-and-harness-work)). `tools.adhoc(attrs, f)` turns the function `f`, the tool's handler, into a tool of the section and returns the tool's Tool object. `attrs` is a plain table with exactly these keys:
+An adhoc tool is a tool the prompt defines itself, with a Lua function that runs inside the run (see [Effects and Harness work](01-what-a-prompt-is.md#effects-and-harness-work)). `tools.adhoc(attrs, f)` turns the function `f`, the tool's handler, into a tool of the section entry and returns the tool's Tool object. `attrs` is a plain table with exactly these keys:
 
 | Key | Holds |
 |---|---|
@@ -1554,7 +1554,7 @@ An adhoc tool is a tool the prompt defines itself, with a Lua function that runs
 
 Here the first model request lists one tool named `grab` with the description `Grab a value`. When the model calls `grab` with the arguments `{"value":"b"}`, the handler receives them as the Lua table `args` and returns the tool result, so the model reads `got b` as the tool's answer on its next round. The run result is the model's final reply.
 
-`tools.adhoc` registers the tool and does not offer it. A defined tool belongs to the section's adhoc Pack (see [Pack objects](#pack-objects)), `tools.get` and `tools.call` reach it by its id, and it needs no `uses:` entry in the frontmatter, but the model sees it only once the section offers it before the first loop round, here with `tools.offer(grab)` (see [Offering tools and Packs with `tools.offer`](#offering-tools-and-packs-with-toolsoffer)). The first loop round then freezes it into the Static Set under its name, with your description and the parameter schema built from `parameters`, so the message list shows a tool call named `grab`. To define and offer in one line, write `tools.offer(tools.adhoc(attrs, f))`.
+`tools.adhoc` registers the tool and does not offer it. A defined tool belongs to the section entry's adhoc Pack (see [Pack objects](#pack-objects)), `tools.get` and `tools.call` reach it by its id, and it needs no `uses:` entry in the frontmatter, but the model sees it only once the section offers it before the first loop round, here with `tools.offer(grab)` (see [Offering tools and Packs with `tools.offer`](#offering-tools-and-packs-with-toolsoffer)). The first loop round then freezes it into the Static Set under its name, with your description and the parameter schema built from `parameters`, so the message list shows a tool call named `grab`. To define and offer in one line, write `tools.offer(tools.adhoc(attrs, f))`.
 
 `tools.adhoc` checks its arguments on its own line, so a mistake raises at that call rather than when the model loop starts. It works before and after the section entry's first loop round freezes its tool list. A tool defined after the freeze cannot be offered, because every offer raises then, but your Lua still calls it with `tools.call`, so a block can define a tool for its own use at any point.
 
@@ -1644,7 +1644,7 @@ Calls to an adhoc tool count in `tools.stats` like any other tool call, under th
 
 ### An adhoc tool as a decision channel
 
-An adhoc tool belongs to the section VM that defines it. `tools.adhoc` works in the H1 block too, because every section, the H1 block included, gets the same `tools` table (see [The H1 pass](04-how-a-prompt-runs.md#the-h1-pass)). A handler can also write to `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)), so an adhoc tool defined in the H1 body can serve as a decision channel whose handler stores the model's choice for later sections:
+An adhoc tool belongs to the section VM that defines it. `tools.adhoc` works in the H1 block too, because every section entry, the H1 block included, gets the same `tools` table (see [The H1 pass](04-how-a-prompt-runs.md#the-h1-pass)). A handler can also write to `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)), so an adhoc tool defined in the H1 body can serve as a decision channel whose handler stores the model's choice for later sections:
 
 ````markdown
 ---
@@ -1693,7 +1693,7 @@ Each adhoc tool has two names:
 
 So `tools.adhoc({ name = 'Shout', description = 'Uppercase text', parameters = { text = 'string' } }, function(args) return args.text:upper() end)` makes a tool the model calls as `Shout` and your Lua names `adhoc/shout`. The adhoc Pack's id `adhoc` prefixes every adhoc tool's id, the way `web` prefixes `web/fetch`, and a bare name such as `'grab'` is no tool id at all, so `tools.get('grab')` reads `nil`.
 
-Each name and each id belongs to one adhoc tool in a section VM. Defining a second tool under a name the section already used raises `tools.adhoc name "{name}" is already registered`, so a second `tools.adhoc` with `name = 'grab'` in one section raises `tools.adhoc name "grab" is already registered`. A name that differs only in case lands on the same id, which raises `tools.adhoc name "{name}" has the id {id}, which "{other}" already holds`, where `{id}` is the id the new name would take, so after `grab`, a tool named `GRAB` raises `tools.adhoc name "GRAB" has the id adhoc/grab, which "grab" already holds`.
+Each name and each id belongs to one adhoc tool in a section VM. Defining a second tool under a name the section entry already used raises `tools.adhoc name "{name}" is already registered`, so a second `tools.adhoc` with `name = 'grab'` in one section entry raises `tools.adhoc name "grab" is already registered`. A name that differs only in case lands on the same id, which raises `tools.adhoc name "{name}" has the id {id}, which "{other}" already holds`, where `{id}` is the id the new name would take, so after `grab`, a tool named `GRAB` raises `tools.adhoc name "GRAB" has the id adhoc/grab, which "grab" already holds`.
 
 ### An adhoc tool that shadows a catalog tool
 
@@ -1826,7 +1826,7 @@ The argument names are the ones the tool's parameter schema declares. The `decid
 
 ### Where a handler runs
 
-A call to an adhoc tool reaches the handler that `tools.adhoc` was given for that tool, so a call to `grab` runs the function defined as `grab` on the call's arguments. An adhoc tool has no implementation outside the prompt: it is your Lua function, and it runs on the section's own Lua VM.
+A call to an adhoc tool reaches the handler that `tools.adhoc` was given for that tool, so a call to `grab` runs the function defined as `grab` on the call's arguments. An adhoc tool has no implementation outside the prompt: it is your Lua function, and it runs on the section entry's own Lua VM.
 
 A model call reaches the tool by its wire name and a script `tools.call` by its id or its Tool object, and either way the handler runs the same way. The Engine answers the call itself, inside the calling chain (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)): the handler runs inline, inside the coroutine of the block that made the call, and the handler's return value is the call's result.
 
@@ -2517,7 +2517,7 @@ return tostring(ok) .. '|' .. err.kind .. ':' .. err.name
 
 This returns `false|unbound_tool:web/missing`. The error value's `name` field holds the exact id the block passed, and its message reads `tool "{name}" is not a tool in this run; catalog tools: [...]`, listing every tool id in the run's tool catalog.
 
-A script call resolves a tool id such as `web/fetch` against the section's adhoc tools and then the run's tool catalog, so `tools.call('adhoc/grab')` before `grab` is defined gives `unbound_tool` too. A string without a slash, a wire name or a bare tool name included, never reaches that lookup: it raises `tools.call: "web_fetch" is not a tool id` at the call, as [Wire names for the model, tool ids for Lua](#wire-names-for-the-model-tool-ids-for-lua) shows. A failed call of either kind sends out no tool call at all.
+A script call resolves a tool id such as `web/fetch` against the section entry's adhoc tools and then the run's tool catalog, so `tools.call('adhoc/grab')` before `grab` is defined gives `unbound_tool` too. A string without a slash, a wire name or a bare tool name included, never reaches that lookup: it raises `tools.call: "web_fetch" is not a tool id` at the call, as [Wire names for the model, tool ids for Lua](#wire-names-for-the-model-tool-ids-for-lua) shows. A failed call of either kind sends out no tool call at all.
 
 The id list covers every tool in the run's tool catalog, not just the tools offered into the current section, so on a Host that serves `user-input` and `web`, a section that offers nothing still lists all three of their tools. The list is in alphabetical order rather than catalog order, so it reads `["user-input/ask", "web/fetch", "web/search"]` whatever order the catalog adds them in. Uncaught, the `tools.call('web/missing', {})` from the block above ends the run with run error kind `Tool` and this message:
 
@@ -2527,7 +2527,7 @@ tool "web/missing" is not a tool in this run; catalog tools: ["user-input/ask", 
 
 ### The `out_of_scope_tool` error
 
-`out_of_scope_tool` is the error kind for a model call to a tool name outside the section's advertised scope and its Dynamic Set. Every tool call outside the allowed tool scope surfaces as this kind, and `models.loop` raises it at its call site, so you catch it with `local ok, err = pcall(models.loop)`:
+`out_of_scope_tool` is the error kind for a model call to a tool name outside the section entry's advertised scope and its Dynamic Set. Every tool call outside the allowed tool scope surfaces as this kind, and `models.loop` raises it at its call site, so you catch it with `local ok, err = pcall(models.loop)`:
 
 ````markdown
 ---
@@ -2643,7 +2643,7 @@ The prompt never defines `input`. Declaring the Pack adds its prelude's globals 
 
 ### Where and when preludes install
 
-Every Pack the prompt declares can define globals of its own in every section's Lua VM, and each declared Pack's prelude installs under that Pack's id. A prelude runs in every section of the run, not only the first, so the globals it defines are there in every section:
+Every Pack the prompt declares can define globals of its own in every section entry's Lua VM, and each declared Pack's prelude installs under that Pack's id. A prelude runs in every section entry of the run, not only the first, so the globals it defines are there in every entry:
 
 ````markdown
 ---
@@ -2678,9 +2678,9 @@ two|true
 
 Both sections reached the prelude's function. The `Second` section also tried to replace `input.ask`, and the write was refused, so `sealed` is `true`. The refused write left the function in place, and the later `input.ask()` call in the same section still works. [Sealed prelude tables](#sealed-prelude-tables) explains the refusal.
 
-A prelude runs once in each section's Lua VM, as top-level code. Every section, every [arm](14-fanout.md#what-an-arm-sees), and every task a block starts with [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) installs the preludes afresh. Each gets its own copy of the prelude's tables and functions, the prelude's top-level code runs again each time, and nothing one of them does to prelude state reaches another's copy.
+A prelude runs once in each section entry's Lua VM, as top-level code. Every section entry, every [arm](14-fanout.md#what-an-arm-sees), and every task a block starts with [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) installs the preludes afresh. Each gets its own copy of the prelude's tables and functions, the prelude's top-level code runs again each time, and nothing one of them does to prelude state reaches another's copy.
 
-Preludes install during each section's Lua setup, before any block runs and before `require` exists. They come after the [Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals), the control globals such as `jump` and `call`, and the suspending forms of calls such as `models.loop`. Because they install before `require`, a library a section loads with [`require`](03-blocks-and-prose.md#sharing-code-with-require) can call prelude helpers, even from its own top-level code while it loads. With `user-input` declared, a library section whose top-level code runs `local first = input.ask()`, an arm that runs `input.ask()`, and a spawned task that runs `input.ask()` all reach the ask tool.
+Preludes install during each section entry's Lua setup, before any block runs and before `require` exists. They come after the [Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals), the control globals such as `jump` and `call`, and the suspending forms of calls such as `models.loop`. Because they install before `require`, a library a section loads with [`require`](03-blocks-and-prose.md#sharing-code-with-require) can call prelude helpers, even from its own top-level code while it loads. With `user-input` declared, a library section whose top-level code runs `local first = input.ask()`, an arm that runs `input.ask()`, and a spawned task that runs `input.ask()` all reach the ask tool.
 
 Only declared Packs contribute. An undeclared Pack's prelude does not run, so a global it would define stays nil: on a Host that has `runvil/user-input`, a prompt that does not declare `user-input` reads `type(input)` as `nil`. Preludes install in the order the prompt lists Packs under `uses:`, not the order the Host's Plugins added them, so the prelude of the Pack listed first runs first.
 
@@ -2694,7 +2694,7 @@ A prelude must be Lua source text, because the Engine loads every prelude in tex
 
 ### Which prelude values become globals
 
-Every global a prelude assigns becomes a real global of the section, so a block calls it by its bare name or reads it through `_G`. Only assigned globals install. The prelude's `local` variables stay private to the prelude, and any value the prelude returns is ignored, so a prelude that assigns only locals, such as `local helper = 1` and `local function unused() return helper end`, adds nothing to your global environment.
+Every global a prelude assigns becomes a real global of the section entry, so a block calls it by its bare name or reads it through `_G`. Only assigned globals install. The prelude's `local` variables stay private to the prelude, and any value the prelude returns is ignored, so a prelude that assigns only locals, such as `local helper = 1` and `local function unused() return helper end`, adds nothing to your global environment.
 
 A prelude global that is not a table, such as a number, a string, or a function, installs as it is, with no seal, so your code reads the value or calls the function directly.
 
@@ -2736,7 +2736,7 @@ A prelude runs in a restricted environment of its own, and its functions keep th
 - the `tools`, `store`, `untrusted`, and `json` globals, which are the same values your code uses
 - a read-only `var`, covered in [`var` inside a prelude](#var-inside-a-prelude)
 
-Every other global reads as nil inside a prelude and its functions, including Engine globals such as `sys`, `log`, `models`, and `require`. A helper cannot read the `ui`, `argv`, `sys`, or `models` globals even when your code calls it, so those values reach a helper only as arguments. A prelude function that returns `type(ui)`, `type(argv)`, `type(sys)`, `type(models)` joined with commas gives `nil,nil,nil,nil` when your block calls it, though the block itself sees all four. Global names inside prelude functions resolve through the prelude's environment, not the section's globals.
+Every other global reads as nil inside a prelude and its functions, including Engine globals such as `sys`, `log`, `models`, and `require`. A helper cannot read the `ui`, `argv`, `sys`, or `models` globals even when your code calls it, so those values reach a helper only as arguments. A prelude function that returns `type(ui)`, `type(argv)`, `type(sys)`, `type(models)` joined with commas gives `nil,nil,nil,nil` when your block calls it, though the block itself sees all four. Global names inside prelude functions resolve through the prelude's environment, not the section entry's globals.
 
 A helper also does not see the globals another Pack's prelude defines, even one installed earlier in the same section, so it cannot call another prelude's helpers. Your code sees the globals of every prelude.
 
@@ -2752,7 +2752,7 @@ A prelude function called from a block can also use the [store operations](09-th
 
 A prelude can call `store` operations at its top level while it loads. During the install they run directly instead of suspending, and once the install ends, any store function the prelude captured suspends like your own store calls.
 
-Because a prelude's top-level code runs again in every section's VM, a top-level `store.write` repeats in every arm. With two arms, both installs run `store.write('seeded.txt', 'seed')`, the second arm's install-time write conflicts with the first, and the run ends with run error kind `Determinism` (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)). That happens even when the prelude wraps the write in `pcall`, as in `pcall(function() store.write('seeded.txt', 'seed') end)`.
+Because a prelude's top-level code runs again in every section entry's VM, a top-level `store.write` repeats in every arm. With two arms, both installs run `store.write('seeded.txt', 'seed')`, the second arm's install-time write conflicts with the first, and the run ends with run error kind `Determinism` (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)). That happens even when the prelude wraps the write in `pcall`, as in `pcall(function() store.write('seeded.txt', 'seed') end)`.
 
 ### `var` inside a prelude
 
@@ -2800,7 +2800,7 @@ A prelude never replaces or shadows an Engine global for your code. Before any o
 
 | The prelude defines | The message |
 |---|---|
-| a name already bound in the section's `_G` | `` Pack `{pack}`: its prelude defines the global `{name}`, which is already an Engine global `` |
+| a name already bound in the section entry's `_G` | `` Pack `{pack}`: its prelude defines the global `{name}`, which is already an Engine global `` |
 | a global an earlier prelude in the run already defines | `` Pack `{pack}`: its prelude defines the global `{name}`, which Pack `{owner}`'s prelude already defines `` |
 | a reserved name | `` Pack `{pack}`: its prelude defines the global `{name}`, which is reserved as {kind} `` |
 | a global under a key that is not a valid UTF-8 string | `` Pack `{pack}`: its prelude defines a global under {key}; a global's name must be a UTF-8 string `` |
