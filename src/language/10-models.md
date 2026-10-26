@@ -911,7 +911,7 @@ return h.label .. '|' .. h.model_id .. '|' .. table.concat(h.capabilities, ',')
 ```
 ````
 
-When the Host's current model is `claude-sonnet-4-6`, the run result is:
+When the Host's current model is `gateway/claude-sonnet-4-6`, the run result is:
 
 ````text
 analyst|claude-sonnet-4-6|frontier,thinking
@@ -940,7 +940,7 @@ A model handle has exactly ten data fields, plus the `infer` and `loop` methods:
 
 `name` and `label` always hold the same string: the role label as you wrote it in the frontmatter `models:` map, the one the handle was obtained by. A handle from `models.get('writer')` or `models.use('writer')` reads `writer` for both. The role label stays the role label whatever model the role is bound to, so `models.get('analyst').name` reads `analyst`. On a handle for a raw model id, both fields hold that id (see [Raw model ids and the Host-state snapshot](#raw-model-ids-and-the-host-state-snapshot)).
 
-`model_id` holds only the name part of the bound model's model id, such as `claude-sonnet-4-6` (see [Binding every role to the current model](#binding-every-role-to-the-current-model)), and it is the model's id, distinct from the role label. Every declared role binds to the Host's one current model (see [How prepare binds and checks roles](#how-prepare-binds-and-checks-roles)), so `model_id` reads the same on every declared role's handle. The `description`, `capabilities`, and `thinking` fields show how roles differ.
+`model_id` holds only the name part of the bound model's model id, such as `claude-sonnet-4-6` for a role bound to `gateway/claude-sonnet-4-6` (see [Binding every role to the current model](#binding-every-role-to-the-current-model)), never the server namespace and never the role label. Every declared role binds to the Host's one current model (see [How prepare binds and checks roles](#how-prepare-binds-and-checks-roles)), so `model_id` reads the same on every declared role's handle. The `description`, `capabilities`, and `thinking` fields show how roles differ.
 
 `description` reads the role's frontmatter `description:` as a string, so the `analyst` handle above reads `Finds the weakest claim in a draft`. When a role declares no `description:`, the field reads the bound model's own catalog description from the Host, which can be empty.
 
@@ -1021,7 +1021,7 @@ return models.get('analyst'):infer('ping')
 
 `writer` is the prompt-wide default, so a round in `## Check` that names no model would run on `writer`. The round on the `analyst` handle still sends its request to the model bound to `analyst`.
 
-A model handle holds a frozen binding: the role binding fixed when the handle was made. Its fields report the values fixed then and read the same every time during the run. Its requests go to the concrete model its role is bound to, so a `writer` handle bound to `claude-sonnet-4-6` sends its requests to `claude-sonnet-4-6`. Later changes to the section's model never change which model a handle uses, and repeated rounds on one handle use the same model, as when two `other:loop()` calls both send their requests to the model bound to `other`.
+A model handle holds a frozen binding: the role binding fixed when the handle was made. Its fields report the values fixed then and read the same every time during the run. Its requests go to the concrete model its role is bound to, so a `writer` handle bound to `gateway/claude-sonnet-4-6` sends its requests to that model, naming it `claude-sonnet-4-6`. Later changes to the section's model never change which model a handle uses, and repeated rounds on one handle use the same model, as when two `other:loop()` calls both send their requests to the model bound to `other`.
 
 ### Read-only handle fields
 
@@ -1031,7 +1031,7 @@ A model handle is Lua userdata, not a table, so `type(h)` returns `'userdata'`. 
 
 ## Getting handles with `models.get`
 
-You can get the model handle for any declared role, or with a Host-state snapshot for any model id, without changing the section's selection.
+You can get the model handle for any declared role, or with a Host-state snapshot for a gateway model by its name, without changing the section's selection.
 
 ````markdown
 ---
@@ -1150,9 +1150,9 @@ When the Host runs this prompt with a Host-state snapshot, the run result is:
 qwen/qwen3-8b|qwen/qwen3-8b|8192
 ````
 
-A Host-state snapshot is the application state a Host can hand a run, the value that `ui()` returns (see [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui)). With one, `models.get` treats a name that no role declares as a raw model id: a model id passed in place of a role label. It returns a handle for that model.
+A Host-state snapshot is the application state a Host can hand a run, the value that `ui()` returns (see [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui)). With one, `models.get` treats a name that no role declares as a raw model id: the name a gateway model is listed under, passed in place of a role label. It returns a handle bound to the model id made of the server namespace `gateway` and that name, so the handle above is bound to `gateway/qwen/qwen3-8b` and its `model_id` reads the name as passed. Pass the name alone, because a full model id such as `gateway/fast` is read as a name too, giving the model id `gateway/gateway/fast`, and the handle's requests then name the model `gateway/fast`.
 
-A prompt can then declare no model role at all, with no `models:` key in its frontmatter, and still reach a model by its model id, usually the one the Host reports in `ui().selected_model`:
+A prompt can then declare no model role at all, with no `models:` key in its frontmatter, and still reach a gateway model by its name, usually the one the Host reports in `ui().selected_model`:
 
 ````markdown
 ## Reply

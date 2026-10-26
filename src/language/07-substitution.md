@@ -398,7 +398,7 @@ id {{ sys.id }} at {{ sys.when }}
 
 The run decides which `sys` fields exist. A placeholder that names a field that does not exist, such as `{{ sys.bogus }}`, fails like any missing key, with substitution kind `MissingKey` and a message that repeats the placeholder after `missing`, here `missing {{ sys.bogus }}`.
 
-Once the section has made its first tool call (see [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls)), `{{ sys.model }}` inserts the id of the section's model, such as `claude-sonnet-4-6`. Before that call `sys` has no `model` field, so a Lua block that reads `sys.model` first fails with `unknown sys field 'model'`, and the placeholder fails like any missing `sys` field.
+Once the section has made its first tool call (see [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls)), `{{ sys.model }}` inserts the name part of the model id of the section's model, without the server namespace, such as `fast` for a model whose id is `gateway/fast` (see [The bound model in `sys.model`](05-lua-environment.md#the-bound-model-in-sysmodel)). Before that call `sys` has no `model` field, so a Lua block that reads `sys.model` first fails with `unknown sys field 'model'`, and the placeholder fails like any missing `sys` field.
 
 ### The moment `var` and `sys` are read
 

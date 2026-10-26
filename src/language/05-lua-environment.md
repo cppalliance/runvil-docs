@@ -1806,11 +1806,11 @@ So reading `sys.index` in an ordinary walked section raises `unknown sys field '
 To read a `sys` field that may be absent, such as `sys.model` before any tool call, wrap the read in `pcall`. As the Lua block of `## Only` in the `where-am-i` prompt, this returns `no tool call yet`:
 
 ````lua
-local ok, id = pcall(function() return sys.model end)
-return ok and id or 'no tool call yet'
+local ok, model = pcall(function() return sys.model end)
+return ok and model or 'no tool call yet'
 ````
 
-The run goes on whether or not the field is there. A caught unknown field error is an error value with error kind `lua`, and `tostring` on it reads `runtime error: unknown sys field '{field}'` (see [Reading `kind` and `message`](#reading-kind-and-message)), so here, where the read fails, `id` holds that error value and `tostring(id)` reads `runtime error: unknown sys field 'model'`.
+The run goes on whether or not the field is there. A caught unknown field error is an error value with error kind `lua`, and `tostring` on it reads `runtime error: unknown sys field '{field}'` (see [Reading `kind` and `message`](#reading-kind-and-message)), so here, where the read fails, `model` holds that error value and `tostring(model)` reads `runtime error: unknown sys field 'model'`.
 
 ### `sys` is sealed and read-only
 
@@ -1893,8 +1893,8 @@ Comparing two `sys.when` strings as text does not reliably order them in time. T
 
 ````markdown
 ---
-name: model-id
-description: Reads the bound model's catalog id before and after the first tool call.
+name: model-name
+description: Reads the bound model's name before and after the first tool call.
 runvil: 0
 uses:
   - user-input
@@ -1902,7 +1902,7 @@ models:
   writer: {}
 ---
 
-# Model id
+# Model name
 
 ```lua
 models.default('writer')
@@ -1911,33 +1911,33 @@ models.default('writer')
 ## Main
 
 ```lua
-local ok, id = pcall(function() return sys.model end)
-var.before = ok and id or 'no tool call yet'
+local ok, model = pcall(function() return sys.model end)
+var.before = ok and model or 'no tool call yet'
 tools.call('user-input/ask')
 ```
 
-Model id is {{ sys.model }}.
+Model name is {{ sys.model }}.
 
 ```lua
 return var.before .. ' / ' .. prose
 ```
 ````
 
-The H1 block makes `writer` the prompt-wide default (see [The prompt-wide default with `models.default`](10-models.md#the-prompt-wide-default-with-modelsdefault)), so `## Main` has a model. In a run where prepare binds `writer` to `claude-sonnet-4-6`, once the operator answers the ask, the run result is:
+The H1 block makes `writer` the prompt-wide default (see [The prompt-wide default with `models.default`](10-models.md#the-prompt-wide-default-with-modelsdefault)), so `## Main` has a model. In a run where prepare binds `writer` to the model `gateway/claude-sonnet-4-6`, once the operator answers the ask, the run result is:
 
 ````text
-no tool call yet / Model id is claude-sonnet-4-6.
+no tool call yet / Model name is claude-sonnet-4-6.
 ````
 
-`sys.model` is a string holding the catalog id of the bound model, such as `claude-sonnet-4-6`, never the alias or role label the prompt uses for that model. It becomes readable only after the section's first tool call, and only when the section has a model. Here the first tool call is the [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls) to the ask tool from [Asking the operator](#asking-the-operator), so the `pcall` before it finds no field and the placeholder after it renders the id.
+`sys.model` is a string holding the name part of the bound model's model id, without the server namespace, so it reads `fast` for a model whose id is `gateway/fast`, and `claude-sonnet-4-6` for `writer` above, bound to `gateway/claude-sonnet-4-6`. It is the same name that role's model handle reads as `model_id` (see [Model handles](10-models.md#model-handles)), never the alias or role label the prompt uses for that model. It becomes readable only after the section's first tool call, and only when the section has a model. Here the first tool call is the [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls) to the ask tool from [Asking the operator](#asking-the-operator), so the `pcall` before it finds no field and the placeholder after it renders the name.
 
-At the section's first tool call, `sys.model` takes the section's model, the model the section selected for itself or else the prompt-wide default, and stays fixed for the rest of the section. From that call on, it holds the bound model's catalog id in later `{{ sys.model }}` prose placeholders and later Lua blocks alike, so a later `return sys.model` returns `claude-sonnet-4-6` too.
+At the section's first tool call, `sys.model` takes the section's model, the model the section selected for itself or else the prompt-wide default, and stays fixed for the rest of the section. From that call on, later `{{ sys.model }}` prose placeholders and later Lua blocks alike read that same name, so a later `return sys.model` returns `claude-sonnet-4-6` too.
 
 `sys.model` appears at the section's first call to a catalog tool or an adhoc tool, whether a Lua block makes it with `tools.call` or the model makes it during a conversation, such as a tool call inside [`models.loop`](11-conversations.md#starting-a-conversation). A model round, one request to a model and its reply, never sets `sys.model` by itself, so a [`models.infer`](10-models.md#running-a-round-with-modelsinfer) or `models.loop` round with no tool call leaves it unreadable. A section that makes no tool call, or has no model when its first tool call runs, never gets the field.
 
 Reading `sys.model` before the section's first tool call raises an error whose message reads `unknown sys field 'model'`, even when the H1 pass set a prompt-wide default such as `models.default('writer')`. That holds whether the read is in the section's opening Lua block or inside a function from a library the section loads with [`require`](03-blocks-and-prose.md#sharing-code-with-require), as in `require '## sys_reader'` followed by `return read_sys_model()`.
 
-Inside a fanout arm, once the arm's first tool call has been dispatched, `sys.model` reads the selected model's catalog id, so an arm for the member `a` that returns `sys.model .. ':' .. item` gives `claude-sonnet-4-6:a`.
+Inside a fanout arm, once the arm's first tool call has been dispatched, `sys.model` reads the name part of the selected model's id in the same way, so an arm for the member `a` that returns `sys.model .. ':' .. item` gives `claude-sonnet-4-6:a`.
 
 ### The Host's state in `ui()`
 

@@ -734,7 +734,7 @@ At run time, the Engine enforces the same grammar, with the same length, first-c
 - `models.default`, for its label
 - `models.get`, only for a name that matches none of the prompt's model roles, since a declared role's handle comes back first
 
-When the Host allows raw model ids, `models.get` skips the grammar for a name that matches no declared role and reads the name as a model id instead, because model ids can contain `/`, `.`, and `:`. With raw model ids allowed, `models.get('qwen/qwen3-8b')` returns a handle whose `model_id` is `qwen/qwen3-8b`. Without them, `models.get('ghost')` fails because `ghost` is not a bound model role.
+When the Host allows raw model ids, `models.get` skips the grammar for a name that matches no declared role and reads the name as a raw model id instead, the name a gateway model is listed under, because model names can contain `/`, `.`, and `:`. With raw model ids allowed, `models.get('qwen/qwen3-8b')` returns a handle bound to `gateway/qwen/qwen3-8b`, whose `model_id` is `qwen/qwen3-8b`. Without them, `models.get('ghost')` fails because `ghost` is not a bound model role.
 
 ### Contract maps and duplicate keys
 
