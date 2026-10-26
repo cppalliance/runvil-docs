@@ -260,7 +260,6 @@ Each row gives a limit, its default, and who can change it, and the Pack tools t
 
 | Limit | Default | Set by | Taught in |
 |---|---|---|---|
-| `concurrency` | 8 tasks at once | Harness | [Run limits and their defaults](16-limits-and-errors.md#run-limits-and-their-defaults) |
 | `json` nesting limit | 127 levels of nested tables, arrays, and objects, on encode and decode | fixed | [Size and nesting limits](05-lua-environment.md#size-and-nesting-limits) |
 | `json.decode` input cap | 8,388,608 bytes per `json.decode` or `json.decode_lines` call | fixed | [Size and nesting limits](05-lua-environment.md#size-and-nesting-limits) |
 | `json.encode` key limit | 100,000 keys that are not numbers or booleans on one path, per `json.encode` or `json.encode_lines` call | fixed | [Size and nesting limits](05-lua-environment.md#size-and-nesting-limits) |
@@ -269,11 +268,12 @@ Each row gives a limit, its default, and who can change it, and the Pack tools t
 | log message limit | 256 Unicode characters | fixed | [Logging and lifecycle reports](05-lua-environment.md#logging-and-lifecycle-reports) |
 | `lua_log_events` | 1024 `log` events per section VM | Harness | [Lua memory and log quotas](16-limits-and-errors.md#lua-memory-and-log-quotas) |
 | `lua_memory_bytes` | 64 MiB per section VM | Harness | [Lua memory and log quotas](16-limits-and-errors.md#lua-memory-and-log-quotas) |
+| `max_concurrency` | 8 tasks at once | Harness | [Run limits and their defaults](16-limits-and-errors.md#run-limits-and-their-defaults) |
 | `max_response_bytes` | 16 MiB per model reply | Harness | [Run limits and their defaults](16-limits-and-errors.md#run-limits-and-their-defaults) |
 | `max_tool_iterations` | 24 model rounds per loop call unless the Harness sets another | frontmatter | [Run limits and their defaults](16-limits-and-errors.md#run-limits-and-their-defaults) |
 | output reserve | `max_tokens`, else one eighth of the window up to 8192 tokens, at most half the window | fixed | [The context precheck](11-conversations.md#the-context-precheck) |
+| `receive_timeout` | 120 seconds per wait for the next part of a model reply | Harness | [Run limits and their defaults](16-limits-and-errors.md#run-limits-and-their-defaults) |
 | recursion depth cap | 8 nested levels, counting each `call`, task, and fanout arm | fixed | [The recursion depth cap](08-jump-and-call.md#the-recursion-depth-cap) |
-| `request_timeout` | 120 seconds per wait for the next part of a model reply | Harness | [Run limits and their defaults](16-limits-and-errors.md#run-limits-and-their-defaults) |
 | `tools.offer` array length | 100,000 entries per `tools.offer` or `tools.offer_dynamic` call | fixed | [Errors from `tools.offer`](12-tools.md#errors-from-toolsoffer) |
 
 ## Parse error kinds
@@ -305,7 +305,6 @@ A failed run reports exactly one run error kind, and a failed `{{ }}` placeholde
 | --- | --- | --- | --- |
 | `BadPath` | substitution kind | `{{ var }}` or `{{ sys }}` written with no key | [Substitution error kinds](07-substitution.md#substitution-error-kinds) |
 | `Binding` | run error kind | `models.infer` or `models.loop` runs with neither `models.use` nor `models.default` in effect, or a section entry's first loop round fails to freeze its tool sets because two tools share a wire name, a tool's wire name is invalid, or its parameter schema is not a JSON object, unless an adhoc tool in the same set shadows it, or because a render answer breaks the render rules | [`Binding`, `Completion`, and `Tool`](16-limits-and-errors.md#binding-completion-and-tool) |
-| `Cancelled` | run error kind | never reported; a run the Host cancels ends with the cancelled outcome, not a failure | [Run error kinds](16-limits-and-errors.md#run-error-kinds) |
 | `Completion` | run error kind | a model call fails at the transport, backend, or decode layer, or an `empty_model_reply` goes uncaught | [Run error kinds](16-limits-and-errors.md#run-error-kinds) |
 | `ContextExhausted` | run error kind | a request overflows the model's context window and the selected compactor leaves it over, or a direct `compactors.fail` call goes uncaught | [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion) |
 | `Determinism` | run error kind | a store call meets a claims conflict, which no `pcall` catches | [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism) |
@@ -321,7 +320,6 @@ A failed run reports exactly one run error kind, and a failed `{{ }}` placeholde
 | `Quota` | run error kind | a block runs out its `log` event or byte quota, or a `call`, `tasks.spawn`, or `tasks.fanout` arm nests past the call depth cap | [The recursion depth cap](08-jump-and-call.md#the-recursion-depth-cap) |
 | `RequirementsUnmet` | run error kind | the environment falls short of a requirement the prompt states, or an H1 block fails the hard gate | [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run) |
 | `Serialize` | substitution kind | a bare global that is not JSON data, and `{{ prose }}` | [Inserting Lua globals by bare name](07-substitution.md#inserting-lua-globals-by-bare-name) |
-| `Substitution` | run error kind | never reported; an uncaught substitution failure ends as `Lua`, or as `RequirementsUnmet` in the H1 pass | [Catching and reading substitution errors](07-substitution.md#catching-and-reading-substitution-errors) |
 | `Tool` | run error kind | a dispatched tool fails, the model calls a tool outside its round's scope, a `tools.call` names an id that is neither a defined adhoc tool nor a catalog tool, or `models.loop` reaches its round cap | [Tool rounds and the round cap](11-conversations.md#tool-rounds-and-the-round-cap) |
 | `Unclosed` | substitution kind | a `{{` with no `}}` anywhere later in the prose | [Substitution error kinds](07-substitution.md#substitution-error-kinds) |
 | `UnknownNamespace` | substitution kind | a first segment that is neither a root nor a set global, as in `{{ ghost }}` | [Inserting Lua globals by bare name](07-substitution.md#inserting-lua-globals-by-bare-name) |

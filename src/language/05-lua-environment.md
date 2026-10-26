@@ -2057,7 +2057,7 @@ Each `call` starts a contained child chain nested under the caller's chain. The 
 
 Each `call` starts a new child chain numbered in call order, so entering the same section through two calls gives two distinct `sys.id` values, `0.0.0` and `0.1.0`. After `call` returns, the caller's `sys.id` is unchanged, so `## Main` still reads `0.1` after both calls, and the walk goes on to `## Last` as `0.2`.
 
-Call chains are numbered as children of the calling chain, not of the calling section's entry. The two calls from `## Main`, itself entry `0.1`, start chains `0.0` and `0.1`, so the second chain's section reads `0.1.0` even though the calling section is also `0.1`. Child chains are numbered by the calling chain's own child counter in the order they start, and calls, tasks, and fanout arms all share that counter no matter which section made the call, so each new call or arm takes the next child chain number.
+Call chains are numbered as children of the calling chain, not of the calling section's entry. The two calls from `## Main`, itself entry `0.1`, start chains `0.0` and `0.1`, so the second chain's section reads `0.1.0` even though the calling section is also `0.1`. Child chains are numbered by the calling chain's own child counter in the order they start, and calls, tasks, fanout arms, and each [timed wait](15-tasks.md#the-timer-behind-a-time-limit)'s internal timer all share that counter no matter which section made the call, so each new call or arm takes the next child chain number.
 
 A chain started by `call` numbers its own section entries. With this `## Main` and its children in place of the ones in the `called-ids` prompt, the run result is `0.1,0.0.1,0.2`:
 

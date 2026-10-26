@@ -1727,7 +1727,7 @@ A section run with `call` runs as a chain inside the calling task, not as a new 
 
 A section run with `call` starts with the same [concurrency limit](14-fanout.md#concurrency-and-the-admission-window) as the section that called it, so the tasks it spawns run within the caller's share. It takes no concurrency slot of its own, and while it waits on tasks it spawned, it gives back the slot of the task it runs inside. So a section called from an arm can still fan out after the section that started the fanout set `tasks.concurrency(1)`. When `## Parent` runs `tasks.concurrency(1)` and fans out to `### Worker`, the worker section runs `call('### Sub')`, and `### Sub` fans out over its own child `#### Leaf`, the run completes, with `worker:tail-reply:x!y!:alpha` as its text.
 
-A `call` made after a fanout takes the caller's next child number after the arms, because called sections and spawned tasks share one child counter. In the main walk after a two-arm fanout, the arms are children 0 and 1, the called section is child 2, and a `## Sub` that returns `sys.id` returns `0.2.0`.
+A `call` made after a fanout takes the caller's next child number after the arms, because called sections, spawned tasks, and each timed wait's internal timer share one child counter. In the main walk after a two-arm fanout, the arms are children 0 and 1, the called section is child 2, and a `## Sub` that returns `sys.id` returns `0.2.0`.
 
 ### Calling from tasks and adhoc tool handlers
 

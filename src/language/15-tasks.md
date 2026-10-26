@@ -1310,7 +1310,7 @@ A task waiting on a model reply, such as a task running `return models.infer('sl
 
 ### Counting with `turns`, `depth`, and `tasks`
 
-`turns` is always present and counts the model rounds the task has finished, reading `0` while its first `models.infer` round is in flight and `1` after that round returns. It keeps its value after the task ends. A task counts its rounds separately from its owner, so its rounds count against its own [round cap](11-conversations.md#tool-rounds-and-the-round-cap), and `turns` shows that count.
+`turns` is always present and counts the model rounds the task has finished, reading `0` while its first `models.infer` round is in flight and `1` after that round returns. It keeps its value after the task ends. A task counts its rounds separately from its owner, and `turns` shows that count. The [round cap](11-conversations.md#tool-rounds-and-the-round-cap) applies to each loop call, not to the task.
 
 `depth` is always present and gives the task chain's `call` depth, its nesting level. It reads `1` for a task spawned from the main walk, such as a task spawned from `## Main`, and it keeps its value after the task ends.
 
@@ -1362,7 +1362,7 @@ return 'child done'
 
 The `note` field holds the task's note once one is set, and it is nil when the task has published none. `tasks.status` shows the note while the task runs and keeps it after the task finishes, so a task that runs `tasks.note('working')` reads `note` `working` both while it waits and when it is done.
 
-A `tasks.note` from a section reached by `call` inside a task records on the task itself, so the called section's note is the task's note. On the main walk, `tasks.note` succeeds but records the note on the walk itself, where nothing reads it.
+A `tasks.note` from a section reached by `call` inside a task records on the task itself, so the called section's note is the task's note. On the main walk, in the H1 pass, and in a section reached by `call` from either, `tasks.note` succeeds and records nothing.
 
 ### Checking without waiting with `tasks.ready`
 
@@ -1766,7 +1766,7 @@ A task's own sections read `sys.id` values that extend the task id with a sectio
 
 ### One child counter per chain
 
-A chain has one child counter shared by the chains it calls, the tasks it spawns, and the fanout arms it starts. So a task's id is its spawner's next child index, and a `call` uses up an index the next spawn would otherwise get:
+A chain has one child counter shared by the chains it calls, the tasks it spawns, the fanout arms it starts, and the internal timer of each timed wait (see [The timer behind a time limit](#the-timer-behind-a-time-limit)). So a task's id is its spawner's next child index, and a `call` uses up an index the next spawn would otherwise get:
 
 ````markdown
 ---

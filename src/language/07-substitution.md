@@ -1468,4 +1468,4 @@ the environment cannot satisfy this prompt:
 - the H1 gate failed
 ````
 
-The substitution failure follows the notice as its cause, after a colon and a space, so the message goes on to contain `missing {{ var.missing }} [MissingKey at byte 9]`. A substitution failure never ends a run under a run error kind of its own: every uncaught one ends as run error kind `Lua`, or as run error kind `RequirementsUnmet` in the H1 pass.
+The substitution failure follows the notice as its cause, after a colon and a space, so the message goes on to contain `missing {{ var.missing }} [MissingKey at byte 9]`. An uncaught substitution failure ends the run as run error kind `Lua`, or as run error kind `RequirementsUnmet` in the H1 pass.

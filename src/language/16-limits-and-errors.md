@@ -813,7 +813,7 @@ A failed run reports one run error kind from a fixed set of twelve:
 | `Internal` | an Engine invariant breaks |
 | `RequirementsUnmet` | the environment falls short of a requirement the prompt states |
 
-The Engine also defines `Substitution` and `Cancelled`, but no failed run reports either. A failed `{{ }}` substitution is an ordinary Lua error that `pcall` can catch, and it reports `Lua` when uncaught. A cancelled run ends as cancelled, never as a failure of kind `Cancelled`.
+A failed `{{ }}` substitution is an ordinary Lua error that `pcall` can catch, and it reports `Lua` when uncaught. A cancelled run ends as cancelled, never as a failed run, so no run error kind stands for a cancel.
 
 ### The failed run's message
 
@@ -1380,7 +1380,7 @@ A block aborted by a cancel ends with the interrupted error, never an ordinary L
 
 The interrupted error's `cancelled` value has no `task` field, so the presence of `task` tells a [task cancellation](15-tasks.md#cancelling-and-listing-tasks) apart from a stop or a run cancel.
 
-Run error kind `Cancelled` classifies only errors raised while a cancelled run is still going, such as a Host interrupt seen inside the run. A run the Host cancels ends with the cancelled outcome rather than as a failure of this kind.
+No run error kind stands for a cancel: a run the Host cancels ends with the cancelled outcome rather than as a failed run.
 
 The first outcome that ends a run is the one it reports, so a run that finishes or fails before a cancel lands keeps that result.
 
