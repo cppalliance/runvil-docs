@@ -156,7 +156,7 @@ local reply =
 ```
 ````
 
-The message starts with `lua compilation error at {location} (line {N}): ` and ends with the Lua compiler's own diagnostic. `{location}` is the block's location label, such as ``H1 `{title}` lua`` for a block in the H1 body, and here a label containing ``section `Transform` epilog``. `{N}` is the line of the prompt file where the block's Lua source starts. [How errors name each block](#how-errors-name-each-block) lists every location label.
+The message starts with `lua compilation error at {location} (line {source_line}): ` and ends with the Lua compiler's own diagnostic. `{location}` is the block's location label, such as ``H1 `{title}` lua`` for a block in the H1 body, and here a label containing ``section `Transform` epilog``. `{source_line}` is the line of the prompt file where the block's Lua source starts. [How errors name each block](#how-errors-name-each-block) lists every location label.
 
 ## Prologue, prose, and epilog
 
@@ -345,7 +345,7 @@ return greeting .. ', ' .. prose
 hello, world
 ````
 
-Other state persists from one fence to the next in the same section too, such as the tools an earlier fence offers and the call counts in `tools.calls` (see [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls)).
+Other state persists from one fence to the next in the same section too, such as the tools an earlier fence offers and the call counts in `tools.stats` (see [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls)).
 
 ### What a prologue and an epilog can do
 
@@ -393,10 +393,11 @@ Error messages name each Lua block with a location label that says where the blo
 | --- | --- |
 | A section's first block, when it is a Lua block | ``section `{name}` prologue`` |
 | A section's last block, when it is a Lua block and the section also has prose | ``section `{name}` epilog`` |
-| Any other Lua block in a section | ``section `{name}` lua {n}`` |
+| Any other Lua block in a section | ``section `{name}` lua {ordinal}`` |
+| Any of those three section blocks, when another section heading has the same section name | ``section `{name}` (line {heading_abs_line}) prologue``, ``section `{name}` (line {heading_abs_line}) epilog``, or ``section `{name}` (line {heading_abs_line}) lua {ordinal}`` |
 | Any block in the H1 body | ``H1 `{title}` lua`` |
 
-`{name}` is the section name, the heading text without the `#` marks, and `{title}` is the H1 title. `{n}` is the block's 1-based place among the section's Lua blocks, counting the prologue as 1, so the third Lua block of `## lib` is ``section `lib` lua 3``, as in the library error in [Where a library error points](#where-a-library-error-points). In a section of just two back-to-back fences, the second fence is labeled `epilog`, because the empty prose between them counts as prose. A malformed epilog makes the prompt fail to parse with parse error kind `Lua` and a message that names the section and its epilog, as in ``section `Transform` epilog`` in [When Lua blocks compile and run](#when-lua-blocks-compile-and-run).
+`{name}` is the section name, the heading text without the `#` marks, `{heading_abs_line}` is the file line of the section's own heading (see [Sections that share a section name](05-lua-environment.md#sections-that-share-a-section-name)), and `{title}` is the H1 title. `{ordinal}` is the block's 1-based place among the section's Lua blocks, counting the prologue as 1, so the third Lua block of `## lib` is ``section `lib` lua 3``, as in the library error in [Where a library error points](#where-a-library-error-points). In a section of just two back-to-back fences, the second fence is labeled `epilog`, because the empty prose between them counts as prose. A malformed epilog makes the prompt fail to parse with parse error kind `Lua` and a message that names the section and its epilog, as in ``section `Transform` epilog`` in [When Lua blocks compile and run](#when-lua-blocks-compile-and-run).
 
 ## Pending prose and the `prose` global
 
@@ -1271,10 +1272,10 @@ section `S` prologue `lua` fence is not closed
 An unclosed `lua` fence that is the only fence and sits at the top of its content, left open to the end of the section, gets this prologue message. In the not-closed messages, the section name is the section's heading text without the `#` marks, such as `S` for `## S`. An unclosed fence that follows prose or another fence, left open to the end of the section, gets the epilog wording instead:
 
 ````text
-section `{name}` epilog `lua` fence is not closed
+section `{section}` epilog `lua` fence is not closed
 ````
 
-An unclosed `lua` fence under the H1 uses the same section wording with the H1 title as the name, for example ``section `{title}` prologue `lua` fence is not closed``. A backtick line indented by four spaces, or three backticks followed by other text, cannot close a `lua` fence, so the fence stays open and the parse fails with the not-closed message. Unlike the rule errors, an unclosed fence error names its section and phase in the message but reports no line or column.
+An unclosed `lua` fence under the H1 uses the same section wording with the H1 title as `{section}`, so under the H1 `# Open` it reads ``section `Open` prologue `lua` fence is not closed``. A backtick line indented by four spaces, or three backticks followed by other text, cannot close a `lua` fence, so the fence stays open and the parse fails with the not-closed message. Unlike the rule errors, an unclosed fence error names its section and phase in the message but reports no line or column.
 
 ## List sections
 
@@ -2302,7 +2303,7 @@ The caller's `prose` comes back the same way however the load ends. After a `req
 
 `require` is Runvil's own section loader, not the Lua base library's `require`. The Engine installs it as a global for each section's whole lifetime, so it is available in every section's Lua and any block can call it, and `type(require)` is `function`. The Engine finds the named library section and renders its prose for it. Author code that rebinds `error`, `setmetatable`, or `table.concat` does not change how `require` behaves.
 
-Because `require` is reserved as one of the Engine's own globals, a [Pack prelude](12-tools.md#pack-preludes) cannot define its own `require`, and trying fails with an error containing `which is reserved as an Engine global`. A Pack prelude cannot call `require` while it installs either, because the Engine installs `require` after the preludes. That call fails the run with a message that starts `` Pack `{id}`: its prelude failed to load: `` and contains `attempt to call a nil value (global 'require')`, where `{id}` is the Pack id.
+Because `require` is reserved as one of the Engine's own globals, a [Pack prelude](12-tools.md#pack-preludes) cannot define its own `require`, and trying fails with an error containing `which is reserved as an Engine global`. A Pack prelude cannot call `require` while it installs either, because the Engine installs `require` after the preludes. That call fails the run with a message that starts `` Pack `{pack}`: its prelude failed to load: `` and contains `attempt to call a nil value (global 'require')`, where `{pack}` is the Pack id.
 
 ## How `require` finds and caches libraries
 
@@ -2771,7 +2772,7 @@ error('load fault')
 [string "line 19"]:1: load fault
 ````
 
-A library error caught with `pcall(require, heading)` comes back in standard Lua form, `[string "line {N}"]:{k}: {message}`. `N` is the prompt line of the library block's first Lua line, here line 19, and `k` is the line within that block, here its first. For an `error` call on the third line of a block that starts at prompt line 100, the caught error reads `[string "line 100"]:3: library fault`.
+A library error caught with `pcall(require, heading)` comes back in standard Lua form, `[string "line {source_line}"]:{k}: {message}`. `{source_line}` is the prompt line of the library block's first Lua line, here line 19, and `{k}` is the line within that block, here its first. For an `error` call on the third line of a block that starts at prompt line 100, the caught error reads `[string "line 100"]:3: library fault`.
 
 Only an uncaught failure is rewritten to the library's location and prompt line. Replace the block of `## Main` with one that calls `require` without `pcall`, keeping the same number of lines:
 
@@ -2790,7 +2791,7 @@ The run fails, and its error message contains:
 section `lib` prologue:19: load fault
 ````
 
-An uncaught Lua error raised while a library loads is reported as `` section `{name}` {block}:{prompt line}: {message} ``. It names the library section by its bare name and gives the failing statement's prompt-file line, at the library block's location rather than at the `require` call site. The location names the full section title even when the title is long, such as `` section `Research Helper Functions For Every Worker` prologue:19: load fault ``. In a library with more than one Lua block, an uncaught error maps to the block that raised it and that block's own prompt lines, using the labels in [How errors name each block](#how-errors-name-each-block), such as `` section `lib` lua 3:21: second fault `` for a raise on the second line of the section's third Lua block, which starts at prompt line 20.
+An uncaught Lua error raised while a library loads is reported as `` section `{name}` {block}:{absolute}: {result} ``. It names the library section by its bare name and gives the failing statement's prompt-file line, at the library block's location rather than at the `require` call site. The location names the full section title even when the title is long, such as `` section `Research Helper Functions For Every Worker` prologue:19: load fault ``. In a library with more than one Lua block, an uncaught error maps to the block that raised it and that block's own prompt lines, using the labels in [How errors name each block](#how-errors-name-each-block), such as `` section `lib` lua 3:21: second fault `` for a raise on the second line of the section's third Lua block, which starts at prompt line 20.
 
 An uncaught error from a function the library defined points at the library too, even when the caller calls that function after the load:
 

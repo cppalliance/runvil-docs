@@ -129,7 +129,7 @@ When the web Pack is unavailable and the prompt does not declare it, offering th
 tools.offer('web')
 ````
 
-The message has the form `tools.offer: the {name} Pack is unavailable in this run: {reason}`, where `{reason}` is the Pack's reason, so on a Host that provides no search provider it reads:
+The message has the form `tools.offer: the {pack} Pack is unavailable in this run: {reason}`, where `{reason}` is the Pack's reason, so on a Host that provides no search provider it reads:
 
 ````text
 tools.offer: the web Pack is unavailable in this run: web needs runvil/search-provider, and this host provides none
@@ -1423,7 +1423,7 @@ Some of these rules need more detail:
 
 ### When the search provider fails
 
-When the search provider fails, the call fails with the message `web_search: {message}`, with the provider's own message after the prefix. A provider `Transport` failure becomes tool error kind `Transport`, and a provider `Backend` failure becomes tool error kind `Backend`, as in `web_search: request failed` with kind `Transport` or `web_search: backend returned 502: upstream down` with kind `Backend`.
+When the search provider fails, the call fails with the message `web_search: {error}`, with the provider's own message after the prefix. A provider `Transport` failure becomes tool error kind `Transport`, and a provider `Backend` failure becomes tool error kind `Backend`, as in `web_search: request failed` with kind `Transport` or `web_search: backend returned 502: upstream down` with kind `Backend`.
 
 Under any provider, a result row whose `url` is empty or only whitespace fails the whole search with tool error kind `Backend` and the message `web_search: malformed search response: result {index} has an empty url`. The index is zero-based and names the first such row, so a blank second row gives `result 1 has an empty url`.
 

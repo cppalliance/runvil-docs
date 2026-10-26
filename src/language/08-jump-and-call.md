@@ -1442,7 +1442,7 @@ The `depth` field of [`tasks.status`](15-tasks.md#checking-on-a-task-with-taskss
 
 ### The `CallDepthExceeded` failure
 
-`CallDepthExceeded` is the dedicated depth cap error. Its message holds the cap of 8 and names the kind of call that tripped it, in the form `<call form> recursion exceeded cap of 8`:
+`CallDepthExceeded` is the dedicated depth cap error. Its message holds the cap of 8 and names the kind of call that tripped it, in the form `{via} recursion exceeded cap of 8`:
 
 - `call recursion exceeded cap of 8` for a `call` or a `tasks.spawn`.
 - `tasks.fanout recursion exceeded cap of 8` for a `tasks.fanout` arm.

@@ -291,13 +291,13 @@ description: d
 hi
 ````
 
-The parse fails with parse error kind `Frontmatter` and a message of this form, where the detail is the YAML reader's own message:
+The parse fails with parse error kind `Frontmatter` and a message of this form, where `{message}` is the YAML reader's own message:
 
 ````text
-invalid frontmatter: {detail}
+invalid frontmatter: {message}
 ````
 
-The Engine reports a decode failure in the same `invalid frontmatter: {detail}` form. The error also gives the file line and column of the offending spot, counting the opening `---` as line 1, so this one reports line 4 and a column. In the same way, a bad list item under `uses:` on file line 5, written after `  - ` so that its text starts in column 5, reports line 5, column 5.
+The Engine reports a decode failure in the same `invalid frontmatter: {message}` form. The error also gives the file line and column of the offending spot, counting the opening `---` as line 1, so this one reports line 4 and a column. In the same way, a bad list item under `uses:` on file line 5, written after `  - ` so that its text starts in column 5, reports line 5, column 5.
 
 The same message and parse error kind cover every way the frontmatter can fail to decode:
 
@@ -395,7 +395,7 @@ runvil: 0
 # Greeter
 ````
 
-The parse error kind is `Frontmatter`, and the message has the `invalid frontmatter: {detail}` form, where the detail names the missing field, here ``missing field `description` ``. A frontmatter without `name` gives the detail ``missing field `name` `` the same way.
+The parse error kind is `Frontmatter`, and the message has the `invalid frontmatter: {message}` form, where `{message}` names the missing field, here ``missing field `description` ``. A frontmatter without `name` gives ``missing field `name` `` the same way.
 
 ## The `runvil` version key
 
@@ -579,7 +579,7 @@ usse: [web]
 # Greeter
 ````
 
-The message has the `invalid frontmatter: {detail}` form, and the detail names the offending key, here `usse`.
+The message has the `invalid frontmatter: {message}` form, and `{message}` names the offending key, here `usse`.
 
 Unknown keys are rejected inside nested declarations too. An `input:` or `output:` declaration accepts only `path` and `description`, an arg entry and a model role each accept only their own fixed set of keys, and any other key inside them fails the parse with parse error kind `Frontmatter`.
 
@@ -740,10 +740,10 @@ When the Host allows raw model ids, `models.get` skips the grammar for a name th
 
 A contract map is the `models:` map or the `args:` map. The two share one set of key rules, so the grammar check and the uniqueness check apply the same way to both. Each key appears once within its map. Keys are compared exactly, so labels that differ only in case, such as `Fast` and `fast`, are two distinct entries.
 
-A repeated key fails the parse with parse error kind `Frontmatter`, and the message names the key kind and the repeated key, where the key kind is `model role label` for `models:` and `arg name` for `args:`:
+A repeated key fails the parse with parse error kind `Frontmatter`, and the message names the key kind and the repeated key, where the key kind `{what}` is `model role label` for `models:` and `arg name` for `args:`:
 
 ````text
-duplicate {key kind} `{key}`: contract map keys must be unique
+duplicate {what} `{key}`: contract map keys must be unique
 ````
 
 The parser checks each key against the grammar first and for uniqueness second, and it checks a key before it reads the key's value. It walks the keys in source order and stops at the first bad one, so:
@@ -771,23 +771,23 @@ This frontmatter declares three args, named `prose`, `store`, and `end`, and the
 
 ### Parse-time name errors
 
-A key outside the grammar fails the parse with parse error kind `Frontmatter`. The detail of the `invalid frontmatter: {detail}` message names the key kind and the offending key, and it shows the grammar:
+A key outside the grammar fails the parse with parse error kind `Frontmatter`. The `{message}` of the `invalid frontmatter: {message}` message names the key kind and the offending key, and it shows the grammar:
 
 ````text
-invalid {key kind} `{key}`: expected [A-Za-z][A-Za-z0-9_-]{0,63}
+invalid {what} `{key}`: expected [A-Za-z][A-Za-z0-9_-]{0,63}
 ````
 
-The key kind reads `model role label` for a key under `models:` and `arg name` for a key under `args:`, because `args:` keys go through the same key rules as `models:` keys. So the two details read:
+The key kind `{what}` reads `model role label` for a key under `models:` and `arg name` for a key under `args:`, because `args:` keys go through the same key rules as `models:` keys. So the two details read:
 
 ````text
 invalid model role label `{key}`: expected [A-Za-z][A-Za-z0-9_-]{0,63}
 invalid arg name `{key}`: expected [A-Za-z][A-Za-z0-9_-]{0,63}
 ````
 
-Writing `models:` or `args:` as something other than a map, such as a list or a scalar, fails with parse error kind `Frontmatter` and this detail, where `{found}` is the YAML reader's description of the value you gave and the key kind is again `model role label` or `arg name`:
+Writing `models:` or `args:` as something other than a map, such as a list or a scalar, fails with parse error kind `Frontmatter` and this detail, where `{found}` is the YAML reader's description of the value you gave and `{what}` is again `model role label` or `arg name`:
 
 ````text
-invalid type: {found}, expected a map of {key kind} keys to declarations
+invalid type: {found}, expected a map of {what} keys to declarations
 ````
 
 Each grammar, duplicate, and map-type error from `models:` and `args:` reports the file line and column of the offending entry, such as line 5, column 5.
@@ -826,10 +826,10 @@ tools.adhoc name "{name}" is already registered
 
 So defining the name `gh_search` a second time fails with `tools.adhoc name "gh_search" is already registered`.
 
-An adhoc tool's id is `adhoc/` followed by its name in lowercase, so two names that differ only in letter case would share one id. The second of them fails with this message, where `{lower}` is the name in lowercase and `{other}` is the name that already holds the id:
+An adhoc tool's id is `adhoc/` followed by its name in lowercase, so two names that differ only in letter case would share one id. The second of them fails with this message, where `{id}` is that shared id, `adhoc/` followed by the name in lowercase, and `{other}` is the name that already holds the id:
 
 ````text
-tools.adhoc name "{name}" has the id adhoc/{lower}, which "{other}" already holds
+tools.adhoc name "{name}" has the id {id}, which "{other}" already holds
 ````
 
 So after `gh_search` is defined, defining `GH_Search` fails with `tools.adhoc name "GH_Search" has the id adhoc/gh_search, which "gh_search" already holds`.
@@ -970,7 +970,7 @@ A prompt with no H1 title, or with more than one H1 title, fails to parse with p
 | Problem | Message |
 |---|---|
 | No H1 | `prompt requires an H1 title` |
-| More than one H1 | `prompt must contain exactly one H1 title, found N at lines L1, L2, ...` |
+| More than one H1 | `prompt must contain exactly one H1 title, found {count} at lines {lines}` |
 | An empty or whitespace-only H1 | `prompt H1 title must not be empty` |
 
 These three errors name no section and give no line or column. Only the more-than-one message lists line numbers, inside its text.
@@ -993,7 +993,7 @@ Introductory prose cannot replace the required title.
 prompt requires an H1 title
 ````
 
-A file with more than one H1 anywhere in the body, even in the preface above the title, fails with a message that gives the H1 count and the file line of every H1, in the form `found N at lines L1, L2, ...`:
+A file with more than one H1 anywhere in the body, even in the preface above the title, fails with a message that gives the H1 count and the file line of every H1, in the form `found {count} at lines {lines}`, where `{lines}` lists the lines separated by commas:
 
 ````markdown
 ---
@@ -1206,7 +1206,7 @@ d
 section `D` is an orphan H4 heading with no parent H3
 ````
 
-The message names the section, its level, and the missing parent level, which is one level deeper than the heading the orphan sits under. Its form is ``section `{name}` is an orphan H{level} heading with no parent H{missing level}``. The error reports the orphan heading's line in the file at column 1, here line 13, column 1.
+The message names the section, its level, and the missing parent level, which is one level deeper than the heading the orphan sits under. Its form is ``section `{name}` is an orphan H{level} heading with no parent H{n}``, where `{n}` is the missing parent level. The error reports the orphan heading's line in the file at column 1, here line 13, column 1.
 
 A first section heading written as `### A` or `#### A`, with no H2 above it, is an orphan the same way: it fails with a `Structure` parse error whose message contains `orphan` and names H2 as the missing parent.
 
@@ -1349,12 +1349,12 @@ A heading reference is one or more `#` markers, then whitespace, then the sectio
 
 ### Malformed heading references
 
-A malformed heading reference is never silently reinterpreted. It raises a Lua error instead (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)), and each message ends with the reference trimmed of its surrounding whitespace, shown as `{text}` here:
+A malformed heading reference is never silently reinterpreted. It raises a Lua error instead (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)), and each message ends with the reference trimmed of its surrounding whitespace, shown as `{stripped}` here:
 
 | Problem | Message |
 |---|---|
-| No `#` markers | `section heading must include ### markers, got bare name: {text}` |
-| No whitespace after the markers | `section heading must have whitespace after the {markers} markers: {text}` |
-| Markers only, with or without whitespace after them | `section heading has no name: {text}` |
+| No `#` markers | `section heading must include ### markers, got bare name: {stripped}` |
+| No whitespace after the markers | `section heading must have whitespace after the {markers} markers: {stripped}` |
+| Markers only, with or without whitespace after them | `section heading has no name: {stripped}` |
 
 In the second message, `{markers}` is the run of `#` marks you wrote. So the bare name `'Nums'` reports `got bare name: Nums`, the reference `'##Nums'` reports `must have whitespace after the ## markers`, and `'###'` or `'### '` reports `section heading has no name`.

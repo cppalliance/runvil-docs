@@ -445,10 +445,10 @@ The value of `args:` must be a map from arg names to declarations. Any other val
 invalid type: {found}, expected a map of arg name keys to declarations
 ````
 
-Each arg name appears only once in an `args:` map. Declaring the same name twice is a `Frontmatter` parse error, with the repeated name in place of `{name}`:
+Each arg name appears only once in an `args:` map. Declaring the same name twice is a `Frontmatter` parse error, with the repeated name in place of `{key}`:
 
 ````text
-duplicate arg name `{name}`: contract map keys must be unique
+duplicate arg name `{key}`: contract map keys must be unique
 ````
 
 Each arg's value must itself be a map of declaration keys, even when its only key is `type:`, as in `use_mcp: { type: boolean }`. A bare scalar or a list in that place is a `Frontmatter` parse error.

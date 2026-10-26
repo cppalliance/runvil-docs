@@ -328,7 +328,7 @@ A prelude global never takes a reserved name, so no Pack global replaces an Engi
 
 All preludes in a run share one global namespace, and a prelude that cannot install fails the run with [run error kind](04-how-a-prompt-runs.md#the-run-result-and-outcomes) `Lua`. Every such message starts with `` Pack `{pack}`: its prelude ... ``, naming the Pack that contributed the prelude. A prelude fails in these cases:
 
-- It defines a global an earlier prelude already defines. The message has the form `` Pack `{pack}`: its prelude defines the global `{name}`, which Pack `{earlier}`'s prelude already defines ``, naming the later Pack, the global, and the Pack that defined it first.
+- It defines a global an earlier prelude already defines. The message has the form `` Pack `{pack}`: its prelude defines the global `{name}`, which Pack `{owner}`'s prelude already defines ``, naming the later Pack, the global, and the Pack that defined it first.
 - It defines a global that an Engine global or another reserved name already holds. A prelude defining `ui` or `item` fails the run with a message saying the name `is reserved as an Engine global`.
 - It fails to load. The message says `its prelude failed to load`.
 
@@ -1215,17 +1215,17 @@ yes lua
 `log` is a function, and a function is not JSON data. Assigning a function or userdata to a `var` field raises a Lua error at the assigning line, and the message names the full target path under `var` and the rejected Lua type:
 
 ````text
-{path} must be JSON data, got {type}
+{target} must be JSON data, got {type}
 ````
 
 Here the write raises `var.handler must be JSON data, got function`. The path is the field's full path, dotted for string keys of object fields and bracketed for any other key, with array elements counted from 1, as in `var.t.f` or `var.list[2]`. The `messages` list or a message record such as `messages[1]` (see [Building a message list](11-conversations.md#building-a-message-list)) is userdata, so assigning one to a `var` field raises the same error ending in `got userdata`. [`json.null`](#null-values-and-jsonnull) is the one userdata the guard accepts, and it stores JSON null: after `var.x = json.null`, `var` reads back as `{ "x": null }`, and `var.x == json.null` holds in Lua.
 
 `var` checks an assigned table deeply, so a table holding a function at any depth, such as `{ f = function() end }`, fails at the assigning line too. That error comes from the conversion to JSON, and its message names the offending type, such as `function`.
 
-A table that is shared at many levels can also be too large to store, because the conversion to JSON copies it once for every place it appears. Before it converts an assigned table, `var` spends the same value and byte budgets that [`json.encode`](#size-and-nesting-limits) does, and a table that runs the budget out raises this error at the assigning line, with the full target path in place of `{path}`:
+A table that is shared at many levels can also be too large to store, because the conversion to JSON copies it once for every place it appears. Before it converts an assigned table, `var` spends the same value and byte budgets that [`json.encode`](#size-and-nesting-limits) does, and a table that runs the budget out raises this error at the assigning line, with the full target path in place of `{target}`:
 
 ````text
-{path} is too large to store
+{target} is too large to store
 ````
 
 After `local t = {} for i = 1, 40 do t = { t, t } end`, the write `var.x = t` raises `var.x is too large to store`. Like any rejected write it stores nothing. A table that contains itself is not a size problem, so the conversion to JSON refuses it with its own message.
@@ -1327,9 +1327,9 @@ Every call builds fresh tables, and you can write to them freely: add fields to 
 | --- | --- |
 | The argument is not a string | `json.decode expects a string, got {type}` |
 | The string is longer than the cap | `json.decode: input exceeds the 8388608-byte limit` |
-| The text is not one valid JSON document | `json.decode: {parser message}` |
+| The text is not one valid JSON document | `json.decode: {error}` |
 
-The parser message says what went wrong and where, by line and column. `json.decode('x')` raises `json.decode: expected value at line 1 column 1`, and `json.decode('1 2')`, which holds two documents, raises `json.decode: trailing characters at line 1 column 3`. To decode text that may be malformed, call `json.decode` under `pcall`:
+`{error}` is the parser's message, which says what went wrong and where, by line and column. `json.decode('x')` raises `json.decode: expected value at line 1 column 1`, and `json.decode('1 2')`, which holds two documents, raises `json.decode: trailing characters at line 1 column 3`. To decode text that may be malformed, call `json.decode` under `pcall`:
 
 ````lua
 local ok, data = pcall(json.decode, text)
@@ -1515,21 +1515,21 @@ Every message names the failing value by its path. The path starts at `value`, t
 
 | Problem | Message |
 | --- | --- |
-| A function, thread, or userdata other than `json.null` | `json.encode: {path} must be JSON data, got {type}` |
+| A function, thread, or userdata other than `json.null` | `json.encode: {path} must be JSON data, got {kind}` |
 | NaN or an infinity | `json.encode: {path} is not a finite number` |
 | A string or object key that is not valid UTF-8 | `json.encode: {path} is not valid UTF-8` |
 | An unmarked table with both integer and string keys | `json.encode: {path} mixes list items and named keys` |
-| Integer keys that are not exactly 1 to n | `json.encode: {path} is missing list item [{n}]` |
-| An unmarked table with a key that is neither an integer nor a string | `json.encode: {path} has a {type} key; object keys must be strings` |
-| A marked list with a key that is not an integer | `json.encode: {path} is marked as a list but has a {type} key` |
+| Integer keys that are not exactly 1 to n | `json.encode: {path} is missing list item [{item}]` |
+| An unmarked table with a key that is neither an integer nor a string | `json.encode: {path} has a {kind} key; object keys must be strings` |
+| A marked list with a key that is not an integer | `json.encode: {path} is marked as a list but has a {kind} key` |
 | A table that contains itself | `json.encode: {path} contains itself` |
 | A table more than 127 levels deep | `json.encode: {path} is nested more than 127 levels deep` |
 | A walk that spends more than the size budget | `json.encode: value is too large to encode` |
 | A sealed view whose `__index` is a function | `json.encode: {path} cannot be read ({label}); copy the fields you need into a plain table` |
 
-`{type}` is the type name every Engine argument error uses, which is not always what Lua's `type` returns: an integer reads `integer`, a float reads `number`, and `json.null` or any other light userdata reads `lightuserdata`. So `json.decode(5)` raises `json.decode expects a string, got integer`, `json.decode(1.5)` raises `json.decode expects a string, got number`, and `json.array(json.null)` raises `json.array expects a table or no argument, got lightuserdata`.
+`{type}`, like `{kind}` in the table above, is the type name every Engine argument error uses, which is not always what Lua's `type` returns: an integer reads `integer`, a float reads `number`, and `json.null` or any other light userdata reads `lightuserdata`. So `json.decode(5)` raises `json.decode expects a string, got integer`, `json.decode(1.5)` raises `json.decode expects a string, got number`, and `json.array(json.null)` raises `json.array expects a table or no argument, got lightuserdata`.
 
-A table that breaks more than one rule reports the same error on every run. An unmarked table reports a key that is neither an integer nor a string first, then a mix of integer and string keys, then a missing list item. Because keys are checked before values, `{ [1] = function() end, a = 1 }` reports `mixes list items and named keys`, not the function. For a missing item, `{n}` is the first of 1 to n that is absent, where n is the table's count of integer keys: `{ [1] = 'a', [3] = 'c' }` reports `[2]`, `{ [0] = 'a' }` reports `[1]`, and `{ [-1] = 'a', [1] = 'b' }` reports `[2]`.
+A table that breaks more than one rule reports the same error on every run. An unmarked table reports a key that is neither an integer nor a string first, then a mix of integer and string keys, then a missing list item. Because keys are checked before values, `{ [1] = function() end, a = 1 }` reports `mixes list items and named keys`, not the function. For a missing item, `{item}` is the first of 1 to n that is absent, where n is the table's count of integer keys: `{ [1] = 'a', [3] = 'c' }` reports `[2]`, `{ [0] = 'a' }` reports `[1]`, and `{ [-1] = 'a', [1] = 'b' }` reports `[2]`.
 
 Within a table, `json.encode` visits keys in one fixed order: booleans, then numbers by value, then strings bytewise, as [Then booleans, numbers, and strings](#then-booleans-numbers-and-strings) describes. Unlike `pairs`, it also gives a fixed place to the two kinds of scalar key that [Keys with no fixed order](#keys-with-no-fixed-order) leaves unordered: a string key that is not valid UTF-8 sorts bytewise among the strings, and an infinite number key sorts by value among the numbers, so `-math.huge` comes first and `math.huge` last. Table, function, userdata, and thread keys come last, ranked by type name, so a table with both a table key and a function key always reports `has a function key`.
 
@@ -1574,7 +1574,7 @@ Debug mode never fails on a value that stays within the [size budget](#size-and-
 - A table that contains itself becomes `"[cycle]"`, and a table more than 127 levels deep becomes `"[too deep]"`.
 - NaN becomes `"NaN"`, infinity becomes `"Infinity"`, and negative infinity becomes `"-Infinity"`.
 - Bytes that are not valid UTF-8, in strings and in keys, are replaced with replacement characters.
-- A sealed view that cannot be read becomes `"[cannot read: <label>]"`, as in `"[cannot read: sys is sealed]"`, or `"[cannot read]"` when its `__metatable` is not a string.
+- A sealed view that cannot be read becomes `"[cannot read: {label}]"`, as in `"[cannot read: sys is sealed]"`, or `"[cannot read]"` when its `__metatable` is not a string.
 - A table that breaks the key rules, marked or not, becomes an object, so `{ [1] = 'a', [3] = 'c' }` becomes `{"1":"a","3":"c"}`. A number key becomes the text it would encode as, such as `2`, `2.5`, or `1e+300`, an infinite key becomes `Infinity` or `-Infinity`, and a boolean key becomes `true` or `false`. When two keys give the same text, the later one in visiting order wins, so with both `t[1]` and `t['1']` set, the string key's value is kept. Table, function, userdata, and thread keys are left out, because their order is not fixed between runs.
 
 Option errors still raise in debug mode, and so does the size refusal, `json.encode: value is too large to encode`, because a placeholder for every remaining value would not stop the walk. The output never contains a memory address. Use debug mode only to look at values. A placeholder such as `"[function]"` is ordinary text to `json.decode`, a tool, or a model, so encode data you send anywhere without `debug`, where a value that is not JSON data fails at the line that encodes it.
@@ -1798,10 +1798,10 @@ A task's first section entry also has `sys.index` when its spawn supplied one. A
 Reading a field that `sys` does not have raises an error instead of returning a silent `nil`, and the message names the field:
 
 ````text
-unknown sys field '<name>'
+unknown sys field '{field}'
 ````
 
-So reading `sys.index` in an ordinary walked section raises `unknown sys field 'index'`. The error is a runtime error with error kind `lua`. Left uncaught, it ends the run with run error kind `Lua`, or with `RequirementsUnmet` in the H1 pass. A `{{ sys.<name> }}` prose placeholder for an absent field fails with its own message, `missing {{ sys.<name> }}`.
+So reading `sys.index` in an ordinary walked section raises `unknown sys field 'index'`. The error is a runtime error with error kind `lua`. Left uncaught, it ends the run with run error kind `Lua`, or with `RequirementsUnmet` in the H1 pass. A prose placeholder for an absent field fails with its own message, which repeats the placeholder after `missing`, so `{{ sys.index }}` in an ordinary walked section's prose fails with `missing {{ sys.index }}`.
 
 To read a `sys` field that may be absent, such as `sys.model` before any tool call, wrap the read in `pcall`. As the Lua block of `## Only` in the `where-am-i` prompt, this returns `no tool call yet`:
 
@@ -1810,7 +1810,7 @@ local ok, id = pcall(function() return sys.model end)
 return ok and id or 'no tool call yet'
 ````
 
-The run goes on whether or not the field is there. A caught unknown field error is an error value with error kind `lua`, and `tostring` on it reads `runtime error: unknown sys field '{name}'` (see [Reading `kind` and `message`](#reading-kind-and-message)), so here, where the read fails, `id` holds that error value and `tostring(id)` reads `runtime error: unknown sys field 'model'`.
+The run goes on whether or not the field is there. A caught unknown field error is an error value with error kind `lua`, and `tostring` on it reads `runtime error: unknown sys field '{field}'` (see [Reading `kind` and `message`](#reading-kind-and-message)), so here, where the read fails, `id` holds that error value and `tostring(id)` reads `runtime error: unknown sys field 'model'`.
 
 ### `sys` is sealed and read-only
 
@@ -2961,26 +2961,26 @@ The line always names the place in the prompt file where the error was raised, n
 
 ### Location labels
 
-An error message names the block by its location label, followed by a colon and the absolute prompt line, in the form `{label}:{line}: {text}`. The label names the section by its section name, without the `#` markers, in backticks, followed by the block's role:
+An error message names the block by its location label, followed by a colon and the absolute prompt line, in the form `{location}:{absolute}: {result}`. The label names the section by its section name, without the `#` markers, in backticks, followed by the block's role:
 
 | Block | Location label |
 | --- | --- |
 | A Lua block that opens the section, before any prose, also when it is the only block | ``section `{name}` prologue`` |
 | A Lua block that ends a section that has prose before it | ``section `{name}` epilog`` |
-| Any other Lua block of a section | ``section `{name}` lua {n}`` |
+| Any other Lua block of a section | ``section `{name}` lua {ordinal}`` |
 | A Lua block under the H1 title | ``H1 `{title}` lua`` |
 
-`{n}` is the block's 1-based place among the section's Lua blocks. The role follows from the block's position, the section's block count, whether the section has any prose, and the block's place among the section's Lua blocks, so it matches the prologue and epilog of [Prologue, prose, and epilog](03-blocks-and-prose.md#prologue-prose-and-epilog) for an ordinary section. One section's two blocks read ``section `Private section` prologue`` and ``section `Private section` epilog``, a failing block under the heading `## lib` reports ``section `lib` prologue:19: load fault``, and the second block of `## lib` is ``section `lib` lua 2``.
+`{ordinal}` is the block's 1-based place among the section's Lua blocks. The role follows from the block's position, the section's block count, whether the section has any prose, and the block's place among the section's Lua blocks, so it matches the prologue and epilog of [Prologue, prose, and epilog](03-blocks-and-prose.md#prologue-prose-and-epilog) for an ordinary section. One section's two blocks read ``section `Private section` prologue`` and ``section `Private section` epilog``, a failing block under the heading `## lib` reports ``section `lib` prologue:19: load fault``, and the second block of `## lib` is ``section `lib` lua 2``.
 
 Every Lua block is its own unit with its own location, so four Lua blocks in `## S` have four distinct locations. A long section name appears in full, so `## Gather Background Research Notes` gives ``section `Gather Background Research Notes` prologue``. A location of any length still maps, so a block labeled ``section `Shared Research Helper Functions` (line 1200) prologue`` still reports `{location}:40:`.
 
 ### Sections that share a section name
 
-When another section heading anywhere after the H1, at any level, has the same section name, the location adds the heading's line as `(line N)`, so you can tell the two sections' errors apart. With `### Helpers` on line 10 under `## A` and another `### Helpers` on line 18 under `## B`, the first section's prologue is ``section `Helpers` (line 10) prologue`` and the second's is ``section `Helpers` (line 18) prologue``.
+When another section heading anywhere after the H1, at any level, has the same section name, the location adds the heading's line as `(line {heading_abs_line})`, so you can tell the two sections' errors apart. With `### Helpers` on line 10 under `## A` and another `### Helpers` on line 18 under `## B`, the first section's prologue is ``section `Helpers` (line 10) prologue`` and the second's is ``section `Helpers` (line 18) prologue``.
 
 The number is the line of the heading itself, not of the fence or the code, so a `### Helpers` heading on line 10 whose fence opens on line 12, with code from line 13, gives `(line 10)`. A heading line of three or more digits appears in full, as in ``section `Research Worker Notes` (line 109) prologue``. A section whose name no other section uses gets a location without a line number, such as ``section `C` prologue``, even when other sections in the file share names.
 
-Errors from two sections with the same name stay separate: each reports its own block's file line, and one `Helpers` section never maps the other's error. Location labels need not be unique for this to work, because the label is a display name only. Lua knows each block by a name built from its first prompt line, `line N`, and that name decides which block an error belongs to, so two H1 blocks that both carry the label ``H1 `T` lua`` still map only their own errors.
+Errors from two sections with the same name stay separate: each reports its own block's file line, and one `Helpers` section never maps the other's error. Location labels need not be unique for this to work, because the label is a display name only. Lua knows each block by a name built from its first prompt line, `line {source_line}`, and that name decides which block an error belongs to, so two H1 blocks that both carry the label ``H1 `T` lua`` still map only their own errors.
 
 ### Compile errors
 
@@ -3013,9 +3013,9 @@ lua compilation error at {location} (line {source_line}): {message}
 
 - `{location}` is the block's location label, so the message tells you which block the problem is in, such as ``section `Transform` epilog``.
 - `(line {source_line})` is the block's first Lua line, the line after its opening fence, counted from the top of the file with the frontmatter included. It is not the line of the fault, so an epilog whose fence opens on line 12 reports ``lua compilation error at section `Check` epilog (line 13): {message}``.
-- `{message}` is the Lua 5.5 compiler's own diagnostic, unchanged. It names the block `[string "line N"]`, where N is the block's first prompt line, such as `[string "line 1"]` for a block that starts on line 1.
+- `{message}` is the Lua 5.5 compiler's own diagnostic, unchanged. It names the block `[string "line {source_line}"]`, where `{source_line}` is the block's first prompt line, such as `[string "line 1"]` for a block that starts on line 1.
 
-The compiler's diagnostic is never rewritten to file lines, so the L in its `[string "line N"]:L:` marker counts from the top of the block, and the faulting file line is N + L - 1. In the prompt above, the diagnostic names `[string "line 14"]`, so its L added to 14, less one, is the file line of the fault.
+The compiler's diagnostic is never rewritten to file lines, so the `{k}` in its `[string "line {source_line}"]:{k}:` marker counts from the top of the block, and the faulting file line is `{source_line}` + `{k}` - 1. In the prompt above, the diagnostic names `[string "line 14"]`, so its `{k}` added to 14, less one, is the file line of the fault.
 
 Every block compiles this way, whether it sits in a library, under the H1 title, or in any section, the last block of the last section included: an unclosed `return (` in a final epilog fails the parse as ``section `Transform` epilog``. A syntax error in a section's prologue fence is located as ``section `{name}` prologue``, such as ``section `Private section` prologue``, and one in its epilog fence as ``section `{name}` epilog``. The compile error also carries the full Lua source of the block that failed, such as `private_payload =`.
 
@@ -3023,9 +3023,9 @@ The compile error's text is the parse error's whole message, with nothing added 
 
 ### Runtime error messages and tracebacks
 
-Compile and runtime errors both name a block by its location label: a compile error as `at {location}`, and a runtime error as `{location}:{line}:`, the form Lua uses for a file. Before mapping, Lua's own position marker for a block reads `[string "line N"]:L:`, where N is the block's first prompt line and L is the line inside the block, so a block at prompt line 120 renders as `[string "line 120"]`. When a runtime error fails a block, the Engine rewrites every marker that belongs to the failing block or to a library it loaded with `require`, so no `[string "line N"]` from those blocks survives in the message. Lua's raw `[string "line 50"]:2: assertion failed!` becomes text that starts ``section `Web Search` epilog:51: ``.
+Compile and runtime errors both name a block by its location label: a compile error as `at {location}`, and a runtime error as `{location}:{absolute}:`, the form Lua uses for a file. Before mapping, Lua's own position marker for a block reads `[string "line {source_line}"]:{k}:`, where `{source_line}` is the block's first prompt line and `{k}` is the line inside the block, so a block at prompt line 120 renders as `[string "line 120"]`. When a runtime error fails a block, the Engine rewrites every marker that belongs to the failing block or to a library it loaded with `require`, so no `[string "line {source_line}"]` from those blocks survives in the message. Lua's raw `[string "line 50"]:2: assertion failed!` becomes text that starts ``section `Web Search` epilog:51: ``.
 
-The mapped message opens with one `{location}:{line}: ` prefix, taken from the first marker it rewrote, so its head shows the location and absolute line twice: once as that prefix and once in place of Lua's own marker. The run reports this mapped diagnostic as the entire message of its Lua runtime error, with no extra type label in front.
+The mapped message opens with one `{location}:{absolute}: ` prefix, taken from the first marker it rewrote, so its head shows the location and absolute line twice: once as that prefix and once in place of Lua's own marker. The run reports this mapped diagnostic as the entire message of its Lua runtime error, with no extra type label in front.
 
 Below its first line, an uncaught Lua runtime error carries a `stack traceback:` whose frames each start with a location label and an absolute prompt line, as in ``section `lib` prologue:51: in`` and ``section `Main` prologue:31: in``, and go on with Lua's description of the frame, such as `function 'boom'` or `main chunk`. The traceback is taken where the error was raised, with the failing frames still on the stack, so it shows your own frames mapped to prompt lines rather than the Engine's wrapper around the block. It never shows `?:` placeholders, because blocks compile with their debug information kept.
 

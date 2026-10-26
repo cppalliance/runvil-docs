@@ -299,13 +299,13 @@ Any record can also hold a `meta` field, which the model never sees (see [Record
 
 After a model call, the model's reply is an `assistant` record at the end of the list, so a reply such as `pong` reads as `messages[#messages].content`. A `tool` record answers one tool call, so a record where `role == 'tool'` and `tool_call_id == 'call_1'` is the result for the call `call_1`.
 
-A record whose `role` is missing or not a string is refused with `messages[N] role must be a string, one of: system, user, assistant, tool`. A `role` string other than the four is refused with a message that quotes it and lists `system, user, assistant, tool` as the known roles. [Record error messages](#record-error-messages) gives every record error in full, along with what `N` counts.
+A record whose `role` is missing or not a string is refused with `messages[{index}] role must be a string, one of: system, user, assistant, tool`. A `role` string other than the four is refused with a message that quotes it and lists `system, user, assistant, tool` as the known roles. [Record error messages](#record-error-messages) gives every record error in full, along with what `{index}` counts.
 
 ### Content
 
 Every message record has a `content` field, whatever its message role, and `content` is always sent to the model beside `role`. It holds the message's visible content, its text and images, in one of two forms: a plain text string, or a non-empty array of content parts.
 
-When the content is plain text, the `content` field is that string itself, and a record gives you its text through that field, so `messages[#messages].content` reads the text of the last record, such as the latest model reply `done`. Any string is valid content, the empty string included, because strings get no length check, and the non-empty rule applies only to a parts array. That is how an `assistant` record that only makes tool calls fills its content, with `content = ""` beside its `tool_calls`. Any other value is refused with `messages[N] content must be a string or a non-empty array of content parts`.
+When the content is plain text, the `content` field is that string itself, and a record gives you its text through that field, so `messages[#messages].content` reads the text of the last record, such as the latest model reply `done`. Any string is valid content, the empty string included, because strings get no length check, and the non-empty rule applies only to a parts array. That is how an `assistant` record that only makes tool calls fills its content, with `content = ""` beside its `tool_calls`. Any other value is refused with `messages[{index}] content must be a string or a non-empty array of content parts`.
 
 A plain message has only a message role and its content, as in `{ "role": "system", "content": "be terse" }`. A plain assistant text record has no `tool_calls` field, so reading its `tool_calls` gives `nil`.
 
@@ -333,7 +333,7 @@ The `user` record's `content` is an array of two typed parts, which appends with
 
 The parts above are sent as `"content": [ { "type": "text", "text": "look" }, ... ]`. A part keeps only its payload, its `text` or its `image_url.url`, and any other field on the part is dropped.
 
-A parts `content` is an array of part tables even when it holds one part, as in `content = { { type = 'text', text = 'hi' } }`. A single part table placed directly in `content` is not an array, so it fails with `messages[N] content must be a string or a non-empty array of content parts`, and so does an empty table. The parts themselves follow three rules, each with its own message:
+A parts `content` is an array of part tables even when it holds one part, as in `content = { { type = 'text', text = 'hi' } }`. A single part table placed directly in `content` is not an array, so it fails with `messages[{index}] content must be a string or a non-empty array of content parts`, and so does an empty table. The parts themselves follow three rules, each with its own message:
 
 - A part that is not a table with a string `type` field is refused with a message ending `must be a table with a string type field`.
 - A part whose `type` is neither `text` nor `image_url` is refused with a message that quotes the type and lists `known types: text, image_url`.
@@ -367,15 +367,15 @@ Each entry in `tool_calls` is a table with exactly three fields:
 - `name` is a string holding the name the model called the tool by, such as `'web_search'`, which is how the model calls the tool you offer as `web/search` (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)).
 - `arguments` is a table holding the model's JSON arguments, already parsed into a Lua table, so a model that sends `{"query":"hi"}` gives `call.arguments.query == 'hi'`. A JSON list in the arguments arrives as a marked list and a JSON null as `json.null`, just as [`json.decode`](05-lua-environment.md#encoding-and-decoding-json-with-json) gives them.
 
-`arguments` may be left out, set to `nil`, or set to a table, and it can be empty or richer, such as a table holding `path` set to `"notes.txt"` and `limit` set to `3`. A call whose `arguments` is left out or `nil` gets the empty object `{}` and is sent that way, which is why the `clock` call above reads `type(calls[2].arguments)` as `table`. A Lua `arguments` table is stored as a JSON object with the same keys and values, so `arguments = { query = 'hi' }` is stored as `{ "query": "hi" }`, and [Tool exchanges in a request](#tool-exchanges-in-a-request) shows how it reaches the model. An empty table inside it is stored as the empty object `{}`, so write an empty list as `json.array()`, as in `arguments = { tags = json.array() }`, to have it sent as `[]`. It must be a Lua table, not JSON text, or adding the record fails with `messages[N] tool_calls[K] arguments must be a table`.
+`arguments` may be left out, set to `nil`, or set to a table, and it can be empty or richer, such as a table holding `path` set to `"notes.txt"` and `limit` set to `3`. A call whose `arguments` is left out or `nil` gets the empty object `{}` and is sent that way, which is why the `clock` call above reads `type(calls[2].arguments)` as `table`. A Lua `arguments` table is stored as a JSON object with the same keys and values, so `arguments = { query = 'hi' }` is stored as `{ "query": "hi" }`, and [Tool exchanges in a request](#tool-exchanges-in-a-request) shows how it reaches the model. An empty table inside it is stored as the empty object `{}`, so write an empty list as `json.array()`, as in `arguments = { tags = json.array() }`, to have it sent as `[]`. It must be a Lua table, not JSON text, or adding the record fails with `messages[{index}] tool_calls[{call_index}] arguments must be a table`.
 
-`tool_calls` is an array of call tables even for one call, as in `tool_calls = { { id = 'call_1', name = 'web_search' } }`. A single call table placed directly in `tool_calls`, or a string there, is not an array and fails with `messages[N] tool_calls must be an array`. A call with a bad `id`, `name`, or `arguments` is refused with a message naming that field.
+`tool_calls` is an array of call tables even for one call, as in `tool_calls = { { id = 'call_1', name = 'web_search' } }`. A single call table placed directly in `tool_calls`, or a string there, is not an array and fails with `messages[{index}] tool_calls must be an array`. A call with a bad `id`, `name`, or `arguments` is refused with a message naming that field.
 
 One `assistant` record can carry visible reply text in `content` together with several tool calls, as `Let me check both.` does beside `call_1` and `call_2`, and the text and every call are sent to the model together. The calls keep the order they were written in, so `call_1` stays first. A record with `tool_calls` can also have the empty string as its content, as in `{ role = 'assistant', content = '', tool_calls = { ... } }`, and such a record followed by its tool result is accepted. A tool call keeps only `id`, `name`, and `arguments`, and any other field on it is dropped.
 
 `tool_calls` is optional, and leaving it out means the record carries no tool calls. A record the loop writes holds calls only when the model asked for tools in that reply. After such a reply, `messages[2].tool_calls[1]` is the first call the model made, so `messages[2].tool_calls[1].id` reads its id, such as `'call_1'`, and `messages[2].tool_calls[1].name` reads the tool it called, such as `'web_search'`. Reading one entry with `local call = messages[2].tool_calls[1]` gives you `call.id`, `call.name`, and `call.arguments`, the call id, the name the model called, and the parsed arguments table. A model that sends `{"query":"one"}` gives `messages[2].tool_calls[1].arguments.query == 'one'`.
 
-Put `tool_calls` only on `assistant` records. Adding a record of another message role with `tool_calls` succeeds, because adding does not check the message role against `tool_calls`, but the next model call over the list fails with `messages[N] sets tool_calls but is not an assistant message`, such as `messages[1] sets tool_calls but is not an assistant message` for a user record at position 1 (see [Cross-record errors](#cross-record-errors)).
+Put `tool_calls` only on `assistant` records. Adding a record of another message role with `tool_calls` succeeds, because adding does not check the message role against `tool_calls`, but the next model call over the list fails with `messages[{index}] sets tool_calls but is not an assistant message`, such as `messages[1] sets tool_calls but is not an assistant message` for a user record at position 1 (see [Cross-record errors](#cross-record-errors)).
 
 ### Tool results
 
@@ -395,8 +395,8 @@ A tool record is sent to the model as `{ "role": "tool", "content": "...", "tool
 
 Every tool record sets `tool_call_id`, and `tool_call_id` belongs on tool records only:
 
-- A `tool` record without a string `tool_call_id` is refused with `messages[N] is a tool message and must set a string tool_call_id`.
-- A `system`, `user`, or `assistant` record that sets `tool_call_id` is refused with `messages[N] sets a tool_call_id but is not a tool message`.
+- A `tool` record without a string `tool_call_id` is refused with `messages[{index}] is a tool message and must set a string tool_call_id`.
+- A `system`, `user`, or `assistant` record that sets `tool_call_id` is refused with `messages[{index}] sets a tool_call_id but is not a tool message`.
 
 So `system`, `user`, and `assistant` records leave the field out, and it is never sent for them. The pairing of calls with their results is checked later, when the model call runs: a tool record whose `tool_call_id` is not among the pending call ids of the `assistant` record before it makes the model call fail with a message that calls it an orphan tool record, in the words `is an orphan tool record`. [What the model receives](#what-the-model-receives) covers these cross-record rules.
 
@@ -425,7 +425,7 @@ form|true|nil
 
 The model never receives `meta`: every message sent to it holds only `role`, `content`, `tool_call_id`, and `tool_calls`. A record that differs from an earlier send only in its `meta` therefore sends the same message, so a change to `meta` alone adds nothing to the run log's chat record (see [Run events and records](04-how-a-prompt-runs.md#run-events-and-records)).
 
-A value too large is refused with `messages[N] meta is {size} bytes as JSON; the limit is 8192 bytes`, so `messages:user('hi', string.rep('x', 9000))` on an empty list raises `messages[1] meta is 9002 bytes as JSON; the limit is 8192 bytes`, counting the two quotes of the JSON string. A refused record leaves the list unchanged. [Record error messages](#record-error-messages) lists the refusals for a `meta` with no JSON form.
+A value too large is refused with `messages[{index}] meta is {size} bytes as JSON; the limit is 8192 bytes`, so `messages:user('hi', string.rep('x', 9000))` on an empty list raises `messages[1] meta is 9002 bytes as JSON; the limit is 8192 bytes`, counting the two quotes of the JSON string. A refused record leaves the list unchanged. [Record error messages](#record-error-messages) lists the refusals for a `meta` with no JSON form.
 
 ### Fields a record keeps
 
@@ -500,7 +500,7 @@ Message lists and model handles are the only Engine values with colon-call metho
 
 `messages:user` accepts any Lua string value, such as a loop variable, not only `prose`. `messages:user(prose)` appends a user record holding the section prose above the fence, and that text reaches the model as a user record. A list can start with a user record and no system message, and it still works as a request to the model.
 
-A builder passes its content on as given and never converts a number to text, so for a number `n` you write `messages:user(tostring(n))`. A number as content raises `messages[N] content must be a string or a non-empty array of content parts`.
+A builder passes its content on as given and never converts a number to text, so for a number `n` you write `messages:user(tostring(n))`. A number as content raises `messages[{index}] content must be a string or a non-empty array of content parts`.
 
 `messages:system(text)` appends a system message. `messages:system(content, meta?)` builds `{ role = "system", content = content }` and returns the same list, so a chain such as `messages:system('Write for a reader who has never programmed.'):user(prose)` puts the system record ahead of the user record.
 
@@ -508,7 +508,7 @@ A builder passes its content on as given and never converts a number to text, so
 
 `messages:assistant(content, tool_calls?, meta?)` appends an assistant record whose `content` is the given text, with an optional `tool_calls` value, and returns the same list. With no second argument, as in `messages:assistant('done')`, it appends a plain assistant record with no `tool_calls` field, since `tool_calls` is set only when it is passed. The optional `tool_calls` argument is an array of tool calls, each a table `{ id = ..., name = ..., arguments = {...} }` with a string `id`, a string `name`, and an optional `arguments` table that becomes `{}` when left out or `nil`.
 
-A table in the second place is always read as `tool_calls`, so for a plain reply with metadata, pass `nil` there: `messages:assistant('done', nil, { draft = true })`. Written as `messages:assistant('done', { draft = true })`, the table is read as `tool_calls` and refused with `messages[N] tool_calls must be an array`.
+A table in the second place is always read as `tool_calls`, so for a plain reply with metadata, pass `nil` there: `messages:assistant('done', nil, { draft = true })`. Written as `messages:assistant('done', { draft = true })`, the table is read as `tool_calls` and refused with `messages[{index}] tool_calls must be an array`.
 
 `messages:tool(content, tool_call_id, meta?)` appends the tool record `{ role = "tool", content = content, tool_call_id = tool_call_id }`, taking the result text first and the id of the earlier tool call it answers second, and returns the same list.
 
@@ -627,12 +627,12 @@ Every record a list edit refuses raises a `lua`-kind error value at your call, w
 
 ### Positions in a record error
 
-Every record error a list raises names the offending record by its 1-based Lua index, written `messages[N]`. N is the position the record takes in the list as it would stand after the edit, so a bad first record on an empty list is `messages[1]`, a bad record after one valid record is `messages[2]`, and appending to a three-record list names `messages[4]`. The first bad record is the one reported, in argument order for a `replace` that adds several records, and in list order at the `models.loop` call.
+Every record error a list raises names the offending record by its 1-based Lua index, written `messages[{index}]`. `{index}` is the position the record takes in the list as it would stand after the edit, so a bad first record on an empty list is `messages[1]`, a bad record after one valid record is `messages[2]`, and appending to a three-record list names `messages[4]`. The first bad record is the one reported, in argument order for a `replace` that adds several records, and in list order at the `models.loop` call.
 
 Errors inside a record add a second position:
 
-- A content-part error names the part by its 1-based position within the record's content array, written `messages[N] content part J`, so the second part is reported as `content part 2`. The first bad part is the one reported.
-- A tool-call error names the call by its 1-based position within the record's `tool_calls` array, written `messages[N] tool_calls[K]`, so a bad first call on the first record is `messages[1] tool_calls[1]`.
+- A content-part error names the part by its 1-based position within the record's content array, written `messages[{index}] content part {part_index}`, so the second part is reported as `content part 2`. The first bad part is the one reported.
+- A tool-call error names the call by its 1-based position within the record's `tool_calls` array, written `messages[{index}] tool_calls[{call_index}]`, so a bad first call on the first record is `messages[1] tool_calls[1]`.
 
 ### The order of the record checks
 
@@ -651,12 +651,12 @@ A record that passes these rules then joins the list only if it keeps the system
 
 ### Record error messages
 
-Every message below is the full text of a `lua`-kind error value. N, J, and K are the positions [Positions in a record error](#positions-in-a-record-error) describes, and the parts in braces are filled in as each entry says.
+Every message below is the full text of a `lua`-kind error value. `{index}`, `{part_index}`, and `{call_index}` are the positions [Positions in a record error](#positions-in-a-record-error) describes, and the other parts in braces are filled in as each entry says.
 
 JSON form:
 
-- `messages[N] must be a JSON-representable message table: {reason}` comes from a record given to `append` or `replace` that has no JSON form, meaning it holds a value that is not a string, number, boolean, `json.null`, or nested table, even in a field the list drops.
-- `messages[N] {field} must be JSON-representable: {reason}` comes from a builder argument that has no JSON form, where `{field}` names `content`, `tool_calls`, `tool_call_id`, or `meta`, and N is `#messages + 1`.
+- `messages[{index}] must be a JSON-representable message table: {reason}` comes from a record given to `append` or `replace` that has no JSON form, meaning it holds a value that is not a string, number, boolean, `json.null`, or nested table, even in a field the list drops.
+- `messages[{index}] {name} must be JSON-representable: {reason}` comes from a builder argument that has no JSON form, where `{name}` names `content`, `tool_calls`, `tool_call_id`, or `meta`, and `{index}` is `#messages + 1`.
 
 The `{reason}` is the converter's own explanation of why the value has no JSON form, such as ``unsupported value type `function` ``. On a list holding one record, these messages read as follows: the first for a whole record that JSON cannot represent, or one with such a field inside it, `meta` included, passed to `append` or `replace`, and the others for a function in a tool call's arguments, as a `tool_call_id`, as content or inside a content table, and as a builder's `meta`:
 
@@ -670,39 +670,39 @@ messages[2] meta must be JSON-representable: unsupported value type `function`
 
 Table shape and message role:
 
-- `messages[N] must be a message table` comes from a record that is not a table. Added to an empty list it reads `messages[1] must be a message table`, and appended to a one-record list it reads `messages[2] must be a message table`.
-- `messages[N] role must be a string, one of: system, user, assistant, tool` comes from a record whose `role` is missing or not a string.
-- `messages[N] role "{role}" is unknown; known roles: system, user, assistant, tool` comes from a `role` string that is not one of the four, quoted in double quotes. The known-roles list is always the four message roles joined with a comma and a space.
+- `messages[{index}] must be a message table` comes from a record that is not a table. Added to an empty list it reads `messages[1] must be a message table`, and appended to a one-record list it reads `messages[2] must be a message table`.
+- `messages[{index}] role must be a string, one of: system, user, assistant, tool` comes from a record whose `role` is missing or not a string.
+- `messages[{index}] role "{role}" is unknown; known roles: system, user, assistant, tool` comes from a `role` string that is not one of the four, quoted in double quotes. The known-roles list is always the four message roles joined with a comma and a space.
 
 Content:
 
-- `messages[N] content must be a string or a non-empty array of content parts` comes from content that is missing, an empty array, or neither a string nor an array. `messages:user()` with no content on an empty list raises `messages[1] content must be a string or a non-empty array of content parts`.
-- `messages[N] content part J must be a table with a string type field` comes from a part that is not a table, or that lacks a string `type` field. A bare string inside the first record's content array raises `messages[1] content part 1 must be a table with a string type field`.
-- `messages[N] content part J has unknown type "{type}"; known types: text, image_url` comes from a part whose `type` is neither `text` nor `image_url`, quoted in double quotes.
-- `messages[N] content part J is a text part and must set a string text field` comes from a `text` part without a string `text` field.
-- `messages[N] content part J is an image_url part and must set an image_url table with a string url field` comes from an `image_url` part with no `image_url` table, or whose table sets other keys but no string `url`.
+- `messages[{index}] content must be a string or a non-empty array of content parts` comes from content that is missing, an empty array, or neither a string nor an array. `messages:user()` with no content on an empty list raises `messages[1] content must be a string or a non-empty array of content parts`.
+- `messages[{index}] content part {part_index} must be a table with a string type field` comes from a part that is not a table, or that lacks a string `type` field. A bare string inside the first record's content array raises `messages[1] content part 1 must be a table with a string type field`.
+- `messages[{index}] content part {part_index} has unknown type "{unknown}"; known types: text, image_url` comes from a part whose `type` is neither `text` nor `image_url`, quoted in double quotes.
+- `messages[{index}] content part {part_index} is a text part and must set a string text field` comes from a `text` part without a string `text` field.
+- `messages[{index}] content part {part_index} is an image_url part and must set an image_url table with a string url field` comes from an `image_url` part with no `image_url` table, or whose table sets other keys but no string `url`.
 
 Tool call ids:
 
-- `messages[N] tool_call_id must be a string` comes from a `tool_call_id` that is present but not a string, such as `messages[1] tool_call_id must be a string` on a first record.
-- `messages[N] is a tool message and must set a string tool_call_id` comes from a `tool` record without a string `tool_call_id`. `messages:tool(text)` with no id, on a list holding one record, raises `messages[2] is a tool message and must set a string tool_call_id`.
-- `messages[N] sets a tool_call_id but is not a tool message` comes from a `system`, `user`, or `assistant` record that sets `tool_call_id`.
+- `messages[{index}] tool_call_id must be a string` comes from a `tool_call_id` that is present but not a string, such as `messages[1] tool_call_id must be a string` on a first record.
+- `messages[{index}] is a tool message and must set a string tool_call_id` comes from a `tool` record without a string `tool_call_id`. `messages:tool(text)` with no id, on a list holding one record, raises `messages[2] is a tool message and must set a string tool_call_id`.
+- `messages[{index}] sets a tool_call_id but is not a tool message` comes from a `system`, `user`, or `assistant` record that sets `tool_call_id`.
 
 Tool calls:
 
-- `messages[N] tool_calls must be an array` comes from a `tool_calls` value that is present but not an array.
-- `messages[N] tool_calls[K] must be a table` comes from a tool call that is not a table, such as `messages[1] tool_calls[1] must be a table`.
-- `messages[N] tool_calls[K] must set a string id` comes from a call without a string `id`, such as `messages[2] tool_calls[1] must set a string id`.
-- `messages[N] tool_calls[K] must set a string name` comes from a call without a string `name`, such as `messages[1] tool_calls[1] must set a string name`.
-- `messages[N] tool_calls[K] arguments must be a table` comes from `arguments` that is anything other than a keyed table, a string or a non-empty sequence included.
+- `messages[{index}] tool_calls must be an array` comes from a `tool_calls` value that is present but not an array.
+- `messages[{index}] tool_calls[{call_index}] must be a table` comes from a tool call that is not a table, such as `messages[1] tool_calls[1] must be a table`.
+- `messages[{index}] tool_calls[{call_index}] must set a string id` comes from a call without a string `id`, such as `messages[2] tool_calls[1] must set a string id`.
+- `messages[{index}] tool_calls[{call_index}] must set a string name` comes from a call without a string `name`, such as `messages[1] tool_calls[1] must set a string name`.
+- `messages[{index}] tool_calls[{call_index}] arguments must be a table` comes from `arguments` that is anything other than a keyed table, a string or a non-empty sequence included.
 
 Metadata:
 
-- `messages[N] meta is {size} bytes as JSON; the limit is 8192 bytes` comes from a `meta` whose compact JSON form takes more than 8192 bytes, where `{size}` is that form's length in bytes.
+- `messages[{index}] meta is {size} bytes as JSON; the limit is 8192 bytes` comes from a `meta` whose compact JSON form takes more than 8192 bytes, where `{size}` is that form's length in bytes.
 
 System placement:
 
-- `messages[N] is a system message after a non-system message; system messages lead the list, and only a compactor can change the leading block` comes from a system record added after any non-system record, where N is the new record's position.
+- `messages[{index}] is a system message after a non-system message; system messages lead the list, and only a compactor can change the leading block` comes from a system record added after any non-system record, where `{index}` is the new record's position.
 
 One rule spans records, so the edit that adds a record does not check it: only `assistant` records carry `tool_calls`, and a `tool_calls` array on a record of another message role fails at the `models.loop` call instead, with the message [Cross-record errors](#cross-record-errors) lists.
 
@@ -923,7 +923,7 @@ Each copy is an ordinary table, so you can change it, keep it in `var`, encode i
 
 Store or insert a record's fields, such as `messages[i].content`, rather than the view itself, as the block above does with `var.last` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)). The guards that refuse userdata still refuse a bare view:
 
-- Assigning a view straight to a `var` field fails with `var.{name} must be JSON data, got userdata`.
+- Assigning a view straight to a `var` field fails with `{target} must be JSON data, got userdata`, where `{target}` is the field's path, such as `var.last`.
 - A prose reference to a global holding a view (see [Inserting Lua globals by bare name](07-substitution.md#inserting-lua-globals-by-bare-name)) fails with ``global `{name}` is a userdata; bare globals in prose must be JSON data``.
 - `json.encode(messages[1])` fails with `json.encode: value must be JSON data, got userdata`, and a view anywhere inside the value you encode fails the same way at its path, so encode `messages[i].content` or a plain table of the fields you need instead (see [Encoding and decoding JSON with `json`](05-lua-environment.md#encoding-and-decoding-json-with-json)).
 
@@ -1131,10 +1131,10 @@ A bound that is not a whole number fails with `replace first must be an integer,
 
 A numeric string is not converted to a number, so `'2'` reports its type, `string`, and a missing `last` reports `nil`.
 
-A range outside the rule fails with this message, which names both bounds as you write them, the record count, and the allowed range, with `{n + 1}` written out as a number:
+A range outside the rule fails with this message, which names both bounds as you write them, the record count, and the allowed range, with `{len + 1}` written out as a number:
 
 ````text
-replace({first}, {last}) is out of bounds on a list of {n} records: it needs 1 <= first <= last + 1 <= {n + 1}
+replace({first}, {last}) is out of bounds on a list of {len} records: it needs 1 <= first <= last + 1 <= {len + 1}
 ````
 
 On the four records `u1 a1 u2 a2`, `messages:replace(2, 5)` raises:
@@ -1642,7 +1642,7 @@ Left uncaught, the `tool_loop_exhausted` error ends the block, so the section's 
 
 ### Valid `max_tool_iterations` values
 
-`max_tool_iterations:` accepts whole numbers from 1 through 1000 inclusive, with 1000 itself accepted, written as a bare YAML integer such as `max_tool_iterations: 50`. A value outside that range fails at parse, before the run starts, with parse error kind `Frontmatter` (see [Parse errors and their kinds](16-limits-and-errors.md#parse-errors-and-their-kinds)) in the `invalid frontmatter: {detail}` form. The detail is one of two messages, where `{raw}` echoes the value as written:
+`max_tool_iterations:` accepts whole numbers from 1 through 1000 inclusive, with 1000 itself accepted, written as a bare YAML integer such as `max_tool_iterations: 50`. A value outside that range fails at parse, before the run starts, with parse error kind `Frontmatter` (see [Parse errors and their kinds](16-limits-and-errors.md#parse-errors-and-their-kinds)) in the `invalid frontmatter: {message}` form. `{message}` is one of two messages, where `{raw}` echoes the value as written:
 
 | Value | Detail message |
 | --- | --- |
@@ -1760,7 +1760,7 @@ For that composition to work, every record in a block of two or more is plain te
 When the block holds two or more records and any of them uses content parts, the `models.loop` call fails and names the first such record by its position:
 
 ````text
-messages[N] is a system message with content parts; only plain text system messages can be composed
+messages[{index}] is a system message with content parts; only plain text system messages can be composed
 ````
 
 ### Your list stays as you wrote it
@@ -1800,7 +1800,7 @@ Content parts keep their order and their type on the way to the model. A record 
 
 ### Cross-record errors
 
-A list that breaks a cross-record rule fails at the `models.loop` call with a Lua error whose message names the offending record by its 1-based position as `messages[N]`. Put this block in the `## Chat` section of `first-chat` to see one:
+A list that breaks a cross-record rule fails at the `models.loop` call with a Lua error whose message names the offending record by its 1-based position as `messages[{index}]`. Put this block in the `## Chat` section of `first-chat` to see one:
 
 ````lua
 models.use('writer')
@@ -1820,11 +1820,11 @@ The list ends while the assistant record at position 2 still has an unanswered c
 
 | Message | Names |
 |---|---|
-| `messages[N] is a system message with content parts; only plain text system messages can be composed` | The first record with content parts in a leading block of two or more system records |
-| `messages[N] sets tool_calls but is not an assistant message` | The `system`, `user`, or `tool` record that sets `tool_calls` |
-| `messages[N] tool call id "ID" duplicates an earlier tool call` | The assistant record that repeats the id, and the id |
-| `messages[N] tool call "ID" has no tool result` | The assistant record with an unanswered call, and its first unanswered call in call order |
-| `messages[N] is an orphan tool record: no pending assistant tool call with id "ID"` | The tool record, and the `tool_call_id` it gives |
+| `messages[{index}] is a system message with content parts; only plain text system messages can be composed` | The first record with content parts in a leading block of two or more system records |
+| `messages[{index}] sets tool_calls but is not an assistant message` | The `system`, `user`, or `tool` record that sets `tool_calls` |
+| `messages[{index}] tool call id "{id}" duplicates an earlier tool call` | The assistant record that repeats the id, and the id |
+| `messages[{index}] tool call "{id}" has no tool result` | The assistant record with an unanswered call, and its first unanswered call in call order |
+| `messages[{index}] is an orphan tool record: no pending assistant tool call with id "{id}"` | The tool record, and the `tool_call_id` it gives |
 
 Each rule has its own triggers:
 

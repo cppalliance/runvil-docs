@@ -342,7 +342,7 @@ An `item` whose Lua type is `function`, `userdata`, or `thread` fails at the cal
 
 `index` is a Lua integer of 0 or more, and it becomes [`sys.index`](14-fanout.md#what-an-arm-sees) inside the task: `index = 7` makes `sys.index` give `index=7` above. Spawning `#### Sub` with `{ index = i }` for `i` from 1 to 3, where `#### Sub` runs `models.infer('S' .. sys.index)`, sends the prompts `S1`, `S2`, and `S3`. Without `index`, `sys.index` is absent in the task, as it is outside a fanout. With `item` and `index` together, a task gets its own `item` and `sys.index`, as a fanout arm has.
 
-A negative integer fails at the call site with a `lua` error that names the value, `index must be a non-negative integer, got {value}`, such as `index must be a non-negative integer, got -1`. A value of any other type, a float such as `1.0` or `2.0` included, fails with the same sentence ending in its Lua type name, such as `got number` or `got string`.
+A negative integer fails at the call site with a `lua` error that names the value, `index must be a non-negative integer, got {index}`, such as `index must be a non-negative integer, got -1`. A value of any other type, a float such as `1.0` or `2.0` included, fails with the same sentence ending in its Lua type name, such as `got number` or `got string`.
 
 The `item` and `sys.index` seeds reach only the first section a task enters. A later section the task falls through to or jumps to has no `item` global and no `sys.index`, while `var` carries across.
 
@@ -559,7 +559,7 @@ The waits check their set before any wait starts, so a bad set raises at the cal
 |---|---|---|
 | A value that is not a table | `lua` | `{call} expects a set of tasks, got {type}` |
 | An empty table | `lua` | `{call} requires at least one task` |
-| A string member that is not a valid task id | `lua` | `` `{text}` is not a task id such as `0.1`: {reason} `` |
+| A string member that is not a valid task id | `lua` | `` `{text}` is not a task id such as `0.1`: {error} `` |
 
 Every member must be a task handle or a valid task id string, and one string that is not a valid id fails the whole call.
 
@@ -760,7 +760,7 @@ A cancelled task does not fail its owner, so the owner's return value becomes th
 | Argument | Error kind | Message |
 |---|---|---|
 | Not a task handle or a string, such as `nil` or a number | `lua` | `tasks.cancel expects a Task handle or task id, got {type}` |
-| A string that is not a valid task id | `lua` | `` `{text}` is not a task id such as `0.1`: {reason} `` |
+| A string that is not a valid task id | `lua` | `` `{text}` is not a task id such as `0.1`: {error} `` |
 
 A task handle here is any table with a string `task` field. Cancelling a task the chain does not own, or an id that names no task, makes the Engine refuse, and `tasks.cancel` raises a [`task_not_owned`](#only-the-owner-may-touch-a-task) error value with the message `` task `{task}` is not a task this chain owns ``.
 
@@ -1403,7 +1403,7 @@ Each call fails for a different reason:
 | Call | Kind | Message |
 |---|---|---|
 | `tasks.status` or `tasks.ready` given a value that is neither a Task handle nor a string | `lua` | `{call} expects a Task handle or task id, got {type}`, such as `tasks.ready expects a Task handle or task id, got integer` |
-| `tasks.status` or `tasks.ready` given a string that is not a task id | `lua` | `` `{text}` is not a task id such as `0.1`: {reason} `` |
+| `tasks.status` or `tasks.ready` given a string that is not a task id | `lua` | `` `{text}` is not a task id such as `0.1`: {error} `` |
 | `tasks.status` or `tasks.ready` on a task the caller may not read | `task_not_owned` | See [Ownership, leaked tasks, and abandonment](#ownership-leaked-tasks-and-abandonment) |
 | `tasks.note` given text that is not a string | `lua` | `tasks.note text must be a string, got {type}` |
 | `tasks.note` given text that is not valid UTF-8 | `lua` | `text must be a valid UTF-8 string` |

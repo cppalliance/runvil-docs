@@ -177,13 +177,13 @@ A label is never a Lua global, so any label the grammar allows works, including 
 Two label mistakes fail the parse with a `Frontmatter` parse error whose message names the label. A label outside the grammar, such as one starting with a digit, gives this message, which also names the grammar:
 
 ````text
-invalid model role label `{label}`: expected [A-Za-z][A-Za-z0-9_-]{0,63}
+invalid model role label `{key}`: expected [A-Za-z][A-Za-z0-9_-]{0,63}
 ````
 
 Each label appears once under `models:`, and a label written twice gives:
 
 ````text
-duplicate model role label `{label}`: contract map keys must be unique
+duplicate model role label `{key}`: contract map keys must be unique
 ````
 
 ### The `keywords` key
@@ -740,7 +740,7 @@ lua|models.use label "ghost" is not a bound model role
 
 | Mistake | Message | What the message names |
 |---|---|---|
-| a label outside the label grammar | `invalid alias "{name}": expected [A-Za-z][A-Za-z0-9_-]{0,63}` | the rejected name and the grammar |
+| a label outside the label grammar | `invalid alias "{alias}": expected [A-Za-z][A-Za-z0-9_-]{0,63}` | the rejected name and the grammar |
 | a label that names no bound role | `models.use label "{label}" is not a bound model role` | the label |
 | more than two arguments | `models.use takes at most 2 arguments, got {n}` | the argument count |
 
@@ -876,13 +876,13 @@ Every sampling option error is an error value of kind `lua` raised by `models.us
 | --- | --- |
 | The second argument is neither a table nor `nil` | `models.use options must be a table, got {type}` |
 | A key is not a string, including a positional entry | `models.use option names must be strings, got {type}` |
-| A string key other than `temperature` or `max_tokens` | `models.use option "{name}" is unknown: expected temperature or max_tokens` |
-| `temperature` is not a number | `models.use option temperature must be a number, got {type}` |
-| `temperature` is NaN or infinite | `models.use option temperature must be finite, got {value}` |
+| A string key other than `temperature` or `max_tokens` | `models.use option "{other}" is unknown: expected temperature or max_tokens` |
+| `temperature` is not a number | `models.use option temperature must be a number, got {actual}` |
+| `temperature` is NaN or infinite | `models.use option temperature must be finite, got {actual}` |
 | `temperature` is below 0.0 or above 2.0 | `models.use option temperature {value} is outside the supported range [0.0, 2.0]` |
 | `max_tokens` is not a whole number from 1 to 4294967295 | `models.use option max_tokens must be an integer in [1, 4294967295], got {actual}` |
 
-In these messages, `{type}` is the Lua type name of the value given, such as `string` or `integer`, and `{name}` is the unknown option name. In the finite message, `{value}` is the value given, such as `NaN`. Finiteness is checked before the range, so an infinite temperature gets the finite message rather than the range message. In the range message, `{value}` is the number as written, so an integer temperature appears without a decimal point. In the `max_tokens` message, `{actual}` is the number given, such as `0`, `-1`, or `1.5`, or the type name of a value that is not a number, such as `string`.
+In these messages, `{type}` is the Lua type name of the value given, such as `string` or `integer`, and `{other}` is the unknown option name. When `temperature` is not a number, `{actual}` is the Lua type name of the value given, and in the finite message, `{actual}` is the value given, such as `NaN`. Finiteness is checked before the range, so an infinite temperature gets the finite message rather than the range message. In the range message, `{value}` is the number as written, so an integer temperature appears without a decimal point. In the `max_tokens` message, `{actual}` is the number given, such as `0`, `-1`, or `1.5`, or the type name of a value that is not a number, such as `string`.
 
 When an options table holds more than one bad entry, `models.use` reports the same one on every run, whatever order Lua's `pairs` visits the keys in. It checks keys that are not strings first, sorted by type name, so a `boolean` key is reported before an `integer` key. It then checks string names in bytewise order, so a bad `max_tokens` is reported before a bad `temperature`, and any other name is reported at its own place in that order.
 
@@ -1167,7 +1167,7 @@ return models.get(ui().selected_model):infer(prose)
 Raw model ids follow these rules:
 
 - A declared role whose role label matches the name passed to `models.get` wins over the raw model id.
-- A raw model id skips the role label grammar, so it may contain `/`, `.`, and `:`, and only the model id's own rules apply (see [Model ids](#model-ids)). The id must be non-empty and free of control characters, or `models.get` fails with `models.get model id "{id}" is invalid: invalid model id: name {reason}`, where `{reason}` is `must not be empty` or `must not contain a control character`.
+- A raw model id skips the role label grammar, so it may contain `/`, `.`, and `:`, and only the model id's own rules apply (see [Model ids](#model-ids)). The id must be non-empty and free of control characters, or `models.get` fails with `models.get model id "{alias}" is invalid: invalid model id: name {reason}`, where `{reason}` is `must not be empty` or `must not contain a control character`.
 - A handle for a raw model id has `name`, `label`, `model_id`, and `description` all equal to the id, an empty `capabilities`, and `nil` for `provider`, `temperature`, `max_tokens`, and `thinking`. Its `context` is a fixed 8192 tokens, because the run has no catalog details for the id.
 - A raw-id handle's `infer` and `loop` methods work like any other handle's, running on that model.
 - A run binds every declared role to the Host's one current model, so a raw model id through `models.get` is the only way a prompt reaches a model other than the Host's current model.
@@ -1377,7 +1377,7 @@ An infer round that fails at the model, such as a transport or backend failure, 
 
 ### When a section has no model
 
-The missing-model error is the error a model round raises when its section has no model, meaning neither a `models.use` selection nor a prompt-wide `models.default` is in effect (see [Which model a round uses](#which-model-a-round-uses)). Declaring a role under `models:` without selecting it or making it the default is not enough, which is why the `unselected` prompt in [When a prompt needs a role](#when-a-prompt-needs-a-role) fails with `model binding required for section Only`. The message is `model binding required for section {name}`, where `{name}` is the section name, such as `Only` or `Worker`, or the prompt's H1 title for a round in the H1 pass. Left uncaught, it fails the run with run error kind `Binding`. Raised in a fanout arm, it fails both the fanout and the run.
+The missing-model error is the error a model round raises when its section has no model, meaning neither a `models.use` selection nor a prompt-wide `models.default` is in effect (see [Which model a round uses](#which-model-a-round-uses)). Declaring a role under `models:` without selecting it or making it the default is not enough, which is why the `unselected` prompt in [When a prompt needs a role](#when-a-prompt-needs-a-role) fails with `model binding required for section Only`. The message is `model binding required for section {section}`, where `{section}` is the section name, such as `Only` or `Worker`, or the prompt's H1 title for a round in the H1 pass. Left uncaught, it fails the run with run error kind `Binding`. Raised in a fanout arm, it fails both the fanout and the run.
 
 The missing-model error reaches the call as its answer, so `pcall` catches it as an error value of kind `internal` and a block can fall back instead of failing. Remove the H1 body from `careful`, and its block returns:
 

@@ -64,7 +64,7 @@ A run error can also carry a location, the place in a file that the failure poin
 
 Each part of a run error has its own job. Use the run error kind to branch on what failed, the message to show a reader what happened, and the location to find the fault.
 
-The [Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host) decides how it shows the run error kind, the message, and, for a parse failure, the location to the person running the prompt. Workshop reports a parse failure under a code named by its parse error kind, one of `parse_frontmatter`, `parse_structure`, `parse_fence`, `parse_list`, or `parse_lua`, with the message prefixed `line {N}: ` when the parser finds the line. The Harness records a failed run as the kind's name plus the message with its chain of causes.
+The [Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host) decides how it shows the run error kind, the message, and, for a parse failure, the location to the person running the prompt. Workshop reports a parse failure under a code named by its parse error kind, one of `parse_frontmatter`, `parse_structure`, `parse_fence`, `parse_list`, or `parse_lua`, with the message prefixed `line {line}: ` when the parser finds the line. The Harness records a failed run as the kind's name plus the message with its chain of causes.
 
 ## Run limits and their defaults
 
@@ -335,10 +335,10 @@ return string.upper(var.text
 Nothing in this prompt runs. Its parse fails with parse error kind `Lua` and this message:
 
 ````text
-lua compilation error at section `Transform` epilog (line {line}): {diagnostic}
+lua compilation error at section `Transform` epilog (line {source_line}): {message}
 ````
 
-Here `{line}` is the file line where the block's Lua starts, and `{diagnostic}` is the Lua compiler's own text.
+Here `{source_line}` is the file line where the block's Lua starts, and `{message}` is the Lua compiler's own text.
 
 The whole prompt file is checked before anything runs. The parser validates the frontmatter, the headings, the fences, and the sections, and it compiles every Lua block in the H1 body and in every section, so a structural error or a Lua syntax error anywhere in the file, even in the last section, stops the prompt before any section runs. A parse error rejects the whole prompt file, even when every other section in it is valid, as `## Load` is here.
 
@@ -376,15 +376,18 @@ Parse error kind `List` means a [list section](03-blocks-and-prose.md#list-secti
 Parse error kind `Lua` means a Lua block does not compile because of a syntax error, whether in the H1 body, a section block such as an epilog, or a `lua` fence between prose passages. It fails the whole parse before the prompt runs, with this message:
 
 ````text
-lua compilation error at {location} (line {line}): {diagnostic}
+lua compilation error at {location} (line {source_line}): {message}
 ````
 
-`{location}` names the block, `{line}` is the file line where the block's Lua starts, and `{diagnostic}` is the Lua compiler's own text. A section block's location takes one of the first three forms below, where the `lua {n}` form names a numbered block between the prologue and the epilog, and a block in the H1 body takes the last form, with the H1 title:
+`{location}` names the block, `{source_line}` is the file line where the block's Lua starts, and `{message}` is the Lua compiler's own text. A section block's location takes one of the first six forms below, and a block in the H1 body takes the last form, with the H1 title. The `lua {ordinal}` forms name a numbered block between the prologue and the epilog, and the three forms with `(line {heading_abs_line})` name a block of a section whose section name another section heading also has, by the file line of the section's own heading (see [Sections that share a section name](05-lua-environment.md#sections-that-share-a-section-name)):
 
 ````text
 section `{name}` prologue
 section `{name}` epilog
-section `{name}` lua {n}
+section `{name}` lua {ordinal}
+section `{name}` (line {heading_abs_line}) prologue
+section `{name}` (line {heading_abs_line}) epilog
+section `{name}` (line {heading_abs_line}) lua {ordinal}
 H1 `{title}` lua
 ````
 
@@ -464,7 +467,7 @@ prompt must contain exactly one H1 title, found {count} at lines {lines}
 prompt H1 title must not be empty
 section `{name}` is an orphan H{level} heading with no parent H{n}
 an H{level} section heading must not be empty
-duplicate sibling section name `{name}`: first declared at line {first_line}, again at line {line}; sibling section names must be unique
+duplicate sibling section name `{name}`: first declared at line {first_line}, again at line {heading_abs_line}; sibling section names must be unique
 ````
 
 A file with no H1 title gives `prompt requires an H1 title`:
@@ -510,12 +513,12 @@ return 1
 section `S` prologue `lua` fence is not closed
 ````
 
-The `{label}` depends on where the fence sits. It is the first form below for a fence that opens its section, the second for the last fence, and the third for any other, and `{name}` is the H1 title for a fence in the H1 body:
+The `{label}` depends on where the fence sits. It is the first form below for a fence that opens its section, the second for the last fence, and the third for any other, and `{section}` is the H1 title for a fence in the H1 body:
 
 ````text
-section `{name}` prologue `lua`
-section `{name}` epilog `lua`
-section `{name}` `lua`
+section `{section}` prologue `lua`
+section `{section}` epilog `lua`
+section `{section}` `lua`
 ````
 
 A line of four spaces followed by three backticks, or three backticks followed by ` x`, does not close the fence. It leaves the fence open, so it also gives ``section `S` prologue `lua` fence is not closed``.
@@ -742,7 +745,7 @@ Many parse failures carry no line or column, among them H1 title failures (missi
 A `List` failure never gives a line or column, because the list check records no span, so its message names the section instead:
 
 ````text
-empty bullet item in list section `{name}`
+empty bullet item in list section `{section}`
 ````
 
 An `Internal` parse failure, a fault in the parser itself, reports no span, name, line, or column.
@@ -980,7 +983,7 @@ When a task error ends the run uncaught, in any chain and in the H1 pass too, th
 Left uncaught, an invalid alias error ends the run as `Lua`, or as `RequirementsUnmet` when it reaches the H1 body's own Lua. Its message reads:
 
 ````text
-invalid alias "<alias>": expected [A-Za-z][A-Za-z0-9_-]{0,63}
+invalid alias "{alias}": expected [A-Za-z][A-Za-z0-9_-]{0,63}
 ````
 
 A valid alias starts with a letter and continues with at most 63 letters, digits, underscores, or hyphens.
@@ -988,7 +991,7 @@ A valid alias starts with a letter and continues with at most 63 letters, digits
 Left uncaught, a heading-not-found error or a malformed heading reference error ends the run as `Lua`, or as `RequirementsUnmet` when it reaches the H1 body's own Lua (see [Resolving heading references](08-jump-and-call.md#resolving-heading-references)). The not-found message reads:
 
 ````text
-section heading `<heading>` not found; available sections: <list>
+section heading `{heading}` not found; available sections: {list}
 ````
 
 Only the H1 body's own Lua code remaps this way. The machinery around it, namely section setup, the final `var` read-back, and jump-target resolution, keeps its own kind.
@@ -1043,7 +1046,7 @@ A model call that fails surfaces as a completion error, and every completion err
 
 When the prompt catches a model call failure, the error value has kind `internal`, whether the cause is a connection failure, a receive timeout, a backend error status, a malformed or oversized reply, or a disabled gateway. An empty reply is the one case that differs, with kind `empty_model_reply` instead. A model call failure that the prompt does not catch ends the run with run error kind `Completion`, and the run's message is the failure's own message, such as `the model backend is overloaded (status 503)`.
 
-A model failure caused by a backend HTTP status ends its message with ` (status N)`, where N is the status code, after the kind's fixed phrase. That is how `summary` returns `skipped: the model backend is overloaded (status 503)` when the backend answers with status 503.
+A model failure caused by a backend HTTP status ends its message with ` (status {status})`, where `{status}` is the status code, after the kind's fixed phrase. That is how `summary` returns `skipped: the model backend is overloaded (status 503)` when the backend answers with status 503.
 
 Each completion error kind has one cause and a fixed answer to whether it is retryable:
 
@@ -1084,7 +1087,7 @@ the model backend did not answer in time
 A reply that cannot be understood fails the round with completion error kind `MalformedResponse`, and the failure is retryable. The message is a fixed phrase followed by what is wrong, as in the second line here:
 
 ````text
-the model backend sent a reply that could not be understood: {what was wrong}
+the model backend sent a reply that could not be understood: {specific}
 the model backend sent a reply that could not be understood: completion stream ended without the [DONE] sentinel
 ````
 

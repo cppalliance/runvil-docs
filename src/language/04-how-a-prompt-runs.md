@@ -258,12 +258,12 @@ The refusal comes after the Pack report and the model report are merged into one
 
 ````text
 the environment cannot satisfy this prompt:
-- missing required Pack: {name}
+- missing required Pack: {id}
 - {pack} needs {service}, and the environment provides none
 - {pack} is unavailable: {reason}
 - the run's tool catalog or Pack roster names the Pack id {id}, which the Engine reserves
-- role '{role}': requires a context of at least {n} tokens; the current model provides {m}
-- role '{role}': requires '{keyword}'; the current model's thinking capability is {mode}
+- role '{role}': requires a context of at least {required} tokens; the current model provides {actual}
+- role '{role}': requires '{required}'; the current model's thinking capability is {actual}
 ````
 
 A real notice holds a line only for each gap the run has. [The requirements notice](#the-requirements-notice) explains every line.
@@ -360,7 +360,7 @@ The call reaches `web/fetch` even though the frontmatter declares no Pack (see [
 
 In Lua, `tools.packs.get(id).required` is `true` for a Pack the frontmatter declares, and `tools.packs.extras()` lists the Pack objects of every other usable Pack in the run, each listing its Tool objects in `tools` (see [Tool objects, Pack objects, and `tools.packs`](12-tools.md#tool-objects-pack-objects-and-toolspacks)). With `uses: [web]` on a Host that has and can serve both `runvil/web` and `runvil/user-input`, `tools.packs.get('web').required` is `true` and that Pack's `tools` holds the Tool objects for `web/fetch` and `web/search`, while `tools.packs.extras()` holds the `subagents` and `user-input` Pack objects, in that order, and the `user-input` object's `tools` holds the one for `user-input/ask`.
 
-A section can offer only the tools in the run's catalog and the adhoc tools it defines, and offering an id the run cannot offer is a hard error (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)). Calling `tools.offer` with a tool id the run lacks raises `tools.offer: "{id}" is not a tool in this run`, with the id in place of `{id}`.
+A section can offer only the tools in the run's catalog and the adhoc tools it defines, and offering an id the run cannot offer is a hard error (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)). Calling `tools.offer` with a tool id the run lacks raises `tools.offer: "{name}" is not a tool in this run`, with the id in place of `{name}`.
 
 ### Host services
 
@@ -396,7 +396,7 @@ When one of the Host's Packs fails to build or fails its readiness check, the Ha
 
 The requirements check looks only at the Packs the prompt declares, so only declared Packs can refuse a run. A `runvil` Pack the prompt does not declare that fails to start or lacks a service just has no tools in the run, and the run goes on. The requirements report lists each Pack the prompt declares, while the run's roster, its list of Packs, holds every Pack in the run, declared or not. A third-party Pack the prompt does not declare is in no run, so it can neither refuse nor delay one. An undeclared Pack with unmet needs joins the roster as unavailable, with the reason `the run lacks the services it needs: {services}`.
 
-Offering an unavailable Pack with `tools.offer` raises `tools.offer: the {name} Pack is unavailable in this run: {reason}`. So an undeclared Pack whose readiness check fails offers no tools, and a section that offers it with `tools.offer` fails the run with that message.
+Offering an unavailable Pack with `tools.offer` raises `tools.offer: the {pack} Pack is unavailable in this run: {reason}`. So an undeclared Pack whose readiness check fails offers no tools, and a section that offers it with `tools.offer` fails the run with that message.
 
 ## Model roles at prepare
 
@@ -484,13 +484,13 @@ Prepare checks only the hard keywords `thinking` and `no-thinking`. Any other ke
 A context window below a role's `min_context` shows as this line, with both numbers as plain token counts:
 
 ````text
-- role '{label}': requires a context of at least {min_context} tokens; the current model provides {window}
+- role '{role}': requires a context of at least {required} tokens; the current model provides {actual}
 ````
 
-A failed hard keyword shows as this line, where `{mode}` is `Never` when `thinking` fails and `Always` when `no-thinking` fails:
+A failed hard keyword shows as this line, where `{required}` is the keyword and `{actual}` is `Never` when `thinking` fails and `Always` when `no-thinking` fails:
 
 ````text
-- role '{label}': requires '{keyword}'; the current model's thinking capability is {mode}
+- role '{role}': requires '{required}'; the current model's thinking capability is {actual}
 ````
 
 So a `writer` role with `keywords: [no-thinking]` on a model that always thinks gives `- role 'writer': requires 'no-thinking'; the current model's thinking capability is Always`. Each shortfall line in the notice starts with `- `, so for a role `reader` that needs 200000 tokens on a 32000-token model, the whole notice is the two lines shown in [How a run proceeds](#how-a-run-proceeds).
@@ -546,17 +546,17 @@ The notice is written for a model to read: concise, factual, and self-contained.
 
 | Notice line | What produces it |
 |---|---|
-| `- missing required Pack: {name}` | a bare entry whose Pack id no Pack of the Host has, from any vendor |
+| `- missing required Pack: {id}` | a bare entry whose Pack id no Pack of the Host has, from any vendor |
 | `- {pack} needs {service}, and the environment provides none` | a declared Pack whose service the run lacks |
 | `- {pack} is unavailable: {reason}` | a declared Pack that the Host has but that cannot serve, a declared `vendor/name` entry the Host lacks, or a bare entry whose Pack id only other vendors' Packs have |
 | `- the run's tool catalog or Pack roster names the Pack id {id}, which the Engine reserves` | a catalog tool or a roster Pack under a reserved Pack id, `adhoc` or `dynamic` |
-| `- role '{label}': requires a context of at least {min} tokens; the current model provides {actual}` | a role whose `min_context` is above the current model's window |
-| `- role '{label}': requires '{keyword}'; the current model's thinking capability is {mode}` | a role whose hard keyword the current model fails |
+| `- role '{role}': requires a context of at least {required} tokens; the current model provides {actual}` | a role whose `min_context` is above the current model's window |
+| `- role '{role}': requires '{required}'; the current model's thinking capability is {actual}` | a role whose hard keyword the current model fails |
 | `- the H1 gate failed` | an uncaught Lua error in the H1 pass |
 
 ### Pack lines in the notice
 
-A bare entry under `uses:` whose Pack id no Pack of the Host has, from any vendor, refuses the run with the line `- missing required Pack: {name}`, such as `- missing required Pack: web`. A `vendor/name` entry never gives this line.
+A bare entry under `uses:` whose Pack id no Pack of the Host has, from any vendor, refuses the run with the line `- missing required Pack: {id}`, such as `- missing required Pack: web`. A `vendor/name` entry never gives this line.
 
 A declared Pack that the Host has but that needs a host service the Host lacks appears as `- {pack} needs {service}, and the environment provides none`, naming both the Pack and the missing service id. A Pack missing several services gets one line for each missing service. The service name in the line is shown exactly as the Host names it, so service names can differ from one Host to another.
 
@@ -570,11 +570,11 @@ Each Pack appears under its real cause only. A Pack that lacks a host service is
 
 ### Role lines in the notice
 
-Each unmet model role requirement gets its own line under the opening line, starting with `- role '{label}':` and naming the role by its label. The notice names every failed check across all roles, each on its own line with required against actual, so a role that fails both its context check and a keyword check gets two lines, as `analyst` does above.
+Each unmet model role requirement gets its own line under the opening line, starting with `- role '{role}':` and naming the role by its label. The notice names every failed check across all roles, each on its own line with required against actual, so a role that fails both its context check and a keyword check gets two lines, as `analyst` does above.
 
-When the bound model's context window is smaller than a role's `min_context`, set at `models.{label}.min_context`, the line is `- role '{label}': requires a context of at least {min} tokens; the current model provides {actual}`. The comparison is strict, so a model whose window equals the minimum passes.
+When the bound model's context window is smaller than a role's `min_context`, set at `models.{label}.min_context`, the line is `- role '{role}': requires a context of at least {required} tokens; the current model provides {actual}`. The comparison is strict, so a model whose window equals the minimum passes.
 
-An unmet hard keyword gives the line `- role '{label}': requires '{keyword}'; the current model's thinking capability is {capability}`. The capability reads `Never` for an unmet `thinking` and `Always` for an unmet `no-thinking`, capitalized as shown, and a `Switchable` model meets both keywords. A role with the `no-thinking` keyword on a model that always thinks gives `- role '{label}': requires 'no-thinking'; the current model's thinking capability is Always`.
+An unmet hard keyword gives the line `- role '{role}': requires '{required}'; the current model's thinking capability is {actual}`, where `{required}` is the keyword. `{actual}` reads `Never` for an unmet `thinking` and `Always` for an unmet `no-thinking`, capitalized as shown, and a `Switchable` model meets both keywords. A role with the `no-thinking` keyword on a model that always thinks gives `- role '{role}': requires 'no-thinking'; the current model's thinking capability is Always`.
 
 Only `min_context` and the hard keywords `thinking` and `no-thinking` can add role lines. Soft keywords such as `frontier` or `fast` are never checked and never refuse a run. The notice lists only the roles that fall short and leaves out roles the model meets. When the Host sets no current model, the notice has no role lines, because prepare skips the role checks.
 

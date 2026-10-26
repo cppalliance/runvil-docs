@@ -689,7 +689,7 @@ The numbered reads behave the same way: `store.read_numbered('a.txt', 2, 99)` re
 
 ### What a line bound can be
 
-A line bound is an integer, a float with a whole value such as `2.0`, which counts as that integer, or `nil`, anywhere in the 64-bit signed range. Any other value fails the call with `{bound} must be an integer, got {type}`, naming `start` or `end` and the Lua type received:
+A line bound is an integer, a float with a whole value such as `2.0`, which counts as that integer, or `nil`, anywhere in the 64-bit signed range. Any other value fails the call with `{name} must be an integer, got {type}`, naming `start` or `end` and the Lua type received:
 
 - A fractional number such as `2.5` passed as `start` raises `start must be an integer, got number`, and passed as `end` raises `end must be an integer, got number`.
 - A whole-valued float counts as a bound only inside the 64-bit signed range, which takes -2^63 but not 2^63, so `math.huge`, NaN, or `1e20` fails with `start must be an integer, got number`, or the `end` equivalent. To read through the last line, leave `end` out rather than passing a huge number.
@@ -1128,7 +1128,7 @@ store invalid_path wildcard a**b
 invalid glob pattern "a**b": pattern contains invalid wildcard grammar
 ````
 
-The failure is an error value of error kind `store`, the kind every store failure has (see [When a store call fails](#when-a-store-call-fails)). Its `reason` is `invalid_path`, its `path` field names the pattern, and its `rule` field names the rule the pattern broke. Its message has the form `invalid glob pattern "{pattern}": {reason}`, with the pattern shown in quotes and the broken rule's reason text after the colon.
+The failure is an error value of error kind `store`, the kind every store failure has (see [When a store call fails](#when-a-store-call-fails)). Its `reason` is `invalid_path`, its `path` field names the pattern, and its `rule` field names the rule the pattern broke. Its message has the form `invalid glob pattern "{path}": {reason}`, with the pattern shown in quotes and the broken rule's reason text after the colon.
 
 Each rule has a tag, which the `rule` field holds, and a reason text, which ends the message:
 
@@ -1295,7 +1295,7 @@ The store's messages follow a few fixed rules:
 - A message is a lowercase phrase, and the store's own wording ends without a period, as in `file not found in store: {path}` and `store I/O failure on {path}: {message}`.
 - A message says what failed and, where there is a fix, how to make it. An anchor that occurs more than once gives a message ending `include more surrounding text so it matches once`, and an invalid path names the rule the path broke, as in `invalid path "../x": path contains a traversal segment`.
 - A message uses the failing operation's own wording, so the same traversal segment reads `invalid glob pattern "../x": path contains a traversal segment` from `store.glob('../x')` and `invalid path "../x": path contains a traversal segment` from `store.read('../x')`.
-- The `anchor` and `invalid_path` messages show the anchor or path in double quotes with special characters escaped, so a multi-line anchor appears on one line with `\n`. Their forms are `invalid path "{path}": {rule message}` and `anchor "{anchor}" occurs {count} times in {path}, ...`.
+- The `anchor` and `invalid_path` messages show the anchor or path in double quotes with special characters escaped, so a multi-line anchor appears on one line with `\n`. Their forms are `invalid path "{path}": {reason}` and `anchor "{anchor}" occurs {count} times in {path}, ...`.
 
 Store error messages name the path exactly as the prompt wrote it, never with any internal prefix, as in `file not found in store: missing.txt`. Three messages differ: the `invalid glob pattern` message names the pattern and no path, the `store backend failure` message names no path, and a `not_a_directory` message can name the file in the way. A store path is refused if it is absolute or has an empty, `.`, or `..` segment, so any path the store accepts is already in the form its errors report.
 
@@ -1340,7 +1340,7 @@ Once `notes/a.txt` exists, `notes` is a directory, so reading it fails with `is_
 | `directory_not_empty` | `directory not empty in store: {path}` | `path` |
 | `io` | `store I/O failure on {path}: {message}` | `path` |
 | `backend` | `store backend failure: {message}` | none |
-| `invalid_path` | `invalid path "{path}": {rule message}` | `path`, `rule` |
+| `invalid_path` | `invalid path "{path}": {reason}` | `path`, `rule` |
 | `anchor` | `anchor "{anchor}" occurs {count} times in {path}, ...` | `path`, `anchor`, `count` |
 
 Each of these reasons comes from a specific situation:
@@ -1379,7 +1379,7 @@ lua
 
 Every `path`, `contents`, `old`, `new`, and `pattern` argument to a `store.*` call is a required string, and leaving one out or passing another type raises an error at the call. The Engine checks store arguments once, when it parses the call, so a bad argument to any `store.*` function raises at the call site, where `pcall` catches it.
 
-A store argument that fails its check raises an error value of error kind `lua`; only a failure the store itself reports has error kind `store`. The message has the form `{argument} must be a string, got {type}`, worded the same for every store call, as in `path must be a string, got {type}` and `contents must be a string, got {type}`. Once a call's arguments pass their checks, any failure of the operation itself has error kind `store`.
+A store argument that fails its check raises an error value of error kind `lua`; only a failure the store itself reports has error kind `store`. The message has the form `{name} must be a string, got {type}`, worded the same for every store call, as in `path must be a string, got {type}` and `contents must be a string, got {type}`. Once a call's arguments pass their checks, any failure of the operation itself has error kind `store`.
 
 ### Store failures that end the run
 
@@ -1627,7 +1627,7 @@ configured/task wrote
 
 Tools and the prompt share one set of files. A file a section writes with `store` is visible to the tools it calls with [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls), and a file a tool writes is visible to `store`. A section that writes `before.txt` with `store.write` and then calls a tool that reads `before.txt` hands that tool the text it wrote, and a file the tool writes, such as `after.txt`, reads back through `store.read('after.txt')`.
 
-Two tool calls in flight at once each run under their own identity, forked from the calling section's, so they never share one sequence of store operations (see [How the model's tool calls run](12-tools.md#how-the-models-tool-calls-run)). When the store refuses to fork a tool call's identity, the call fails at its caller with a store error, and the attempt still counts toward the tool-call counts already taken.
+Two tool calls in flight at once each run under their own identity, forked from the calling section's, so they never share one sequence of store operations (see [How the model's tool calls run](12-tools.md#how-the-models-tool-calls-run)). When the store refuses to fork a tool call's identity, the call fails at its caller with a store error, and the attempt still counts in `tools.stats`, which counted the call before the fork (see [Counting calls with `tools.stats`](12-tools.md#counting-calls-with-toolsstats)).
 
 An adhoc tool handler, the Lua function given to `tools.adhoc` for Lua or a model to call (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)), can use `store`, and a store call made there is an ordinary store operation. A handler whose body runs `store.write('grab.txt', 'kept ' .. args.value)` and then `return store.read('grab.txt')` returns `kept hi` when it is called with the value `hi`.
 
@@ -1663,7 +1663,7 @@ store.append('log.txt', item .. ';')
 This run never reaches its `return`. Both arms append to `log.txt`, nothing orders one arm after the other, and the run fails with run error kind `Determinism` and a message of this form, where each identity names one of the two arms:
 
 ````text
-store determinism violation: write on log.txt by {identity} conflicts with a write claim by {other_identity}
+store determinism violation: write on log.txt by {id} conflicts with a write claim by {other}
 ````
 
 Every store call claims what it touches for the chain that made it, so the store tracks which chain touches which region. That record is a claim. Two store accesses that touch the same region conflict only when at least one of them is a write and the two are concurrent, and such a clash is a claims conflict. Two accesses are concurrent when they come from different chains of the run and no spawn or join orders one before the other, or when they come from two runs sharing one Host store at the same time.
@@ -1758,10 +1758,10 @@ When a claims conflict ends the run, no task or arm counts as failed. Every othe
 The message has the form `store determinism violation: {detail}`, and the detail names the store path, both chains, and both claim kinds:
 
 ````text
-store determinism violation: {claim} on {path} by {identity} conflicts with a {other_claim} claim by {other_identity}
+store determinism violation: {kind} on {path} by {id} conflicts with a {other_kind} claim by {other}
 ````
 
-The message begins with the fixed prefix `store determinism violation: `, names the contested path as the prompt wrote it, says `conflicts with`, gives each claim as `read` or `write`, and names both chains' identities, each rendered as `ExecId(...)`. `{claim}` and `{identity}` belong to the access that detected the conflict, the one that came second, and `{other_claim}` and `{other_identity}` belong to the earlier claim it ran into.
+The message begins with the fixed prefix `store determinism violation: `, names the contested path as the prompt wrote it, says `conflicts with`, gives each claim as `read` or `write`, and names both chains' identities, each rendered as `ExecId(...)`. `{kind}` and `{id}` belong to the access that detected the conflict, the one that came second, and `{other_kind}` and `{other}` belong to the earlier claim it ran into.
 
 `store.read`, `store.read_numbered`, `store.exists`, and `store.glob` show as a `read` claim, and `store.write`, `store.append`, `store.str_replace`, and `store.delete` show as a `write` claim. The path in the message is the path the detecting access named, or its pattern when that access is a `store.glob`, even when the clash is over an ancestor directory or over the other chain's glob pattern. So when a `store.glob('research/*')` runs second and meets a sibling's write of `research/5.md`, the message names `research/*`.
 
@@ -2029,7 +2029,7 @@ Under a Host in Ask mode, with `note.md` holding `hello`, the run result is:
 hello | approval_required
 ````
 
-A store change in Ask mode raises reason `approval_required` with the message `store path {path} needs approval, which this run cannot give: {Op} on {path} needs user approval: the Ask mode refuses all mutations`. For the write above, that is `store path note.md needs approval, which this run cannot give: Write on note.md needs user approval: the Ask mode refuses all mutations`.
+A store change in Ask mode raises reason `approval_required` with the message `store path {path} needs approval, which this run cannot give: {op} on {path} needs user approval: the Ask mode refuses all mutations`. For the write above, that is `store path note.md needs approval, which this run cannot give: Write on note.md needs user approval: the Ask mode refuses all mutations`.
 
 In Plan mode a store change succeeds only when its path ends in `.md`:
 
@@ -2057,7 +2057,7 @@ Under a Host in Plan mode, the run result is:
 # ok | permission_denied | false
 ````
 
-Plan mode's markdown test is case-sensitive, so a change to a path ending in `.MD` is refused too. A store change to a non-markdown path in Plan mode raises reason `permission_denied` with the message `permission denied for store path {path}: {Op} on {path} is refused: the Plan mode allows mutations only to markdown paths`. For the write above, that is `permission denied for store path data.bin: Write on data.bin is refused: the Plan mode allows mutations only to markdown paths`.
+Plan mode's markdown test is case-sensitive, so a change to a path ending in `.MD` is refused too. A store change to a non-markdown path in Plan mode raises reason `permission_denied` with the message `permission denied for store path {path}: {op} on {path} is refused: the Plan mode allows mutations only to markdown paths`. For the write above, that is `permission denied for store path data.bin: Write on data.bin is refused: the Plan mode allows mutations only to markdown paths`.
 
 A mode refusal's reason text starts with the operation's kind name, followed by `on {path}` with the path in logical form. The kind name is `Write` for `store.write` and `store.str_replace`, `Append` for `store.append`, and `Delete` for `store.delete`.
 

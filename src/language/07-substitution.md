@@ -1285,14 +1285,14 @@ A substitution kind classifies a substitution failure, and every failure has exa
 | `EmptySegment` | An empty or space-padded segment, as in `{{ var. }}` or `{{ }}` | `empty or padded path segment in {{ {path} }}` |
 | `BadPath` | `{{ var }}` or `{{ sys }}` with no key | `bad path: {{ var }}` or `bad path: {{ sys }}` |
 | `UnknownNamespace` | A first segment that is neither a root nor a set global, as in `{{ ghost }}` | `unknown namespace or global '{name}' in {{ {path} }}` |
-| `NotATable` | A dotted path after `args` or `item`, as in `{{ args.x }}` | `{root} is a string, not a table` |
+| `NotATable` | A dotted path after `args` or `item`, as in `{{ args.x }}` | `{namespace} is a string, not a table` |
 | `MissingKey` | An absent key under `var`, `sys`, `argv`, or a global, as in `{{ sys.bogus }}` | `missing {{ {path} }}` |
 | `NullValue` | A path that lands on JSON null, under every root except `item` | `missing {{ {path} }}` |
 | `NilItem` | `{{ item }}` where no item is seeded | `{{ item }} is nil (not inside a fanout arm)` |
 | `NilArgv` | Any `argv` placeholder while `argv` is nil | `{{ {path} }} is nil (the args string is not JSON)` |
 | `Serialize` | A global that is not JSON data, and `{{ prose }}` | `global '{name}' in {{ {path} }} is not JSON data` |
 
-In the messages, `{path}` stands for the placeholder's path, `{name}` for the global's name, and `{root}` for the root you wrote.
+In the messages, `{path}` stands for the placeholder's path, `{name}` for the global's name, and `{namespace}` for the root you wrote.
 
 ### Unclosed and EmptySegment
 
