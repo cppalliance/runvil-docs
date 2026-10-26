@@ -802,7 +802,7 @@ A failed run reports one run error kind from a fixed set of twelve:
 |---|---|
 | `Parse` | the prompt fails to parse, a Lua block does not compile, or the frontmatter has no `runvil:` key |
 | `Version` | the `runvil:` key declares a major version other than `0` |
-| `Binding` | `models.infer` or `models.loop` runs with neither `models.use` nor `models.default` in effect |
+| `Binding` | `models.infer` or `models.loop` runs with neither `models.use` nor `models.default` in effect, or a section entry's first loop round fails to freeze its tool sets because two tools share a wire name, a tool's wire name is invalid, or its parameter schema is not a JSON object, unless an adhoc tool in the same set shadows it, or because a render answer breaks the render rules |
 | `Completion` | a model call fails, or an `empty_model_reply` goes uncaught |
 | `Tool` | a tool fails, is out of scope or unknown, or the tool-call loop reaches its round cap |
 | `Vfs` | a `store` operation fails uncaught, the run declares no store, or the store backend fails as the run starts |
@@ -830,6 +830,15 @@ A run fails with kind `Version` when the prompt's [`runvil:` key](02-file-struct
 ### `Binding`, `Completion`, and `Tool`
 
 A run fails with kind `Binding` when a section calls [`models.infer`](10-models.md#running-a-round-with-modelsinfer) while neither `models.use` nor a prompt-wide `models.default` is in effect, and the message is `model binding required for section {section}`. A [`models.loop`](11-conversations.md#how-the-loop-runs) call in such a section raises the same [missing-model error](10-models.md#infer-errors-and-the-missing-model-error) and fails the run the same way. Prose by itself never requires a model; only an explicit `models.infer` of it does.
+
+A run also fails with kind `Binding` when a section entry's first loop round cannot freeze its tool sets (see [When an offer takes effect](12-tools.md#when-an-offer-takes-effect) and [What a Pack's render can change](12-tools.md#what-a-packs-render-can-change)). The run reports `tool_scope_validation_failed`, the round sends no request and freezes nothing, so offers still work after it, and the `models.loop` or `handle:loop` call raises an error value of kind `internal` that `pcall` catches. Left uncaught, it ends the run with kind `Binding`, and the run's message begins with the error's own message (see [The failed run's message](#the-failed-runs-message)). Each failure has its own message, where `{tool}` reads `{id} of the {pack} Pack in the {set}` and `{set}` is `Static Set` or `Dynamic Set`:
+
+- A tool whose wire name breaks the wire-name rule, or whose parameter schema is not a JSON object, gives `model-facing schema build failure for tool alias "{name}"`, with the tool's wire name as `{name}`.
+- Two tools that share a wire name give `the tools {tool} and {tool} share the wire name "{name}", and a wire name names one tool across a section's Static Set and Dynamic Set; offer only one of them`.
+- A Pack's render that returns a tool under another Pack's id gives `the {pack} Pack's render returned {tool}; a Pack renders only tools whose id starts with its own Pack id`.
+- A Pack's render that returns a run catalog tool the section did not offer in that set gives `the render returned {tool}, a run catalog tool the section did not offer in that set; a render returns a catalog tool only into a set the section offered it in`.
+- A render answer with tools for a set the section did not offer the Pack into gives `the {pack} Pack's render returned {tool}, a set the section did not offer the {pack} Pack into; a render returns tools only for the sets the section offered its Pack into`.
+- A render answer that names other Packs, or the offered Packs in another order, gives `the render answered the Packs {answered} where the section offered the Packs {asked}; a render answers each offered Pack once, in offer order`, with each list of Pack ids in brackets, such as `[web, gh]`.
 
 A run fails with kind `Completion` when a model call fails at the transport, backend, or decode layer, such as an overloaded backend, or when an `empty_model_reply` error goes uncaught, and the message is the model call's own error text. [Model request limits and failures](#model-request-limits-and-failures) lists those messages.
 
@@ -933,9 +942,9 @@ Error kinds and run error kinds are separate vocabularies. An error kind is what
 
 ### The `internal` error kind
 
-The `internal` error kind marks a failure the prompt cannot fix. A failure you cannot act on, such as a violated internal invariant or a transport, backend, or configuration failure outside the prompt, reaches Lua as kind `internal`, while a store failure has its own kind `store`.
+The `internal` error kind marks a failure that has no kind of its own. A violated internal invariant, a transport, backend, or configuration failure outside the prompt, the missing-model error, and a section entry's failed tool freeze all reach Lua as kind `internal`, while a store failure has its own kind `store`.
 
-An `internal` error value has no extra fields. Left uncaught, it ends the run as `Completion` for a model call failure, `Binding` for the [missing-model error](10-models.md#infer-errors-and-the-missing-model-error), or `Internal` for an Engine fault.
+An `internal` error value has no extra fields. Left uncaught, it ends the run as `Completion` for a model call failure, `Binding` for the [missing-model error](10-models.md#infer-errors-and-the-missing-model-error) or a failed tool freeze (see [`Binding`, `Completion`, and `Tool`](#binding-completion-and-tool)), or `Internal` for an Engine fault.
 
 When an Engine function fails and `pcall` catches it, the error kind is `lua` for an authoring or argument problem, such as a runtime error, a syntax error, a memory error, a bad argument, or a value that cannot be converted or serialized. It is `internal` when the Lua runtime's own machinery fails.
 
@@ -949,7 +958,7 @@ A caught error value raised again with `error(err)` before the block makes anoth
 
 That is what `summary` relies on. A section can turn a caught `internal` failure, such as a model call the Harness cannot complete, into its result, and raise every other kind again with `error(reply)` before any other suspending call, so the run ends exactly as it would have without the `pcall`.
 
-A failure outside the prompt, such as a model call's transport, backend, or decode failure, a disabled gateway, the missing-model error, or an Engine fault, raises an `internal` error value. An empty model reply is the one case that differs, and it raises `empty_model_reply` instead. This holds inside a `tasks.fanout` arm too, where an arm's `models.infer` with no model access configured surfaces the disabled-gateway failure.
+A failure with no kind of its own, such as a model call's transport, backend, or decode failure, a disabled gateway, the missing-model error, a failed tool freeze, or an Engine fault, raises an `internal` error value. An empty model reply is the one case that differs, and it raises `empty_model_reply` instead. This holds inside a `tasks.fanout` arm too, where an arm's `models.infer` with no model access configured surfaces the disabled-gateway failure.
 
 Left uncaught in a walked section, a [`models.loop`](11-conversations.md#loop-arguments-and-errors) failure ends the run like this:
 
@@ -959,7 +968,7 @@ Left uncaught in a walked section, a [`models.loop`](11-conversations.md#loop-ar
 | `empty_model_reply` | `Completion` |
 | `context_exhausted` | `ContextExhausted` |
 | `tool_loop_exhausted`, `out_of_scope_tool` | `Tool` |
-| `internal` | `Completion` for a backend or transport failure, `Binding` for the missing-model error |
+| `internal` | `Completion` for a backend or transport failure, `Binding` for the missing-model error or a failed tool freeze |
 
 Raised again later, after another suspending call, each error kind ends the run like this:
 

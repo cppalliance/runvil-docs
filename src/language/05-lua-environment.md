@@ -2634,7 +2634,7 @@ Each kind comes from the feature that raises it:
 - `tasks_live`, `task_not_owned`, and `task_consumed` come from the task functions (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) and [Waiting with `tasks.join_any` and `tasks.join`](15-tasks.md#waiting-with-tasksjoin_any-and-tasksjoin)).
 - `store` comes from store operations, and only from failures the store itself reports.
 - `cancelled` reports a cancellation, and carries `task` when what was cancelled is a task.
-- `internal` marks an Engine function failure caused by the Lua runtime's own machinery rather than by an authoring or argument problem. It is not something you can act on.
+- `internal` comes from a failure that has no kind of its own: a model call's transport, backend, or decode failure, the missing-model error, a section entry's failed tool freeze (see [`Binding`, `Completion`, and `Tool`](16-limits-and-errors.md#binding-completion-and-tool)), an Engine fault, or an Engine function failure caused by the Lua runtime's own machinery rather than by an authoring or argument problem.
 - `lua` covers every failure on the Lua side, as shown next.
 
 ### The `lua` kind
