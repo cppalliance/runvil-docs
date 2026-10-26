@@ -359,19 +359,19 @@ return messages[#messages].content
 
 Each section selects the `writer` model role with `models.use` (see [Selecting a role per section with `models.use`](10-models.md#selecting-a-role-per-section-with-modelsuse)) and runs one conversation over its own `messages` list. In `## Ask`, every model round of the loop offers the model one tool, `web_search`. `## Ask` returns nothing, so the walk falls through to `## Plain`, which offers nothing: its rounds go out with no tool list at all, and the run result is the model's reply there.
 
-A section's tool scope is the set of tools the model is offered in that section's `models.loop` rounds. You fill it by calling `tools.offer` in that section before its first loop round (see [Offering tools and Packs with `tools.offer`](#offering-tools-and-packs-with-toolsoffer)). The first loop round freezes the scope into the Static Set, which every round of the section entry then offers the model.
+A section entry's tool scope is the set of tools the model is offered in that entry's `models.loop` rounds. You fill it by calling `tools.offer` in that entry before its first loop round (see [Offering tools and Packs with `tools.offer`](#offering-tools-and-packs-with-toolsoffer)). The first loop round freezes the scope into the Static Set, which every round of the section entry then offers the model.
 
 ### Every section entry starts empty
 
-Every section entry starts with an empty tool scope, whether the section is walked into, entered as a task's first section, or is the H1 pass. Each entry runs in a fresh section VM (see [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals)) that shares only the run's tools and models, so calls to `tools.offer`, `tools.offer_dynamic`, and `tools.adhoc` never last from one section entry to the next. The entry's fresh `messages` holds no Static Set either, so its first loop round freezes its own. That is why `## Plain` sees none of the tools `## Ask` offered.
+Every section entry starts with an empty tool scope, whether the section is walked into, entered again with `jump`, run with `call`, entered as a fanout arm or a task's first section, or is the H1 pass. Each entry runs in a fresh section VM (see [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals)) that shares only the run's tools and models, so calls to `tools.offer`, `tools.offer_dynamic`, and `tools.adhoc` never last from one section entry to the next. The entry's fresh `messages` holds no Static Set either, so its first loop round freezes its own. That is why `## Plain` sees none of the tools `## Ask` offered.
 
 ### What the scope holds
 
-A section's scope is one ordered list of the offers the section made, in call order. Each offer names a tool or a Pack, and its mode says which set it feeds: an offer made with `tools.offer` feeds the Static Set, and one made with `tools.offer_dynamic` feeds the Dynamic Set (see [The Dynamic Set with `tools.offer_dynamic`](#the-dynamic-set-with-toolsoffer_dynamic)). An offer the scope already holds, with the same tool or Pack and the same mode, is not added again.
+A section entry's scope is one ordered list of the offers the entry made, in call order. Each offer names a tool or a Pack, and its mode says which set it feeds: an offer made with `tools.offer` feeds the Static Set, and one made with `tools.offer_dynamic` feeds the Dynamic Set (see [The Dynamic Set with `tools.offer_dynamic`](#the-dynamic-set-with-toolsoffer_dynamic)). An offer the scope already holds, with the same tool or Pack and the same mode, is not added again.
 
-The first loop round in a section entry that builds its tools freezes the Static Set and the Dynamic Set from the scope as it stands at that moment, and both stay fixed for the rest of the section entry. When the scope names a catalog tool, that round first asks the Harness to render each offered Pack's tools for the section entry and the round's model (see [The five kinds of Harness work](01-what-a-prompt-is.md#the-five-kinds-of-harness-work)), and it freezes the sets from the Harness's answer. The Harness currently returns those tools unchanged, so the model sees the tools as offered. After the freeze, `tools.offer` and `tools.offer_dynamic` raise, so make every offer before the first loop, or offer in another section (see [When an offer takes effect](#when-an-offer-takes-effect)), while `tools.adhoc` still defines tools. The two sets are attached to the section's `messages`, so they last exactly as long as the section entry, and compactions never detach them.
+The first loop round in a section entry that builds its tools freezes the Static Set and the Dynamic Set from the scope as it stands at that moment, and both stay fixed for the rest of the section entry. When the scope names a catalog tool, that round first asks the Harness to render each offered Pack's tools for the section entry and the round's model (see [The five kinds of Harness work](01-what-a-prompt-is.md#the-five-kinds-of-harness-work)), and it freezes the sets from the Harness's answer. The Harness currently returns those tools unchanged, so the model sees the tools as offered. After the freeze, `tools.offer` and `tools.offer_dynamic` raise, so make every offer before the first loop, or offer in another section (see [When an offer takes effect](#when-an-offer-takes-effect)), while `tools.adhoc` still defines tools. The two sets are attached to the entry's `messages`, so they last exactly as long as the section entry, and compactions never detach them.
 
-A section that makes no `tools.offer` call sends its rounds with no tool list at all, since a defined adhoc tool that is not offered adds nothing, so `models.loop` advertises no tools to the model, and a round with no tools completes normally. A first loop round with nothing offered still freezes the section's tool list, an empty one, so an offer after that round raises.
+A section that makes no `tools.offer` call sends its rounds with no tool list at all, since a defined adhoc tool that is not offered adds nothing, so `models.loop` advertises no tools to the model, and a round with no tools completes normally. A first loop round with nothing offered still freezes the entry's tool list, an empty one, so an offer after that round raises.
 
 Each frozen tool reaches the model under its wire name, with its description and parameter schema copied unchanged, since the Harness currently returns each offered Pack's tools as offered, and the tool keeps its tool id as its identity.
 
@@ -477,7 +477,7 @@ Tool objects are frozen: cannot assign field "description"
 
 The general form is `Tool objects are frozen: cannot assign field "{key}"`.
 
-Errors from `tools.get`, `tools.offer`, `tools.offer_dynamic`, `tools.adhoc`, `tools.packs.get`, and Tool object assignment are Lua errors that `pcall` catches with `ok == false` (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)), and `tostring(err)` renders the message. That includes the refusal of an offer made after the section's first loop round froze its tool list (see [When an offer takes effect](#when-an-offer-takes-effect)). After `local ok, err = pcall(tools.get, 42)`, `ok` is `false` and `tostring(err)` contains `tools.get takes a tool id, got integer`.
+Errors from `tools.get`, `tools.offer`, `tools.offer_dynamic`, `tools.adhoc`, `tools.packs.get`, and Tool object assignment are Lua errors that `pcall` catches with `ok == false` (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)), and `tostring(err)` renders the message. That includes the refusal of an offer made after the section entry's first loop round froze its tool list (see [When an offer takes effect](#when-an-offer-takes-effect)). After `local ok, err = pcall(tools.get, 42)`, `ok` is `false` and `tostring(err)` contains `tools.get takes a tool id, got integer`.
 
 ### One object per tool
 
@@ -497,7 +497,7 @@ Every tool operation lives in the one Lua table `tools`, the way model operation
 | `tools.call` | calls a tool from Lua |
 | `tools.get` | reads one Tool object by tool id |
 | `tools.offer` | offers tools and Packs to the section's model |
-| `tools.offer_dynamic` | records tools and Packs in the section's Dynamic Set |
+| `tools.offer_dynamic` | records tools and Packs in the section entry's Dynamic Set |
 | `tools.packs` | a read-only table of the Pack objects, with the functions `get` and `extras` |
 | `tools.stats` | a read-only table that counts the section's tool calls in total, per Pack, and per tool, present from the section's first tool call |
 
@@ -677,7 +677,7 @@ return messages[#messages].content
 ```
 ````
 
-The run result is the model's final reply. To offer a tool is to put it in the current section's [tool scope](#tool-scope) before the section's first loop round, so the model can call it during `models.loop`. `tools.offer('web/search')` adds the `web` Pack's `search` tool to the scope of `## Ask`, so every model round of the loop that follows advertises the tool under its wire name `web_search`, and each call the model makes to `web_search` goes to `web/search`.
+The run result is the model's final reply. To offer a tool is to put it in the current section entry's [tool scope](#tool-scope) before the entry's first loop round, so the model can call it during `models.loop`. `tools.offer('web/search')` adds the `web` Pack's `search` tool to the scope of `## Ask`, so every model round of the loop that follows advertises the tool under its wire name `web_search`, and each call the model makes to `web_search` goes to `web/search`.
 
 Offering a tool only makes it available to the model and never calls it. If the model answers without asking for a search, the tool is never called, and a section that offers a tool and never calls it runs normally. Your own Lua needs no offer to call a tool, as [Calling tools from Lua and counting calls](#calling-tools-from-lua-and-counting-calls) shows, because offering controls only what the model sees.
 
@@ -699,7 +699,7 @@ A model round in a section entry that offers nothing advertises no tools, even w
 - A Pack object, such as one returned by `tools.packs.get` or read from a Tool object's `pack` field, stands for its Pack id.
 - An array holds any mix of these, offered in array order.
 
-Each of these lines offers to the section:
+Each of these lines offers to the section entry:
 
 ````lua
 tools.offer('web/search')
@@ -721,7 +721,7 @@ An array is its `#t` entries, from index 1 to `#t`, each read the way Lua indexi
 
 Calling `tools.offer()` with no argument, or `tools.offer({})` with an empty array, raises no error, offers nothing, and leaves the scope unchanged. An explicit `nil` raises, because `nil` names no tool or Pack. So a lookup that may miss, such as `tools.packs.get` or `tools.get`, is guarded with `if` before you offer what it returns, as [Offering a Pack that may be absent](#offering-a-pack-that-may-be-absent) shows.
 
-`tools.offer` checks its argument when it is called and only remembers the offer: it builds no tool list and calls no tool. The section's first loop round freezes every remembered offer into the Static Set. `tools.offer` returns no value, and it returns immediately, without suspending the running block. The `tools` table is ready in a block's top-level code, so you can choose which tools to offer before any model call.
+`tools.offer` checks its argument when it is called and only remembers the offer: it builds no tool list and calls no tool. The section entry's first loop round freezes every remembered offer into the Static Set. `tools.offer` returns no value, and it returns immediately, without suspending the running block. The `tools` table is ready in a block's top-level code, so you can choose which tools to offer before any model call.
 
 ### Offering a whole Pack
 
@@ -758,7 +758,7 @@ An undeclared Pack that the run knows is an [extra Pack](#the-tool-catalog-and-e
 
 Successive offers in one section before its first loop round add to the same scope rather than replacing it. Each offer is checked when it is made and only remembered, and an offer identical to one the scope already holds is skipped. After the freeze, every offer raises, a repeat of an earlier offer included.
 
-The section's first loop round freezes the Static Set from the remembered offers in these steps:
+The section entry's first loop round freezes the Static Set from the remembered offers in these steps:
 
 1. It walks the offers made with `tools.offer` in the order they were made.
 2. A tool offer adds that tool, and a Pack offer adds the Pack's tools in tool id order, read at the freeze. The adhoc Pack adds every adhoc tool the section defined before the freeze.
@@ -785,11 +785,11 @@ A Pack's tools stay together even when another Pack's offer comes between them. 
 
 A Pack offer reads its tools at the freeze, so `tools.offer(tools.packs.get('adhoc'))` includes every adhoc tool defined before the first loop round, even one defined after the offer, while `tools.offer(tools.packs.get('adhoc').tools)` takes only the adhoc tools defined when it is called. The Static Set never changes after the freeze.
 
-Offered tools reach the model in the order the prompt offers them, with each Pack's tools together, not the order the catalog lists them. A Pack offer brings in its tools in tool id order whatever order the catalog lists them in, while the order the model sees comes from the section's offers. So with a catalog that lists `web/fetch` before `web/search`, a section that runs `tools.offer({ 'web/search', 'web/fetch' })` advertises `web_search` and then `web_fetch`.
+Offered tools reach the model in the order the prompt offers them, with each Pack's tools together, not the order the catalog lists them. A Pack offer brings in its tools in tool id order whatever order the catalog lists them in, while the order the model sees comes from the section entry's offers. So with a catalog that lists `web/fetch` before `web/search`, a section that runs `tools.offer({ 'web/search', 'web/fetch' })` advertises `web_search` and then `web_fetch`.
 
 ### The Dynamic Set with `tools.offer_dynamic`
 
-`tools.offer_dynamic` takes the same forms as `tools.offer` and makes the same checks, and its errors carry its own name, but it records its offers into the section's Dynamic Set rather than the Static Set. The first loop round records the Dynamic Set beside the Static Set by the same steps, so each tool the dynamic offers name appears once, in offer order, with each Pack's tools together, and an adhoc tool offered dynamically shadows a catalog tool offered dynamically. The Dynamic Set then drops each tool whose id the Static Set holds. No round advertises a Dynamic Set tool. Instead, when the Dynamic Set still holds a tool after that drop, the Static Set ends with the Engine's two discovery tools: `GetDynamicTools`, which lists, searches, and describes the Dynamic Set, and `CallDynamicTool`, which calls one of its tools. So the model sees two tools in place of the whole Dynamic Set, and finds and calls a dynamic tool through them (see [Finding and calling dynamic tools](#finding-and-calling-dynamic-tools)). With an adhoc tool `grab` defined, each of these lines records into the Dynamic Set:
+`tools.offer_dynamic` takes the same forms as `tools.offer` and makes the same checks, and its errors carry its own name, but it records its offers into the section entry's Dynamic Set rather than the Static Set. The first loop round records the Dynamic Set beside the Static Set by the same steps, so each tool the dynamic offers name appears once, in offer order, with each Pack's tools together, and an adhoc tool offered dynamically shadows a catalog tool offered dynamically. The Dynamic Set then drops each tool whose id the Static Set holds. No round advertises a Dynamic Set tool. Instead, when the Dynamic Set still holds a tool after that drop, the Static Set ends with the Engine's two discovery tools: `GetDynamicTools`, which lists, searches, and describes the Dynamic Set, and `CallDynamicTool`, which calls one of its tools. So the model sees two tools in place of the whole Dynamic Set, and finds and calls a dynamic tool through them (see [Finding and calling dynamic tools](#finding-and-calling-dynamic-tools)). With an adhoc tool `grab` defined, each of these lines records into the Dynamic Set:
 
 ````lua
 tools.offer_dynamic('user-input')
@@ -797,7 +797,7 @@ tools.offer_dynamic(tools.packs.extras())
 tools.offer_dynamic({ 'web', grab })
 ````
 
-The Static Set wins whichever call comes first. A section that runs `tools.offer('web/search')` and `tools.offer_dynamic('web')`, in either order, records only `web/fetch` in its Dynamic Set and advertises `web_search`, `GetDynamicTools`, and `CallDynamicTool` to the model. A dynamic offer can still fail the section's first loop round, because a wire name names one tool across both sets and the round checks every Dynamic Set tool's wire name and parameter schema as it checks the Static Set's. So two tools with different ids that share a wire name fail that round whichever sets they sit in, unless one is an adhoc tool that shadows the other in the same set, as [An adhoc tool that shadows a catalog tool](#an-adhoc-tool-that-shadows-a-catalog-tool) shows. Like `tools.offer`, `tools.offer_dynamic` raises once the section's first loop round has frozen its tool list (see [When an offer takes effect](#when-an-offer-takes-effect)).
+The Static Set wins whichever call comes first. A section that runs `tools.offer('web/search')` and `tools.offer_dynamic('web')`, in either order, records only `web/fetch` in its Dynamic Set and advertises `web_search`, `GetDynamicTools`, and `CallDynamicTool` to the model. A dynamic offer can still fail the section's first loop round, because a wire name names one tool across both sets and the round checks every Dynamic Set tool's wire name and parameter schema as it checks the Static Set's. So two tools with different ids that share a wire name fail that round whichever sets they sit in, unless one is an adhoc tool that shadows the other in the same set, as [An adhoc tool that shadows a catalog tool](#an-adhoc-tool-that-shadows-a-catalog-tool) shows. Like `tools.offer`, `tools.offer_dynamic` raises once the section entry's first loop round has frozen its tool list (see [When an offer takes effect](#when-an-offer-takes-effect)).
 
 ### Finding and calling dynamic tools
 
@@ -826,7 +826,7 @@ A space and the Dynamic Set's wire names follow it, sorted in byte order, comma-
 Calls a dynamic tool: pass its name from GetDynamicTools as toolName and its arguments as arguments.
 ````
 
-Both descriptions stay the same for every round of the section, because the section's tool list is fixed at its first loop round. The two tools take these parameters:
+Both descriptions stay the same for every round of the section entry, because the entry's tool list is fixed at its first loop round. The two tools take these parameters:
 
 | Tool | Parameter | Type | Required | Parameter description |
 |---|---|---|---|---|
@@ -837,7 +837,7 @@ Both descriptions stay the same for every round of the section, because the sect
 
 #### Searching with `GetDynamicTools`
 
-`GetDynamicTools` answers from the section's Dynamic Set in one of three ways:
+`GetDynamicTools` answers from the section entry's Dynamic Set in one of three ways:
 
 - With `toolName`, it looks that tool up and returns one JSON object holding the tool's wire name as `tool`, its whole description as `description`, and its parameter schema as `inputSchema`. `toolName` wins over `pattern`, so a call that passes both looks the tool up and never reads the pattern.
 - With `pattern` and no `toolName`, it returns a JSON array holding `tool` and `description` for each Dynamic Set tool whose wire name the pattern matches, in Dynamic Set order, or `[]` when none matches.
@@ -896,11 +896,11 @@ A section that keeps no tool in its Dynamic Set advertises no discovery tool, so
 
 ### When an offer takes effect
 
-An offer lasts for the rest of the section. A tool offered in one block stays in the section's scope through every later block, and an offer made inside a function that a later block calls counts the same as one made at top level. A loop in a later block of the same section advertises the tool and sends the model's calls to it.
+An offer lasts for the rest of the section entry. A tool offered in one block stays in the entry's scope through every later block, and an offer made inside a function that a later block calls counts the same as one made at top level. A loop in a later block of the same section entry advertises the tool and sends the model's calls to it.
 
-The first loop round in the section entry that builds its tools freezes the section's Static Set and Dynamic Set: the tools the section's offers name, as they stand at that moment, including offers made in earlier blocks. When those offers name a catalog tool, the round first asks the Harness to render each offered Pack's tools for the section entry and the round's model (see [The five kinds of Harness work](01-what-a-prompt-is.md#the-five-kinds-of-harness-work)), and it freezes the sets from the Harness's answer. The Harness currently returns those tools unchanged, so the model sees the tools as offered. The freeze happens before that round's message list is checked and before the context precheck (see [The context precheck](11-conversations.md#the-context-precheck)), so a first round the precheck refuses still fixes the sets. A round refused before the freeze freezes nothing, so offers still work after it: a round over an empty `messages`, a round with no model to run on, and a round whose freeze fails, such as one over a wire name two offered catalog tools share.
+The first loop round in the section entry that builds its tools freezes the entry's Static Set and Dynamic Set: the tools the entry's offers name, as they stand at that moment, including offers made in earlier blocks. When those offers name a catalog tool, the round first asks the Harness to render each offered Pack's tools for the section entry and the round's model (see [The five kinds of Harness work](01-what-a-prompt-is.md#the-five-kinds-of-harness-work)), and it freezes the sets from the Harness's answer. The Harness currently returns those tools unchanged, so the model sees the tools as offered. The freeze happens before that round's message list is checked and before the context precheck (see [The context precheck](11-conversations.md#the-context-precheck)), so a first round the precheck refuses still fixes the sets. A round refused before the freeze freezes nothing, so offers still work after it: a round over an empty `messages`, a round with no model to run on, and a round whose freeze fails, such as one over a wire name two offered catalog tools share.
 
-Every later round in the section sends the same tool schemas, whether it belongs to the same loop or a later one, and that includes the retry after a compaction and rounds on another model. The scope gate checks the model's calls against the same names, and the `TOOL_SCOPE_VALIDATION_*` events fire once, at the freeze (see [The tool scope check and section names](#the-tool-scope-check-and-section-names)). The list is attached to the section's `messages`, so it lasts exactly as long as the section, and compactions, restores, and `compactors.clear` never detach it. `models.infer` sends no tools at all.
+Every later round in the section entry sends the same tool schemas, whether it belongs to the same loop or a later one, and that includes the retry after a compaction and rounds on another model. The scope gate checks the model's calls against the same names, and the `TOOL_SCOPE_VALIDATION_*` events fire once, at the freeze (see [The tool scope check and section names](#the-tool-scope-check-and-section-names)). The list is attached to the entry's `messages`, so it lasts exactly as long as the section entry, and compactions, restores, and `compactors.clear` never detach it. `models.infer` sends no tools at all.
 
 After the freeze, `tools.offer` and `tools.offer_dynamic` raise, even for an offer identical to an earlier one. The message starts with the name of the function you called:
 
@@ -910,7 +910,7 @@ tools.offer: the section's tool list is fixed at its first models.loop round; ma
 
 `tools.offer_dynamic:` starts the same text with its own name. The refusal is checked before the arguments, it is a `lua`-kind error that `pcall` catches, and it leaves the Static Set as it was. An adhoc tool's handler that runs inside `models.loop` cannot offer either, because the round that called it already froze the list, though `tools.adhoc` still defines tools there and `tools.call` still calls them.
 
-So the tools you offer before the first `models.loop` are advertised in its first round, and they stay advertised on every round of every loop in the section, including the round after the model's tool call. To run loops with different tool sets, put each loop in its own section:
+So the tools you offer before the first `models.loop` are advertised in its first round, and they stay advertised on every round of every loop in the section entry, including the round after the model's tool call. To run loops with different tool sets, put each loop in its own section:
 
 ````markdown
 ---
@@ -944,13 +944,14 @@ return messages[#messages].content
 ```
 ````
 
-`## Recall` offers nothing, so its first round freezes an empty tool list and its rounds advertise no tools. `## Search` is a new section entry with its own scope and its own empty `messages`, so its rounds advertise `web_search`, and the first answer reaches it through `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)). A list of Tool objects works the same way: after `tools.offer(list)` before the first loop round, each round of the section advertises exactly those tools under their wire names.
+`## Recall` offers nothing, so its first round freezes an empty tool list and its rounds advertise no tools. `## Search` is a new section entry with its own scope and its own empty `messages`, so its rounds advertise `web_search`, and the first answer reaches it through `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)). A list of Tool objects works the same way: after `tools.offer(list)` before the first loop round, each round of the section entry advertises exactly those tools under their wire names.
 
 ### Which section entries an offer reaches
 
-Each section sees its own scoped tool set, built from the tools and Packs that section offered. A section entry's offers reach only that entry's model rounds and no other entry's:
+Each section entry sees its own scoped tool set, built from the tools and Packs that entry offered, and freezes it at its own first loop round. A section entry's offers reach only that entry's model rounds and no other entry's:
 
 - The section the walk falls through to next starts with nothing offered (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)).
+- A section entered again with `jump` is a new entry, so it starts with nothing offered, whatever its earlier entry offered, and freezes its own sets (see [Jumping to a section](08-jump-and-call.md#jumping-to-a-section)).
 - Offers made in the H1 block do not reach the sections the walk enters afterward (see [The H1 pass](04-how-a-prompt-runs.md#the-h1-pass)).
 - A section entered with `call` starts with no tools offered, even when the calling section has offers in effect (see [Calling a section](08-jump-and-call.md#calling-a-section)).
 - A task started with `tasks.spawn` does not inherit the spawning section's offers and sees only the offers its own section makes (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn)).
@@ -1001,7 +1002,7 @@ tools.offer('web')
 
 ### Errors from `tools.offer`
 
-`tools.offer` first checks that the section's tool list is not yet frozen. Called after the section's first loop round froze it, `tools.offer` raises this before it looks at its argument, even for a tool already offered:
+`tools.offer` first checks that the section entry's tool list is not yet frozen. Called after the entry's first loop round froze it, `tools.offer` raises this before it looks at its argument, even for a tool already offered:
 
 ````text
 tools.offer: the section's tool list is fixed at its first models.loop round; make every offer before the first loop, or offer in another section
@@ -1040,7 +1041,7 @@ tools.offer: the web Pack is unavailable in this run: web needs runvil/search-pr
 
 So `tools.offer('mcp')` on a Host whose `mcp` Pack cannot serve raises with that Pack's own reason.
 
-Because the check runs when `tools.offer` is called, an unknown entry raises on that line while the section's Lua runs, before the first loop round freezes the section's tool list, and the tool never reaches any model round. A failed `tools.offer` in a section's prologue, the Lua before its prose, stops the run before the section's prose reaches a model. The error reads the same wherever in the prompt's Lua the offer runs, and left uncaught it fails the run with run error kind `Lua` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)).
+Because the check runs when `tools.offer` is called, an unknown entry raises on that line while the section's Lua runs, before the first loop round freezes the section entry's tool list, and the tool never reaches any model round. A failed `tools.offer` in a section's prologue, the Lua before its prose, stops the run before the section's prose reaches a model. The error reads the same wherever in the prompt's Lua the offer runs, and left uncaught it fails the run with run error kind `Lua` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)).
 
 You can catch the error with `pcall`. This block offers a misspelled tool id next to a real one. Put it in the `## Ask` section of `offer-search` in place of the first one:
 
@@ -1055,7 +1056,7 @@ lua|tools.offer: "web/serch" is not a tool in this run
 
 A failing `tools.offer` caught by `pcall` yields an error value of kind `lua`, not a plain string, and `tostring` of it gives the error message (see [Error values](05-lua-environment.md#error-values)). Errors from `tools.offer`, `tools.offer_dynamic`, `tools.adhoc`, `tools.packs`, and `tools.stats` are all raised as Lua runtime errors inside the call, so they surface like any other Lua error and `pcall` catches them (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)).
 
-Every entry of one `tools.offer` call is checked before any is recorded, so a call that refuses any entry offers nothing, the valid entries in the same call included, and leaves the section's scope unchanged. In the block above, `web/search` is not offered either, because an array offer is all or nothing. A refused call leaves the offers the section already made in place, and a section that catches the failure with `pcall` is free to keep offering before the first loop round, so a later valid offer still records.
+Every entry of one `tools.offer` call is checked before any is recorded, so a call that refuses any entry offers nothing, the valid entries in the same call included, and leaves the section entry's scope unchanged. In the block above, `web/search` is not offered either, because an array offer is all or nothing. A refused call leaves the offers the entry already made in place, and a section that catches the failure with `pcall` is free to keep offering before the first loop round, so a later valid offer still records.
 
 `tools.offer` also checks the shape of its argument. Every shape error begins with the name of the function you called, as in `tools.offer takes`:
 
@@ -1156,7 +1157,7 @@ Every one of these errors comes back as the call's own answer, so it raises at t
 
 A call your Lua makes with `tools.call` is a script call, and a call the model makes inside `models.loop` is a model tool call (see [Tool rounds and the round cap](11-conversations.md#tool-rounds-and-the-round-cap)). Both reach a catalog tool the same way, as one tool call request whose origin names either the script or the model as the caller. Only the model's tool calls inside `models.loop` have a model call id, and every `tools.call` you write runs as a script call with no call id.
 
-Calling a tool is not offering it. `tools.call` neither offers a tool nor advertises it to the model, so a `models.loop` that runs after script calls but before any `tools.offer` advertises no tools and freezes an empty tool list, and a tool the script called but never offered stays unadvertised even after another tool is offered before the first loop round. The other way round, the tool scope limits only what the model is offered and never restricts your own Lua, so a script call reaches any catalog tool in the run, including a declared Pack's tool such as `web/search` that the section never offered. A script `tools.call` that runs before a `models.infer` in the same section leaves the section's tool scope in place for that later round.
+Calling a tool is not offering it. `tools.call` neither offers a tool nor advertises it to the model, so a `models.loop` that runs after script calls but before any `tools.offer` advertises no tools and freezes an empty tool list, and a tool the script called but never offered stays unadvertised even after another tool is offered before the first loop round. The other way round, the tool scope limits only what the model is offered and never restricts your own Lua, so a script call reaches any catalog tool in the run, including a declared Pack's tool such as `web/search` that the section never offered. A script `tools.call` that runs before a `models.infer` in the same section leaves the section entry's tool scope in place for that later round.
 
 A call made from Lua is a script call wherever the code sits. A Pack prelude helper that calls `tools.call`, such as `input.ask`, makes a script call attributed to the section whose code called the helper, and not a model tool call, so it has no model call id (see [Pack preludes](#pack-preludes)).
 
@@ -1182,7 +1183,7 @@ A tool's call count is the number of calls made to it so far in the current sect
 
 Script calls and model tool calls count in the same table. One model call and one script call to `web/fetch` make `tools.stats.tools['web/fetch']` read `2`. The model calls an offered tool by its wire name, and `tools.stats` counts that call under the tool's id, in the same counter as script calls made by id, because every tool call counts under its tool's id and never under the name it was called by. The wire name the model sees is not a key.
 
-The counts go up each time the run attempts to dispatch a tool, before the tool runs, so a call counts even when the tool then fails, and a cancelled call still counts. An adhoc tool call counts under its id when it is dispatched, before its handler runs, so a handler that then fails still counts. A script call to a catalog tool outside the section's scope counts as an attempt for that tool too, which is why `fetch-count` reads `1` with no `tools.offer` at all. A call refused before its count is taken stays out of every counter: a `tools.call` to an id no tool has, which fails with `unbound_tool` (see [The `unbound_tool` error](#the-unbound_tool-error)), a section's first tool call that fails while setting up the section's counts, and a model call to a name neither of the section's sets holds, which fails with `out_of_scope_tool` (see [The `out_of_scope_tool` error](#the-out_of_scope_tool-error)).
+The counts go up each time the run attempts to dispatch a tool, before the tool runs, so a call counts even when the tool then fails, and a cancelled call still counts. An adhoc tool call counts under its id when it is dispatched, before its handler runs, so a handler that then fails still counts. A script call to a catalog tool outside the section entry's scope counts as an attempt for that tool too, which is why `fetch-count` reads `1` with no `tools.offer` at all. A call refused before its count is taken stays out of every counter: a `tools.call` to an id no tool has, which fails with `unbound_tool` (see [The `unbound_tool` error](#the-unbound_tool-error)), a section's first tool call that fails while setting up the section's counts, and a model call to a name neither of the section entry's sets holds, which fails with `out_of_scope_tool` (see [The `out_of_scope_tool` error](#the-out_of_scope_tool-error)).
 
 The Engine's discovery tools count under the Pack id `dynamic` (see [Finding and calling dynamic tools](#finding-and-calling-dynamic-tools)). A `CallDynamicTool` call that reaches a Dynamic Set tool counts once, under the tool it calls, so after the model runs an adhoc `grab` through `CallDynamicTool` and makes no other call, `tools.stats.tools['adhoc/grab']` and `tools.stats.packs.adhoc` each read `1` and `tools.stats.packs.dynamic` reads `0`. A `GetDynamicTools` call, whatever it answers, and every refusal the discovery tools give, a direct call to a Dynamic Set tool by its wire name included (see [Mistakes the model gets back as text](#mistakes-the-model-gets-back-as-text)), count under `packs.dynamic` instead. All of them count toward `total`. `tools` never holds the discovery tools' ids, `dynamic/search` and `dynamic/call`, so a `GetDynamicTools` call or a discovery refusal shows in `total` and `packs.dynamic` but in no entry of `tools`.
 
@@ -1216,13 +1217,13 @@ return 'pages fetched: ' .. pages
 
 If the model fetches the page once, the run result is `pages fetched: 1`, and if it answers without fetching, the result is `pages fetched: 0`. Indexing `tools.stats` while it is `nil` raises an ordinary Lua error, and the guard `tools.stats and ... or 0` covers a model that called no tool at all.
 
-The first tool call in a section, whether a script call or a model tool call inside `models.loop`, and whether to a catalog tool or an adhoc tool, sets up the section's counts at 0. `tools` starts with an entry for each catalog tool and adhoc tool in the section's two sets, the Static Set and the Dynamic Set, as the section's offers stand at that call, and `packs` starts with an entry for each of their Packs, plus `dynamic` when the section's tool list holds the discovery tools. So an offered tool that was never called reads `0`, whether `tools.offer` or `tools.offer_dynamic` offered it, and that includes an offered adhoc tool and each tool of a Pack offered with `tools.offer('web')`, which start at 0 just like a tool offered by its id. With `uses: [web]` declared and an adhoc tool in `grab`, a section that runs `tools.offer('web/search')` and `tools.offer_dynamic({ 'web/fetch', grab })` and whose model calls only `web_search` ends with `tools.stats.packs` holding `adhoc`, `dynamic`, and `web`, reading `0`, `0`, and `1`, and `tools.stats.tools` holding `adhoc/grab`, `web/fetch`, and `web/search`, reading `0`, `0`, and `1`.
+The first tool call in a section, whether a script call or a model tool call inside `models.loop`, and whether to a catalog tool or an adhoc tool, sets up the section's counts at 0. `tools` starts with an entry for each catalog tool and adhoc tool in the section entry's two sets, the Static Set and the Dynamic Set, as the entry's offers stand at that call, and `packs` starts with an entry for each of their Packs, plus `dynamic` when the entry's tool list holds the discovery tools. So an offered tool that was never called reads `0`, whether `tools.offer` or `tools.offer_dynamic` offered it, and that includes an offered adhoc tool and each tool of a Pack offered with `tools.offer('web')`, which start at 0 just like a tool offered by its id. With `uses: [web]` declared and an adhoc tool in `grab`, a section that runs `tools.offer('web/search')` and `tools.offer_dynamic({ 'web/fetch', grab })` and whose model calls only `web_search` ends with `tools.stats.packs` holding `adhoc`, `dynamic`, and `web`, reading `0`, `0`, and `1`, and `tools.stats.tools` holding `adhoc/grab`, `web/fetch`, and `web/search`, reading `0`, `0`, and `1`.
 
-After that, `tools.stats.tools` has a key for each tool the section's offers name and each tool the script dispatched with `tools.call`, `tools.stats.packs` has a key for the Pack of every tool the section counts, and each key reads its live count:
+After that, `tools.stats.tools` has a key for each tool the section entry's offers name and each tool the script dispatched with `tools.call`, `tools.stats.packs` has a key for the Pack of every tool the section counts, and each key reads its live count:
 
 - A tool that had no entry when the counts were set up gets one on its first dispatch, starting at 0 and then counting that dispatch, and its Pack gets one in `packs` the same way.
 - Each tool call picks up the section's current offers, so a tool offered before the first loop round but after the section's latest tool call has no count until the section's next tool call. In the same way, `packs.dynamic` appears at the section's first tool call after its first loop round has added the discovery tools to its tool list.
-- A defined adhoc tool that the section did not offer gets its count only with its own first call, because the seeding covers only the tools the section's offers name.
+- A defined adhoc tool that the section did not offer gets its count only with its own first call, because the seeding covers only the tools the section entry's offers name.
 - A name that was never seeded and never dispatched has no entry at all, rather than a 0 count.
 
 An adhoc tool call and the catalog call its handler makes each count once. After one call to an adhoc `grab` whose handler calls `web/fetch`, `tostring(tools.stats.tools['adhoc/grab']) .. '|' .. tostring(tools.stats.tools['web/fetch'])` renders `1|1`, with each count read by bracket indexing on its tool id, and with no other call in the section, `tools.stats.total` reads `2`.
@@ -1507,7 +1508,7 @@ tools.adhoc({ name = 'x', description = 'y', run = 1 }, function() end) -- unkno
 tools.adhoc({ description = 'y' }, function() end)     -- name is required
 tools.adhoc({ name = 'x', description = 'y', parameters = 'string' }, function() end) -- parameters must be a table
 tools.call('grab', { value = 'hi' })                   -- a string without a slash is not a tool id
--- any tools.offer or tools.offer_dynamic after the section's first models.loop round: the tool list is fixed
+-- any tools.offer or tools.offer_dynamic after the section entry's first models.loop round: the tool list is fixed
 ````
 
 ## Adhoc tools with `tools.adhoc`
@@ -1555,7 +1556,7 @@ Here the first model request lists one tool named `grab` with the description `G
 
 `tools.adhoc` registers the tool and does not offer it. A defined tool belongs to the section's adhoc Pack (see [Pack objects](#pack-objects)), `tools.get` and `tools.call` reach it by its id, and it needs no `uses:` entry in the frontmatter, but the model sees it only once the section offers it before the first loop round, here with `tools.offer(grab)` (see [Offering tools and Packs with `tools.offer`](#offering-tools-and-packs-with-toolsoffer)). The first loop round then freezes it into the Static Set under its name, with your description and the parameter schema built from `parameters`, so the message list shows a tool call named `grab`. To define and offer in one line, write `tools.offer(tools.adhoc(attrs, f))`.
 
-`tools.adhoc` checks its arguments on its own line, so a mistake raises at that call rather than when the model loop starts. It works before and after the section's first loop round freezes its tool list. A tool defined after the freeze cannot be offered, because every offer raises then, but your Lua still calls it with `tools.call`, so a block can define a tool for its own use at any point.
+`tools.adhoc` checks its arguments on its own line, so a mistake raises at that call rather than when the model loop starts. It works before and after the section entry's first loop round freezes its tool list. A tool defined after the freeze cannot be offered, because every offer raises then, but your Lua still calls it with `tools.call`, so a block can define a tool for its own use at any point.
 
 The attrs are plain data, so a catalog tool's fields can fill them, which wraps that tool in a handler of your own:
 
@@ -1884,7 +1885,7 @@ The results are strings, so a block can join several tool results with `..` into
 
 A handler can also run a model round of its own. A model-called handler that does `return 'inferred ' .. models.infer('inner prompt')` runs a nested [`models.infer`](10-models.md#running-a-round-with-modelsinfer) round, and the loop goes on with the handler's text as the call's result. A note-taking handler can append to the store with `store.append('notes.md', args.text .. '\n')`, and a handler can call `input.ask` (see [Asking the operator](05-lua-environment.md#asking-the-operator)) or [`call`](08-jump-and-call.md#calling-a-section) a section the same way.
 
-A handler that runs inside `models.loop` cannot offer: `tools.offer` and `tools.offer_dynamic` raise there, because the round that called the handler already froze the section's tool list (see [When an offer takes effect](#when-an-offer-takes-effect)), though `tools.adhoc` still defines a tool there. It cannot start a loop or a compaction either, so `models.loop`, `handle:loop`, and `models.compact` raise inside it (see [Argument errors](11-conversations.md#argument-errors)). `models.infer` and `tools.call` stay allowed, so a handler asks a side question with `models.infer`.
+A handler that runs inside `models.loop` cannot offer: `tools.offer` and `tools.offer_dynamic` raise there, because the round that called the handler already froze the section entry's tool list (see [When an offer takes effect](#when-an-offer-takes-effect)), though `tools.adhoc` still defines a tool there. It cannot start a loop or a compaction either, so `models.loop`, `handle:loop`, and `models.compact` raise inside it (see [Argument errors](11-conversations.md#argument-errors)). `models.infer` and `tools.call` stay allowed, so a handler asks a side question with `models.infer`.
 
 #### A failing bound tool inside a handler
 
@@ -2226,9 +2227,9 @@ Your prompt never sets a catalog tool's wire name, which comes from its Pack or 
 
 ### Which tools a round advertises
 
-Each `models.loop` round offers the model the section's Static Set. The section's first loop round that builds its tools freezes the Static Set from the section's [tool scope](#tool-scope) as it stands at that moment, so every `tools.offer` call made before that round shapes it. When the scope names a catalog tool, that round first asks the Harness to render each offered Pack's tools for the section entry and the round's model, and the Harness currently returns them unchanged, so the model sees the tools as offered. The first round already includes every offered tool, so the model can call one on its first reply, and in the `search-loop` prompt the first round's tool list holds `web_search`. Every later round in the section advertises the same tools, whether it is the round that follows a tool call, the retry after a compaction, a round on another model, or a round of a later loop, and the scope gate checks the model's calls against the same names (see [When an offer takes effect](#when-an-offer-takes-effect)).
+Each `models.loop` round offers the model the section entry's Static Set. The entry's first loop round that builds its tools freezes the Static Set from the entry's [tool scope](#tool-scope) as it stands at that moment, so every `tools.offer` call made before that round shapes it. When the scope names a catalog tool, that round first asks the Harness to render each offered Pack's tools for the section entry and the round's model, and the Harness currently returns them unchanged, so the model sees the tools as offered. The first round already includes every offered tool, so the model can call one on its first reply, and in the `search-loop` prompt the first round's tool list holds `web_search`. Every later round in the section entry advertises the same tools, whether it is the round that follows a tool call, the retry after a compaction, a round on another model, or a round of a later loop, and the scope gate checks the model's calls against the same names (see [When an offer takes effect](#when-an-offer-takes-effect)).
 
-The freeze walks the section's offers in call order: a tool offer adds that tool, a Pack offer adds the Pack's tools in tool id order, each tool appears once at the place of its first offer, each Pack's tools sit together where that Pack's first tool was offered, an offered catalog tool that an offered adhoc tool shadows is dropped, and last, a wire name two tools share fails the round (see [Repeated offers and the order the model sees](#repeated-offers-and-the-order-the-model-sees)). Adhoc and catalog tools mix in one round: a section that offers `web/search` and an adhoc `grab` advertises both together, so the first round's tool list holds 2 tools, and each call goes to its own tool. The adhoc `grab` answers its call with `grabbed x`, while `web/search` answers its call with its search results.
+The freeze walks the entry's offers in call order: a tool offer adds that tool, a Pack offer adds the Pack's tools in tool id order, each tool appears once at the place of its first offer, each Pack's tools sit together where that Pack's first tool was offered, an offered catalog tool that an offered adhoc tool shadows is dropped, and last, a wire name two tools share fails the round (see [Repeated offers and the order the model sees](#repeated-offers-and-the-order-the-model-sees)). Adhoc and catalog tools mix in one round: a section that offers `web/search` and an adhoc `grab` advertises both together, so the first round's tool list holds 2 tools, and each call goes to its own tool. The adhoc `grab` answers its call with `grabbed x`, while `web/search` answers its call with its search results.
 
 An offered adhoc tool whose wire name equals an offered catalog tool's wire name takes that name, so the round advertises only the adhoc tool under it, as [An adhoc tool that shadows a catalog tool](#an-adhoc-tool-that-shadows-a-catalog-tool) shows.
 
@@ -2291,9 +2292,9 @@ When the model calls a tool, the run reports a `tool_call_succeeded` event for t
 
 Each tool call the model makes inside `models.loop` is dispatched by tool name with its call id and the model's JSON arguments, in the order the model listed the calls. A model call `call_1` to `web_search` with `{ "query": "lua" }` goes out as the call `web_search` with the id `call_1` and those arguments, tagged with the number of the round that requested it.
 
-The loop resolves each name through the section's Static Set. An advertised name that maps to an `adhoc/` id runs that adhoc tool's handler, the Engine answers `GetDynamicTools` and `CallDynamicTool` itself (see [Finding and calling dynamic tools](#finding-and-calling-dynamic-tools)), and any other advertised name runs the catalog tool it maps to.
+The loop resolves each name through the section entry's Static Set. An advertised name that maps to an `adhoc/` id runs that adhoc tool's handler, the Engine answers `GetDynamicTools` and `CallDynamicTool` itself (see [Finding and calling dynamic tools](#finding-and-calling-dynamic-tools)), and any other advertised name runs the catalog tool it maps to.
 
-Before any call runs, each tool name the model requests in the round is checked against the names that round advertised and the names in the section's Dynamic Set, though a direct call to a Dynamic Set tool only gets refusal text (see [Mistakes the model gets back as text](#mistakes-the-model-gets-back-as-text)). A name in neither is out of scope, and when any name in the round is out of scope, the whole round fails before any of its calls runs, at the first such name. `models.loop` raises an error value of kind `out_of_scope_tool` whose `name` field holds the requested name. In the `search-loop` prompt, a model call to `rogue`, caught with `pcall(models.loop)`, gives the kind `out_of_scope_tool`, the name `rogue`, and the message:
+Before any call runs, each tool name the model requests in the round is checked against the names that round advertised and the names in the section entry's Dynamic Set, though a direct call to a Dynamic Set tool only gets refusal text (see [Mistakes the model gets back as text](#mistakes-the-model-gets-back-as-text)). A name in neither is out of scope, and when any name in the round is out of scope, the whole round fails before any of its calls runs, at the first such name. `models.loop` raises an error value of kind `out_of_scope_tool` whose `name` field holds the requested name. In the `search-loop` prompt, a model call to `rogue`, caught with `pcall(models.loop)`, gives the kind `out_of_scope_tool`, the name `rogue`, and the message:
 
 ````text
 tool "rogue" is not in this section's scope; in-scope aliases: ["web_search"]
@@ -2371,7 +2372,7 @@ A model-issued call whose bound tool fails still reports a `tool_result` event u
 
 #### The tool scope check and section names
 
-The section's first loop round that builds its tools checks the tool scope as it freezes the section's tool sets, before the model round is sent and, when the scope names a catalog tool, after the Harness answers the render. It reports `tool_scope_validation_started`, then `tool_scope_validation_succeeded`, then the round's `model_turn_completed`. The validation events fire once per section: later rounds send the same Static Set and report only their own `model_turn_completed`. A freeze that fails, such as one over a wire name two offered catalog tools share, reports `tool_scope_validation_failed` in place of `tool_scope_validation_succeeded` and sends no round. A tool call refused as out of scope reports a `tool_call_failed` event.
+The section entry's first loop round that builds its tools checks the tool scope as it freezes the entry's tool sets, before the model round is sent and, when the scope names a catalog tool, after the Harness answers the render. It reports `tool_scope_validation_started`, then `tool_scope_validation_succeeded`, then the round's `model_turn_completed`. The validation events fire once per section entry: later rounds send the same Static Set and report only their own `model_turn_completed`. A freeze that fails, such as one over a wire name two offered catalog tools share, reports `tool_scope_validation_failed` in place of `tool_scope_validation_succeeded` and sends no round. A tool call refused as out of scope reports a `tool_call_failed` event.
 
 Every event names the section that reported it in its `section` field, so the tool call and tool result events from a block name the section that made the call, and a failed model-issued tool call reports its `tool_call_failed` event on that section.
 
@@ -2531,7 +2532,7 @@ tool "web/missing" is not a tool in this run; catalog tools: ["user-input/ask", 
 ````markdown
 ---
 name: scope-check
-description: Catches a model call to a tool outside the section's scope.
+description: Catches a model call to a tool outside the section entry's scope.
 runvil: 0
 models:
   writer: {}

@@ -622,7 +622,7 @@ return messages[#messages].content
 ```
 ````
 
-The run result is the model's summary. Each offered tool joins the section's tool scope once, in the order it was first offered. The model sees and calls each offered web tool by its wire name, which is the tool id with `/` replaced by `_`, and a `.` also becomes `_`. So `web/fetch` is `web_fetch` and `web/search` is `web_search`. The model can reach a tool only by a wire name its model round advertised, and its call to `web_fetch` reaches `web/fetch`.
+The run result is the model's summary. Each offered tool joins the section entry's tool scope once, in the order it was first offered. The model sees and calls each offered web tool by its wire name, which is the tool id with `/` replaced by `_`, and a `.` also becomes `_`. So `web/fetch` is `web_fetch` and `web/search` is `web_search`. The model can reach a tool only by a wire name its model round advertised, and its call to `web_fetch` reaches `web/fetch`.
 
 ### Offering both tools and naming them in prose
 

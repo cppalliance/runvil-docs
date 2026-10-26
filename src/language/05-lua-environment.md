@@ -2629,7 +2629,7 @@ Every field is a string, except two `store` fields that are integers: `count`, o
 Each kind comes from the feature that raises it:
 
 - `context_exhausted` comes from a model round that runs out of context, through `models.infer` or `models.loop`.
-- `empty_model_reply`, `tool_loop_exhausted`, `out_of_scope_tool`, `unbound_tool`, and `cancelled` can each come from `models.loop`. `out_of_scope_tool` names a tool that is not offered in the section (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)).
+- `empty_model_reply`, `tool_loop_exhausted`, `out_of_scope_tool`, `unbound_tool`, and `cancelled` can each come from `models.loop`. `out_of_scope_tool` names a tool that is not offered in the section entry (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)).
 - `tool` reports a tool failure from [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls).
 - `tasks_live`, `task_not_owned`, and `task_consumed` come from the task functions (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) and [Waiting with `tasks.join_any` and `tasks.join`](15-tasks.md#waiting-with-tasksjoin_any-and-tasksjoin)).
 - `store` comes from store operations, and only from failures the store itself reports.
