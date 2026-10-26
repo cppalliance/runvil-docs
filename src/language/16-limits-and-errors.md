@@ -1291,7 +1291,7 @@ The Host can cancel a run from any thread through the run's cancel handle. It ca
 
 A run the Host cancels, before it starts or while it runs, ends with the cancelled outcome, the run outcome of a cancelled run. The cancelled outcome carries no message and no run error kind, and a cancelled run never ends as a failure. Inside the run, a cancel surfaces as the interrupted error, whose kind in Lua is `cancelled`, and that error ends the run with the cancelled outcome.
 
-Once a run is cancelled, it issues no further model rounds or tool calls. Its outcome is decided at the next step and reported once the Host answers every request still out, whether a model reply, a tool call, or a timer, as dropped.
+Once a run is cancelled, it issues no further model rounds or tool calls. Its outcome is decided at the next step and reported once the Host answers every request still out, whether a model reply, a [render](01-what-a-prompt-is.md#the-five-kinds-of-harness-work), a tool call, or a timer, as dropped.
 
 ### The cancel flag
 

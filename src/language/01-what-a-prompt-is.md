@@ -585,16 +585,19 @@ nil,nil
 
 A block's Lua has no `io` or `os` library, so it reaches the outside world only through Harness work, and it reads the time only as the start time in `sys.when`.
 
-### The four kinds of Harness work
+### The five kinds of Harness work
 
-There are exactly four kinds of Harness work:
+There are exactly five kinds of Harness work:
 
 - A model round.
+- A render of the tools a section entry offers, which comes before the entry's first loop round when its offers name a catalog tool.
 - A call to a Pack's tool.
 - A store operation.
 - The timer behind a timed wait on tasks (see [Time limits on waits](15-tasks.md#time-limits-on-waits)).
 
 A model round is one request to a model and its reply. The Harness answers it with the model's reply or with the reason the round failed.
+
+A render asks the Harness how each Pack the entry offered tools from shows those tools to the model, for that entry and the model of its first loop round, the first round a `models.loop` or a handle's `loop` sends (see [Starting a conversation](11-conversations.md#starting-a-conversation)). It happens once per section entry, before that round's request goes out, and the tools the entry gives the model in that round and every later one are built from its answer. The Harness answers with the offered tools unchanged, so the model sees the same tools it would see without a render. You see a render only in the run's record, ahead of the entry's first model round: the request names the entry's `sys.id`, the role label the round runs under, and the ids of the tools offered from each Pack, and the answer holds the tools each Pack shows the model. An entry that offers only adhoc tools, or that runs no loop round, has no render.
 
 Asking the operator with `input.ask()` is a call to a Pack's tool. The operator is the person who answers `input.ask` during a run. The user-input Pack defines `input.ask` to end in `return tools.call(pack .. "/ask")`, so every ask reaches the Harness as an ordinary tool call, and the wait for the operator's answer is Harness work.
 

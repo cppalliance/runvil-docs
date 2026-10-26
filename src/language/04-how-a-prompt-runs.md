@@ -106,16 +106,17 @@ Neither section creates or passes a store handle: `store` is ready when the firs
 
 ### The work the Harness does
 
-Some calls in your Lua need something outside the prompt, and the Harness performs that work for the run (see [Effects and Harness work](01-what-a-prompt-is.md#effects-and-harness-work)). There are four kinds of Harness work:
+Some calls in your Lua need something outside the prompt, and the Harness performs that work for the run (see [Effects and Harness work](01-what-a-prompt-is.md#effects-and-harness-work)). There are five kinds of Harness work:
 
 - a model round
+- a render of the tools a section entry offers, which comes before the entry's first loop round when its offers name a catalog tool, and shows in the run's record as one more step ahead of that round (see [The five kinds of Harness work](01-what-a-prompt-is.md#the-five-kinds-of-harness-work))
 - a tool call, including a wait on `input.ask()` (see [Asking the operator](05-lua-environment.md#asking-the-operator))
 - a store operation
 - the timer behind a timed wait on a task started with `tasks.spawn` (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn))
 
 `input.ask()` is an ordinary tool call to the `user-input` Pack's ask tool. While one chain waits for its answer, only that chain waits, and every other chain keeps running. A chain is a walk with its own entries, defined in [The section walk](#the-section-walk). So the three arms of one `tasks.fanout` call (see [Fanout in one call](14-fanout.md#fanout-in-one-call)) all send their model rounds together, without any arm waiting for another.
 
-A call that needs Harness work looks synchronous to you: the block pauses at the call and continues with the call's answer, as if the call had returned it directly. Each Lua block runs as its own Lua coroutine, which is what lets it pause at the call and resume later. A block that asks for none of the four kinds of work, such as `return 'hello'`, never pauses.
+A call that needs Harness work looks synchronous to you: the block pauses at the call and continues with the call's answer, as if the call had returned it directly. Each Lua block runs as its own Lua coroutine, which is what lets it pause at the call and resume later. A block that asks for no Harness work, such as `return 'hello'`, never pauses.
 
 ## Parsing comes first
 
@@ -1702,11 +1703,13 @@ Each run of a prompt is recorded as its own run with its own run id, even when t
 | Seed | A fresh seed drawn for this run |
 | `started_at` | The run's start time, in UTC milliseconds since the Unix epoch |
 
+Beside these values, the record holds the run's history: every event the run reports, every piece of [Harness work](01-what-a-prompt-is.md#the-five-kinds-of-harness-work) the run asks for, and the answer to each.
+
 The run's name is the run metadata's `name` and also the `execution` field of every event the run records, from its parse events through its last event. The same prompt text always yields the same prompt hash across runs.
 
 Each run draws its own fresh [seed](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host) from the operating system's cryptographic random source and records it at the start of the run, before anything else, so two runs of the same prompt get different seeds. The run's start time, `started_at`, is stamped once from the system wall clock when the run is prepared, because the Engine reads no clock of its own, and a later run never starts earlier. The Harness supplies both the seed and the start instant, drawing them before the prompt is parsed, and a prompt cannot set either one.
 
-Two runs of the same prompt running at the same time stay separate. Each returns its own result, and each run's records hold only its own events, `log` checkpoints, and final `run_succeeded`.
+Two runs of the same prompt running at the same time stay separate. Each returns its own result, and each run's records hold only its own events, Harness work and answers, `log` checkpoints, and final `run_succeeded`.
 
 ### Repeating a run exactly
 

@@ -782,7 +782,7 @@ A cancelled task's error value shares kind `cancelled` with an interrupted run o
 
 - A cancelled run, such as a Host cancel that reaches running Lua or a waiting call, ends that Lua with an error value of kind `cancelled`.
 - A model round, tool call, or other call stopped by cancellation raises an error value of kind `cancelled` with the message `interrupted: the run was cancelled or this call was stopped`.
-- When the Host drops a model round, tool call, or timer instead of answering it, the Lua waiting on it resumes with the same `cancelled` error a run cancel raises. `pcall` catches it and the run continues, and an uncaught one ends the run as cancelled rather than as a failure.
+- When the Host drops a model round, a [render](01-what-a-prompt-is.md#the-five-kinds-of-harness-work), a tool call, or a timer instead of answering it, the Lua waiting on it resumes with the same `cancelled` error a run cancel raises. `pcall` catches it and the run continues, and an uncaught one ends the run as cancelled rather than as a failure.
 - When the Host drops a tool call the model issued, `models.loop` raises an error of kind `cancelled` at the loop call site, and the section can catch it with `pcall` and finish with its own return value.
 
 ### Listing live tasks with `tasks.pending`
