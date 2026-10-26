@@ -2490,7 +2490,7 @@ The ask tool takes no arguments. Its parameters are described as an object with 
 
 ### Letting the model ask
 
-Declaring `user-input` offers nothing to the model, because a [`models.loop`](11-conversations.md#starting-a-conversation) conversation offers the model exactly the tools the section offers, so unless the prompt opts in, only Lua asks the operator. Neither the Host having the Pack nor the prompt declaring it offers the ask tool to the model, and the model can ask the operator only when the prompt's Lua opts in by offering it.
+Declaring `user-input` offers nothing to the model, because a [`models.loop`](11-conversations.md#starting-a-conversation) conversation offers the model only tools from the Packs and adhoc tools the section offers, so unless the prompt opts in, only Lua asks the operator. Neither the Host having the Pack nor the prompt declaring it offers the ask tool to the model, and the model can ask the operator only when the prompt's Lua opts in by offering it.
 
 To let the model ask, offer the ask tool in the section that runs the model, either by its id or as the whole Pack (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)):
 
@@ -2502,7 +2502,7 @@ tools.offer('user-input/ask')
 tools.offer('user-input')
 ````
 
-The model sees the offered ask tool under the name `user-input_ask`, not under its id `user-input/ask`, because each tool's model-facing name is its id with `/` and `.` replaced by `_`. It sees the description `Wait for the operator's next message and return its text.` The model calls the tool with an empty arguments object, `{}`, the call waits until the operator sends their next message, and the tool returns that message's text as its result, in plain text. The operator's answer comes back as trusted tool output, so the text is never wrapped or marked untrusted.
+The model sees the offered ask tool under the name `user-input_ask`, not under its id `user-input/ask`, because the `user-input` Pack neither names the tool nor renders it, so its model-facing name is its id with `/` and `.` replaced by `_`. It sees the description `Wait for the operator's next message and return its text.` The model calls the tool with an empty arguments object, `{}`, the call waits until the operator sends their next message, and the tool returns that message's text as its result, in plain text. The operator's answer comes back as trusted tool output, so the text is never wrapped or marked untrusted.
 
 ### When an ask fails
 

@@ -109,7 +109,7 @@ Neither section creates or passes a store handle: `store` is ready when the firs
 Some calls in your Lua need something outside the prompt, and the Harness performs that work for the run (see [Effects and Harness work](01-what-a-prompt-is.md#effects-and-harness-work)). There are five kinds of Harness work:
 
 - a model round
-- a render of the tools a section entry offers, which comes before the entry's first loop round when its offers name a catalog tool, and shows in the run's record as one more step ahead of that round (see [The five kinds of Harness work](01-what-a-prompt-is.md#the-five-kinds-of-harness-work))
+- a render of the tools a section entry offers, in which each offered Pack decides how its tools reach the model, which comes before the entry's first loop round when its offers name a catalog tool, and shows in the run's record as one more step ahead of that round (see [The five kinds of Harness work](01-what-a-prompt-is.md#the-five-kinds-of-harness-work))
 - a tool call, including a wait on `input.ask()` (see [Asking the operator](05-lua-environment.md#asking-the-operator))
 - a store operation
 - the timer behind a timed wait on a task started with `tasks.spawn` (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn))
