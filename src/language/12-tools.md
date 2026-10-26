@@ -2221,10 +2221,10 @@ The description of `web/search` is the tool's own, `Search the web and return a 
 {"type":"object","properties":{"value":{"type":"string"}},"required":["value"]}
 ````
 
-Every tool the model is offered has a wire name that matches `[A-Za-z][A-Za-z0-9_-]{0,63}`, a letter followed by up to 63 letters, digits, `_`, or `-`, and a parameter schema that is a JSON object. Anything else is refused before it reaches the model, whether the tool comes from the Pack's tool list or from its render. A section that offers a catalog tool whose parameter schema is not a JSON object, such as the bare string `"scalar"`, or whose wire name breaks the rule, such as `9lives_fetch` for the tool id `9lives/fetch`, fails its first loop round, which sends nothing. `models.loop` raises an error value of kind `internal` whose message names the tool by its wire name:
+Every tool the model is offered has a wire name that matches `[A-Za-z][A-Za-z0-9_-]{0,63}`, a letter followed by up to 63 letters, digits, `_`, or `-`, and a parameter schema that is a JSON object. Anything else is refused before it reaches the model, whether the tool comes from the Pack's tool list or from its render. A section that offers a catalog tool whose parameter schema is not a JSON object, such as the bare string `"scalar"`, or whose wire name breaks the rule, such as `9lives_fetch` for the tool id `9lives/fetch`, fails its first loop round, which sends nothing. `models.loop` raises an error value of kind `internal` whose message names the tool by its wire name and ends with the reason it was refused:
 
 ````text
-model-facing schema build failure for tool alias "9lives_fetch"
+model-facing schema build failure for tool alias "9lives_fetch": invalid tool wire name "9lives_fetch": expected [A-Za-z][A-Za-z0-9_-]{0,63}
 ````
 
 Two offered tools that share a wire name, such as two ids that differ only where one has a `.` and the other a `/`, fail the first loop round the same way, unless one is an adhoc tool that shadows the other in the same set (see [An adhoc tool that shadows a catalog tool](#an-adhoc-tool-that-shadows-a-catalog-tool)). With a `dup` Pack that holds `dup/a.b` and `dup/a/b`, which both take the wire name `dup_a_b`, a section that runs `tools.offer('dup')` and then `models.loop` gets an error that names both tools, each with its Pack and its set:

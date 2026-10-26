@@ -51,7 +51,7 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `err.anchor` | field | Anchor text passed to a failed `store.str_replace` | [Editing, deleting, and checking files](09-the-store.md#editing-deleting-and-checking-files) |
 | `err.count` | field | Times the anchor matched: `0` absent, `2` or more ambiguous | [Editing, deleting, and checking files](09-the-store.md#editing-deleting-and-checking-files) |
 | `err.finish_reason` | field | Empty round's finish reason, such as `stop` or `length`; `nil` if unreported | [Empty replies and finish reasons](11-conversations.md#empty-replies-and-finish-reasons) |
-| `err.kind` | field | Lowercase error kind string, one of thirteen, to branch on | [Error values](05-lua-environment.md#error-values) |
+| `err.kind` | field | Lowercase error kind string, one of fifteen, to branch on | [Error values](05-lua-environment.md#error-values) |
 | `err.message` | field | Message text; `tostring(err)` and `..` give the same text | [Error values](05-lua-environment.md#error-values) |
 | `err.path` | field | Path or pattern as passed; `not_a_directory` may name the blocking file | [When a store call fails](09-the-store.md#when-a-store-call-fails) |
 | `err.reason` | field | Store tag such as `not_found`, or a `context_exhausted` reason such as `precheck` or `provider` | [When a store call fails](09-the-store.md#when-a-store-call-fails) |
@@ -89,8 +89,10 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `kind = "cancelled"` | error kind | Cancelled task delivered by a wait, or a stopped run or call | [Cancelling and listing tasks](15-tasks.md#cancelling-and-listing-tasks) |
 | `kind = "context_exhausted"` | error kind | Conversation overflows the context window and compaction does not make it fit, or `compactors.fail` raises | [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion) |
 | `kind = "empty_model_reply"` | error kind | No text or tool calls, except an empty `stop` after tool calls | [Empty replies and finish reasons](11-conversations.md#empty-replies-and-finish-reasons) |
-| `kind = "internal"` | error kind | A failure with no kind of its own, such as a transport failure, the missing-model error, or a failed tool freeze | [Error kinds in Lua and the run error they become](16-limits-and-errors.md#error-kinds-in-lua-and-the-run-error-they-become) |
+| `kind = "internal"` | error kind | A failure with no kind of its own, such as a failed tool freeze or an Engine fault | [Error kinds in Lua and the run error they become](16-limits-and-errors.md#error-kinds-in-lua-and-the-run-error-they-become) |
 | `kind = "lua"` | error kind | An authoring or runtime failure, such as a compile or argument error | [Error values](05-lua-environment.md#error-values) |
+| `kind = "model_failure"` | error kind | A model call's transport, backend, or decode failure, or a disabled gateway | [Error kinds in Lua and the run error they become](16-limits-and-errors.md#error-kinds-in-lua-and-the-run-error-they-become) |
+| `kind = "model_required"` | error kind | A model call with no model selected, the missing-model error | [Error kinds in Lua and the run error they become](16-limits-and-errors.md#error-kinds-in-lua-and-the-run-error-they-become) |
 | `kind = "out_of_scope_tool"` | error kind | Model calls a tool outside the scope, raised at `models.loop` | [Tool errors](12-tools.md#tool-errors) |
 | `kind = "store"` | error kind | Any failure the store itself reports for an operation | [When a store call fails](09-the-store.md#when-a-store-call-fails) |
 | `kind = "task_consumed"` | error kind | A wait names a task whose result is already delivered | [Waiting with `tasks.join_any` and `tasks.join`](15-tasks.md#waiting-with-tasksjoin_any-and-tasksjoin) |

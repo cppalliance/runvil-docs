@@ -1534,7 +1534,7 @@ When the model requests tools, `models.loop` appends an assistant record whose c
 
 Right after that assistant record, the loop appends one record per call whose message role is `tool`, with `tool_call_id` equal to the call's `id` and `content` holding the call's result text. The `tool` record the list holds is exactly what the loop sends to the model on the next round. The loop records calls in the same shape you write them yourself (see [Message records](#message-records)), so its records and yours replay the same way.
 
-A model reply with a blank call id or name, an id repeated within the round, or arguments that are missing or do not decode to a JSON object fails the round as a malformed reply, raised at the call with kind `internal`. A round that requests tool calls is a tool round even when the provider finishes it with the finish reason `stop`.
+A model reply with a blank call id or name, an id repeated within the round, or arguments that are missing or do not decode to a JSON object fails the round as a malformed reply, raised at the call with kind `model_failure`. A round that requests tool calls is a tool round even when the provider finishes it with the finish reason `stop`.
 
 Each tool round appends its records after the records already in the list. When each round asks for one call, every tool round appends exactly two records, an assistant record holding the call and a `tool` record holding its result, in round order. With one leading user record, the tool results sit at `messages[3]`, `messages[5]`, `messages[7]`, and onward, and you read each one through `content`:
 
@@ -1977,7 +1977,7 @@ a reply of `partial answer` with finish reason `length` gives:
 
 A text reply that finishes with reason `length` emits a truncation observation alongside its `assistant_reply` report: the run reports a `model_turn_truncated` event right after the `model_turn_completed` event.
 
-A tool round is different. A tool-call round that the provider cuts short with finish reason `length` or `content_filter` fails as a model failure whose message names the truncation, so its partial arguments never run. `pcall` catches that failure as an error value of kind `internal`, and left uncaught it ends the run with run error kind `Completion` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)).
+A tool round is different. A tool-call round that the provider cuts short with finish reason `length` or `content_filter` fails as a model failure whose message names the truncation, so its partial arguments never run. `pcall` catches that failure as an error value of kind `model_failure`, and left uncaught it ends the run with run error kind `Completion` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)).
 
 ### Events for an empty round
 
@@ -2145,7 +2145,7 @@ A provider response with HTTP status 400 or 413 whose body contains one of these
 
 An error the provider sends inside an already started reply stream is classified as an overflow by the same phrases, with no HTTP status involved. Runvil classifies the provider's failure, and the loop acts only on that classification: a failure classified as a context overflow takes the provider overflow path during a section's model round instead of failing as a plain model error.
 
-A provider rejection counts as a context overflow only when its body contains an overflow phrase. An unrelated 400 rejection never invokes a compactor, and it ends the loop as the model failure `the model backend rejected the request (status 400)`. Any other failed provider response, such as any 5xx status, any status other than 400 or 413, or a 400 or 413 without an overflow phrase, gets no compactor call and is raised at the `models.loop` call as an error of kind `internal`.
+A provider rejection counts as a context overflow only when its body contains an overflow phrase. An unrelated 400 rejection never invokes a compactor, and it ends the loop as the model failure `the model backend rejected the request (status 400)`. Any other failed provider response, such as any 5xx status, any status other than 400 or 413, or a 400 or 413 without an overflow phrase, gets no compactor call and is raised at the `models.loop` call as an error of kind `model_failure`.
 
 A provider context overflow is reported as a failed model round, with a `model_turn_failed` event, and it reaches the loop as an overflow with reason `provider`, not as an error.
 

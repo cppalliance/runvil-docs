@@ -2602,9 +2602,9 @@ Because `kind` is a string and `tostring` gives the message, one expression can 
 - `err.kind .. '|' .. err.tasks .. '|' .. tostring(err)` reports a `tasks_live` failure with its `tasks` field.
 - An argument rejected for not being a positive whole number gives kind `lua` and a message containing `positive whole number`.
 
-### The thirteen error kinds
+### The fifteen error kinds
 
-An error value's `kind` is always one of exactly thirteen strings. The set is closed, so every failure falls into one of them, and each string names exactly one kind, so you match a kind by comparing `err.kind` against its string, as in `err.kind == 'store'`. The table lists each kind with the fields it adds beside `kind` and `message`:
+An error value's `kind` is always one of exactly fifteen strings. The set is closed, so every failure falls into one of them, and each string names exactly one kind, so you match a kind by comparing `err.kind` against its string, as in `err.kind == 'store'`. The table lists each kind with the fields it adds beside `kind` and `message`:
 
 | Kind | Fields beside `kind` and `message` |
 | --- | --- |
@@ -2613,6 +2613,8 @@ An error value's `kind` is always one of exactly thirteen strings. The set is cl
 | `cancelled` | `task`, when it reports a cancelled task |
 | `context_exhausted` | `reason` |
 | `empty_model_reply` | `finish_reason` |
+| `model_failure` | none |
+| `model_required` | none |
 | `tool_loop_exhausted` | none |
 | `tasks_live` | `tasks` |
 | `task_not_owned` | `task` |
@@ -2634,7 +2636,9 @@ Each kind comes from the feature that raises it:
 - `tasks_live`, `task_not_owned`, and `task_consumed` come from the task functions (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) and [Waiting with `tasks.join_any` and `tasks.join`](15-tasks.md#waiting-with-tasksjoin_any-and-tasksjoin)).
 - `store` comes from store operations, and only from failures the store itself reports.
 - `cancelled` reports a cancellation, and carries `task` when what was cancelled is a task.
-- `internal` comes from a failure that has no kind of its own: a model call's transport, backend, or decode failure, the missing-model error, a section entry's failed tool freeze (see [`Binding`, `Completion`, and `Tool`](16-limits-and-errors.md#binding-completion-and-tool)), an Engine fault, or an Engine function failure caused by the Lua runtime's own machinery rather than by an authoring or argument problem.
+- `model_failure` comes from a model call's transport, backend, or decode failure, or a disabled gateway, through `models.infer` or `models.loop`.
+- `model_required` comes from a model call with no model selected, the [missing-model error](10-models.md#infer-errors-and-the-missing-model-error).
+- `internal` comes from a failure that has no kind of its own: a section entry's failed tool freeze (see [`Binding`, `Completion`, and `Tool`](16-limits-and-errors.md#binding-completion-and-tool)), an Engine fault, or an Engine function failure caused by the Lua runtime's own machinery rather than by an authoring or argument problem.
 - `lua` covers every failure on the Lua side, as shown next.
 
 ### The `lua` kind
@@ -2746,7 +2750,7 @@ When the store holds no `note.md`, the run result is:
 no note yet
 ````
 
-`pcall` runs [`store.read`](09-the-store.md#writing-and-reading-files) in protected mode. The read fails, so instead of the failure ending the block, `pcall` returns `false` and the error value. The block handles the one failure it expects, a missing note, and raises every other error value again unchanged with `error(result)`, which fails the run exactly as if the block had never caught it. When `note.md` exists, `pcall` returns `true` and the text, and the block returns the note. The same shape works for any kind, as in a block that catches `pcall(models.infer, prose)`, returns `'model unavailable: ' .. err.message` when `err.kind == 'internal'`, and otherwise raises the value again with `error(err)`.
+`pcall` runs [`store.read`](09-the-store.md#writing-and-reading-files) in protected mode. The read fails, so instead of the failure ending the block, `pcall` returns `false` and the error value. The block handles the one failure it expects, a missing note, and raises every other error value again unchanged with `error(result)`, which fails the run exactly as if the block had never caught it. When `note.md` exists, `pcall` returns `true` and the text, and the block returns the note. The same shape works for any kind, as in a block that catches `pcall(models.infer, prose)`, returns `'model unavailable: ' .. err.message` when `err.kind == 'model_failure'`, and otherwise raises the value again with `error(err)`.
 
 `pcall(f, ...)` calls `f` in protected mode, passing on any arguments after it, and returns a success flag first: `true` followed by every value `f` returned, or `false` followed by an error value or the value your code raised. A re-raise is raising a caught error value again unchanged, with `error(err)` or `error(err, 0)`.
 

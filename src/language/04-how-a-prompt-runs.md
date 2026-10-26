@@ -1457,7 +1457,7 @@ Task errors stay `Lua` rather than becoming `RequirementsUnmet`. That covers an 
 
 ### Errors raised again after a catch
 
-An error you catch with `pcall` in the H1 pass and raise again keeps the failure it came from when you raise it before the block makes another call that waits on the Harness, such as a model round, so its own run error kind holds. Raised again after such a call, some errors are rebuilt as an ordinary Lua error and fail the gate as `RequirementsUnmet`. The rebuilt errors are any error whose `kind` is `lua`, `internal`, `out_of_scope_tool`, `unbound_tool`, or `tasks_live`, and any `task_not_owned` or `task_consumed` error missing its `task` field.
+An error you catch with `pcall` in the H1 pass and raise again keeps the failure it came from when you raise it before the block makes another call that waits on the Harness, such as a model round, so its own run error kind holds. Raised again after such a call, some errors are rebuilt as an ordinary Lua error and fail the gate as `RequirementsUnmet`. The rebuilt errors are any error whose `kind` is `lua`, `model_failure`, `model_required`, `internal`, `out_of_scope_tool`, `unbound_tool`, or `tasks_live`, and any `task_not_owned` or `task_consumed` error missing its `task` field.
 
 ### Failures outside the gate
 

@@ -767,7 +767,7 @@ Prose in a library that an arm loads with [`require`](03-blocks-and-prose.md#sha
 
 ### Fields of a table item
 
-A dotted path into `item`, `{{ item.key }}`, always fails with substitution kind `NotATable` and the message `item is a string, not a table`, so `{{ item.x }}` with the item `text` fails with a message saying `not a table`. The message says the root is a string whatever type the item really has and whether or not an item is set, because the dotted path is refused before the item's value, or whether one is set, is checked. To show one field of a table member, copy it to a global in the section's Lua and reference that global:
+A dotted path into `item`, `{{ item.key }}`, always fails with substitution kind `NotATable` and the message `item takes no key path; {{ item }} renders the whole item`, so `{{ item.x }}` with the item `text` fails with that message. It fails the same way whatever type the item really has and whether or not an item is set, because the dotted path is refused before the item's value, or whether one is set, is checked. To show one field of a table member, copy it to a global in the section's Lua and reference that global:
 
 ````markdown
 ### Worker
@@ -805,7 +805,7 @@ return prose
 ```
 ````
 
-The run fails with an error containing `{{ item }} is nil`. Reading `{{ item }}` where no item is seeded, such as in a walked section like this one, in a section entered through `call`, or in a later section the same chain enters, fails with substitution kind `NilItem` and the message `{{ item }} is nil (not inside a fanout arm)`. The read of `prose` raises it as an ordinary Lua error, so left uncaught in a walked section it ends the run with [run error kind](04-how-a-prompt-runs.md#the-run-result-and-outcomes) `Lua`.
+The run fails with an error containing `{{ item }} is nil`. Reading `{{ item }}` where no item is seeded, such as in a walked section like this one, in a section entered through `call`, or in a later section the same chain enters, fails with substitution kind `NilItem` and the message `{{ item }} is nil (no item is seeded into this section)`. The read of `prose` raises it as an ordinary Lua error, so left uncaught in a walked section it ends the run with [run error kind](04-how-a-prompt-runs.md#the-run-result-and-outcomes) `Lua`.
 
 ## Inserting Lua globals by bare name
 
@@ -1285,10 +1285,10 @@ A substitution kind classifies a substitution failure, and every failure has exa
 | `EmptySegment` | An empty or space-padded segment, as in `{{ var. }}` or `{{ }}` | `empty or padded path segment in {{ {path} }}` |
 | `BadPath` | `{{ var }}` or `{{ sys }}` with no key | `bad path: {{ var }}` or `bad path: {{ sys }}` |
 | `UnknownNamespace` | A first segment that is neither a root nor a set global, as in `{{ ghost }}` | `unknown namespace or global '{name}' in {{ {path} }}` |
-| `NotATable` | A dotted path after `args` or `item`, as in `{{ args.x }}` | `{namespace} is a string, not a table` |
+| `NotATable` | A dotted path after `args` or `item`, as in `{{ args.x }}` | `args is a string, not a table`, or `item takes no key path; {{ item }} renders the whole item` |
 | `MissingKey` | An absent key under `var`, `sys`, `argv`, or a global, as in `{{ sys.bogus }}` | `missing {{ {path} }}` |
 | `NullValue` | A path that lands on JSON null, under every root except `item` | `missing {{ {path} }}` |
-| `NilItem` | `{{ item }}` where no item is seeded | `{{ item }} is nil (not inside a fanout arm)` |
+| `NilItem` | `{{ item }}` where no item is seeded | `{{ item }} is nil (no item is seeded into this section)` |
 | `NilArgv` | Any `argv` placeholder while `argv` is nil | `{{ {path} }} is nil (the args string is not JSON)` |
 | `Serialize` | A global that is not JSON data, and `{{ prose }}` | `global '{name}' in {{ {path} }} is not JSON data` |
 
@@ -1306,7 +1306,7 @@ Substitution kind `UnknownNamespace` comes from a path whose first segment is ne
 
 ### NotATable, MissingKey, and NullValue
 
-Substitution kind `NotATable` comes from a dotted key after `args` or `item`, because both roots are used whole only, so `{{ args.x }}` fails with `args is a string, not a table` and `{{ item.x }}` fails with `item is a string, not a table`.
+Substitution kind `NotATable` comes from a dotted key after `args` or `item`, because both roots are used whole only, so `{{ args.x }}` fails with `args is a string, not a table` and `{{ item.x }}` fails with `item takes no key path; {{ item }} renders the whole item`.
 
 Substitution kind `MissingKey` comes from a dotted path whose key is absent under `var`, `sys`, `argv`, or a global, such as `{{ sys.bogus }}` with the message `missing {{ sys.bogus }}`. It also comes from a path that continues past a string, number, or boolean, so `{{ var.name.first }}` when `name` is a string fails with `missing {{ var.name.first }}`.
 

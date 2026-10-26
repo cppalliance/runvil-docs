@@ -624,7 +624,7 @@ In the arm for `alpha`, the prose `Reply about {{ item }}.` becomes `Reply about
 
 `models.infer` works inside an arm and returns the reply as a string, whether the prompt is the arm's substituted `prose` or a string built in Lua. You can build an arm's prompt from `item` directly, so `local first = models.infer(item .. ':1')` sends `a:1` from the arm for `a`, and arms over `a`, `b`, and `c` send `a:1`, `b:1`, and `c:1`. Returning the reply makes it the arm's `.text`, so after an arm runs `return models.infer(prose)`, the caller reads the reply as `r[1].text` and can join all the replies with `table.concat(r, '\n\n')`, as [Collection order and joining results](#collection-order-and-joining-results) explains.
 
-`{{ item }}` in the prose of a section that has no `item`, such as a walked section, fails when the prose is read, with the error `{{ item }} is nil (not inside a fanout arm)`. So a walked section whose prose is `Ask about {{ item }}.` fails when its block runs `return prose`.
+`{{ item }}` in the prose of a section that has no `item`, such as a walked section, fails when the prose is read, with the error `{{ item }} is nil (no item is seeded into this section)`. So a walked section whose prose is `Ask about {{ item }}.` fails when its block runs `return prose`.
 
 ### Where `item` and `sys.index` exist
 

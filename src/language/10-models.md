@@ -1365,7 +1365,7 @@ In the prompt message, `{type}` is the Lua type name of the value given, so a mi
 
 ### Errors from the model backend
 
-An infer call offers the model no tools, so it never dispatches tools. A model that replies to an infer round with tool calls fails the call with an error value of kind `internal` and this message:
+An infer call offers the model no tools, so it never dispatches tools. A model that replies to an infer round with tool calls fails the call with an error value of kind `model_failure` and this message:
 
 ````text
 the model backend sent a reply that could not be understood: the round sent tool calls, but no tools were advertised
@@ -1373,19 +1373,19 @@ the model backend sent a reply that could not be understood: the round sent tool
 
 The text is the same for `models.infer` and `handle:infer`, and it never names `models.infer`. Left uncaught, the refusal fails the run with run error kind `Completion` (see [The run result and outcomes](04-how-a-prompt-runs.md#the-run-result-and-outcomes)), and the run error reports itself retryable, since a reply that broke protocol may come back well formed (see [Retryable failures](16-limits-and-errors.md#retryable-failures)).
 
-An infer round that fails at the model, such as a transport or backend failure, raises the round's own error at the call site. `pcall` sees it with kind `internal`, or with kind `empty_model_reply` for an empty reply. Left uncaught, it fails the run with run error kind `Completion`.
+An infer round that fails at the model, such as a transport or backend failure, raises the round's own error at the call site. `pcall` sees it with kind `model_failure`, or with kind `empty_model_reply` for an empty reply. Left uncaught, it fails the run with run error kind `Completion`.
 
 ### When a section has no model
 
 The missing-model error is the error a model round raises when its section has no model, meaning neither a `models.use` selection nor a prompt-wide `models.default` is in effect (see [Which model a round uses](#which-model-a-round-uses)). Declaring a role under `models:` without selecting it or making it the default is not enough, which is why the `unselected` prompt in [When a prompt needs a role](#when-a-prompt-needs-a-role) fails with `model binding required for section Only`. The message is `model binding required for section {section}`, where `{section}` is the section name, such as `Only` or `Worker`, or the prompt's H1 title for a round in the H1 pass. Left uncaught, it fails the run with run error kind `Binding`. Raised in a fanout arm, it fails both the fanout and the run.
 
-The missing-model error reaches the call as its answer, so `pcall` catches it as an error value of kind `internal` and a block can fall back instead of failing. Remove the H1 body from `careful`, and its block returns:
+The missing-model error reaches the call as its answer, so `pcall` catches it as an error value of kind `model_required` and a block can fall back instead of failing. Remove the H1 body from `careful`, and its block returns:
 
 ````text
-skipped (internal)
+skipped (model_required)
 ````
 
-`models.loop` in a section entry with neither `models.use` nor `models.default` in effect fails with the same missing-model error naming the section, which `pcall` also catches as kind `internal`.
+`models.loop` in a section entry with neither `models.use` nor `models.default` in effect fails with the same missing-model error naming the section, which `pcall` also catches as kind `model_required`.
 
 Only an explicit model call such as `models.infer(prose)` can raise the missing-model error, so prose that no block sends to a model needs no `models.use` or `models.default`, in the H1 body or in a section, just as it needs no model at all (see [When a prompt needs a role](#when-a-prompt-needs-a-role)).
 

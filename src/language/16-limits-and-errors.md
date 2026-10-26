@@ -46,7 +46,7 @@ Each run limit has its own default and its own owner, and [Run limits and their 
 A failure belongs to one of four failure families, and each family has its own vocabulary:
 
 - A parse failure is found before anything runs, and it has a parse error kind: `Frontmatter`, `Structure`, `Fence`, `List`, or `Lua`, plus `Internal` for a fault in the parser itself. See [Parse errors and their kinds](#parse-errors-and-their-kinds).
-- A failure inside Lua is an [error value](05-lua-environment.md#error-values), the table an Engine failure raises in Lua, whose `kind` is one of thirteen lowercase error kinds, such as `lua`, `tool_loop_exhausted`, or `internal`. See [Error kinds in Lua and the run error they become](#error-kinds-in-lua-and-the-run-error-they-become).
+- A failure inside Lua is an [error value](05-lua-environment.md#error-values), the table an Engine failure raises in Lua, whose `kind` is one of fifteen lowercase error kinds, such as `lua`, `tool_loop_exhausted`, or `model_failure`. See [Error kinds in Lua and the run error they become](#error-kinds-in-lua-and-the-run-error-they-become).
 - A failed run has a [run error kind](04-how-a-prompt-runs.md#the-run-result-and-outcomes), the stable name of what failed. See [Run error kinds](#run-error-kinds).
 - A Host cancel ends the run with the cancelled outcome, which has no error kind. See [Cancellation and stops](#cancellation-and-stops).
 
@@ -833,7 +833,7 @@ A run fails with kind `Binding` when a section calls [`models.infer`](10-models.
 
 A run also fails with kind `Binding` when a section entry's first loop round cannot freeze its tool sets (see [When an offer takes effect](12-tools.md#when-an-offer-takes-effect) and [What a Pack's render can change](12-tools.md#what-a-packs-render-can-change)). The run reports `tool_scope_validation_failed`, the round sends no request and freezes nothing, so offers still work after it, and the `models.loop` or `handle:loop` call raises an error value of kind `internal` that `pcall` catches. Left uncaught, it ends the run with kind `Binding`, and the run's message begins with the error's own message (see [The failed run's message](#the-failed-runs-message)). Each failure has its own message, where `{tool}` reads `{id} of the {pack} Pack in the {set}` and `{set}` is `Static Set` or `Dynamic Set`:
 
-- A tool whose wire name breaks the wire-name rule, or whose parameter schema is not a JSON object, gives `model-facing schema build failure for tool alias "{name}"`, with the tool's wire name as `{name}`.
+- A tool whose wire name breaks the wire-name rule gives `model-facing schema build failure for tool alias "{name}": invalid tool wire name "{name}": expected [A-Za-z][A-Za-z0-9_-]{0,63}`, and a tool whose parameter schema is not a JSON object gives `model-facing schema build failure for tool alias "{name}": tool "{name}" parameters schema must be a JSON object`, with the tool's wire name as `{name}`.
 - Two tools that share a wire name give `the tools {tool} and {tool} share the wire name "{name}", and a wire name names one tool across a section's Static Set and Dynamic Set; offer only one of them`.
 - A Pack's render that returns a tool under another Pack's id gives `the {pack} Pack's render returned {tool}; a Pack renders only tools whose id starts with its own Pack id`.
 - A Pack's render that returns a run catalog tool the section did not offer in that set gives `the render returned {tool}, a run catalog tool the section did not offer in that set; a render returns a catalog tool only into a set the section offered it in`.
@@ -925,7 +925,7 @@ local ok, reply = pcall(models.infer, prose)
 if ok then
   return reply
 end
-if reply.kind == 'internal' then
+if reply.kind == 'model_failure' then
   return 'skipped: ' .. reply.message
 end
 error(reply)
@@ -934,17 +934,23 @@ error(reply)
 
 When the model call succeeds, the run result is the model's reply. When it fails outside the prompt, for example because the backend cannot answer, the run result is `skipped: ` followed by the failure's message. Any other failure is raised again unchanged, so the run ends exactly as it would have without the `pcall`.
 
-### Thirteen error kinds
+### Fifteen error kinds
 
-Every Engine failure that reaches Lua carries exactly one of thirteen error kinds in its error value's `kind` field: `lua`, `context_exhausted`, `empty_model_reply`, `cancelled`, `tool_loop_exhausted`, `tasks_live`, `task_not_owned`, `task_consumed`, `out_of_scope_tool`, `unbound_tool`, `tool`, `store`, and `internal`.
+Every Engine failure that reaches Lua carries exactly one of fifteen error kinds in its error value's `kind` field: `lua`, `context_exhausted`, `empty_model_reply`, `model_failure`, `model_required`, `cancelled`, `tool_loop_exhausted`, `tasks_live`, `task_not_owned`, `task_consumed`, `out_of_scope_tool`, `unbound_tool`, `tool`, `store`, and `internal`.
 
-Error kinds and run error kinds are separate vocabularies. An error kind is what Lua sees at the call, and a run error kind is what the Host reports when a failure ends the run. One error kind can lead to different run error kinds depending on its source, as `internal` does when it ends the run as `Completion`, `Binding`, or `Internal`.
+Error kinds and run error kinds are separate vocabularies. An error kind is what Lua sees at the call, and a run error kind is what the Host reports when a failure ends the run. One error kind can lead to different run error kinds depending on its source, as `internal` does when it ends the run as `Binding` or `Internal`.
+
+### The `model_failure` and `model_required` error kinds
+
+The `model_failure` error kind marks a model call that failed outside the prompt: a transport, backend, or decode failure, or a disabled gateway. An empty reply is the one model call failure with a kind of its own, `empty_model_reply`. The `model_required` error kind marks the [missing-model error](10-models.md#infer-errors-and-the-missing-model-error), a model call with no model selected.
+
+Neither value has extra fields. Left uncaught, a `model_failure` value ends the run as `Completion`, and a `model_required` value ends it as `Binding`.
 
 ### The `internal` error kind
 
-The `internal` error kind marks a failure that has no kind of its own. A violated internal invariant, a transport, backend, or configuration failure outside the prompt, the missing-model error, and a section entry's failed tool freeze all reach Lua as kind `internal`, while a store failure has its own kind `store`.
+The `internal` error kind marks a failure that has no kind of its own. A violated internal invariant and a section entry's failed tool freeze reach Lua as kind `internal`, while a store failure has its own kind `store` and a failed model call its own kind `model_failure`.
 
-An `internal` error value has no extra fields. Left uncaught, it ends the run as `Completion` for a model call failure, `Binding` for the [missing-model error](10-models.md#infer-errors-and-the-missing-model-error) or a failed tool freeze (see [`Binding`, `Completion`, and `Tool`](#binding-completion-and-tool)), or `Internal` for an Engine fault.
+An `internal` error value has no extra fields. Left uncaught, it ends the run as `Binding` for a failed tool freeze (see [`Binding`, `Completion`, and `Tool`](#binding-completion-and-tool)), or `Internal` for an Engine fault.
 
 When an Engine function fails and `pcall` catches it, the error kind is `lua` for an authoring or argument problem, such as a runtime error, a syntax error, a memory error, a bad argument, or a value that cannot be converted or serialized. It is `internal` when the Lua runtime's own machinery fails.
 
@@ -956,9 +962,9 @@ An uncaught failure ends the run with its kind, message, and fields intact, neve
 
 A caught error value raised again with `error(err)` before the block makes another [suspending call](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals), a call that waits on the Harness, ends the run exactly as if it had never been caught, with the same run error kind (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)). A caught error value raised again after another suspending call is rebuilt from its `kind`, and that `kind` decides the run error kind.
 
-That is what `summary` relies on. A section can turn a caught `internal` failure, such as a model call the Harness cannot complete, into its result, and raise every other kind again with `error(reply)` before any other suspending call, so the run ends exactly as it would have without the `pcall`.
+That is what `summary` relies on. A section can turn a caught `model_failure`, a model call the Harness cannot complete, into its result, and raise every other kind again with `error(reply)` before any other suspending call, so the run ends exactly as it would have without the `pcall`.
 
-A failure with no kind of its own, such as a model call's transport, backend, or decode failure, a disabled gateway, the missing-model error, a failed tool freeze, or an Engine fault, raises an `internal` error value. An empty model reply is the one case that differs, and it raises `empty_model_reply` instead. This holds inside a `tasks.fanout` arm too, where an arm's `models.infer` with no model access configured surfaces the disabled-gateway failure.
+A model call's transport, backend, or decode failure, or a disabled gateway, raises a `model_failure` error value, and an empty model reply raises `empty_model_reply` instead. The missing-model error raises `model_required`, and a failure with no kind of its own, such as a failed tool freeze or an Engine fault, raises an `internal` error value. This holds inside a `tasks.fanout` arm too, where an arm's `models.infer` with no model access configured surfaces the disabled-gateway failure as `model_failure`.
 
 Left uncaught in a walked section, a [`models.loop`](11-conversations.md#loop-arguments-and-errors) failure ends the run like this:
 
@@ -968,7 +974,9 @@ Left uncaught in a walked section, a [`models.loop`](11-conversations.md#loop-ar
 | `empty_model_reply` | `Completion` |
 | `context_exhausted` | `ContextExhausted` |
 | `tool_loop_exhausted`, `out_of_scope_tool` | `Tool` |
-| `internal` | `Completion` for a backend or transport failure, `Binding` for the missing-model error or a failed tool freeze |
+| `model_failure` | `Completion` |
+| `model_required` | `Binding` |
+| `internal` | `Binding` for a failed tool freeze |
 
 Raised again later, after another suspending call, each error kind ends the run like this:
 
@@ -979,9 +987,9 @@ Raised again later, after another suspending call, each error kind ends the run 
 | `tool_loop_exhausted`, `tool` | `Tool` |
 | `store` | `Vfs` |
 | `task_not_owned`, `task_consumed`, with their `task` field | `Lua`, in the H1 pass too |
-| `out_of_scope_tool`, `unbound_tool`, `tasks_live`, `lua`, `internal` | `Lua`, or `RequirementsUnmet` in the H1 pass |
+| `out_of_scope_tool`, `unbound_tool`, `tasks_live`, `lua`, `model_failure`, `model_required`, `internal` | `Lua`, or `RequirementsUnmet` in the H1 pass |
 
-An `empty_model_reply` value raised again later keeps its message. An `out_of_scope_tool`, `unbound_tool`, `tasks_live`, `lua`, or `internal` value raised again later is rebuilt as a plain Lua failure that keeps only its message.
+An `empty_model_reply` value raised again later keeps its message. An `out_of_scope_tool`, `unbound_tool`, `tasks_live`, `lua`, `model_failure`, `model_required`, or `internal` value raised again later is rebuilt as a plain Lua failure that keeps only its message.
 
 A value missing its kind's fields is rebuilt as a plain Lua failure too. A `context_exhausted` value without a valid `reason`, or a `task_not_owned` or `task_consumed` value without a valid `task`, raised again later ends the run as `Lua`, or as `RequirementsUnmet` in the H1 pass. A `store` value without a recognized `reason` still ends the run as `Vfs`. A `cancelled` value raised again later ends the run with the cancelled outcome, as [Cancellation and stops](#cancellation-and-stops) explains.
 
@@ -1033,7 +1041,7 @@ local ok, reply = pcall(models.infer, prose)
 if ok then
   return reply
 end
-if reply.kind == 'internal' then
+if reply.kind == 'model_failure' then
   log('model call failed')
   return 'skipped: ' .. reply.message
 end
@@ -1047,13 +1055,13 @@ This is `summary` from the previous section with one `log` line added. When the 
 skipped: the model backend is overloaded (status 503)
 ````
 
-The block catches the model call failure, checks for kind `internal`, logs a checkpoint, and returns `skipped: ` plus the error's message.
+The block catches the model call failure, checks for kind `model_failure`, logs a checkpoint, and returns `skipped: ` plus the error's message.
 
 ### Completion errors and how Lua sees them
 
 A model call that fails surfaces as a completion error, and every completion error carries a completion error kind that names what went wrong, such as `Overloaded` or `Timeout`. When the model request for a `models.infer` round fails, the `models.infer` call raises that failure as its error.
 
-When the prompt catches a model call failure, the error value has kind `internal`, whether the cause is a connection failure, a receive timeout, a backend error status, a malformed or oversized reply, or a disabled gateway. An empty reply is the one case that differs, with kind `empty_model_reply` instead. A model call failure that the prompt does not catch ends the run with run error kind `Completion`, and the run's message is the failure's own message, such as `the model backend is overloaded (status 503)`.
+When the prompt catches a model call failure, the error value has kind `model_failure`, whether the cause is a connection failure, a receive timeout, a backend error status, a malformed or oversized reply, or a disabled gateway. An empty reply is the one case that differs, with kind `empty_model_reply` instead. A model call failure that the prompt does not catch ends the run with run error kind `Completion`, and the run's message is the failure's own message, such as `the model backend is overloaded (status 503)`.
 
 A model failure caused by a backend HTTP status ends its message with ` (status {status})`, where `{status}` is the status code, after the kind's fixed phrase. That is how `summary` returns `skipped: the model backend is overloaded (status 503)` when the backend answers with status 503.
 
@@ -1110,7 +1118,7 @@ the model backend sent a reply that could not be understood: response body excee
 the model backend sent a reply that could not be understood: response body of {len} bytes exceeds the {cap}-byte limit
 ````
 
-The first is a successful reply over the cap, the second an error reply over the cap, and the third an error reply whose advertised length is already over the cap. A response-cap or receive-timeout failure is kind `internal` when caught and run error kind `Completion` when uncaught, and it counts as transient, so running the prompt again may succeed.
+The first is a successful reply over the cap, the second an error reply over the cap, and the third an error reply whose advertised length is already over the cap. A response-cap or receive-timeout failure is kind `model_failure` when caught and run error kind `Completion` when uncaught, and it counts as transient, so running the prompt again may succeed.
 
 ### Failures from a backend status
 
@@ -1137,7 +1145,7 @@ the model backend refused the request on content policy grounds (status 400)
 the request is larger than the model's context window (status {status})
 ````
 
-A `models.infer` call raises a `ContextOverflow` failure as kind `internal`, while a `models.loop` round hands it to the compactor instead (see [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion)).
+A `models.infer` call raises a `ContextOverflow` failure as kind `model_failure`, while a `models.loop` round hands it to the compactor instead (see [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion)).
 
 When model access is turned off or not configured, every model round fails as `Unavailable`, nothing is sent to the network, and the failure is not retryable. A backend status 401 or 403 also fails the round as `Unavailable`, and it is not retryable. Their messages are:
 
