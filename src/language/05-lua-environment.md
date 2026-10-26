@@ -2484,7 +2484,7 @@ return tools.call('user-input/ask')
 
 The tool asks the operator when called and returns the text they type, so `tools.call(tools.get('user-input/ask'))` returns the operator's text as well. The prelude receives the Pack id and builds the tool id from it, so `input.ask()` reaches `user-input/ask` without the prelude spelling the Pack id out.
 
-Each `input.ask()` is one tool call from Lua, reported like any tool call a Lua block makes: the run records a `ToolCall` for the tool `user-input/ask` under the alias `user-input_ask`, the name a model sees for it, and the result reports as trusted with the operator's text as its content.
+Each `input.ask()` is one tool call from Lua, reported like any tool call a Lua block makes. The run records a `ToolCall` for the tool `user-input/ask` with the script as the caller and the tool's id, `user-input/ask`, as the alias, never `user-input_ask`, the name a model sees for it (see [How tool calls are recorded](12-tools.md#how-tool-calls-are-recorded)). The result reports as trusted with the operator's text as its content.
 
 The ask tool takes no arguments. Its parameters are described as an object with no properties, `{ "type": "object", "properties": {} }`, and any arguments passed to it are ignored. It returns plain text rather than structured output. Its description, shown to any model it is offered to and wherever Lua reads the tool, reads `Wait for the operator's next message and return its text.`
 
