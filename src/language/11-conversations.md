@@ -1180,7 +1180,7 @@ return #messages .. ': ' .. messages[1].role .. ', ' .. messages[2].role
 In a section, you call `models.loop` to run a model-tool loop over the section's `messages` list. The loop runs the conversation as a series of rounds: each round sends the message list to the model, and the loop judges the answer until it can return or must raise an error such as `empty_model_reply` (see [Empty replies and finish reasons](#empty-replies-and-finish-reasons)). This call goes through these steps:
 
 1. A valid call opens by sending the message list to the model, so the first thing the loop does is send a round.
-2. No tools are in scope for the section, so the loop offers the model no tools. This first round still renders the section's tool list, an empty one, so an offer after it raises.
+2. No tools are in scope for the section, so the loop offers the model no tools. This first round still freezes the section's tool list, an empty one, so an offer after it raises.
 3. The model replies with text and no tool calls, so the loop appends one `assistant` record holding the reply text.
 4. The loop returns after that single round, leaving the user record and the terminal record, so `#messages` is 2.
 
@@ -1212,7 +1212,7 @@ Every record added during `models.loop` appears in the list: assistant replies a
 
 Each round is one stateless, tool-capable model request over the whole message list as it stands at that moment, including every record that earlier rounds and earlier calls have added. A round after a tool call therefore resends the whole conversation so far, with the message roles `user`, `assistant`, and `tool`. In one call with three one-call tool rounds before the final reply, the four requests hold 1, 3, 5, and 7 messages.
 
-A loop round is the same request a nested `infer` makes (see [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer)), only sent over your conversation together with the section's tool list. The first loop round in the section that builds its tools renders the section's tool list, the Static Set, from every offer made so far (see [Tool scope](12-tools.md#tool-scope)), and the Static Set is fixed for the rest of the section. The render happens before the round's list is checked and before the context precheck, so a first round the precheck refuses still fixes the list. Every later round, a compacted round's retry and rounds on another model included, sends the same tool schemas, and once the list is rendered, `tools.offer` and `tools.offer_dynamic` raise (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)). `tools.adhoc` still defines a tool after the render (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)), but the Static Set never gains it. A round refused before the build renders nothing: one over an empty list, one with no model to run on, and one whose tool build fails. [When an offer takes effect](12-tools.md#when-an-offer-takes-effect) covers the rule.
+A loop round is the same request a nested `infer` makes (see [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer)), only sent over your conversation together with the section's tool list. The first loop round in the section that builds its tools freezes the section's Static Set and Dynamic Set from every offer made so far (see [Tool scope](12-tools.md#tool-scope)), and both stay fixed for the rest of the section entry. When those offers name a catalog tool, that round first asks the Harness to render each offered Pack's tools for the section entry and the round's model (see [The five kinds of Harness work](01-what-a-prompt-is.md#the-five-kinds-of-harness-work)), and the Harness currently returns them unchanged, so the model sees the tools as offered. The freeze happens before the round's list is checked and before the context precheck, so a first round the precheck refuses still fixes the sets. Every later round, a compacted round's retry and rounds on another model included, sends the same tool schemas, and once the sets are frozen, `tools.offer` and `tools.offer_dynamic` raise (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)). `tools.adhoc` still defines a tool after the freeze (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)), but the Static Set never gains it. A round refused before the freeze freezes nothing: one over an empty list, one with no model to run on, and one whose freeze fails. [When an offer takes effect](12-tools.md#when-an-offer-takes-effect) covers the rule.
 
 The model's sampling options (see [Sampling options on `models.use`](10-models.md#sampling-options-on-modelsuse)), such as `temperature`, `max_tokens`, and `thinking`, apply to every round of the loop. Each round is sent with the options of the model it runs on, the conversation so far, and the Static Set.
 
@@ -1456,7 +1456,7 @@ A loop round over a list that holds no records fails at the `models.loop` call w
 messages must not be empty
 ````
 
-A round refused this way renders no tool list, so offers still work after it.
+A round refused this way freezes no tool list, so offers still work after it.
 
 Any failure while the loop prepares a round is raised at the `models.loop` call, where your `pcall` catches it like any other call error. That covers choosing the model, reading the section's tools, checking the list, the empty-list check among them, turning the list into the request, and reaching the model's provider.
 
@@ -2375,7 +2375,7 @@ models.compact(function(reason) messages:replace(#messages, #messages) end, "dro
 models.compact(compactors.clear, "manual compaction")
 ````
 
-The first line removes the last record, and the second empties the list. `models.compact` snapshots the records, calls the compactor with the reason you pass, and checks the structural rules when the compactor returns (see [The rules a compaction must pass](#the-rules-a-compaction-must-pass)). The size rules do not apply, because no round overflowed. A raise or a broken rule restores the records and raises that failure, and a compaction that passes is kept. `models.compact` returns `nil`. It runs no loop round of its own and renders no tool list, though its compactor may call `models.infer` or `tools.call`.
+The first line removes the last record, and the second empties the list. `models.compact` snapshots the records, calls the compactor with the reason you pass, and checks the structural rules when the compactor returns (see [The rules a compaction must pass](#the-rules-a-compaction-must-pass)). The size rules do not apply, because no round overflowed. A raise or a broken rule restores the records and raises that failure, and a compaction that passes is kept. `models.compact` returns `nil`. It runs no loop round of its own and freezes no tool list, though its compactor may call `models.infer` or `tools.call`.
 
 `models.compact` checks its arguments in a fixed order and raises the first failure as a `lua`-kind error before the compactor runs:
 
