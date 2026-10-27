@@ -28,7 +28,7 @@ The run result is:
 finished
 ````
 
-Even this small run observes a full set of run limits. The run limits are the bounds every run works within: how many model rounds one loop call may take, how many tasks run at once, how large a model reply may be, how much memory and logging each section's Lua may use, and how long a wait for a model reply may last. A model round is one request to a model and its reply. One set of run limits holds across the whole run, and those limits are the built-in defaults unless the [Harness](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host) that runs the prompt sets its own values for that run.
+Even this small run observes a full set of run limits. The run limits are the bounds every run works within: how many model rounds one loop call may take, how many tasks run at once, and how much memory and logging each section's Lua may use. A model round is one request to a model and its reply. One set of run limits holds across the whole run, and those limits are the built-in defaults unless the [Harness](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host) that runs the prompt sets its own values for that run. How large a model reply may be and how long a wait for a model reply may last are not run limits but request limits, which the gateway client applies to each model request.
 
 ### The run limits in brief
 
@@ -36,9 +36,12 @@ Each run limit has its own default and its own owner, and [Run limits and their 
 
 - The [round cap](11-conversations.md#tool-rounds-and-the-round-cap), the most model rounds one `models.loop` call takes.
 - The [concurrency limit](14-fanout.md#concurrency-and-the-admission-window), the most tasks that run at once.
-- The response cap, the largest model reply a run accepts.
 - The memory ceiling, the most Lua heap each [section VM](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals) may use.
 - The log event quota, the most `log` calls each section VM records, together with the log byte quota that follows from it.
+
+The same section gives the defaults of the two request limits the gateway client applies to each model request:
+
+- The response cap, the largest model reply the client accepts.
 - The receive timeout, the longest wait for the next part of a model reply.
 
 ### The failure families
@@ -108,26 +111,33 @@ When the model answers with text within its three rounds, the run result is that
 
 The `max_tool_iterations: 3` line sets this prompt's round cap to 3, so the [`models.loop`](11-conversations.md#starting-a-conversation) call in `## Ask` takes at most three model rounds. Reaching the round cap fails the loop call with an error value whose `kind` is `tool_loop_exhausted` and whose message is `tool-call loop did not converge`, and the block catches it with [`pcall`](05-lua-environment.md#raising-and-catching-errors) and returns both.
 
-### The six run limits
+### The four run limits
 
-A run observes six limits, each with a default:
+A run observes four limits, each with a default:
 
 | Limit | Default | Applies to | Who changes it |
 |---|---|---|---|
 | Round cap | 24 model rounds | each `models.loop` call or model handle `loop` call | the prompt's `max_tool_iterations`, or the Harness |
 | Concurrency limit | 8 tasks at once | every task the run admits, fanout arms included | the Harness, and `tasks.concurrency` lowers it for a chain's own spawns |
-| Response cap | 16 MiB | each model reply | the Harness |
 | Memory ceiling | 64 MiB | the Lua heap of each section VM | the Harness |
 | Log event quota | 1024 `log` events | each section VM | the Harness |
+
+These built-in values are the default limits, the set every run starts from. The Harness that runs a prompt can replace any of the four defaults, so the limits a given run observes can differ from the ones in the table. One set of limits applies to the whole run, the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) and every section included, and it is the default set unless the Harness sets another.
+
+Every count and size limit of a run is at least 1, so the round cap, the concurrency limit, the memory ceiling, and the log event quota can never be zero.
+
+The gateway client also applies two request limits to each model request, each with a default:
+
+| Limit | Default | Applies to | Who changes it |
+|---|---|---|---|
+| Response cap | 16 MiB | each model reply | the Harness |
 | Receive timeout | 120 seconds | each wait for the next part of a model reply | the Harness |
 
-These built-in values are the default limits, the set every run starts from. The Harness that runs a prompt can replace any of the six defaults, so the limits a given run observes can differ from the ones in the table. One set of limits applies to the whole run, the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) and every section included, and it is the default set unless the Harness sets another.
-
-Every count and size limit of a run is at least 1, so the round cap, the concurrency limit, the response cap, the memory ceiling, and the log event quota can never be zero.
+The response cap is at least 1 byte, so it can never be zero.
 
 ### The one limit a prompt sets
 
-`max_tool_iterations` is the only run limit a prompt's frontmatter can change (see [Optional keys and unknown keys](02-file-structure.md#optional-keys-and-unknown-keys)), and the other five limits come from the Harness that runs the prompt. A prompt's own `max_tool_iterations` value replaces the run's round cap. Without the key, the run's cap applies, which is 24 unless the Harness sets another.
+`max_tool_iterations` is the only run limit a prompt's frontmatter can change (see [Optional keys and unknown keys](02-file-structure.md#optional-keys-and-unknown-keys)), and the other three run limits come from the Harness that runs the prompt. A prompt's own `max_tool_iterations` value replaces the run's round cap. Without the key, the run's cap applies, which is 24 unless the Harness sets another.
 
 The round cap allows 24 model rounds by default in each `models.loop` call or model handle `loop` call. Each call starts its own count at zero, so two loop calls in one section can each use up to the full cap.
 
@@ -137,13 +147,13 @@ Reaching the round cap fails the loop call with an error value whose `kind` is `
 
 The concurrency limit caps how many tasks run at once across the whole run, 8 by default. The Harness sets it, and no frontmatter key changes it. By default a run admits at most 8 tasks at once, fanout arms included; the Harness can set a different limit, and `tasks.concurrency` lowers it for a chain's own spawns.
 
-Each model reply may be at most 16 MiB by default, and only the Harness can change that cap. Each wait for the next piece of a model reply times out after 120 seconds by default, and only the Harness can change that timeout. [Model request limits and failures](#model-request-limits-and-failures) shows how both bound a model round.
+The response cap and the receive timeout are request limits, not run limits: the gateway client applies them to each model request. Each model reply may be at most 16 MiB by default, and each wait for the next piece of a model reply times out after 120 seconds by default. No frontmatter key changes either. [Model request limits and failures](#model-request-limits-and-failures) shows how both bound a model round.
 
 The memory ceiling and the log event quota bound each section entry's Lua, and [Lua memory and log quotas](#lua-memory-and-log-quotas) covers them.
 
 ### The call depth cap is not a run limit
 
-The call depth cap of 8 is a fixed Engine constant, not one of the six run limits, so neither the Harness nor a prompt's frontmatter can change it. [The recursion depth cap](08-jump-and-call.md#the-recursion-depth-cap) covers how that cap works.
+The call depth cap of 8 is a fixed Engine constant, not one of the four run limits, so neither the Harness nor a prompt's frontmatter can change it. [The recursion depth cap](08-jump-and-call.md#the-recursion-depth-cap) covers how that cap works.
 
 ## Lua memory and log quotas
 

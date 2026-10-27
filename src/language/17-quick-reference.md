@@ -271,10 +271,10 @@ Each row gives a limit, its default, and who can change it, and the Pack tools t
 | `lua_log_events` | 1024 `log` events per section VM | Harness | [Lua memory and log quotas](16-limits-and-errors.md#lua-memory-and-log-quotas) |
 | `lua_memory_bytes` | 64 MiB per section VM | Harness | [Lua memory and log quotas](16-limits-and-errors.md#lua-memory-and-log-quotas) |
 | `max_concurrency` | 8 tasks at once | Harness | [Run limits and their defaults](16-limits-and-errors.md#run-limits-and-their-defaults) |
-| `max_response_bytes` | 16 MiB per model reply | Harness | [Run limits and their defaults](16-limits-and-errors.md#run-limits-and-their-defaults) |
+| `max_response_bytes` | 16 MiB per model reply, a request limit the gateway client applies | Harness | [Run limits and their defaults](16-limits-and-errors.md#run-limits-and-their-defaults) |
 | `max_tool_iterations` | 24 model rounds per loop call unless the Harness sets another | frontmatter | [Run limits and their defaults](16-limits-and-errors.md#run-limits-and-their-defaults) |
 | output reserve | `max_tokens`, else one eighth of the window up to 8192 tokens, at most half the window | fixed | [The context precheck](11-conversations.md#the-context-precheck) |
-| `receive_timeout` | 120 seconds per wait for the next part of a model reply | Harness | [Run limits and their defaults](16-limits-and-errors.md#run-limits-and-their-defaults) |
+| `receive_timeout` | 120 seconds per wait for the next part of a model reply, a request limit the gateway client applies | Harness | [Run limits and their defaults](16-limits-and-errors.md#run-limits-and-their-defaults) |
 | recursion depth cap | 8 nested levels, counting each `call`, task, and fanout arm | fixed | [The recursion depth cap](08-jump-and-call.md#the-recursion-depth-cap) |
 | `tools.offer` array length | 100,000 entries per `tools.offer` or `tools.offer_dynamic` call | fixed | [Errors from `tools.offer`](12-tools.md#errors-from-toolsoffer) |
 
