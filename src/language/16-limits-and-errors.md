@@ -122,7 +122,7 @@ A run observes four limits, each with a default:
 | Memory ceiling | 64 MiB | the Lua heap of each section VM | the Harness |
 | Log event quota | 1024 `log` events | each section VM | the Harness |
 
-These built-in values are the default limits, the set every run starts from. The Harness that runs a prompt can replace any of the four defaults, so the limits a given run observes can differ from the ones in the table. One set of limits applies to the whole run, the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) and every section included, and it is the default set unless the Harness sets another.
+These built-in values are the default limits, the set every run starts from. The Engine accepts other limits from the code that starts a run, but the Harness passes none today, so every run observes these defaults. One set of limits applies to the whole run, the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) and every section included.
 
 Every count and size limit of a run is at least 1, so the round cap, the concurrency limit, the memory ceiling, and the log event quota can never be zero.
 
