@@ -1450,7 +1450,7 @@ An infer round that returns text reports exactly one `assistant_reply` event, st
 | `finish_reason` | The provider's finish reason, present only when the provider sent one |
 | `metrics` | The call's metrics, present only when any were reported |
 
-The Engine adds no metrics of its own, so `metrics` holds only what the provider reported.
+The Engine adds nothing of its own, so every figure comes from one of four sources: the backend's `usage`, llama.cpp's `timings`, vLLM's `metrics`, and the client's own `client` timing.
 
 Each infer round counts as one model round on the run's round counter, the number its events report in `turn`. Inside a spawned task (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn)), it counts on the task's own counter instead, so a task's infer rounds count against the task's own cap rather than the run's.
 
