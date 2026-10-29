@@ -182,13 +182,13 @@ The role label of a declared [model role](10-models.md#model-roles-instead-of-mo
 
 Every section VM is set up in one fixed order. The same order applies to every section entry, the H1 pass, every fanout arm, and every spawned task chain:
 
-1. `args`, `argv`, `sys`, and `var`
-2. `log`, `store`, and `json`
-3. `ui`
-4. `item`
-5. `jump` and the `prompt` reads
-6. the suspending calls
-7. `models.loop` and `models.compact`
+1. `untrusted`, when the VM is built
+2. `args`, `argv`, `sys`, `var`, `tools`, `models`, `messages`, and `compactors`
+3. `log`, `store`, and `json`
+4. `ui`
+5. `item`
+6. `jump` and the `prompt` reads
+7. the suspending calls: `call`, the `tasks` table, `tools.call`, `models.infer`, `models.loop`, and `models.compact`
 8. Pack preludes
 9. `require`
 10. the store's suspending calls
