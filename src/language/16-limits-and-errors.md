@@ -1091,6 +1091,7 @@ Each completion error kind has one cause and a fixed answer to whether it is ret
 | `Unavailable` | model access turned off or not configured, or status 401 or 403 | no |
 | `Rejected` | any other non-success status | no |
 | `EmptyReply` | a reply with no tool calls and no text other than whitespace | no |
+| `InvalidParts` | a caller built a tool call or completion from parts the validating constructors refuse | no |
 
 ### The response cap and the receive timeout
 
