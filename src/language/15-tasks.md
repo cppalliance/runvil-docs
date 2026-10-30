@@ -2006,7 +2006,7 @@ A task runs the same Lua as any chain, and these rules cover what happens when i
 - When two tasks each run a `call`, the called chains can finish in either order, one finishing while the other is still running, and each `call` still returns its own result to its own task.
 - A `models.infer` reply made inside a `call` chain of a task flows back through `call` to the task's result and then to the spawner's `tasks.join`. For example, `## Main` joins `### Caller`, which runs `return call('#### Leaf')`, and `#### Leaf` runs `return models.infer(var.who)`, so the reply reaches `## Main` as the result of `### Caller`.
 - An adhoc tool handler runs inside the calling chain, so it can start and wait on tasks just as block code can (see [How adhoc tool handlers run](12-tools.md#how-adhoc-tool-handlers-run)).
-- Each task keeps its own round count starting at zero, so its model rounds count against its own cap and never add to its spawner's count, and its `tasks.status` reads `turns` as 0 while its first `models.infer` round is in flight and 1 after it returns.
+- Each task keeps its own round count starting at zero, so its rounds are numbered on its own counter and never add to its spawner's count, and its `tasks.status` reads `turns` as 0 while its first `models.infer` round is in flight and 1 after it returns.
 - A task spawned after its spawner writes a store path reads the spawner's content, while a task spawned before that write always meets a claims conflict when it reads the path. That conflict ends the run on the spot with run error kind `Determinism` and a message naming the path, and no `pcall` catches it (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)).
 
 ## Task events and task errors

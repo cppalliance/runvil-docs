@@ -892,7 +892,7 @@ A call the discovery tools refuse does not fail the round. The model gets refusa
 
 Here `{tool}` is `GetDynamicTools` or `CallDynamicTool`, whichever the model called, `{key}` is the key that held the value, `{type}` is the JSON type of that value, such as `number`, `array`, or `null`, and `{reason}` is the regex parser's own reason, such as `unclosed group` for the pattern `(`. A quoted name or pattern shows in double quotes with escapes. So in the section above, a model call to `grab` by its own name runs nothing and gets `"grab" is a dynamic tool; call it through CallDynamicTool with toolName "grab"`.
 
-A refusal is Engine text, so the model reads it as is, outside the envelope, and its `tool_result` event reports `trusted` as `true`. A refused call runs no tool, and the run reports it as a failed tool call with a `tool_call_failed` event. A name in neither set still fails the round: a model call to a name that neither the Static Set nor the Dynamic Set holds raises `out_of_scope_tool` (see [The `out_of_scope_tool` error](#the-out_of_scope_tool-error)), and that error's in-scope list names only the Static Set's tools, `GetDynamicTools` and `CallDynamicTool` included.
+A refusal is Engine text, so the model reads it as is, outside the envelope, and its `tool_result` event reports `trusted` as `true`. A refused call runs no tool, and the run reports it as a failed tool call with a `tool_call_failed` event. A name in neither set still fails the round: a model call to a name that neither the Static Set nor the Dynamic Set holds raises `out_of_scope_tool` (see [The `out_of_scope_tool` error](#the-out_of_scope_tool-error)), and that error's offered list names only the Static Set's tools, `GetDynamicTools` and `CallDynamicTool` included. Its message then ends with `; a Dynamic Set tool is reached through GetDynamicTools and CallDynamicTool`, after the not-offered hint when that applies.
 
 #### Names the discovery tools take
 
@@ -2311,7 +2311,7 @@ The loop resolves each name through the section entry's Static Set. An advertise
 Before any call runs, each tool name the model requests in the round is checked against the names that round advertised and the names in the section entry's Dynamic Set, though a direct call to a Dynamic Set tool only gets refusal text (see [Mistakes the model gets back as text](#mistakes-the-model-gets-back-as-text)). A name in neither is out of scope, and when any name in the round is out of scope, the whole round fails before any of its calls runs, at the first such name. `models.loop` raises an error value of kind `out_of_scope_tool` whose `name` field holds the requested name. In the `search-loop` prompt, a model call to `rogue`, caught with `pcall(models.loop)`, gives the kind `out_of_scope_tool`, the name `rogue`, and the message:
 
 ````text
-tool "rogue" is not in this section's scope; in-scope aliases: ["web_search"]
+tool "rogue" is not in this section's scope; aliases this section offers: ["web_search"]
 ````
 
 An out-of-scope call ends the loop in the round where it happens, and the model gets no further round to recover, so the failed round is the only request the model receives. The run reports the refused call as a failed tool call event: exactly one, under the section that ran the loop, after the batch's tool-calls event has already been reported. [The `out_of_scope_tool` error](#the-out_of_scope_tool-error) gives the rest of this error's rules.
@@ -2515,7 +2515,7 @@ You read a caught tool error through three things:
 For an out-of-scope call, `err.kind .. '|' .. err.name .. '|' .. tostring(err)` renders:
 
 ````text
-out_of_scope_tool|rogue|tool "rogue" is not in this section's scope; in-scope aliases: ["echo"]
+out_of_scope_tool|rogue|tool "rogue" is not in this section's scope; aliases this section offers: ["echo"]
 ````
 
 `pcall` around a script `tools.call` catches every failure at the call alike: a string that is not a tool id, an unbound id (caught as `unbound_tool`), an adhoc tool handler's error (caught as the very value the handler raised), or the tool's own failure. An uncaught error from `tools.call` ends the run with that error.
@@ -2573,13 +2573,13 @@ return messages[#messages].content
 The round advertises one tool, `echo`. When the model calls `rogue` instead, the run result is:
 
 ````text
-the model asked for rogue: tool "rogue" is not in this section's scope; in-scope aliases: ["echo"] (1)
+the model asked for rogue: tool "rogue" is not in this section's scope; aliases this section offers: ["echo"] (1)
 ````
 
-The error is a hard error. It records the requested name, whether that name is the wire name of a tool in the run's tool catalog, and the round's in-scope tools:
+The error is a hard error. It records the requested name, whether that name is the wire name of a tool in the run's tool catalog, and the aliases the section offers:
 
 - The `name` field holds the tool name exactly as the model called it, whether that is `rogue`, `web_search`, `web/search`, or `nonexistent`.
-- The message names the requested tool and lists the in-scope tools by their wire names, not their tool ids, each in double quotes, and it ends with that list written as a bracketed list of quoted names, such as `["echo"]`.
+- The message names the requested tool and lists the aliases the section offers by their wire names, not their tool ids, each in double quotes, as a bracketed list of quoted names, such as `["echo"]`. The list ends the message, unless the not-offered hint follows it or the section's Dynamic Set holds a tool, which adds `; a Dynamic Set tool is reached through GetDynamicTools and CallDynamicTool` last.
 - None of the round's calls run, so the round appends nothing, and `#messages` is unchanged after `pcall(models.loop)` fails, which is why the result above ends with `(1)`.
 - The round that holds the out-of-scope call is the last model request of the loop, so the model gets no further round to retry with a valid name.
 
@@ -2587,16 +2587,16 @@ Uncaught, it ends the section and fails the run with run error kind `Tool`, so a
 
 #### The not-offered hint
 
-The message tells a tool the section forgot to offer apart from a wrong or unknown name. When the model calls the wire name of a tool in the run's tool catalog that the current section did not offer, the message adds a hint after the in-scope list. In the `scope-check` section, on a Host that serves `web`, the only in-scope tool is the adhoc `echo`, so a model call to `web_search`, the wire name of a catalog tool this section never offered, gives a message ending:
+The message tells a tool the section forgot to offer apart from a wrong or unknown name. When the model calls the wire name of a tool in the run's tool catalog that the current section did not offer, the message adds a hint after the offered list. In the `scope-check` section, on a Host that serves `web`, the only alias the section offers is the adhoc `echo`, so a model call to `web_search`, the wire name of a catalog tool this section never offered, gives a message ending:
 
 ````text
 ["echo"] (a catalog tool that was not offered in this section)
 ````
 
-The hint appears only in that case. Two other mistakes get the same error without it, so their message ends with the in-scope list:
+The hint appears only in that case. Two other mistakes get the same error without it, so their message ends with the offered list, or with the Dynamic Set ending when the section's Dynamic Set holds a tool:
 
-- Calling a tool by its tool id instead of its wire name, such as `web/search`. The `name` is `web/search`, the in-scope list still shows the advertised wire names, and no hint follows, because an id is never a wire name.
-- Calling a name that matches no tool at all, such as `nonexistent`. The `name` is `nonexistent`, and the message lists the round's in-scope tools.
+- Calling a tool by its tool id instead of its wire name, such as `web/search`. The `name` is `web/search`, the offered list still shows the advertised wire names, and no hint follows, because an id is never a wire name.
+- Calling a name that matches no tool at all, such as `nonexistent`. The `name` is `nonexistent`, and the message lists the aliases the section offers.
 
 ### Tool errors that end the run
 
@@ -2605,10 +2605,10 @@ Run error kind `Tool` covers four uncaught failures: a dispatched tool's failure
 | Uncaught failure | Run message |
 |---|---|
 | A dispatched tool fails | `tool call failure: {message}` |
-| The model calls a tool outside the round's scope | `tool {name:?} is not in this section's scope; in-scope aliases: {in_scope:?}`, followed by the not-offered hint when it applies |
+| The model calls a tool outside the round's scope | `tool {name:?} is not in this section's scope; aliases this section offers: {static_aliases:?}`, followed by the not-offered hint when it applies, then `; a Dynamic Set tool is reached through GetDynamicTools and CallDynamicTool` when the section's Dynamic Set holds a tool |
 | A script call names an id not bound in the run | `tool {name:?} is not a tool in this run; catalog tools: {ids:?}`, listing every tool id in the run's tool catalog |
 
-In these messages, each `:?` placeholder, such as `{name:?}`, shows the value in double quotes with escapes, so a name renders as `"rogue"` and an in-scope list as `["echo"]`.
+In these messages, each `:?` placeholder, such as `{name:?}`, shows the value in double quotes with escapes, so a name renders as `"rogue"` and the offered list as `["echo"]`.
 
 ## Pack preludes
 

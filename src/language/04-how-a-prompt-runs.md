@@ -212,6 +212,7 @@ A prompt's parse events are the first records of its run (see [Effects and Harne
 | the prompt does not parse | `parse_started` | `parse_failed` |
 | the input is refused | `parse_started` | `parse_succeeded` |
 | the requirements are unmet | `parse_started` | `parse_succeeded` |
+| the run is refused when it is built: an unsupported or missing version, no declared store, or a store that fails its probe | `parse_started` | `parse_succeeded` |
 
 A prompt that does not parse ends its run as failed with the kind `Parse`, and the failure message is the parse error's full cause chain. Requirements are checked only after the prompt parses, so the record of a run refused for unmet requirements ends with `parse_succeeded`. The prompt is also parsed before its input is checked, so an input refusal always follows a successful parse, and the refused run's last event is `parse_succeeded`. A refused or unparseable prompt runs no section code, and its record holds only parse events.
 
@@ -283,7 +284,7 @@ Prepare runs in a fixed order:
 8. It refuses a prompt the environment cannot satisfy.
 9. It builds the run.
 
-When the run is built, after preparation and before any section runs, the `runvil` version in the frontmatter is checked (see [The `runvil` version key](02-file-structure.md#the-runvil-version-key)). Version `0` proceeds, and any other version is refused as unsupported. A missing version fails with the message `not a runvil prompt: no runvil version`. Either way, a prompt with an unsupported or missing version produces no section result.
+When the run is built, after preparation and before any section runs, the `runvil` version in the frontmatter is checked (see [The `runvil` version key](02-file-structure.md#the-runvil-version-key)). Version `0` proceeds, and any other version is refused as unsupported. A missing version fails with the message `not a runvil prompt: no runvil version`. Either way, a prompt with an unsupported or missing version produces no section result. Such a run reports no run events, so its record ends with `parse_succeeded`, the last parse event.
 
 ### Staging the input file
 
@@ -340,7 +341,7 @@ The refused run's record ends with the `parse_succeeded` event, because the prom
 
 Every Pack a prompt lists under the `uses:` key (see [Tools, Packs, and the `uses:` key](12-tools.md#tools-packs-and-the-uses-key)) is a required Pack: the run does not start unless the Host can provide it. Each one is named by its Pack id and kept in declaration order. Before any Lua runs, prepare checks each declared Pack against the Host and refuses the run unless the Host has that Pack and it can serve and has every service it needs.
 
-A declared Pack counts as present when the Host has it and it can serve, even if it offers no tools, so declaring a Pack that has no tools never refuses the run. A Pack the frontmatter declares, and any Pack listed as able to serve, still has a Pack object in Lua when it offers no tool. The Pack check is the Harness's part of prepare. The Engine's own part checks model roles only, so it finds nothing missing in `uses: [web]` even when the catalog holds no `web` tool.
+A declared Pack counts as present when the Host has it and it can serve, even if it offers no tools, so declaring a Pack that has no tools never refuses the run. A Pack the frontmatter declares, and any Pack listed as able to serve, still has a Pack object in Lua when it offers no tool. The Pack check is the Harness's part of prepare. The Engine's own part checks model roles and the reserved Pack ids `adhoc` and `dynamic` in the run's catalog and roster, so it finds nothing missing in `uses: [web]` even when the catalog holds no `web` tool.
 
 Each declared Pack's prelude runs in every section entry's VM, in the order the prompt declares the Packs, after the Engine globals are installed and before any block runs. An undeclared Pack's prelude never runs, even when the prompt calls that Pack's tools.
 
@@ -1661,7 +1662,7 @@ A run reports its progress as ordered [run events](01-what-a-prompt-is.md#a-mark
 
 A prompt with no H1 blocks, such as `loop`, goes straight from `run_started` to the first section's `section_started`. A block that is waiting reports neither succeeded nor failed until it finally returns or fails.
 
-A run that does not succeed ends its events with `run_failed` under the H1 title in place of `run_succeeded`. The only run-level events are `run_started`, `run_succeeded`, and `run_failed`, and there is no run-level cancel event, so a cancelled run also ends with `run_failed`, even though its outcome is cancelled.
+A run that started and does not succeed ends its events with `run_failed` under the H1 title in place of `run_succeeded`. The only run-level events are `run_started`, `run_succeeded`, and `run_failed`, and there is no run-level cancel event, so a cancelled run also ends with `run_failed`, even though its outcome is cancelled.
 
 ### Which name an event carries
 

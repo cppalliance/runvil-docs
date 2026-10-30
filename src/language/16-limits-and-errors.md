@@ -833,7 +833,7 @@ A failed run's message is the underlying error's own text followed by the text o
 
 A run fails with kind `Parse` when the prompt fails to parse, including when one of its Lua blocks has a syntax error and does not compile. A prompt that fails to parse ends its run as failed with kind `Parse` before any section or code runs, before input staging and before the wait for Packs, and the recorded message is the parse error followed by its chain of causes.
 
-Any parse failure, whatever its parse error kind, ends the run with kind `Parse`, including a file with no `runvil:` key, whose parse error reads `not a runvil prompt: no runvil version`. The run carries the parse failure's own message and its location when known: the path is the frontmatter name or `<prompt>`, with line, column, and span when known. A `runvil:` key with an unsupported version reports `Version` instead.
+Any parse failure, whatever its parse error kind, ends the run with kind `Parse`. A file with no `runvil:` key also fails with kind `Parse` and the message `not a runvil prompt: no runvil version`, but its prompt parses: the check runs when the run is built, after input staging, the wait for Packs, and the requirements check, so an input or requirements refusal comes first when one applies, and its record ends with `parse_succeeded`. The run carries the parse failure's own message and its location when known: the path is the frontmatter name or `<prompt>`, with line, column, and span when known. A `runvil:` key with an unsupported version reports `Version` instead.
 
 A run fails with kind `Version` when the prompt's [`runvil:` key](02-file-structure.md#the-runvil-version-key) declares a major version other than `0`, and the message is `unsupported runvil version: {n} (this build supports major 0)`, as `future` shows.
 
@@ -874,7 +874,7 @@ Run error kind `Lua` means a section's Lua fails at run time or returns an unusa
 
 A [Pack prelude](12-tools.md#pack-preludes) that cannot install also fails the run with `Lua`, before any section code runs.
 
-A run fails with kind `Quota` when a section entry's Lua runs out its `log` event quota or its `log` byte quota, or when a `call`, `tasks.spawn`, or `tasks.fanout` arm would nest past the call depth cap. No instruction-count quota runs out in practice. A `Quota` failure's message is one of these:
+A run fails with kind `Quota` when a section entry's Lua runs out its `log` event quota or its `log` byte quota, or when a `call`, `tasks.spawn`, or `tasks.fanout` arm would nest past the call depth cap. No instruction-count quota exists. A `Quota` failure's message is one of these:
 
 ````text
 lua log event quota exceeded
@@ -891,7 +891,7 @@ A run fails with kind `ContextExhausted` when a request overflows the model's co
 
 Run error kind `Internal` means an Engine invariant breaks, a fault in the Engine rather than in the prompt. That includes Harness mistakes such as an answer of the wrong kind, an answer for an id never issued, or a second answer to one effect. The message starts with `internal invariant violated: {message}`, and the location names an Engine source file and line rather than a place in the prompt.
 
-A run fails with kind `RequirementsUnmet` when the environment falls short of a requirement the prompt states: a required Pack is missing, unavailable, or needs a service the run lacks, the bound model fails a declared requirement such as a context minimum or a hard keyword, or an H1 block fails the prompt's [hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate).
+A run fails with kind `RequirementsUnmet` when the environment falls short of what the prompt needs: a required Pack is missing, unavailable, or needs a service the run lacks, the bound model fails a declared requirement such as a context minimum or a hard keyword, a tool in the run's catalog or a Pack in its roster has a Pack id the Engine reserves, `adhoc` or `dynamic`, or an H1 block fails the prompt's [hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate).
 
 ### Cancelled runs and preparation failures
 

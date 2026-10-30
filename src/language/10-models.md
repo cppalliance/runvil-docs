@@ -1452,7 +1452,7 @@ An infer round that returns text reports exactly one `assistant_reply` event, st
 
 The Engine adds nothing of its own, so every figure comes from one of four sources: the backend's `usage`, llama.cpp's `timings`, vLLM's `metrics`, and the client's own `client` timing.
 
-Each infer round counts as one model round on the run's round counter, the number its events report in `turn`. Inside a spawned task (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn)), it counts on the task's own counter instead, so a task's infer rounds count against the task's own cap rather than the run's.
+Each infer round counts as one model round on the run's round counter, the number its events report in `turn`. Inside a spawned task (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn)), it counts on the task's own counter instead, so a task's `turn` numbers, and its `tasks.status` `turns`, count only its own rounds. No cap counts infer rounds.
 
 An infer round's `thinking` event, `assistant_reply` event, and answer record name the model the round was actually sent to. That can be a substitute the Host picked in place of the model the prompt bound. The name comes from the model the request named, whatever name the backend's response gave.
 

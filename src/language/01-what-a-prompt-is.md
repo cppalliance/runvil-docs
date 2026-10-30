@@ -605,7 +605,7 @@ Every store call a block makes, even a read, is a store operation that the Harne
 
 ### Every effect gets one answer
 
-The Harness answers every effect exactly once, either with its result or with its failure, such as the reason a model round, a tool call, or a store operation failed. A round the Host stops is answered with its failure, as [Stopping a model round](#stopping-a-model-round) shows.
+The Harness answers every effect exactly once: with its result, with its failure, such as the reason a model round, a tool call, or a store operation failed, or as dropped when it gives the work up. A round the Host stops is answered as dropped, which the waiting call raises as the `cancelled` error, as [Stopping a model round](#stopping-a-model-round) shows.
 
 ### Work that needs no Harness
 

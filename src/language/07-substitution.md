@@ -516,7 +516,7 @@ Here `argv.prose` and `args` both equal `'hello there'`.
 
 ### When `argv` is nil
 
-Under an explicit declaration, `argv` is nil for substitution when the argument string does not parse as JSON, when it is the JSON `null`, or when the H1 pass leaves `argv` nil, so the argument strings `not json` and `null` both leave a nil `argv` under a `query` declaration. The default declaration always wraps the string instead. An `argv` placeholder never renders an empty string for a nil `argv`: `{{ argv }}` and every `{{ argv.field }}` fail with substitution kind `NilArgv`, the kind for a nil `argv` (see [Freezing `argv` after the H1 pass](06-arguments.md#freezing-argv-after-the-h1-pass)), with a message of the form `{{ {path} }} is nil (the args string is not JSON)` that uses the placeholder's own path. Check `argv` in Lua first and read `prose` only when the argument string parsed:
+Under an explicit declaration, `argv` is nil for substitution when the argument string does not parse as JSON, when it is the JSON `null`, or when the H1 pass leaves `argv` nil, so the argument strings `not json` and `null` both leave a nil `argv` under a `query` declaration. The default declaration always wraps the string instead. An `argv` placeholder never renders an empty string for a nil `argv`: `{{ argv }}` and every `{{ argv.field }}` fail with substitution kind `NilArgv`, the kind for a nil `argv` (see [Freezing `argv` after the H1 pass](06-arguments.md#freezing-argv-after-the-h1-pass)), with a message of the form `{{ {path} }} is nil (argv holds no value)` that uses the placeholder's own path. Check `argv` in Lua first and read `prose` only when the argument string parsed:
 
 ````markdown
 ---
@@ -550,7 +550,7 @@ Run with the argument string `{"query":"x"}`, the run result is:
 Value: {"query":"x"}
 ````
 
-Without the guard, the read of `prose` under `not json` fails with an error naming `argv`, `{{ argv }} is nil (the args string is not JSON)`. The guard works because prose that a block never reads never renders, so even prose holding an unclosed `{{` or a missing key runs clean when the block never reads `prose`.
+Without the guard, the read of `prose` under `not json` fails with an error naming `argv`, `{{ argv }} is nil (argv holds no value)`. The guard works because prose that a block never reads never renders, so even prose holding an unclosed `{{` or a missing key runs clean when the block never reads `prose`.
 
 ### The frozen `argv` and H1 repair
 
@@ -1289,7 +1289,7 @@ A substitution kind classifies a substitution failure, and every failure has exa
 | `MissingKey` | An absent key under `var`, `sys`, `argv`, or a global, as in `{{ sys.bogus }}` | `missing {{ {path} }}` |
 | `NullValue` | A path that lands on JSON null, under every root except `item` | `missing {{ {path} }}` |
 | `NilItem` | `{{ item }}` where no item is seeded | `{{ item }} is nil (no item is seeded into this section)` |
-| `NilArgv` | Any `argv` placeholder while `argv` is nil | `{{ {path} }} is nil (the args string is not JSON)` |
+| `NilArgv` | Any `argv` placeholder while `argv` is nil | `{{ {path} }} is nil (argv holds no value)` |
 | `Serialize` | A global that is not JSON data, and `{{ prose }}` | `global '{name}' in {{ {path} }} is not JSON data` |
 
 In the messages, `{path}` stands for the placeholder's path, `{name}` for the global's name, and `{namespace}` for the root you wrote.
