@@ -2445,7 +2445,7 @@ Every Pack a prompt declares is required, so a prompt that declares `user-input`
 
 ````text
 the environment cannot satisfy this prompt:
-- user-input needs runvil/input-broker, and the environment provides none
+- user-input is unavailable: the run lacks the services it needs: runvil/input-broker
 ````
 
 The ask tool is visible only in a run that has an operator input broker, because the Pack's declared needs keep a run without one from seeing the tool, and a Pack missing a service has its tools left out of the tool catalog. The refusal also gives you a guarantee: a section of a prompt that declares `user-input` always has an operator to ask, so it needs no connection check before calling `input.ask()`.

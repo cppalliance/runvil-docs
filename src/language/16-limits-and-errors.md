@@ -59,15 +59,15 @@ A run ends in one of three run outcomes: it completes with a text result, as `st
 
 A run that fails ends with a run error, the record of that failure. A run error carries exactly one run error kind naming what failed, because every Engine failure maps to exactly one run error kind. It also carries a human-readable message, the failing error's own text, that says what went wrong. Together the run error kind and the message form the typed contract of a failed run: the kind is exact, and each message always contains a fixed fragment that names the failure.
 
-A run error also carries a retryable flag, which says whether the failure may be transient, so that running the prompt again could succeed. Only model call failures caused by transient transport or backend problems set the flag, and every other failure reports that a retry will not help. [Retryable failures](#retryable-failures) lists which failures count.
+A run error carries nothing else. Whether a failure is retryable, meaning it may be transient so that running the prompt again could succeed, follows from what failed: only model call failures caused by transient transport or backend problems are retryable. [Retryable failures](#retryable-failures) lists which failures count.
 
-A run error can also carry a location, the place in a file that the failure points at. A parse failure in the frontmatter or in the structure of the prompt's body carries a location in the prompt file, an internal fault carries the Engine source file and line instead, and every other failure carries no location. [Where an error points](#where-an-error-points) covers each location field.
+A run error has no separate location either. Where a failure points at a place, its message says so: a parse failure that the run's first step finds ends its message with the prompt's name and, when known, its line and column, and an internal fault ends its message with the Engine source file and line. [Where an error points](#where-an-error-points) covers each form, and the location fields a parse error itself reports.
 
 ### Branching on a failure
 
-Each part of a run error has its own job. Use the run error kind to branch on what failed, the message to show a reader what happened, and the location to find the fault.
+Each part of a run error has its own job. Use the run error kind to branch on what failed, and the message to show a reader what happened and where.
 
-The [Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host) decides how it shows the run error kind, the message, and, for a parse failure, the location to the person running the prompt. Workshop reports a parse failure under a code named by its parse error kind, one of `parse_frontmatter`, `parse_structure`, `parse_fence`, `parse_list`, or `parse_lua`, with the message prefixed `line {line}: ` when the parser finds the line. The Harness records a failed run as the kind's name plus the message with its chain of causes.
+The [Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host) decides how it shows the run error kind and the message to the person running the prompt, and how it shows a parse error's location fields. Workshop reports a parse failure under a code named by its parse error kind, one of `parse_frontmatter`, `parse_structure`, `parse_fence`, `parse_list`, or `parse_lua`, with the message prefixed `line {line}: ` when the parser finds the line. The Harness records a failed run as the kind's name plus the message with its chain of causes.
 
 ## Run limits and their defaults
 
@@ -306,7 +306,7 @@ With a Harness log event quota of 1, a library that calls `log('one')` and then 
 
 ### Reading a quota error
 
-Left uncaught, an exhausted log event quota ends the run with run error kind `Quota`, and the remedy is to raise the matching ceiling or change the prompt so it needs less. A log quota failure in the H1 pass still ends the run as `Quota`, unlike a Lua error there, which becomes `RequirementsUnmet`. The uncaught message names no prompt line, and the run error carries no location.
+Left uncaught, an exhausted log event quota ends the run with run error kind `Quota`, and the remedy is to raise the matching ceiling or change the prompt so it needs less. A log quota failure in the H1 pass still ends the run as `Quota`, unlike a Lua error there, which becomes `RequirementsUnmet`. The uncaught message names no prompt line.
 
 Left uncaught, every Lua quota error ends the run with run error kind `Quota`, and the only quotas a block can run out are the log event quota and the log byte quota. Caught as an error value, a Lua quota error has kind `lua`, the same kind as an ordinary Lua runtime error, rather than a kind of its own. The error value has no field naming which quota ran out; only its message tells the two apart, `lua log event budget exceeded` or `lua log cumulative byte budget exceeded`.
 
@@ -577,7 +577,7 @@ Parse error kind `Internal` means the parser fails through no fault of the promp
 
 ## Where an error points
 
-After this section you can read a parse failure's location, with its path, line, column, and byte span, and know which failures carry each field.
+After this section you can read a parse failure's location, with its prompt name, line, column, and byte span, know which failures carry each field, and read the location a run error's message names.
 
 ````markdown
 ---
@@ -603,48 +603,48 @@ The first `## S` is on line 9 and the second is on line 13, so the parse fails w
 duplicate sibling section name `S`: first declared at line 9, again at line 13; sibling section names must be unique
 ````
 
-The run fails with run error kind `Parse`, and the failure carries this location:
+The parse error carries these location fields:
 
 | Field | Value |
 |---|---|
-| Path | `dup`, the prompt's frontmatter `name` |
+| Name | `dup`, the prompt's frontmatter `name` |
 | Line | 13 |
 | Column | 1 |
 | Byte span | the range of the second `## S` heading |
 
+The run fails with run error kind `Parse`, and its message is the parse error's own text, with no location added, because the Harness parses the prompt before the run starts. The location fields belong to the parse error itself, which a Host that parses the prompt, as Workshop does, can read beside the message.
+
 ### Location fields
 
-When the parser can point at the problem, a parse failure carries a location, and the Host reports it beside the message as a path, a line, a column, and a byte span, each when known. A location is that set of fields, and a byte span is the range of bytes the offending region covers. A failure that can locate the offending region, such as a duplicate sibling section, reports a byte span, and every other failure reports none. The failures that can locate their region are the heading checks and the fence rule checks in the prompt body.
+When the parser can point at the problem, a parse error carries location fields, and a Host can report them beside the message: the prompt's name, a line, a column, and a byte span, each when known. A location is that set of fields, and a byte span is the range of bytes the offending region covers. A failure that can locate the offending region, such as a duplicate sibling section, reports a byte span, and every other failure reports none. The failures that can locate their region are the heading checks and the fence rule checks in the prompt body.
 
-A failure with run error kind `Parse`, whether it comes from the frontmatter or from the body, carries a location in the prompt source. A parse error's line is the line in the prompt file as written, and you use it together with the column, not the byte span, to point at the mistake.
+A parse error, whether it comes from the frontmatter or from the body, points into the prompt source. A parse error's line is the line in the prompt file as written, and you use it together with the column, not the byte span, to point at the mistake.
 
-Error locations report 1-based line numbers and 1-based column numbers. A failure's line and column are 1-based when known, and an internal fault never has a column.
+Error locations report 1-based line numbers and 1-based column numbers. A failure's line and column are 1-based when known, and an internal fault's message names a line but never a column.
 
 ### Counting lines from the top of the file
 
 Parse locations use 1-based lines counted from the top of the file, the frontmatter included, so the opening `---` frontmatter delimiter is line 1. A bad `uses:` entry on the fifth line of the file is reported at line 5, and with frontmatter on lines 1 to 4 a `## S` heading on file line 8 is reported at line 8. Line numbers in body parse errors count from the top of the file, with the frontmatter lines included, not from the start of the body.
 
-### The prompt name or `<prompt>`
+### The prompt name
 
-A parse failure's location names the prompt by its frontmatter `name` when parsing gets that far, and falls back to the `<prompt>` placeholder otherwise, so you can tell which prompt failed. The `<prompt>` placeholder is the path a location shows when the prompt's name is not known, and the Host replaces it with its own label for the file.
+A parse error names the prompt by its frontmatter `name` when parsing gets that far, so you can tell which prompt failed. When the name is not known, the parse error has no name, and the Host can use its own label for the file.
 
 Every `Structure`, `Fence`, or `List` failure found after the frontmatter reports the prompt's frontmatter `name`, so a prompt with `name: dup` reports `dup`, plus the line and column of its offending span when it has one. A frontmatter failure, a Lua compile failure, and an internal fault report no name.
 
-A failure's location path is one of three things: the prompt's frontmatter `name`, the placeholder `<prompt>` that the Host replaces with its own label, or, for an internal fault, the path of an Engine source file. A `Structure`, `Fence`, or `List` failure has the prompt's frontmatter `name` as its location path, plus the 1-based line and column where the offending region starts when the parser can locate that region, and neither a line nor a column otherwise. The `dup` prompt shows the whole case: parse error kind `Structure`, location path `dup`, line 13, column 1, a byte span, and run error kind `Parse`.
+A `Structure`, `Fence`, or `List` failure has the prompt's frontmatter `name`, plus the 1-based line and column where the offending region starts when the parser can locate that region, and neither a line nor a column otherwise. The `dup` prompt shows the whole case: parse error kind `Structure`, name `dup`, line 13, column 1, a byte span, and run error kind `Parse`.
 
-### Which run errors carry a location
+### Where a run error's message points
 
-A run error can point back to a source location in the prompt file. A run error carries a source location only for parse and internal failures, and an internal fault points at a line of Engine source code rather than at the prompt. The source location a run error carries has the same location fields a parse error reports.
+A run error has no location fields of its own, so any place it points at is in its message. When the run's first step finds a parse failure, as it does for a missing `runvil:` version, the message ends with the parts of the location that are known, in the form ` (prompt {name}, line {line}, column {column})`. So the `version-zero` prompt without its `runvil:` line fails with `not a runvil prompt: no runvil version (prompt version-zero)` (see [A missing version](02-file-structure.md#a-missing-version)).
 
-Only parse failures have a prompt location. An `Internal` failure, a fault in the Engine rather than a mistake in the prompt, names the Engine source file and line of the broken invariant instead, and every other run error kind reports no location.
+Only parse failures point at the prompt. An `Internal` failure, a fault in the Engine rather than a mistake in the prompt, ends its message with ` (at {file}:{line})`, the Engine source file and line of the broken invariant. Every other run error's message names no location, and a parse failure that the Harness finds when it parses the prompt keeps the parse error's own message with nothing added.
 
-A parse failure that happens before the prompt's `name` is known shows the placeholder `<prompt>` as its path.
+A parse failure that happens before the prompt's `name` is known has no name.
 
 ### Frontmatter failure locations
 
 A frontmatter failure carries no prompt name, because it happens before the prompt's `name` is read from the frontmatter itself. A missing delimiter, a YAML decode failure, and an error in the `uses:` list all report none, even one found after the YAML decodes, and the Host can use its own label for the file instead. A frontmatter syntax error reports no prompt name for the same reason.
-
-A frontmatter failure's location path is the placeholder `<prompt>`, which the Host may replace with its own name for the file. A frontmatter YAML failure always shows `<prompt>` as its path, because it happens before the name is read.
 
 ````markdown
 ---
@@ -657,7 +657,7 @@ runvil: 0
 # Broken
 ````
 
-This file fails with parse error kind `Frontmatter` and `invalid frontmatter: {message}`, at line 4 with a column, path `<prompt>`, and no byte span.
+This file fails with parse error kind `Frontmatter` and `invalid frontmatter: {message}`, at line 4 with a column, no name, and no byte span.
 
 A frontmatter YAML failure has no byte span, so its only location is its line and column, and it never reports a span. A frontmatter failure's line and column come from the YAML error. An invalid-YAML failure reports the 1-based file line that the YAML parser gave, and reports no line when the YAML error has no location.
 
@@ -679,7 +679,7 @@ runvil: 0
 
 The `uses:` entry fails on its own value, so the parse error's line points at that entry's own line in the prompt file, line 5, and its column is 5, where the value starts after the list marker. A rejected frontmatter value's column is 1-based and points at the value's first character, the `n` of `not`, not at the `-` marker and the spaces before it.
 
-A Pack id declared twice under `uses:`, as in `twice`, gives neither a line nor a column, because that check compares the entries after the YAML decodes, when no source position is kept. A missing opening `---` or an unclosed frontmatter block also gives no line or column, and its location path is the placeholder `<prompt>`; the messages read `file must begin with a --- frontmatter delimiter` and `frontmatter was not closed with ---`.
+A Pack id declared twice under `uses:`, as in `twice`, gives neither a line nor a column, because that check compares the entries after the YAML decodes, when no source position is kept. A missing opening `---` or an unclosed frontmatter block also gives no line or column, and it has no name; the messages read `file must begin with a --- frontmatter delimiter` and `frontmatter was not closed with ---`.
 
 ### Body failure locations
 
@@ -796,7 +796,7 @@ The run result is:
 hello
 ````
 
-Change the version line to `runvil: 1` and run the prompt again. The run fails with run error kind `Version` and this message:
+Change the version line to `runvil: 1` and run the prompt again. The run fails with run error kind `Parse` and this message:
 
 ````text
 unsupported runvil version: 1 (this build supports major 0)
@@ -804,24 +804,22 @@ unsupported runvil version: 1 (this build supports major 0)
 
 A run error kind, as [The run result and outcomes](04-how-a-prompt-runs.md#the-run-result-and-outcomes) introduces it, is the stable name a failed run reports for what failed. Every failed run reports exactly one, which classifies the failure by what failed, and the run outcome shows that kind by its name, such as `Parse` or `Lua`.
 
-### The twelve run error kinds
+### The ten run error kinds
 
-A failed run reports one run error kind from a fixed set of twelve:
+A failed run reports one run error kind from a fixed set of ten:
 
 | Run error kind | What causes it |
 |---|---|
-| `Parse` | the prompt fails to parse, a Lua block does not compile, or the frontmatter has no `runvil:` key |
-| `Version` | the `runvil:` key declares a major version other than `0` |
-| `Binding` | `models.infer` or `models.loop` runs with neither `models.use` nor `models.default` in effect, or a section entry's first loop round fails to freeze its tool sets because two tools share a wire name, a tool's wire name is invalid, or its parameter schema is not a JSON object, unless an adhoc tool in the same set shadows it, or because a render answer breaks the render rules |
-| `Completion` | a model call fails, or an `empty_model_reply` goes uncaught |
+| `Parse` | the prompt fails to parse, a Lua block does not compile, or the `runvil:` key is missing or declares a major version other than `0` |
+| `Binding` | a section entry's first loop round fails to freeze its tool sets because two tools share a wire name, a tool's wire name is invalid, or its parameter schema is not a JSON object, unless an adhoc tool in the same set shadows it, or because a render answer breaks the render rules |
+| `Completion` | a model call fails, an `empty_model_reply` goes uncaught, or the Harness cannot fetch the Host's list of models |
 | `Tool` | a tool fails, is out of scope or unknown, or the tool-call loop reaches its round cap |
-| `Vfs` | a `store` operation fails uncaught, the run declares no store, or the store backend fails as the run starts |
-| `Determinism` | a store call meets a claims conflict |
+| `Vfs` | a `store` operation fails uncaught, a store call meets a claims conflict, the run declares no store, the store backend fails as the run starts, or the store refuses to stage the input file |
 | `Lua` | a section's Lua fails at run time or returns an unusable value, or a Pack prelude cannot install |
 | `Quota` | a log quota runs out, or a call nests past the call depth cap |
 | `ContextExhausted` | a request overflows the model's context window and compaction does not make it fit, or a direct `compactors.fail(reason)` call with any reason goes uncaught |
-| `Internal` | an Engine invariant breaks |
-| `RequirementsUnmet` | the environment falls short of a requirement the prompt states |
+| `Internal` | an Engine invariant breaks, or the Harness has nothing to wait for while the run is still pending |
+| `RequirementsUnmet` | the environment falls short of what the prompt needs, a model round has no model, the launch input does not match the `input:` declaration, or the Host's selected model is missing |
 
 A failed `{{ }}` substitution is an ordinary Lua error that `pcall` can catch, and it reports `Lua` when uncaught. A cancelled run ends as cancelled, never as a failed run, so no run error kind stands for a cancel.
 
@@ -829,19 +827,17 @@ A failed `{{ }}` substitution is an ordinary Lua error that `pcall` can catch, a
 
 A failed run's message is the underlying error's own text followed by the text of each cause in its chain, joined by `: `, and any cause whose text already appears in the message is left out so no text repeats. The kind never replaces the message, and the message stands on its own.
 
-### `Parse` and `Version`
+### `Parse`
 
-A run fails with kind `Parse` when the prompt fails to parse, including when one of its Lua blocks has a syntax error and does not compile. A prompt that fails to parse ends its run as failed with kind `Parse` before any section or code runs, before input staging and before the wait for Packs, and the recorded message is the parse error followed by its chain of causes.
+A run fails with kind `Parse` when the prompt fails to parse, including when one of its Lua blocks has a syntax error and does not compile. A prompt that fails to parse ends its run as failed with kind `Parse` before any section or code runs, before input staging and before the wait for Packs, and the recorded message is the parse error followed by its chain of causes, with no location added.
 
-Any parse failure, whatever its parse error kind, ends the run with kind `Parse`. A file with no `runvil:` key also fails with kind `Parse` and the message `not a runvil prompt: no runvil version`, but its prompt parses: the check runs when the run is built, after input staging, the wait for Packs, and the requirements check, so an input or requirements refusal comes first when one applies, and its record ends with `parse_succeeded`. The run carries the parse failure's own message and its location when known: the path is the frontmatter name or `<prompt>`, with line, column, and span when known. A `runvil:` key with an unsupported version reports `Version` instead.
+Any parse failure, whatever its parse error kind, ends the run with kind `Parse`. A file with no `runvil:` key also fails with kind `Parse`, but its prompt parses: the version check is the first start check on the run's first step, after input staging and the wait for Packs and before the store and requirements checks. So an input refusal comes first when one applies, and the record ends with `parse_succeeded`. The message is `not a runvil prompt: no runvil version (prompt {name})`, which ends with the prompt's frontmatter `name`.
 
-A run fails with kind `Version` when the prompt's [`runvil:` key](02-file-structure.md#the-runvil-version-key) declares a major version other than `0`, and the message is `unsupported runvil version: {n} (this build supports major 0)`, as `future` shows.
+A run also fails with kind `Parse` when the prompt's [`runvil:` key](02-file-structure.md#the-runvil-version-key) declares a major version other than `0`, and the message is `unsupported runvil version: {n} (this build supports major 0)`, as `future` shows.
 
 ### `Binding`, `Completion`, and `Tool`
 
-A run fails with kind `Binding` when a section calls [`models.infer`](10-models.md#running-a-round-with-modelsinfer) while neither `models.use` nor a prompt-wide `models.default` is in effect, and the message is `model binding required for section {section}`. A [`models.loop`](11-conversations.md#how-the-loop-runs) call in such a section raises the same [missing-model error](10-models.md#infer-errors-and-the-missing-model-error) and fails the run the same way. Prose by itself never requires a model; only an explicit `models.infer` of it does.
-
-A run also fails with kind `Binding` when a section entry's first loop round cannot freeze its tool sets (see [When an offer takes effect](12-tools.md#when-an-offer-takes-effect) and [What a Pack's render can change](12-tools.md#what-a-packs-render-can-change)). The run reports `tool_scope_validation_failed`, the round sends no request and freezes nothing, so offers still work after it, and the `models.loop` or `handle:loop` call raises an error value of kind `internal` that `pcall` catches. Left uncaught, it ends the run with kind `Binding`, and the run's message begins with the error's own message (see [The failed run's message](#the-failed-runs-message)). Each failure has its own message, where `{tool}` reads `{id} of the {pack} Pack in the {set}` and `{set}` is `Static Set` or `Dynamic Set`:
+A run fails with kind `Binding` when a section entry's first loop round cannot freeze its tool sets (see [When an offer takes effect](12-tools.md#when-an-offer-takes-effect) and [What a Pack's render can change](12-tools.md#what-a-packs-render-can-change)). The run reports `tool_scope_validation_failed`, the round sends no request and freezes nothing, so offers still work after it, and the `models.loop` or `handle:loop` call raises an error value of kind `internal` that `pcall` catches. Left uncaught, it ends the run with kind `Binding`, and the run's message begins with the error's own message (see [The failed run's message](#the-failed-runs-message)). Each failure has its own message, where `{tool}` reads `{id} of the {pack} Pack in the {set}` and `{set}` is `Static Set` or `Dynamic Set`:
 
 - A tool whose wire name breaks the wire-name rule gives `model-facing schema build failure for tool alias "{name}": invalid tool wire name "{name}": expected [A-Za-z][A-Za-z0-9_-]{0,63}`, and a tool whose parameter schema is not a JSON object gives `model-facing schema build failure for tool alias "{name}": tool "{name}" parameters schema must be a JSON object`, with the tool's wire name as `{name}`.
 - Two tools that share a wire name give `the tools {tool} and {tool} share the wire name "{name}", and a wire name names one tool across a section's Static Set and Dynamic Set; offer only one of them`.
@@ -850,15 +846,15 @@ A run also fails with kind `Binding` when a section entry's first loop round can
 - A render answer with tools for a set the section did not offer the Pack into gives `the {pack} Pack's render returned {tool}, a set the section did not offer the {pack} Pack into; a render returns tools only for the sets the section offered its Pack into`.
 - A render answer that names other Packs, or the offered Packs in another order, gives `the render answered the Packs {answered} where the section offered the Packs {asked}; a render answers each offered Pack once, in offer order`, with each list of Pack ids in brackets, such as `[web, gh]`.
 
-A run fails with kind `Completion` when a model call fails at the transport, backend, or decode layer, such as an overloaded backend, or when an `empty_model_reply` error goes uncaught, and the message is the model call's own error text. [Model request limits and failures](#model-request-limits-and-failures) lists those messages.
+A run fails with kind `Completion` when a model call fails at the transport, backend, or decode layer, such as an overloaded backend, or when an `empty_model_reply` error goes uncaught, and the message is the model call's own error text. [Model request limits and failures](#model-request-limits-and-failures) lists those messages. The Harness also ends a run with `Completion` before it parses the prompt when it cannot fetch the Host's list of models, and the message then starts with `the model catalog could not be fetched`.
 
 A run fails with kind `Tool` when a dispatched tool fails, the model calls a tool outside the section entry's [tool scope](12-tools.md#tool-scope), a `tools.call` names an id that is neither a defined adhoc tool nor a tool in the run's catalog, or the tool-call loop reaches its round cap before the model gives a final reply (see [Tool errors](12-tools.md#tool-errors)).
 
-### `Vfs` and `Determinism`
+### `Vfs`
 
-A run fails with kind `Vfs` when a `store` operation fails and goes uncaught, or when the run declares no store to operate on (see [When a store call fails](09-the-store.md#when-a-store-call-fails)). A store backend that fails as the run starts also ends the run with `Vfs`, even when the prompt never calls `store` (see [Host stores, policies, and modes](09-the-store.md#host-stores-policies-and-modes)). The kind is named `Vfs` even though the Lua global is `store`. An uncaught `store.read('missing.txt')` fails the run with `Vfs` and a message that includes `file not found in store: missing.txt`, and a store operation in a run that declares no store fails with `Vfs` and a message that includes `this run declares no store, so no store operation can run`.
+A run fails with kind `Vfs` when a `store` operation fails and goes uncaught, or when the run declares no store to operate on (see [When a store call fails](09-the-store.md#when-a-store-call-fails)). A store backend that fails as the run starts also ends the run with `Vfs`, even when the prompt never calls `store` (see [Host stores, policies, and modes](09-the-store.md#host-stores-policies-and-modes)), and so does a store that refuses to stage the declared input file before the run starts. The kind is named `Vfs` even though the Lua global is `store`. An uncaught `store.read('missing.txt')` fails the run with `Vfs` and a message that includes `file not found in store: missing.txt`, and a store operation in a run that declares no store fails with `Vfs` and a message that includes `this run declares no store, so no store operation can run`.
 
-A run fails with kind `Determinism` when a store call meets a claims conflict (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)). Any claims conflict ends the run on the spot, even in the H1 pass, so no `pcall` can catch it, not even a `pcall` a library runs while it loads, and no task or arm counts as failed.
+A store call that meets a claims conflict also fails the run with kind `Vfs` (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)), and its message starts with `store determinism violation: `. Unlike other store failures, any claims conflict ends the run on the spot, even in the H1 pass, so no `pcall` can catch it, not even a `pcall` a library runs while it loads, and no task or arm counts as failed.
 
 ### `Lua` and `Quota`
 
@@ -889,17 +885,17 @@ A `tasks.spawn` past the cap reports as `call`, because it shares `call`'s cap. 
 
 A run fails with kind `ContextExhausted` when a request overflows the model's context window, either on the check before sending or at the provider, and the selected [compactor](11-conversations.md#compactors-and-context-exhaustion) does not make it fit, or when a `compactors.fail(reason)` call goes uncaught, whether a compactor made it inside a loop with a reason of your own or your Lua made it directly outside any loop, with any reason. The message is `context exhausted: {detail}`, where the detail is the overflow reason in words for `precheck` and `provider`, and the reason itself otherwise.
 
-Run error kind `Internal` means an Engine invariant breaks, a fault in the Engine rather than in the prompt. That includes Harness mistakes such as an answer of the wrong kind, an answer for an id never issued, or a second answer to one effect. The message starts with `internal invariant violated: {message}`, and the location names an Engine source file and line rather than a place in the prompt.
+Run error kind `Internal` means an Engine invariant breaks, a fault in the Engine rather than in the prompt. That includes Harness mistakes such as an answer of the wrong kind, an answer for an id never issued, or a second answer to one effect. The message starts with `internal invariant violated: {message}` and ends with ` (at {file}:{line})`, which names an Engine source file and line rather than a place in the prompt. The Harness also ends a run with `Internal` when the run is still pending but the Harness has nothing to wait for, which means it lost track of an effect, and the message is then `the effect loop has nothing to await for a pending run`.
 
-A run fails with kind `RequirementsUnmet` when the environment falls short of what the prompt needs: a required Pack is missing, unavailable, or needs a service the run lacks, the bound model fails a declared requirement such as a context minimum or a hard keyword, a tool in the run's catalog or a Pack in its roster has a Pack id the Engine reserves, `adhoc` or `dynamic`, or an H1 block fails the prompt's [hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate).
+A run fails with kind `RequirementsUnmet` when the environment falls short of what the prompt needs: a required Pack is missing, unavailable, or needs a service the run lacks, the bound model fails a declared requirement such as a context minimum or a hard keyword, a tool in the run's catalog or a Pack in its roster has a Pack id the Engine reserves, `adhoc` or `dynamic`, or an H1 block fails the prompt's [hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate). It also covers a model round that has no model to run on: an uncaught [missing-model error](10-models.md#infer-errors-and-the-missing-model-error) from [`models.infer`](10-models.md#running-a-round-with-modelsinfer) or [`models.loop`](11-conversations.md#how-the-loop-runs) fails the run with the message `model binding required for section {section}`. Prose by itself never requires a model; only an explicit `models.infer` of it does. Before the run starts, the Harness also ends a run with `RequirementsUnmet` when the launch input does not match the prompt's `input:` declaration, or when the Host's selected model is missing from its list of models.
 
-### Cancelled runs and preparation failures
+### Cancelled runs and runs that end before they start
 
-A run the Host cancels ends as cancelled rather than failed, so it reports no run error kind.
+A run the Host cancels ends as cancelled rather than failed, so it reports no run error kind. That holds even for a cancel that comes before the run starts or while the Harness looks up the model.
 
-A frontmatter parse failure ends the run with kind `Parse`, and so does a structural parse failure in the prompt body. A run that fails during [preparation](04-how-a-prompt-runs.md#preparing-the-run) ends as `Parse` when the prompt does not parse, `Input` when its input cannot be staged, or `RequirementsUnmet` when the environment refuses it, and its message is the full chain of causes.
+A frontmatter parse failure ends the run with kind `Parse`, and so does a structural parse failure in the prompt body. A run that ends before it starts (see [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run)) ends as `Completion` when the Harness cannot fetch the Host's list of models, `RequirementsUnmet` when that list does not hold the selected model, `Parse` when the prompt does not parse, `RequirementsUnmet` when the launch input does not match the prompt's `input:` declaration, or `Vfs` when the store refuses to stage the input, and its message is the full chain of causes.
 
-Every input refusal, such as input text given to a prompt that declares no input or a store failure while staging the input, ends the run as failed under the Harness's `Input` kind, which sits outside the twelve run error kinds, and the message is the full chain of causes.
+Each of these is one of the ten run error kinds, and the Harness adds no kind of its own.
 
 ### Kinds in the H1 pass and through calls
 
@@ -954,7 +950,7 @@ Error kinds and run error kinds are separate vocabularies. An error kind is what
 
 The `model_failure` error kind marks a model call that failed outside the prompt: a transport, backend, or decode failure, or a disabled gateway. An empty reply is the one model call failure with a kind of its own, `empty_model_reply`. The `model_required` error kind marks the [missing-model error](10-models.md#infer-errors-and-the-missing-model-error), a model call with no model selected.
 
-Neither value has extra fields. Left uncaught, a `model_failure` value ends the run as `Completion`, and a `model_required` value ends it as `Binding`.
+Neither value has extra fields. Left uncaught, a `model_failure` value ends the run as `Completion`, and a `model_required` value ends it as `RequirementsUnmet`.
 
 ### The `internal` error kind
 
@@ -985,7 +981,7 @@ Left uncaught in a walked section, a [`models.loop`](11-conversations.md#loop-ar
 | `context_exhausted` | `ContextExhausted` |
 | `tool_loop_exhausted`, `out_of_scope_tool` | `Tool` |
 | `model_failure` | `Completion` |
-| `model_required` | `Binding` |
+| `model_required` | `RequirementsUnmet` |
 | `internal` | `Binding` for a failed tool freeze |
 
 Raised again later, after another suspending call, each error kind ends the run like this:
@@ -1225,13 +1221,13 @@ return models.infer(prose)
 ```
 ````
 
-When the backend answers with status 503, the run fails with run error kind `Completion` and this message, and the run error's retryable flag is set:
+When the backend answers with status 503, the run fails with run error kind `Completion` and this message, and the failure is retryable:
 
 ````text
 the model backend is overloaded (status 503)
 ````
 
-When the backend answers with status 429 and a body that names a spent quota, such as `insufficient_quota`, the run fails as `Completion` with this message, and the retryable flag is clear:
+When the backend answers with status 429 and a body that names a spent quota, such as `insufficient_quota`, the run fails as `Completion` with this message, and the failure is not retryable:
 
 ````text
 the model backend says the usage quota is spent (status 429)
@@ -1263,8 +1259,7 @@ Every failure other than a transient model call failure is never retryable:
 - a spent Lua quota
 - an exceeded call depth
 - an exhausted context
-- store failures
-- determinism failures
+- store failures, claims conflicts included
 
 ### The completion error kind decides
 
@@ -1288,7 +1283,7 @@ A context overflow, a spent quota (`QuotaExhausted`), a request refused on conte
 
 When the backend reports an error partway through a streamed reply, the Harness bounds the error text, with a bound of 2000, and escapes its control characters, then classifies the failure by that text alone. Text naming an overload, such as `overloaded_error: try again`, fails as `Overloaded`, and text naming no known cause fails as `Transport`, both retryable. Text naming a context limit, a spent quota, or a content policy fails as a context overflow, `QuotaExhausted`, or `Refused`, and is not transient.
 
-When the model answers a `models.infer` round with tool calls although none are advertised, the call fails as a malformed reply (kind `MalformedResponse`) with the detail `the round sent tool calls, but no tools were advertised`. The failure is retryable, because a reply that breaks protocol may come back well formed on another try. When that failure ends the run, the run error keeps the retryable flag, so the run outcome reports a retryable failure.
+When the model answers a `models.infer` round with tool calls although none are advertised, the call fails as a malformed reply (kind `MalformedResponse`) with the detail `the round sent tool calls, but no tools were advertised`. The failure is retryable, because a reply that breaks protocol may come back well formed on another try. When that failure ends the run, the run fails with kind `Completion`, and it still counts as a retryable failure.
 
 ## Cancellation and stops
 
@@ -1315,7 +1310,7 @@ Nothing in `spinner` ends the loop, and no limit would. When the Host cancels th
 
 ### Cancelling a run
 
-The Host can cancel a run from any thread through the run's cancel handle. It can cancel at any time, even while Lua is busy in a loop or waiting on a model reply, and the run's next step tears it down wherever it is.
+The Host can cancel a run from any thread by setting the cancel flag it gave the run when it built the run. It can cancel at any time, even while Lua is busy in a loop or waiting on a model reply, and the run's next step tears it down wherever it is.
 
 A run the Host cancels, before it starts or while it runs, ends with the cancelled outcome, the run outcome of a cancelled run. The cancelled outcome carries no message and no run error kind, and a cancelled run never ends as a failure. Inside the run, a cancel surfaces as the interrupted error, whose kind in Lua is `cancelled`, and that error ends the run with the cancelled outcome.
 

@@ -200,7 +200,7 @@ The keywords are kept in the order you write them, so `keywords: [frontier, thin
 
 `min_context` takes a whole number of tokens from 1 to 4294967295, and any other value fails the parse with a `Frontmatter` error. The smallest minimum you can write is 1, so a role that wants no minimum leaves the key out. Leaving out `min_context`, or setting it to null, declares no context minimum, and the role sets no floor on the model's context window.
 
-Parsing a `models` declaration checks only its shape. The checks against a real model happen later, when the run is prepared and each role is bound to a concrete model, and only then is the role's fit against its hard keywords and context minimum checked. So a prompt declaring `analyst` with `min_context: 200000` parses cleanly, and only a run under a 32000-token model refuses it, with `role 'analyst': requires a context of at least 200000 tokens` (see [The context check](#the-context-check)).
+Parsing a `models` declaration checks only its shape. The checks against a real model happen later: each role is bound to a concrete model when the run is built, and only then is the role's fit against its hard keywords and context minimum checked, with any shortfall reported on the run's first step. So a prompt declaring `analyst` with `min_context: 200000` parses cleanly, and only a run under a 32000-token model refuses it, with `role 'analyst': requires a context of at least 200000 tokens` (see [The context check](#the-context-check)).
 
 ### The `description` key
 
@@ -222,7 +222,7 @@ A mistake inside `models:` fails the parse with a `Frontmatter` parse error that
 
 ## Keywords and thinking
 
-After this section you can choose keywords for a role, tell which ones prepare checks, and predict whether the role's rounds ask the model to think.
+After this section you can choose keywords for a role, tell which ones the run checks, and predict whether the role's rounds ask the model to think.
 
 ````markdown
 ---
@@ -249,11 +249,11 @@ return models.infer(prose)
 ```
 ````
 
-The `responder` role lists two keywords. `no-thinking` is a hard keyword, so prepare checks that the current model can run with thinking turned off, and every round under the role asks for thinking off, including the round in `## Ask`, which reaches `responder` only through the prompt-wide default. `fast` is a soft keyword, so it records that you want a fast model and changes nothing about the round.
+The `responder` role lists two keywords. `no-thinking` is a hard keyword, so the run checks that the current model can run with thinking turned off, and every round under the role asks for thinking off, including the round in `## Ask`, which reaches `responder` only through the prompt-wide default. `fast` is a soft keyword, so it records that you want a fast model and changes nothing about the round.
 
 ### The seven keywords
 
-A role's keywords come from a closed, fixed vocabulary of seven: `thinking`, `no-thinking`, `frontier`, `fast`, `small`, `creative`, and `chat`. They split into two hard keywords, `thinking` and `no-thinking`, and five soft keywords, `frontier`, `fast`, `small`, `creative`, and `chat`. A hard keyword is a requirement that prepare checks against the bound model, and a soft keyword records what you intend and is never checked.
+A role's keywords come from a closed, fixed vocabulary of seven: `thinking`, `no-thinking`, `frontier`, `fast`, `small`, `creative`, and `chat`. They split into two hard keywords, `thinking` and `no-thinking`, and five soft keywords, `frontier`, `fast`, `small`, `creative`, and `chat`. A hard keyword is a requirement that the run checks against the bound model, and a soft keyword records what you intend and is never checked.
 
 | Keyword | Kind | What it asks of the model |
 |---|---|---|
@@ -277,13 +277,13 @@ The `thinking` keyword is a hard requirement that the model bound to the role su
 
 The `no-thinking` keyword is a hard requirement that the model bound to the role can run with thinking turned off, so only a model whose thinking mode is `always` fails it. You list it to turn thinking off, for example first in `keywords: [no-thinking, creative, chat]`.
 
-A role with `keywords: [frontier, thinking]` declares one hard keyword, so prepare checks the model bound to it only for its context window and its thinking mode.
+A role with `keywords: [frontier, thinking]` declares one hard keyword, so the run checks the model bound to it only for its context window and its thinking mode.
 
 ### Soft keywords
 
-Soft keywords only record what you intend, each marking the kind of model the table above names. Nothing checks them against the model before the run, so they never steer which model a role gets, never make a role unmet, and never cause prepare to refuse a run, even on a model whose thinking mode is `never`. None of them changes anything about a round, so in `boiling-point` above, `fast` leaves the round exactly as `no-thinking` sets it.
+Soft keywords only record what you intend, each marking the kind of model the table above names. Nothing checks them against the model before the run, so they never steer which model a role gets, never make a role unmet, and never refuse a run, even on a model whose thinking mode is `never`. None of them changes anything about a round, so in `boiling-point` above, `fast` leaves the round exactly as `no-thinking` sets it.
 
-You can combine soft keywords with each other and with a hard keyword, as in `keywords: [frontier, thinking]`, `triage: { keywords: [fast, small] }`, and `keywords: [no-thinking, creative, chat]`. So `scout: { keywords: [frontier, fast] }` and `sprinter: { keywords: [small, creative, chat] }` both bind to the same single current model and both pass prepare on any current model, a role such as `writer: { keywords: [fast] }` never appears as unmet in the requirements notice, and an `analyst` role with `[frontier, thinking]` on a model that never thinks reports only `thinking` as unmet.
+You can combine soft keywords with each other and with a hard keyword, as in `keywords: [frontier, thinking]`, `triage: { keywords: [fast, small] }`, and `keywords: [no-thinking, creative, chat]`. So `scout: { keywords: [frontier, fast] }` and `sprinter: { keywords: [small, creative, chat] }` both bind to the same single current model and both pass the requirements check on any current model, a role such as `writer: { keywords: [fast] }` never appears as unmet in the requirements notice, and an `analyst` role with `[frontier, thinking]` on a model that never thinks reports only `thinking` as unmet.
 
 ### Thinking modes
 
@@ -295,7 +295,7 @@ Every model has exactly one of three thinking modes: it never thinks, it always 
 | `always` | always emits thinking tokens | met | refused |
 | `switchable` | lets each request turn thinking on or off | met | met, with thinking off |
 
-A model in thinking mode `never` always runs with thinking off, so prepare refuses a `thinking` role on it with the message `requires 'thinking'; the current model's thinking capability is Never`. A model in thinking mode `always` always emits thinking tokens, so prepare refuses a `no-thinking` role on it as an unmet requirement. A model in thinking mode `switchable` lets each request turn thinking on or off, so a `no-thinking` role on it prepares, runs, and sends its requests with thinking off.
+A model in thinking mode `never` always runs with thinking off, so a `thinking` role on it refuses the run with the message `requires 'thinking'; the thinking capability of the model filling it is Never`. A model in thinking mode `always` always emits thinking tokens, so a `no-thinking` role on it refuses the run as an unmet requirement. A model in thinking mode `switchable` lets each request turn thinking on or off, so a `no-thinking` role on it prepares, runs, and sends its requests with thinking off.
 
 ### The thinking switch
 
@@ -303,7 +303,7 @@ A role's hard keyword sets its thinking switch, the thinking setting that every 
 
 The switch is fixed once per run from the role's keywords, when the run builds its set of roles from prepare's bindings. Every round under the role sends that same switch, even when `models.use` sets sampling options, which change only `temperature` and `max_tokens` (see [Sampling options on `models.use`](#sampling-options-on-modelsuse)).
 
-The switch takes effect on a model that can switch thinking per request. A fixed-mode model only ever runs with a matching switch, because prepare refuses a `thinking` role on a `never` model and a `no-thinking` role on an `always` model.
+The switch takes effect on a model that can switch thinking per request. A fixed-mode model only ever runs with a matching switch, because a `thinking` role on a `never` model and a `no-thinking` role on an `always` model refuse the run on its first step.
 
 A `no-thinking` role sends every request with thinking off, whether a section picks the role with `models.use` or runs on the prompt-wide default, and including when the model bound to the role is `switchable`. In `boiling-point` above, `models.default('responder')` makes `responder` the default, and the round in `## Ask` reaches it only through that default, yet it still asks for thinking off.
 
@@ -317,11 +317,11 @@ models:
     keywords: [thinking, no-thinking]
 ````
 
-A `switchable` model satisfies both hard keywords, so `drafter` still passes prepare on it, and its rounds follow the later keyword, `no-thinking`, and send thinking off.
+A `switchable` model satisfies both hard keywords, so `drafter` still passes the requirements check on it, and its rounds follow the later keyword, `no-thinking`, and send thinking off.
 
 ## How prepare binds and checks roles
 
-After this section you can tell which model each role is bound to, read a model id, and predict which roles prepare reports as unmet.
+After this section you can tell which model each role is bound to, read a model id, and predict which roles the run reports as unmet.
 
 ````markdown
 ---
@@ -390,11 +390,11 @@ A model request names the model by the name part of its id only. A request throu
 
 A label that the frontmatter does not declare as a role, such as `undeclared`, has no model binding.
 
-### What prepare checks
+### What the run checks
 
-A role's hard keywords and its `min_context` are requirements, and before the run starts the Harness checks them against the model bound to the role. These two checks are the only role requirements that can refuse the run, and prepare makes them only when the Host provides a current model. Soft keywords are never checked, so `frontier`, `fast`, `small`, `creative`, and `chat` never produce a role line in the notice, even against a 32000-token model that never thinks. A role that declares no hard keyword and no `min_context`, such as one with only soft keywords, is satisfied by any current model, so prepare reports nothing for it and it never blocks the run.
+A role's hard keywords and its `min_context` are requirements, and before any section runs the run checks them against the model bound to the role. These two checks are the only role requirements that can refuse the run, and the run makes them only when the Host provides a current model. Soft keywords are never checked, so `frontier`, `fast`, `small`, `creative`, and `chat` never produce a role line in the notice, even against a 32000-token model that never thinks. A role that declares no hard keyword and no `min_context`, such as one with only soft keywords, is satisfied by any current model, so nothing is reported for it and it never blocks the run.
 
-An unmet requirement is one shortfall that prepare records before the run starts (see [Model roles at prepare](04-how-a-prompt-runs.md#model-roles-at-prepare)). Prepare checks a role's keywords and its `min_context` as two separate checks, so a role can fail only its keyword, and a role that fails both gets one notice line for its context and another for its keyword:
+An unmet requirement is one shortfall that the run records when it is built and reports on its first step (see [Model roles at prepare](04-how-a-prompt-runs.md#model-roles-at-prepare)). The run checks a role's keywords and its `min_context` as two separate checks, so a role can fail only its keyword, and a role that fails both gets one notice line for its context and another for its keyword:
 
 ````markdown
 ---
@@ -420,35 +420,35 @@ On a Host whose current model has a 32000-token context window and never thinks,
 
 ````text
 the environment cannot satisfy this prompt:
-- role 'analyst': requires a context of at least 200000 tokens; the current model provides 32000
-- role 'analyst': requires 'thinking'; the current model's thinking capability is Never
+- role 'analyst': requires a context of at least 200000 tokens; the model filling it provides 32000
+- role 'analyst': requires 'thinking'; the thinking capability of the model filling it is Never
 ````
 
 The notice opens with the line `the environment cannot satisfy this prompt:`, followed by one `- ` line per unmet check (see [The requirements notice](04-how-a-prompt-runs.md#the-requirements-notice)). `frontier` adds no line, because it is a soft keyword. Each unmet line names the role by the label the prompt declares under `models:`, shown as `role '{role}'` in both line forms.
 
 ### The context check
 
-At prepare, a role's `min_context` is read as a token count and compared with the context window of the model bound to the role. The minimum is inclusive: a model whose window is at least the minimum, including exactly equal to it, meets the requirement. So `min_context: 200000` passes on a 200000-token model, `min_context: 100000` passes on a 200000-token model, and only a smaller window leaves the requirement unmet.
+When the run is built, a role's `min_context` is read as a token count and compared with the context window of the model bound to the role. The minimum is inclusive: a model whose window is at least the minimum, including exactly equal to it, meets the requirement. So `min_context: 200000` passes on a 200000-token model, `min_context: 100000` passes on a 200000-token model, and only a smaller window leaves the requirement unmet.
 
-When a role's `min_context` is above the current model's context window, prepare records an unmet context-minimum requirement that names the role and gives the required and actual sizes, and the run is refused before it starts. The line takes this form:
+When a role's `min_context` is above the current model's context window, the run records an unmet context-minimum requirement that names the role and gives the required and actual sizes, and the run is refused on its first step. The line takes this form:
 
 ````text
-- role '{role}': requires a context of at least {required} tokens; the current model provides {actual}
+- role '{role}': requires a context of at least {required} tokens; the model filling it provides {actual}
 ````
 
-So `analyst` with `min_context: 200000` on a 32000-token model is refused with required 200000 and actual 32000. A role `reader` that needs 200000 tokens on that model makes the whole message read `the environment cannot satisfy this prompt:` followed by `- role 'reader': requires a context of at least 200000 tokens; the current model provides 32000`.
+So `analyst` with `min_context: 200000` on a 32000-token model is refused with required 200000 and actual 32000. A role `reader` that needs 200000 tokens on that model makes the whole message read `the environment cannot satisfy this prompt:` followed by `- role 'reader': requires a context of at least 200000 tokens; the model filling it provides 32000`.
 
 ### The thinking check
 
-The `thinking` and `no-thinking` keywords are hard checks: when the bound model's thinking mode does not match what the role asks for, the role is unmet and prepare refuses the run. Both lines take this form, where `{required}` is the keyword and `{actual}` is `Never` or `Always`, the notice's spelling of the modes `never` and `always`:
+The `thinking` and `no-thinking` keywords are hard checks: when the bound model's thinking mode does not match what the role asks for, the role is unmet and the run is refused on its first step. Both lines take this form, where `{required}` is the keyword and `{actual}` is `Never` or `Always`, the notice's spelling of the modes `never` and `always`:
 
 ````text
-- role '{role}': requires '{required}'; the current model's thinking capability is {actual}
+- role '{role}': requires '{required}'; the thinking capability of the model filling it is {actual}
 ````
 
-A `thinking` role is unmet only on a model whose thinking mode is `never`, which refuses the run with the line `- role '{role}': requires 'thinking'; the current model's thinking capability is Never`. An `always` or `switchable` model satisfies it, so a role with `keywords: [frontier, thinking]` runs on an `always` model.
+A `thinking` role is unmet only on a model whose thinking mode is `never`, which refuses the run with the line `- role '{role}': requires 'thinking'; the thinking capability of the model filling it is Never`. An `always` or `switchable` model satisfies it, so a role with `keywords: [frontier, thinking]` runs on an `always` model.
 
-A `no-thinking` role is unmet only on a model whose thinking mode is `always`, which refuses the run with the line `- role '{role}': requires 'no-thinking'; the current model's thinking capability is Always`. So `models: { triage: { keywords: [no-thinking] } }` on an `always` model reports role `triage` unmet, with required `no-thinking` and actual `Always`.
+A `no-thinking` role is unmet only on a model whose thinking mode is `always`, which refuses the run with the line `- role '{role}': requires 'no-thinking'; the thinking capability of the model filling it is Always`. So `models: { triage: { keywords: [no-thinking] } }` on an `always` model reports role `triage` unmet, with required `no-thinking` and actual `Always`.
 
 A `switchable` model, whose thinking can be turned on or off per request, satisfies both a `thinking` role and a `no-thinking` role, and it is asked to turn thinking off for a `no-thinking` role.
 
@@ -482,14 +482,14 @@ ok
 
 When the Host sets no current model, prepare binds no role and checks no requirement, so even a role with `min_context` does not stop the run from starting, and the run starts with no model. This prompt declares `writer`, but no section asks a model for a reply and its H1 prose is never read by a model, so the run still succeeds.
 
-Prepare refuses nothing in this case, and the declared roles stay unbound. Selecting one with `models.use` or `models.default` then raises an error that names the label, the first message below from `models.use` and the second from `models.default`:
+Nothing refuses the run in this case, and the declared roles stay unbound. Selecting one with `models.use` or `models.default` then raises an error that names the label, the first message below from `models.use` and the second from `models.default`:
 
 ````text
 models.use label "{label}" is not a bound model role
 models.default label "{label}" is not a bound model role
 ````
 
-So prepare reports success for a prompt that declares roles, and the run fails later, when a section selects a role. A clean prepare report does not prove that the roles are bound.
+So the requirements check passes for a prompt that declares roles, and the run fails later, when a section selects a role. A passing requirements check does not prove that the roles are bound.
 
 ## The prompt-wide default with `models.default`
 
@@ -1371,13 +1371,13 @@ An infer call offers the model no tools, so it never dispatches tools. A model t
 the model backend sent a reply that could not be understood: the round sent tool calls, but no tools were advertised
 ````
 
-The text is the same for `models.infer` and `handle:infer`, and it never names `models.infer`. Left uncaught, the refusal fails the run with run error kind `Completion` (see [The run result and outcomes](04-how-a-prompt-runs.md#the-run-result-and-outcomes)), and the run error reports itself retryable, since a reply that broke protocol may come back well formed (see [Retryable failures](16-limits-and-errors.md#retryable-failures)).
+The text is the same for `models.infer` and `handle:infer`, and it never names `models.infer`. Left uncaught, the refusal fails the run with run error kind `Completion` (see [The run result and outcomes](04-how-a-prompt-runs.md#the-run-result-and-outcomes)), and the failure counts as retryable, since a reply that broke protocol may come back well formed (see [Retryable failures](16-limits-and-errors.md#retryable-failures)).
 
 An infer round that fails at the model, such as a transport or backend failure, raises the round's own error at the call site. `pcall` sees it with kind `model_failure`, or with kind `empty_model_reply` for an empty reply. Left uncaught, it fails the run with run error kind `Completion`.
 
 ### When a section has no model
 
-The missing-model error is the error a model round raises when its section has no model, meaning neither a `models.use` selection nor a prompt-wide `models.default` is in effect (see [Which model a round uses](#which-model-a-round-uses)). Declaring a role under `models:` without selecting it or making it the default is not enough, which is why the `unselected` prompt in [When a prompt needs a role](#when-a-prompt-needs-a-role) fails with `model binding required for section Only`. The message is `model binding required for section {section}`, where `{section}` is the section name, such as `Only` or `Worker`, or the prompt's H1 title for a round in the H1 pass. Left uncaught, it fails the run with run error kind `Binding`. Raised in a fanout arm, it fails both the fanout and the run.
+The missing-model error is the error a model round raises when its section has no model, meaning neither a `models.use` selection nor a prompt-wide `models.default` is in effect (see [Which model a round uses](#which-model-a-round-uses)). Declaring a role under `models:` without selecting it or making it the default is not enough, which is why the `unselected` prompt in [When a prompt needs a role](#when-a-prompt-needs-a-role) fails with `model binding required for section Only`. The message is `model binding required for section {section}`, where `{section}` is the section name, such as `Only` or `Worker`, or the prompt's H1 title for a round in the H1 pass. Left uncaught, it fails the run with run error kind `RequirementsUnmet`. Raised in a fanout arm, it fails both the fanout and the run.
 
 The missing-model error reaches the call as its answer, so `pcall` catches it as an error value of kind `model_required` and a block can fall back instead of failing. Remove the H1 body from `careful`, and its block returns:
 

@@ -1,6 +1,6 @@
 # How a prompt runs
 
-Every run moves through the same stages in the same order: the parse, prepare, the H1 pass, and the section walk, and it ends in exactly one outcome. This chapter follows that order, one stage at a time. Knowing the order tells you which mistakes stop a run before any of your Lua runs, which sections run and when, and what text the run hands back when it finishes.
+Every run moves through the same stages in the same order: the parse, prepare, the start checks, the H1 pass, and the section walk, and it ends in exactly one outcome. This chapter follows that order, one stage at a time. Knowing the order tells you which mistakes stop a run before any of your Lua runs, which sections run and when, and what text the run hands back when it finishes.
 
 ## How a run proceeds
 
@@ -26,23 +26,24 @@ return 'hello'
 hello
 ````
 
-This run is as short as a run gets. Prepare finds nothing to check, because the frontmatter declares no Packs and no model roles. The H1 body under `# Hello` is empty, so there is no H1 pass. The walk enters `## Main`, the block returns `hello`, and the run ends in success with `hello` as its run result. A block that only returns a literal value asks the Harness for no work at all, so this run finishes without waiting on anything outside the prompt.
+This run is as short as a run gets. The start checks find nothing missing, because the frontmatter declares no Packs and no model roles. The H1 body under `# Hello` is empty, so there is no H1 pass. The walk enters `## Main`, the block returns `hello`, and the run ends in success with `hello` as its run result. A block that only returns a literal value asks the Harness for no work at all, so this run finishes without waiting on anything outside the prompt.
 
 ### The stages in order
 
 Every run goes through these stages, in this order:
 
 1. Parse. The whole file is parsed and every Lua block is compiled, and nothing runs yet. See [Parsing comes first](#parsing-comes-first).
-2. Prepare. The Harness sets up everything the frontmatter asks for and checks that it can provide it, or refuses the run. See [Preparing the run](#preparing-the-run).
-3. The H1 pass. The H1 body's blocks run before the first section, but only when the H1 body holds a `lua` block or prose. See [The H1 pass](#the-h1-pass).
-4. The section walk. The top-level sections run in file order. See [The section walk](#the-section-walk).
-5. The outcome. The run ends in exactly one of three run outcomes. See [The run result and outcomes](#the-run-result-and-outcomes).
+2. Prepare. The Harness stages the declared input file, readies the run's Packs, and builds the run. See [Preparing the run](#preparing-the-run).
+3. The start checks. The run's first step checks the `runvil` version, the store, and the requirements, and refuses a run that fails one of them. See [Preparing the run](#preparing-the-run).
+4. The H1 pass. The H1 body's blocks run before the first section, but only when the H1 body holds a `lua` block or prose. See [The H1 pass](#the-h1-pass).
+5. The section walk. The top-level sections run in file order. See [The section walk](#the-section-walk).
+6. The outcome. The run ends in exactly one of three run outcomes. See [The run result and outcomes](#the-run-result-and-outcomes).
 
-Parsing is the first check prepare makes after it draws the run's seed and start time, so a file that does not parse never reaches the checks of Packs and model roles. A prompt whose H1 body holds no `lua` block and no prose skips the H1 pass and goes straight to its first section, as `hello` does. The three run outcomes are success, with the text the run returned; cancelled, when the run is interrupted; and failure, with the error that ended the run.
+Before it parses, the Harness draws the run's seed and start time, begins the run's record, and looks up the Host's current model. Parsing is the first check after that, so a file that does not parse never reaches the checks of Packs and model roles. A prompt whose H1 body holds no `lua` block and no prose skips the H1 pass and goes straight to its first section, as `hello` does. The three run outcomes are success, with the text the run returned; cancelled, when the run is interrupted; and failure, with the error that ended the run.
 
-### Prepare can stop a run before it starts
+### A run can be refused before it starts
 
-Prepare runs before any of your Lua, so a prompt the Harness cannot satisfy fails before its first section runs. This prompt declares a model role that needs a large context window:
+The start checks run before any of your Lua, so a prompt the environment cannot satisfy fails before its first section runs. This prompt declares a model role that needs a large context window:
 
 ````markdown
 ---
@@ -67,10 +68,10 @@ Run on a Host whose current model has a 32000-token context window, this prompt 
 
 ````text
 the environment cannot satisfy this prompt:
-- role 'reader': requires a context of at least 200000 tokens; the current model provides 32000
+- role 'reader': requires a context of at least 200000 tokens; the model filling it provides 32000
 ````
 
-The `reader` role is a model role (see [Model roles instead of models](10-models.md#model-roles-instead-of-models)), and `min_context` is one of its keys (see [Declaring roles under `models:`](10-models.md#declaring-roles-under-models)). [Model roles at prepare](#model-roles-at-prepare) shows how prepare checks the role, and [The requirements notice](#the-requirements-notice) explains each line of the message.
+The `reader` role is a model role (see [Model roles instead of models](10-models.md#model-roles-instead-of-models)), and `min_context` is one of its keys (see [Declaring roles under `models:`](10-models.md#declaring-roles-under-models)). [Model roles at prepare](#model-roles-at-prepare) shows how the run checks the role, and [The requirements notice](#the-requirements-notice) explains each line of the message.
 
 ### What a run starts with
 
@@ -155,14 +156,14 @@ The H1 block's `local secret = 42` compiles during the parse, but none of it run
 
 The whole prompt file is parsed, and every Lua block in it compiled, before any part of the prompt runs. A prompt with a parse error never starts. An invalid prompt file is rejected as a whole, never accepted in part, so none of its sections run. Parsing needs no network access and no connection to a model, so you can check a prompt's structure offline.
 
-Parsing checks only the shape of the frontmatter's contract keys and what the file's text shows: keys, names, duplicates, ranges, and default types. A prompt whose contract has a valid shape parses even when the environment that runs it cannot satisfy it. Matching the Packs under `uses:` and the roles under `models:` against the environment is prepare's job, and the tool catalog and the model reach the prompt only at prepare. The tool catalog holds the tools of the run's Packs that can serve it, every `runvil` Pack and each third-party Pack the prompt declares (see [The Engine, the Harness, and the Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host)). A prompt that declares Pack `web` in an environment without it parses first, and then the requirements notice reports the gap:
+Parsing checks only the shape of the frontmatter's contract keys and what the file's text shows: keys, names, duplicates, ranges, and default types. A prompt whose contract has a valid shape parses even when the environment that runs it cannot satisfy it. Matching the Packs under `uses:` and the roles under `models:` against the environment happens on the run's first step, and the tool catalog and the model reach the prompt only when the Harness prepares the run. The tool catalog holds the tools of the run's Packs that can serve it, every `runvil` Pack and each third-party Pack the prompt declares (see [The Engine, the Harness, and the Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host)). A prompt that declares Pack `web` in an environment without it parses first, and then the requirements notice reports the gap:
 
 ````text
 the environment cannot satisfy this prompt:
 - missing required Pack: web
 ````
 
-Each check ends the run before the next one starts, so the order of failures is fixed. A parse failure is reported ahead of any input failure, and an input failure is reported ahead of any requirements refusal.
+Each check ends the run before the next one starts, so the order of failures is fixed. A failed model lookup is reported ahead of any parse failure, a parse failure ahead of any input failure, and an input failure ahead of the start checks, which check the version, then the store, then the requirements.
 
 ### The six parse event kinds
 
@@ -211,19 +212,18 @@ A prompt's parse events are the first records of its run (see [Effects and Harne
 |---|---|---|
 | the prompt does not parse | `parse_started` | `parse_failed` |
 | the input is refused | `parse_started` | `parse_succeeded` |
-| the requirements are unmet | `parse_started` | `parse_succeeded` |
-| the run is refused when it is built: an unsupported or missing version, no declared store, or a store that fails its probe | `parse_started` | `parse_succeeded` |
+| a start check fails on the run's first step: an unsupported or missing version, no declared store, a store that fails its probe, or unmet requirements | `parse_started` | `parse_succeeded` |
 
-A prompt that does not parse ends its run as failed with the kind `Parse`, and the failure message is the parse error's full cause chain. Requirements are checked only after the prompt parses, so the record of a run refused for unmet requirements ends with `parse_succeeded`. The prompt is also parsed before its input is checked, so an input refusal always follows a successful parse, and the refused run's last event is `parse_succeeded`. A refused or unparseable prompt runs no section code, and its record holds only parse events.
+A prompt that does not parse ends its run as failed with the kind `Parse`, and the failure message is the parse error's full cause chain. The start checks run only after the prompt parses, so the record of a run they refuse ends with `parse_succeeded`. The prompt is also parsed before its input is checked, so an input refusal always follows a successful parse, and the refused run's last event is `parse_succeeded`. A refused or unparseable prompt runs no section code, and its record holds only parse events. A run that ends before its parse, because the model lookup failed or a cancel came first, has no events in its record at all.
 
 ## Preparing the run
 
-After this section you can say what prepare checks and binds before any Lua runs, and why it refuses a run with `RequirementsUnmet` when it cannot.
+After this section you can say what prepare sets up and what the start checks look at before any Lua runs, and why a run is refused with `RequirementsUnmet` when the environment falls short.
 
 ````markdown
 ---
 name: no-requirements
-description: Declares nothing for prepare to check.
+description: Declares no Packs and no model roles.
 runvil: 0
 ---
 
@@ -240,13 +240,13 @@ return 'no Packs'
 no Packs
 ````
 
-Prepare is the stage before a run starts in which the Harness sets up everything the frontmatter asks for and checks that it can provide it. This prompt declares no Packs under `uses:` and no model roles under `models:`, so prepare has nothing to check, its requirements report has no gaps, and prepare never refuses it. A prompt like this one, which also calls no model, runs to completion on a Host with no Packs and no model configured.
+Prepare is the stage before a run starts in which the Harness sets up everything the frontmatter asks for and builds the run. The run's first step then makes the start checks, which make sure the environment provides what the prompt needs. This prompt declares no Packs under `uses:` and no model roles under `models:`, so the requirements check finds no gaps and never refuses it. A prompt like this one, which also calls no model, runs to completion on a Host with no Packs and no model configured.
 
-### What prepare checks
+### What the start checks look at
 
-Before a run starts, the Harness checks the Packs the prompt declares against the Packs the Host has built and the services the run provides, and checks the model roles the prompt declares against the Host's current model. Prepare can refuse to start the run, and a refused run ends before it is built.
+The run's first step makes three start checks before any section runs, in this order: the `runvil` version, the store, which the run must declare and whose backend must pass its probe, and the requirements. The requirements check compares the Packs the prompt declares with the Packs the Harness took for the run and the services the run provides, and compares the model roles the prompt declares with the Host's current model. A start check that fails ends the run on that first step, and the run reports no run events.
 
-A prompt the environment cannot satisfy is refused before any of its blocks run. `RequirementsUnmet` is the run error kind of that refusal: the run ends as failed, and its message is the requirements notice, which lists what is missing, one line per gap. Prepare refuses the run with `RequirementsUnmet` when any of these holds:
+A prompt the environment cannot satisfy is refused before any of its blocks run. `RequirementsUnmet` is the run error kind of that refusal: the run ends as failed, and its message is the requirements notice, which lists what is missing, one line per gap. The requirements check refuses the run with `RequirementsUnmet` when any of these holds:
 
 - the Host has no Pack, from any vendor, for a bare entry the prompt declares
 - a declared Pack is unavailable, because the Host has it but it cannot serve, for example because it failed to build, or because the Host lacks a declared `vendor/name` entry, or has a bare entry's Pack id only from other vendors
@@ -254,54 +254,56 @@ A prompt the environment cannot satisfy is refused before any of its blocks run.
 - a tool in the run's catalog or a Pack in its roster has a Pack id the Engine reserves, `adhoc` or `dynamic`
 - the current model falls short of a declared role's context minimum or one of its hard keywords
 
-An unavailable Pack is one the Host has that cannot serve the run, a declared `vendor/name` entry the Host lacks, or a bare entry whose reason tells you which vendor's Pack to write instead. The run proceeds only when every model role requirement is met, the Host has every required Pack, each one can serve and has the services it needs, and nothing in the run takes a reserved Pack id. [Packs at prepare](#packs-at-prepare) shows each Pack case.
+An unavailable Pack is one the Host has that cannot serve the run or lacks a service it needs, a declared `vendor/name` entry the Host lacks, or a bare entry whose reason tells you which vendor's Pack to write instead. The run proceeds only when every model role requirement is met, the Host has every required Pack, each one can serve and has the services it needs, and nothing in the run takes a reserved Pack id. [Packs at prepare](#packs-at-prepare) shows each Pack case.
 
-The refusal comes after the Pack report and the model report are merged into one, and before the run is built. So when the Harness cannot provide what the prompt requires, such as a model with a large enough context window for one of its roles, no section runs, no Lua runs, and nothing in the prompt can catch the refusal. The refusal's message is the notice text, line for line. The notice opens with the line `the environment cannot satisfy this prompt:` and then gives one `- ` line per gap, in this order, with each `{...}` standing for the value the line names:
+The refusal comes on the run's first step, after the version and store checks pass. So when the environment cannot provide what the prompt requires, such as a model with a large enough context window for one of its roles, no section runs, no Lua runs, and nothing in the prompt can catch the refusal. The refusal's message is the notice text, line for line. The notice opens with the line `the environment cannot satisfy this prompt:` and then gives one `- ` line per gap, in this order, with each `{...}` standing for the value the line names:
 
 ````text
 the environment cannot satisfy this prompt:
 - missing required Pack: {id}
-- {pack} needs {service}, and the environment provides none
 - {pack} is unavailable: {reason}
 - the run's tool catalog or Pack roster names the Pack id {id}, which the Engine reserves
-- role '{role}': requires a context of at least {required} tokens; the current model provides {actual}
-- role '{role}': requires '{required}'; the current model's thinking capability is {actual}
+- role '{role}': requires a context of at least {required} tokens; the model filling it provides {actual}
+- role '{role}': requires '{required}'; the thinking capability of the model filling it is {actual}
 ````
 
 A real notice holds a line only for each gap the run has. [The requirements notice](#the-requirements-notice) explains every line.
 
-### The order prepare works in
+### The order before the first section
 
-Prepare runs in a fixed order:
+Before any section runs, the Harness and the run work in a fixed order:
 
-1. It draws the run's seed and start time (see [The Engine, the Harness, and the Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host)).
-2. It parses the prompt.
-3. It stages the input file the prompt declares.
-4. It picks the run's Packs from the prompt's `uses:` entries.
-5. It waits for the run's Packs to be ready.
-6. It takes the snapshot of the run's Packs.
-7. It prepares the run context, which binds the declared model roles.
-8. It refuses a prompt the environment cannot satisfy.
-9. It builds the run.
+1. The Harness draws the run's seed and start time and begins the run's record (see [The Engine, the Harness, and the Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host)).
+2. It looks up the Host's current model.
+3. It parses the prompt.
+4. It stages the input file the prompt declares.
+5. It picks the run's Packs from the prompt's `uses:` entries.
+6. It waits for the run's Packs to be ready.
+7. It takes the snapshot of the run's Packs.
+8. It builds the run, which binds the declared model roles.
+9. The run's first step checks the `runvil` version, then the store, then the requirements, and refuses the run when one of them fails.
 
-When the run is built, after preparation and before any section runs, the `runvil` version in the frontmatter is checked (see [The `runvil` version key](02-file-structure.md#the-runvil-version-key)). Version `0` proceeds, and any other version is refused as unsupported. A missing version fails with the message `not a runvil prompt: no runvil version`. Either way, a prompt with an unsupported or missing version produces no section result. Such a run reports no run events, so its record ends with `parse_succeeded`, the last parse event.
+The model lookup lists the Host's models and finds the one the Host selected, or takes the first model listed when the Host selected none. When the list cannot be fetched, the run ends as failed with run error kind `Completion`, and when the list does not hold the selected model, the run ends as failed with `RequirementsUnmet`. The message is the lookup error with its chain of causes, such as ``the selected model `{id}` is absent from the fetched catalog``. A cancel that comes before the run or during the lookup ends the run as cancelled. A run that ends here has not parsed, so its record holds no events.
+
+The version check is the first start check (see [The `runvil` version key](02-file-structure.md#the-runvil-version-key)). Version `0` proceeds, and any other version is refused as unsupported. A missing version fails with the message `not a runvil prompt: no runvil version (prompt {name})`, where `{name}` is the prompt's frontmatter `name`. Either way, a prompt with an unsupported or missing version produces no section result. The run then checks its store, and a run that declares no store, or whose store backend fails its probe, fails with run error kind `Vfs`. The requirements check comes last. A run that a start check refuses reports no run events, so its record ends with `parse_succeeded`, the last parse event. When the run's cancel flag is set as a start check fails, the run ends as cancelled instead of failed.
 
 ### Staging the input file
 
-Input staging happens during prepare, before the run starts. The launch's input text is placed at the path the frontmatter's `input:` key names (see [Input and output file declarations](02-file-structure.md#input-and-output-file-declarations)), so the first section's Lua can already read the input file. Prepare fails the run before it starts, with the failure kind `Input`, in two cases:
+Input staging happens during prepare, before the run starts. The launch's input text is placed at the path the frontmatter's `input:` key names (see [Input and output file declarations](02-file-structure.md#input-and-output-file-declarations)), so the first section's Lua can already read the input file. Prepare fails the run before it starts in three cases:
 
-- The launch supplies input text, but the prompt declares no `input:` file. The message is ``the launch supplied input text, but the prompt declares no `input:` file``.
-- The prompt declares an `input:` file that the launch did not supply and the store does not already hold. The message is ``the prompt declares the input file `{path}`, but the launch supplied no input text and the store has no such file``, with the declared path in place of `{path}`.
+- The launch supplies input text, but the prompt declares no `input:` file. The run error kind is `RequirementsUnmet`, and the message is ``the launch supplied input text, but the prompt declares no `input:` file``.
+- The prompt declares an `input:` file that the launch did not supply and the store does not already hold. The run error kind is `RequirementsUnmet`, and the message is ``the prompt declares the input file `{path}`, but the launch supplied no input text and the store has no such file``, with the declared path in place of `{path}`.
+- The store refuses the write that stages the input, or the check that the file is there. The run error kind is `Vfs`, and the message is ``the input file `{path}` could not be staged``, followed by `: ` and the store's own error.
 
 ### Waiting for Packs and taking the snapshot
 
-Before a run starts, the Harness picks the run's Packs: each Pack the prompt declares under `uses:`, plus every `runvil` Pack whose Pack id no declared Pack takes. It then waits until each of those Packs is ready or the run is cancelled, so a Pack outside the run, such as an undeclared third-party Pack, never delays it. A Pack whose readiness check fails is unavailable to the run, with its error as the reason, so a prompt that declares it is refused. Cancelling a run while Packs are still starting ends the wait, and each Pack is taken as it stands at that moment. A refusal that follows the cancel, such as one for a declared Pack that was still starting, ends the run as cancelled rather than failed.
+Before a run starts, the Harness picks the run's Packs: each Pack the prompt declares under `uses:`, plus every `runvil` Pack whose Pack id no declared Pack takes. It then waits until each of those Packs is ready or the run is cancelled, so a Pack outside the run, such as an undeclared third-party Pack, never delays it. A Pack whose readiness check fails is unavailable to the run, with its error as the reason, so a prompt that declares it is refused on the run's first step. Cancelling a run while Packs are still starting ends the wait, and each Pack is taken as it stands at that moment. A refusal that follows the cancel, such as one for a declared Pack that was still starting, ends the run as cancelled rather than failed.
 
 After the wait, each run takes one snapshot of its Packs. That snapshot supplies the tool catalog the run offers, the object for each Pack in the run's Lua (see [Tool objects, Pack objects, and `tools.packs`](12-tools.md#tool-objects-pack-objects-and-toolspacks)), and the preludes that go to every section entry's Lua (see [Pack preludes](12-tools.md#pack-preludes)).
 
 ### Binding model roles
 
-When it prepares the run context, prepare binds every model role the prompt declares to the Host's current model, and checks each role's context minimum and hard keywords against that model. A role requiring `thinking` fails on a model whose thinking capability is `Never`, and a role requiring `no-thinking` fails on a model whose thinking capability is `Always`. Soft keywords only record your intent and are not checked (see [Keywords and thinking](10-models.md#keywords-and-thinking)). When the Host has no current model, no role is bound and nothing is checked. [Model roles at prepare](#model-roles-at-prepare) shows each case.
+When it builds the run, prepare binds every model role the prompt declares to the Host's current model, and the run's first step checks each role's context minimum and hard keywords against that model. A role requiring `thinking` fails on a model whose thinking capability is `Never`, and a role requiring `no-thinking` fails on a model whose thinking capability is `Always`. Soft keywords only record your intent and are not checked (see [Keywords and thinking](10-models.md#keywords-and-thinking)). When the Host has no current model, no role is bound and nothing is checked. [Model roles at prepare](#model-roles-at-prepare) shows each case.
 
 ### An H1 gate failure reads like a refusal
 
@@ -309,7 +311,7 @@ One failure that is not a refusal reports the same run error kind. An uncaught L
 
 ## Packs at prepare
 
-After this section you can predict how prepare treats each Pack you declare, what an unavailable Pack does to a run, and what the tool catalog holds once the run starts.
+After this section you can predict how the run treats each Pack you declare, what an unavailable Pack does to a run, and what the tool catalog holds once the run starts.
 
 ````markdown
 ---
@@ -328,7 +330,7 @@ return 'done'
 ```
 ````
 
-On a Host that has `runvil/web` and where it can serve, prepare passes and the run returns `done`. On a Host with no Packs, the run is refused at prepare, before any section runs, with run error kind `RequirementsUnmet` and this notice:
+On a Host that has `runvil/web` and where it can serve, the start checks pass and the run returns `done`. On a Host with no Packs, the run is refused on its first step, before any section runs, with run error kind `RequirementsUnmet` and this notice:
 
 ````text
 the environment cannot satisfy this prompt:
@@ -339,9 +341,9 @@ The refused run's record ends with the `parse_succeeded` event, because the prom
 
 ### Declared Packs are required Packs
 
-Every Pack a prompt lists under the `uses:` key (see [Tools, Packs, and the `uses:` key](12-tools.md#tools-packs-and-the-uses-key)) is a required Pack: the run does not start unless the Host can provide it. Each one is named by its Pack id and kept in declaration order. Before any Lua runs, prepare checks each declared Pack against the Host and refuses the run unless the Host has that Pack and it can serve and has every service it needs.
+Every Pack a prompt lists under the `uses:` key (see [Tools, Packs, and the `uses:` key](12-tools.md#tools-packs-and-the-uses-key)) is a required Pack: the run does not start unless the Host can provide it. Each one is named by its Pack id and kept in declaration order. Before any Lua runs, the run's first step checks each declared Pack and refuses the run unless the Host has that Pack and it can serve and has every service it needs.
 
-A declared Pack counts as present when the Host has it and it can serve, even if it offers no tools, so declaring a Pack that has no tools never refuses the run. A Pack the frontmatter declares, and any Pack listed as able to serve, still has a Pack object in Lua when it offers no tool. The Pack check is the Harness's part of prepare. The Engine's own part checks model roles and the reserved Pack ids `adhoc` and `dynamic` in the run's catalog and roster, so it finds nothing missing in `uses: [web]` even when the catalog holds no `web` tool.
+A declared Pack counts as present when the Host has it and it can serve, even if it offers no tools, so declaring a Pack that has no tools never refuses the run. A Pack the frontmatter declares, and any Pack listed as able to serve, still has a Pack object in Lua when it offers no tool. The Harness's part is the run's roster, its list of Packs, which marks each Pack as usable or as unavailable with a reason. The Engine checks each declared Pack against that roster, not against the tool catalog, so it finds nothing missing in `uses: [web]` even when the catalog holds no `web` tool.
 
 Each declared Pack's prelude runs in every section entry's VM, in the order the prompt declares the Packs, after the Engine globals are installed and before any block runs. An undeclared Pack's prelude never runs, even when the prompt calls that Pack's tools.
 
@@ -368,13 +370,13 @@ A section can offer only the tools in the run's catalog and the adhoc tools it d
 
 A host service is a named service the Host supplies for each run, such as an input broker. A Pack can need host services, and prepare checks the needs of each of the run's Packs against the run's services. A Pack is usable only when the run provides every service it needs, and a Pack missing any of its services has no tools in the run.
 
-A declared Pack that lacks a service it needs refuses the run at prepare with run error kind `RequirementsUnmet`. The notice gets one line per missing service, in the form `- {pack} needs {service}, and the environment provides none`, which names both the Pack and the service instead of calling the Pack missing. A run refused this way never calls the Pack, so no tool effect happens, and the refused run records zero effects.
+A declared Pack that lacks a service it needs refuses the run on its first step with run error kind `RequirementsUnmet`. The notice gets one line for the Pack, in the form `- {pack} is unavailable: the run lacks the services it needs: {services}`, where `{services}` lists every service the Pack lacks, joined by `, `. The line names both the Pack and the services instead of calling the Pack missing. A run refused this way never calls the Pack, so no tool effect happens, and the refused run records zero effects.
 
 The `user-input` Pack is the common case. Its fully qualified name is `runvil/user-input`, so its Pack id is `user-input`. It needs the run's input broker, the service `runvil/input-broker`, so a run without a broker cannot use it. A prompt that declares it is refused before the run starts on a Host with no operator to ask, and the notice names both the Pack and the service:
 
 ````text
 the environment cannot satisfy this prompt:
-- user-input needs runvil/input-broker, and the environment provides none
+- user-input is unavailable: the run lacks the services it needs: runvil/input-broker
 ````
 
 That notice does not contain `missing required Pack: user-input`, because the Host has the Pack.
@@ -396,13 +398,13 @@ When one of the Host's Packs fails to build or fails its readiness check, the Ha
 
 ### Only declared Packs can refuse a run
 
-The requirements check looks only at the Packs the prompt declares, so only declared Packs can refuse a run. A `runvil` Pack the prompt does not declare that fails to start or lacks a service just has no tools in the run, and the run goes on. The requirements report lists each Pack the prompt declares, while the run's roster, its list of Packs, holds every Pack in the run, declared or not. A third-party Pack the prompt does not declare is in no run, so it can neither refuse nor delay one. An undeclared Pack with unmet needs joins the roster as unavailable, with the reason `the run lacks the services it needs: {services}`.
+The requirements check looks only at the Packs the prompt declares, so only declared Packs can refuse a run. A `runvil` Pack the prompt does not declare that fails to start or lacks a service just has no tools in the run, and the run goes on. The check looks up each Pack the prompt declares, while the run's roster, its list of Packs, holds every Pack in the run, declared or not. A third-party Pack the prompt does not declare is in no run, so it can neither refuse nor delay one. An undeclared Pack with unmet needs joins the roster as unavailable, with the reason `the run lacks the services it needs: {services}`.
 
 Offering an unavailable Pack with `tools.offer` raises `tools.offer: the {pack} Pack is unavailable in this run: {reason}`. So an undeclared Pack whose readiness check fails offers no tools, and a section that offers it with `tools.offer` fails the run with that message.
 
 ## Model roles at prepare
 
-After this section you can predict how prepare binds each model role you declare, which checks it runs against the Host's current model, and what an unmet requirement looks like.
+After this section you can predict how prepare binds each model role you declare, which checks the run makes against the Host's current model, and what an unmet requirement looks like.
 
 ````markdown
 ---
@@ -434,11 +436,11 @@ Before the run starts, prepare binds every model role declared under `models:` t
 
 Every declared role binds to the same current model, whatever keywords it has, so roles `scout` and `sprinter` with different keywords both bind to that one model. A label the prompt does not declare gets no binding.
 
-A prompt whose only declaration is a role with no keys, `models: { writer: {} }`, passes prepare with its requirements satisfied when the Host supplies a model. A prompt with no `models:` key gives prepare no roles to bind or check, so no model requirement can stop it; a prompt whose frontmatter declares only `uses: [web]` prepares with no model requirement to meet. When the Host sets no current model, prepare skips the role binding and the keyword and context checks, so no role is bound and no model requirement is reported.
+A prompt whose only declaration is a role with no keys, `models: { writer: {} }`, passes the requirements check when the Host supplies a model. A prompt with no `models:` key gives the run no roles to bind or check, so no model requirement can stop it; a prompt whose frontmatter declares only `uses: [web]` starts with no model requirement to meet. When the Host sets no current model, the run skips the role binding and the keyword and context checks, so no role is bound and no model requirement is reported.
 
 ### The model role check
 
-The model role check is the comparison prepare makes, before the run starts, between each declared model role and the Host's current model. It checks the role's `min_context` and its hard keywords, `thinking` and `no-thinking`, and it reports the context minimum and each hard keyword separately.
+The model role check is the comparison the run makes when it is built, between each declared model role and the Host's current model, and the run's first step reports any shortfall it finds. It checks the role's `min_context` and its hard keywords, `thinking` and `no-thinking`, and it reports the context minimum and each hard keyword separately.
 
 ````markdown
 ---
@@ -460,15 +462,15 @@ return 'done'
 ```
 ````
 
-On a model with a 32000-token window that never thinks, `analyst` falls short on both checks, and the Host refuses the run before any section runs. The run fails with run error kind `RequirementsUnmet`, and the notice opens with `the environment cannot satisfy this prompt:`, followed by one line per shortfall:
+On a model with a 32000-token window that never thinks, `analyst` falls short on both checks, and the run is refused on its first step, before any section runs. The run fails with run error kind `RequirementsUnmet`, and the notice opens with `the environment cannot satisfy this prompt:`, followed by one line per shortfall:
 
 ````text
 the environment cannot satisfy this prompt:
-- role 'analyst': requires a context of at least 200000 tokens; the current model provides 32000
-- role 'analyst': requires 'thinking'; the current model's thinking capability is Never
+- role 'analyst': requires a context of at least 200000 tokens; the model filling it provides 32000
+- role 'analyst': requires 'thinking'; the thinking capability of the model filling it is Never
 ````
 
-Prepare reports each failed check on its own line. A role that meets its context minimum but fails a keyword gets exactly one line, and a role that fails both its context minimum and a keyword gets two lines, as `analyst` does here.
+The notice reports each failed check on its own line. A role that meets its context minimum but fails a keyword gets exactly one line, and a role that fails both its context minimum and a keyword gets two lines, as `analyst` does here.
 
 Whether a hard keyword is met depends on the current model's thinking capability:
 
@@ -479,29 +481,29 @@ Whether a hard keyword is met depends on the current model's thinking capability
 
 `thinking` fails only on a model that never thinks, and `no-thinking` fails only on a model that always thinks, so a model whose thinking is switchable meets both hard keywords. A `no-thinking` role on a switchable model prepares and runs, with thinking turned off on its requests.
 
-Prepare checks only the hard keywords `thinking` and `no-thinking`. Any other keyword on a role, such as `frontier`, `fast`, `small`, `creative`, or `chat`, records your intent and never causes a shortfall, even on a 32000-token model that never thinks.
+The run checks only the hard keywords `thinking` and `no-thinking`. Any other keyword on a role, such as `frontier`, `fast`, `small`, `creative`, or `chat`, records your intent and never causes a shortfall, even on a 32000-token model that never thinks.
 
 ### The two role lines
 
 A context window below a role's `min_context` shows as this line, with both numbers as plain token counts:
 
 ````text
-- role '{role}': requires a context of at least {required} tokens; the current model provides {actual}
+- role '{role}': requires a context of at least {required} tokens; the model filling it provides {actual}
 ````
 
 A failed hard keyword shows as this line, where `{required}` is the keyword and `{actual}` is `Never` when `thinking` fails and `Always` when `no-thinking` fails:
 
 ````text
-- role '{role}': requires '{required}'; the current model's thinking capability is {actual}
+- role '{role}': requires '{required}'; the thinking capability of the model filling it is {actual}
 ````
 
-So a `writer` role with `keywords: [no-thinking]` on a model that always thinks gives `- role 'writer': requires 'no-thinking'; the current model's thinking capability is Always`. Each shortfall line in the notice starts with `- `, so for a role `reader` that needs 200000 tokens on a 32000-token model, the whole notice is the two lines shown in [How a run proceeds](#how-a-run-proceeds).
+So a `writer` role with `keywords: [no-thinking]` on a model that always thinks gives `- role 'writer': requires 'no-thinking'; the thinking capability of the model filling it is Always`. Each shortfall line in the notice starts with `- `, so for a role `reader` that needs 200000 tokens on a 32000-token model, the whole notice is the two lines shown in [How a run proceeds](#how-a-run-proceeds).
 
 ### Unmet requirements are recorded, not raised
 
-An unmet requirement is one shortfall the model role check finds, recorded in the requirements report before the prompt starts rather than raised as an error. Because of that, a model that cannot serve a role never surfaces as an error partway through a run. A role `checker` that needs `no-thinking` on a model that always thinks gives exactly one unmet requirement, and the run is refused before any section has run.
+An unmet requirement is one shortfall the model role check finds, recorded when the run is built and reported on its first step rather than raised as an error. Because of that, a model that cannot serve a role never surfaces as an error partway through a run. A role `checker` that needs `no-thinking` on a model that always thinks gives exactly one unmet requirement, and the run is refused before any section has run.
 
-Prepare checks and never repairs. A role that fails a keyword or context check stays bound to the current model, and prepare never looks for a different model to serve it.
+The check never repairs. A role that fails a keyword or context check stays bound to the current model, and nothing looks for a different model to serve it.
 
 ## The requirements notice
 
@@ -533,34 +535,33 @@ Run this prompt on a Host that has no `web` Pack from any vendor, that has `runv
 ````text
 the environment cannot satisfy this prompt:
 - missing required Pack: web
-- user-input needs runvil/input-broker, and the environment provides none
-- role 'analyst': requires a context of at least 200000 tokens; the current model provides 32000
-- role 'analyst': requires 'thinking'; the current model's thinking capability is Never
+- user-input is unavailable: the run lacks the services it needs: runvil/input-broker
+- role 'analyst': requires a context of at least 200000 tokens; the model filling it provides 32000
+- role 'analyst': requires 'thinking'; the thinking capability of the model filling it is Never
 ````
 
-The requirements notice is the text prepare writes when it refuses to start a run. When a prompt's requirements are unmet, the Harness refuses the run before any section or Lua runs, so nothing in the prompt can catch the refusal. Any unmet requirement, including an unmet model role requirement, makes the refusal a run error of kind `RequirementsUnmet` whose message is the notice, word for word. When nothing blocks the run, there is no refusal. The `frontier` keyword adds no line, because it is a soft keyword.
+The requirements notice is the text the run's first step reports when the requirements check refuses the run. When a prompt's requirements are unmet, the run is refused before any section or Lua runs, so nothing in the prompt can catch the refusal. Any unmet requirement, including an unmet model role requirement, makes the refusal a run error of kind `RequirementsUnmet` whose message is the notice, word for word. When nothing blocks the run, there is no refusal. The `frontier` keyword adds no line, because it is a soft keyword.
 
 ### The notice's fixed layout
 
-The notice has a fixed layout: the opening line `the environment cannot satisfy this prompt:`, then one line starting with `- ` for each unmet requirement. Prepare does not stop at the first gap, so when several requirements are unmet you see all of them together in one notice, not only the first. Each line names what is missing or falls short, such as each missing service and each unavailable Pack, and states the required value against the actual value where that applies.
+The notice has a fixed layout: the opening line `the environment cannot satisfy this prompt:`, then one line starting with `- ` for each unmet requirement. The check does not stop at the first gap, so when several requirements are unmet you see all of them together in one notice, not only the first. Each line names what is missing or falls short, such as each unavailable Pack and the services it lacks, and states the required value against the actual value where that applies.
 
-The notice is written for a model to read: concise, factual, and self-contained. It names only the gaps that block the run, because the report behind it lists only what needs a person's attention. Each kind of line comes from one kind of gap:
+The notice is written for a model to read: concise, factual, and self-contained. It names only the gaps that block the run, because the check records only what needs a person's attention. Each kind of line comes from one kind of gap:
 
 | Notice line | What produces it |
 |---|---|
 | `- missing required Pack: {id}` | a bare entry whose Pack id no Pack of the Host has, from any vendor |
-| `- {pack} needs {service}, and the environment provides none` | a declared Pack whose service the run lacks |
-| `- {pack} is unavailable: {reason}` | a declared Pack that the Host has but that cannot serve, a declared `vendor/name` entry the Host lacks, or a bare entry whose Pack id only other vendors' Packs have |
+| `- {pack} is unavailable: {reason}` | a declared Pack that the Host has but that cannot serve or lacks a service it needs, a declared `vendor/name` entry the Host lacks, or a bare entry whose Pack id only other vendors' Packs have |
 | `- the run's tool catalog or Pack roster names the Pack id {id}, which the Engine reserves` | a catalog tool or a roster Pack under a reserved Pack id, `adhoc` or `dynamic` |
-| `- role '{role}': requires a context of at least {required} tokens; the current model provides {actual}` | a role whose `min_context` is above the current model's window |
-| `- role '{role}': requires '{required}'; the current model's thinking capability is {actual}` | a role whose hard keyword the current model fails |
+| `- role '{role}': requires a context of at least {required} tokens; the model filling it provides {actual}` | a role whose `min_context` is above the current model's window |
+| `- role '{role}': requires '{required}'; the thinking capability of the model filling it is {actual}` | a role whose hard keyword the current model fails |
 | `- the H1 gate failed` | an uncaught Lua error in the H1 pass |
 
 ### Pack lines in the notice
 
 A bare entry under `uses:` whose Pack id no Pack of the Host has, from any vendor, refuses the run with the line `- missing required Pack: {id}`, such as `- missing required Pack: web`. A `vendor/name` entry never gives this line.
 
-A declared Pack that the Host has but that needs a host service the Host lacks appears as `- {pack} needs {service}, and the environment provides none`, naming both the Pack and the missing service id. A Pack missing several services gets one line for each missing service. The service name in the line is shown exactly as the Host names it, so service names can differ from one Host to another.
+A declared Pack that the Host has but that needs a host service the run lacks appears as `- {pack} is unavailable: the run lacks the services it needs: {services}`, naming the Pack and every missing service id, joined by `, `. A Pack missing several services still gets only that one line. The service name in the line is shown exactly as the Host names it, so service names can differ from one Host to another.
 
 A declared Pack that the Host has but that cannot serve, for example because it failed to build, appears as `- {pack} is unavailable: {reason}`, with the Pack id and the reason the environment gave, word for word. The reason is written for the model that reads the refusal, as in `- web is unavailable: web needs runvil/search-provider, and this host provides none`.
 
@@ -568,17 +569,17 @@ A declared entry the Host has no Pack for appears the same way, unless it is a b
 
 The Engine reserves two Pack ids, `adhoc` for a section entry's own tools (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)) and `dynamic` for its discovery tools (see [Finding and calling dynamic tools](12-tools.md#finding-and-calling-dynamic-tools)), so a run whose tool catalog holds a tool under a reserved Pack id, or whose roster holds a Pack with one, usable or not, is refused with the line `- the run's tool catalog or Pack roster names the Pack id {id}, which the Engine reserves`, such as `- the run's tool catalog or Pack roster names the Pack id adhoc, which the Engine reserves`. Each reserved Pack id the run names gets one line, however many such tools or Packs the run has, and a run that names both gets the `adhoc` line first.
 
-Each Pack appears under its real cause only. A Pack that lacks a host service is reported only under that service gap, never also as a missing required Pack, whichever check finds it first. A Pack that the Host has but that fails to build or activate is reported only as unavailable, with its reason, never as a missing required Pack. So when a declared Pack lacks a service or is unavailable, the notice leaves out its `missing required Pack` line and names only the real cause.
+Each Pack appears under its real cause only. A Pack that lacks a host service is reported only as unavailable, with the services it lacks as its reason, never also as a missing required Pack. A Pack that the Host has but that fails to build or activate is reported only as unavailable, with its reason, never as a missing required Pack. So when a declared Pack lacks a service or is unavailable, the notice leaves out its `missing required Pack` line and names only the real cause.
 
 ### Role lines in the notice
 
 Each unmet model role requirement gets its own line under the opening line, starting with `- role '{role}':` and naming the role by its label. The notice names every failed check across all roles, each on its own line with required against actual, so a role that fails both its context check and a keyword check gets two lines, as `analyst` does above.
 
-When the bound model's context window is smaller than a role's `min_context`, set at `models.{label}.min_context`, the line is `- role '{role}': requires a context of at least {required} tokens; the current model provides {actual}`. The comparison is strict, so a model whose window equals the minimum passes.
+When the bound model's context window is smaller than a role's `min_context`, set at `models.{label}.min_context`, the line is `- role '{role}': requires a context of at least {required} tokens; the model filling it provides {actual}`. The comparison is strict, so a model whose window equals the minimum passes.
 
-An unmet hard keyword gives the line `- role '{role}': requires '{required}'; the current model's thinking capability is {actual}`, where `{required}` is the keyword. `{actual}` reads `Never` for an unmet `thinking` and `Always` for an unmet `no-thinking`, capitalized as shown, and a `Switchable` model meets both keywords. A role with the `no-thinking` keyword on a model that always thinks gives `- role '{role}': requires 'no-thinking'; the current model's thinking capability is Always`.
+An unmet hard keyword gives the line `- role '{role}': requires '{required}'; the thinking capability of the model filling it is {actual}`, where `{required}` is the keyword. `{actual}` reads `Never` for an unmet `thinking` and `Always` for an unmet `no-thinking`, capitalized as shown, and a `Switchable` model meets both keywords. A role with the `no-thinking` keyword on a model that always thinks gives `- role '{role}': requires 'no-thinking'; the thinking capability of the model filling it is Always`.
 
-Only `min_context` and the hard keywords `thinking` and `no-thinking` can add role lines. Soft keywords such as `frontier` or `fast` are never checked and never refuse a run. The notice lists only the roles that fall short and leaves out roles the model meets. When the Host sets no current model, the notice has no role lines, because prepare skips the role checks.
+Only `min_context` and the hard keywords `thinking` and `no-thinking` can add role lines. Soft keywords such as `frontier` or `fast` are never checked and never refuse a run. The notice lists only the roles that fall short and leaves out roles the model meets. When the Host sets no current model, the notice has no role lines, because the run skips the role checks.
 
 ### The H1 gate line
 
@@ -586,32 +587,17 @@ The `- the H1 gate failed` line does not come from a refusal. An uncaught Lua er
 
 ### The order of the lines
 
-Notice lines appear in a fixed order: missing Packs first, then missing services, then unavailable Packs, then the lines for reserved Pack ids, in sorted order, then unmet model role requirements. Missing required Packs come before Packs that lack a host service, no matter which gap was found first. Within each kind of gap, the notice keeps the order in which the gaps were found. Role lines are listed in sorted label order, and within a role the context line comes first, then the keyword lines in the order the keywords are declared.
+Notice lines appear in a fixed order: missing Packs first, then unavailable Packs, including those that lack a host service, then the lines for reserved Pack ids, in sorted order, then unmet model role requirements. Missing required Packs come before unavailable Packs, no matter which gap was found first. Missing and unavailable Packs each keep the order in which the prompt declares them. Role lines are listed in sorted label order, and within a role the context line comes first, then the keyword lines in the order the keywords are declared.
 
-Each gap appears once. A Pack gap that more than one merged report names appears only once in the notice. Each Pack and missing service pair appears once even when it is reported twice, and every distinct pair is listed. Each unavailable Pack appears once even when more than one check reports it, and every distinct unavailable Pack is listed with its own reason.
+Each gap appears once. The check looks up each declared Pack once in the run's roster, so each declared Pack gets at most one line, and an unavailable Pack is listed with its own reason.
 
-### The requirements report
+### How the gaps are gathered
 
-The requirements report is the preflight check behind the notice, made before the prompt starts. It combines the Harness's check that each declared Pack can serve, made when the Harness takes its snapshot of the run's Packs, with the model role checks made while the run context is prepared, so one refusal names every gap. It names missing required Packs, declared Packs that lack a host service, declared Packs that are unavailable, the reserved Pack ids the run's catalog or roster takes, and unmet requirements.
-
-Unmet requirements do not make prepare itself fail. Prepare still produces a requirements report, marked as not satisfied, and when prepare refuses to start the run, its refusal text is the notice built from that report. The report keeps one record per kind of gap:
-
-- missing required Packs
-- missing services, one entry for each Pack and missing service
-- unavailable Packs, each with its reason
-- the reserved Pack ids that a catalog tool or a roster Pack has, sorted, each once
-- unmet requirements, one entry for each failed model role check
-
-The report keeps unmet role checks apart from its list of missing required Packs, which stays empty when only a role check fails. Each unmet role entry records:
-
-- the label of the role that falls short, such as `checker`
-- which check the role failed: `ContextMinimum` for the context minimum, or `HardKeyword` for a hard keyword
-- the requirement the prompt declared, such as `no-thinking` from `keywords: [no-thinking]` or the `min_context` value `200000`
-- the model's actual value, such as `32000`
+The requirements are gathered once, when the run is built, and the run's first step reports them after the version and store checks pass. The check looks at every Pack the prompt declares, every reserved Pack id in the run's catalog and roster, and every declared model role, so one refusal names every gap. Unmet requirements never make prepare fail: the run is built all the same, and its first step fails with the notice. When the notice would have no lines, nothing blocks the run.
 
 ### When a cancel comes first
 
-When the run is cancelled before the Harness refuses it, for example while a declared Pack is still starting, no notice is reported: the run ends as cancelled rather than failing with `RequirementsUnmet`, as [Waiting for Packs and taking the snapshot](#waiting-for-packs-and-taking-the-snapshot) explains.
+When the run's cancel flag is set by the time a start check fails, for example because a cancel cut short the wait while a declared Pack was still starting, no notice is reported: the run ends as cancelled rather than failing with `RequirementsUnmet`, as [Waiting for Packs and taking the snapshot](#waiting-for-packs-and-taking-the-snapshot) explains. A failed version or store check that meets a cancel ends the run as cancelled in the same way.
 
 ## The section walk
 
@@ -1437,7 +1423,7 @@ Because `tasks.fanout` raises the failing arm's own error, an arm's tool or stor
 
 ### The failed gate's message
 
-Run error kind `RequirementsUnmet` covers two cases: [prepare](#preparing-the-run) refusing the run, and the H1 pass failing its hard gate. The message tells them apart. A prepare refusal's message is only the [requirements notice](#the-requirements-notice), while a failed gate's message ends with the Lua error text.
+Run error kind `RequirementsUnmet` covers three cases inside the run: the [requirements check](#preparing-the-run) refusing the run, the H1 pass failing its hard gate, and a model round that has no model, which fails with `model binding required for section {section}`. The message tells them apart. A refusal's message is only the [requirements notice](#the-requirements-notice), while a failed gate's message ends with the Lua error text. The Harness also ends a run with `RequirementsUnmet` before it starts, when the launch input does not match the prompt's `input:` declaration or the Host's selected model is missing from its list of models (see [Runs that end before the walk](#runs-that-end-before-the-walk)).
 
 A failed gate's error has a fixed notice, the line `the environment cannot satisfy this prompt:` followed by the line `- the H1 gate failed`, and it keeps the Lua failure as its cause. The message is the notice, then a colon and a space, then the cause's text, with the cause text appearing exactly once. So the assertion's message appears in the cause and not in the notice.
 
@@ -1449,8 +1435,7 @@ In the H1 pass only ordinary Lua errors turn into `RequirementsUnmet`, and every
 | --- | --- |
 | A tool failure | `Tool` |
 | A `Quota`, `Completion`, `Binding`, or `ContextExhausted` failure | That same kind |
-| A failed store call | `Vfs` |
-| A claims conflict | `Determinism` |
+| A failed store call or a claims conflict | `Vfs` |
 | A task error | `Lua` |
 | A Host cancel | The cancelled outcome |
 
@@ -1565,7 +1550,7 @@ Every run ends in exactly one of three run outcomes:
 - Cancelled, when the Host cancels the run. A cancelled run carries no result text and no error.
 - Failed, with the error it failed with: a run error kind that names the cause, such as an uncaught Lua error, together with a self-contained message for people to read.
 
-The first outcome that ends a run is the one reported, and a later error or cancel never replaces it. A cancel that lands while a requirements refusal is being recorded leaves the run failed with run error kind `RequirementsUnmet`.
+The first outcome that ends a run is the one reported, and a later error or cancel never replaces it. A cancel that lands after the run's first step has refused the run leaves the run failed with run error kind `RequirementsUnmet`.
 
 ### Cancelling a run
 
@@ -1573,7 +1558,7 @@ When the Host cancels a run, the run ends as cancelled. A cancel is reported as 
 
 A cancel that lands while every chain is waiting takes effect at the run's next step, which tears down every chain, while Lua code that is already running sees the cancel as it runs. A run cancelled while a `tools.call` to a script tool is suspended ends with the cancelled outcome rather than a text result or an error. A model request cut short by a cancel is not reported as a failed model call.
 
-A requirements refusal that happens after the run's cancel fired ends the run as cancelled instead of failed, as when a cancel cuts the wait short while a needed Pack is still starting (see [Waiting for Packs and taking the snapshot](#waiting-for-packs-and-taking-the-snapshot)).
+A start check that fails after the run's cancel fired, whether on the version, the store, or the requirements, ends the run as cancelled instead of failed, as when a cancel cuts the wait short while a needed Pack is still starting (see [Waiting for Packs and taking the snapshot](#waiting-for-packs-and-taking-the-snapshot)). A cancel that comes before the run, or while the Harness looks up the model, ends the run as cancelled before the prompt is parsed.
 
 ### Failed runs and run error kinds
 
@@ -1610,7 +1595,15 @@ The run fails with run error kind `Lua` and a message containing `expected failu
 
 ### Runs that end before the walk
 
-A run that ends during preparation still has a record. When the Harness refuses its requirements, the prompt fails to parse, or an [input file](02-file-structure.md#input-and-output-file-declarations) cannot be put in place, the run's record ends as failed with the cause as its message. The recorded kind is `RequirementsUnmet` for a refusal and `Parse` for a prompt that does not parse, so you can see why a run that never reached its sections failed.
+A run that ends before the walk still has a record, because the Harness begins the record before anything else. The run's record ends as failed with the cause as its message, and the recorded kind tells you why a run that never reached its sections failed:
+
+- `Completion` when the Harness cannot fetch the Host's list of models, and `RequirementsUnmet` when that list does not hold the selected model.
+- `Parse` when the prompt does not parse, or when its `runvil:` version is missing or unsupported.
+- `RequirementsUnmet` when the launch input does not match the prompt's [input file](02-file-structure.md#input-and-output-file-declarations) declaration, and `Vfs` when the store refuses to stage the input.
+- `Vfs` when the run declares no store or its store fails the probe.
+- `RequirementsUnmet` when the environment falls short of the prompt's requirements.
+
+A run whose cancel fires first ends as cancelled instead, even when the cancel comes before the run starts.
 
 ## Run events and records
 
@@ -1690,7 +1683,7 @@ A `log` checkpoint is recorded under the name of the section whose Lua wrote it,
 
 ### Events from a run that ends early
 
-When a run ends during preparation, the events recorded before it ended stay in its record and can still be read. A prompt that parsed and was then refused by the environment still has its parse events, ending with the parse-succeeded event.
+When a run ends before it starts, the events recorded before it ended stay in its record and can still be read. A prompt that parsed and was then refused still has its parse events, ending with the parse-succeeded event. A run that ended before its parse, on a failed model lookup or an early cancel, has no events in its record, only the values below and its outcome.
 
 ### What a run's record holds
 
@@ -1708,7 +1701,7 @@ Beside these values, the record holds the run's history: every event the run rep
 
 The run's name is the run metadata's `name` and also the `execution` field of every event the run records, from its parse events through its last event. The same prompt text always yields the same prompt hash across runs.
 
-Each run draws its own fresh [seed](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host) from the operating system's cryptographic random source and records it at the start of the run, before anything else, so two runs of the same prompt get different seeds. The run's start time, `started_at`, is stamped once from the system wall clock when the run is prepared, because the Engine reads no clock of its own, and a later run never starts earlier. The Harness supplies both the seed and the start instant, drawing them before the prompt is parsed, and a prompt cannot set either one.
+Each run draws its own fresh [seed](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host) from the operating system's cryptographic random source and records it at the start of the run, before anything else, so two runs of the same prompt get different seeds. The run's start time, `started_at`, is stamped once from the system wall clock when the Harness begins the run's record, because the Engine reads no clock of its own, and a later run never starts earlier. The Harness supplies both the seed and the start instant, drawing them before the prompt is parsed, and a prompt cannot set either one.
 
 Two runs of the same prompt running at the same time stay separate. Each returns its own result, and each run's records hold only its own events, Harness work and answers, `log` checkpoints, and final `run_succeeded`.
 

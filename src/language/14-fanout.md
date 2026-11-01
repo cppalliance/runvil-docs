@@ -687,7 +687,7 @@ Inside an arm, and in a chain the arm starts with `call`, `sys.section_count` is
 
 A library loaded with [`require`](03-blocks-and-prose.md#sharing-code-with-require) inside a fanout arm runs in the arm's environment, so its top-level code reads the arm's `item`. [`call` and `require` inside an arm](#call-and-require-inside-an-arm) shows an example.
 
-A fanout arm sees every [Pack prelude](12-tools.md#pack-preludes) global, so where `greeter` is a prelude global, an arm block `return greeter.greet(item)` yields `hello arm`. Each arm runs every prelude afresh in its own Lua environment, so a prelude's install-time side effects happen once per arm. With `tasks.fanout('### Worker', { 'alpha', 'beta' })`, a prelude whose install-time code writes a store file writes it in both arms, so the second arm's write is a [store conflict](#store-conflicts) that ends the run with `Determinism`, even when the prelude wraps the write in `pcall`.
+A fanout arm sees every [Pack prelude](12-tools.md#pack-preludes) global, so where `greeter` is a prelude global, an arm block `return greeter.greet(item)` yields `hello arm`. Each arm runs every prelude afresh in its own Lua environment, so a prelude's install-time side effects happen once per arm. With `tasks.fanout('### Worker', { 'alpha', 'beta' })`, a prelude whose install-time code writes a store file writes it in both arms, so the second arm's write is a [store conflict](#store-conflicts) that ends the run with `Vfs`, even when the prelude wraps the write in `pcall`.
 
 ## Returning, jumping, and nesting inside an arm
 
@@ -1482,7 +1482,7 @@ return item
 ```
 ````
 
-Both arms write `shared.txt`, so the run never returns `alpha,beta`. It ends with run error kind [`Determinism`](09-the-store.md#races-claims-and-determinism), and the error message begins `store determinism violation:`, then names the contested path `shared.txt`, the words `conflicts with`, and both arms.
+Both arms write `shared.txt`, so the run never returns `alpha,beta`. It ends with run error kind `Vfs`, as a [claims conflict](09-the-store.md#races-claims-and-determinism), and the error message begins `store determinism violation:`, then names the contested path `shared.txt`, the words `conflicts with`, and both arms.
 
 ### One store for every arm
 
@@ -1494,7 +1494,7 @@ An arm can read the files the caller wrote before it called `tasks.fanout`, beca
 
 ### Store conflicts
 
-Two accesses make a store conflict when they touch the same store path, at least one of them writes, they come from different arms, and nothing orders one arm before the other. So two unordered arms that touch one path with a write never silently race, while any number of arms may read the same path. Two arms writing the same store path, as in `shared-path`, end the whole run with run error kind `Determinism`.
+Two accesses make a store conflict when they touch the same store path, at least one of them writes, they come from different arms, and nothing orders one arm before the other. So two unordered arms that touch one path with a write never silently race, while any number of arms may read the same path. Two arms writing the same store path, as in `shared-path`, end the whole run with run error kind `Vfs`.
 
 A cross-arm conflict is unconditional and never depends on timing. Sibling arms never join each other, and a claim on a path stands for the rest of the run, even after the arm that made it ends (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)). So whichever of two conflicting accesses runs second always meets the first one's claim, in every interleaving.
 
@@ -1502,7 +1502,7 @@ Of two conflicting arm accesses, the second never reaches the store, so exactly 
 
 A store conflict ends the run at once. The losing arm never resumes, no arm counts as failed, an arm still waiting when the conflict lands reports cancelled, and at most the winning arm reports success. So two conflicting arms both report `Task started`, neither reports a failed task event, and at most one reports `Task succeeded`.
 
-A cross-arm store conflict cannot be caught with `pcall`, not even a `pcall` wrapped around the store call inside the arm, because the conflict never resumes into the arm. When the arms run `pcall(store.append, 'notes.md', item .. '\n')`, the run still ends with `Determinism` instead of returning `alpha,beta`.
+A cross-arm store conflict cannot be caught with `pcall`, not even a `pcall` wrapped around the store call inside the arm, because the conflict never resumes into the arm. When the arms run `pcall(store.append, 'notes.md', item .. '\n')`, the run still ends with the store conflict instead of returning `alpha,beta`.
 
 ### Which store calls can conflict
 
@@ -1514,11 +1514,11 @@ Every store call can take part in a conflict, not just writes:
 | `store.read`, `store.read_numbered`, `store.exists` | its path, for reading |
 | `store.glob` | its whole pattern |
 
-A sibling's write to any path a `store.glob` pattern matches conflicts with the glob. Any of these calls that touches a path a sibling arm writes ends the run with `Determinism`, whichever arm runs first.
+A sibling's write to any path a `store.glob` pattern matches conflicts with the glob. Any of these calls that touches a path a sibling arm writes ends the run with a store conflict, whichever arm runs first.
 
-`store.append` claims its path for writing just like `store.write`, so two arms appending to one file conflict even though neither overwrites the other. When both arms run `store.append('log.txt', item .. ';')`, the run ends with `Determinism` instead of returning the joined results, and the error names `log.txt`.
+`store.append` claims its path for writing just like `store.write`, so two arms appending to one file conflict even though neither overwrites the other. When both arms run `store.append('log.txt', item .. ';')`, the run ends with the store conflict instead of returning the joined results, and the error names `log.txt`.
 
-An arm whose `store.read`, `store.exists`, or `store.glob` touches a path a sibling arm is writing ends the run with the same `Determinism` error in every interleaving. So arms coordinate only through the results `tasks.fanout` returns, never through store files a sibling is writing, and they cannot meet by polling each other's marker files while the sibling is still running.
+An arm whose `store.read`, `store.exists`, or `store.glob` touches a path a sibling arm is writing ends the run with the same store conflict in every interleaving. So arms coordinate only through the results `tasks.fanout` returns, never through store files a sibling is writing, and they cannot meet by polling each other's marker files while the sibling is still running.
 
 ### The safe store pattern
 

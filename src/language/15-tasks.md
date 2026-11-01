@@ -654,7 +654,7 @@ You can also call `tasks.join` purely to wait, as a bare statement such as `task
 
 Delivery joins the task, so everything the task did, its store writes included, is visible to the owner from the very next operation. `tasks.join_any` joins the task it returns, so you can read that task's store writes right away, and after `tasks.join` returns, every delivered member's store writes are visible to you.
 
-Read a task's files only after a wait delivers it. Reading the store files of a task that no wait has delivered yet, such as a member `tasks.join_any` did not return or a member a timed-out wait left running, is a claims conflict: it ends the run on the spot with run error kind `Determinism`, and no `pcall` catches it, even when the task has already written the file (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)).
+Read a task's files only after a wait delivers it. Reading the store files of a task that no wait has delivered yet, such as a member `tasks.join_any` did not return or a member a timed-out wait left running, is a claims conflict: it ends the run on the spot with run error kind `Vfs`, and no `pcall` catches it, even when the task has already written the file (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)).
 
 A task cannot join its sibling, so you build a pipeline by having the owner spawn a stage, join it, and then spawn the next stage, which reads the earlier stage's store writes:
 
@@ -2007,7 +2007,7 @@ A task runs the same Lua as any chain, and these rules cover what happens when i
 - A `models.infer` reply made inside a `call` chain of a task flows back through `call` to the task's result and then to the spawner's `tasks.join`. For example, `## Main` joins `### Caller`, which runs `return call('#### Leaf')`, and `#### Leaf` runs `return models.infer(var.who)`, so the reply reaches `## Main` as the result of `### Caller`.
 - An adhoc tool handler runs inside the calling chain, so it can start and wait on tasks just as block code can (see [How adhoc tool handlers run](12-tools.md#how-adhoc-tool-handlers-run)).
 - Each task keeps its own round count starting at zero, so its rounds are numbered on its own counter and never add to its spawner's count, and its `tasks.status` reads `turns` as 0 while its first `models.infer` round is in flight and 1 after it returns.
-- A task spawned after its spawner writes a store path reads the spawner's content, while a task spawned before that write always meets a claims conflict when it reads the path. That conflict ends the run on the spot with run error kind `Determinism` and a message naming the path, and no `pcall` catches it (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)).
+- A task spawned after its spawner writes a store path reads the spawner's content, while a task spawned before that write always meets a claims conflict when it reads the path. That conflict ends the run on the spot with run error kind `Vfs` and a message naming the path, and no `pcall` catches it (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)).
 
 ## Task events and task errors
 

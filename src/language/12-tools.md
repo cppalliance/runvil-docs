@@ -89,11 +89,11 @@ the environment cannot satisfy this prompt:
 
 A bare entry whose Pack id the Host has only from other vendors gets a line that names the entry to write instead, so `uses: [poop]` on a Host that has `acme/poop` but no `runvil/poop` gives `- poop is unavailable: poop means runvil/poop, which is not installed; write acme/poop to use that Pack`. A `vendor/name` entry the Host does not have gets a line such as `- poop is unavailable: acme/poop is not installed`.
 
-A declared Pack also refuses the run when the Host has it but it cannot serve, either because it failed to build or start or because it needs a service the run lacks. The notice lists every such declared Pack at once, with lines in these forms:
+A declared Pack also refuses the run when the Host has it but it cannot serve, either because it failed to build or start or because it needs a service the run lacks. The notice lists every such declared Pack at once, one line per Pack, with lines in these forms:
 
 ````text
 - {pack} is unavailable: {reason}
-- {pack} needs {service}, and the environment provides none
+- {pack} is unavailable: the run lacks the services it needs: {services}
 ````
 
 An undeclared Pack that cannot serve never refuses the run, and its tools are left out of the catalog. [The requirements notice](04-how-a-prompt-runs.md#the-requirements-notice) explains the whole notice.
@@ -130,7 +130,7 @@ The run's declared Packs and the catalog tools it can offer stay fixed for the w
 
 ### Errors in the `uses:` key
 
-Every mistake in a `uses:` entry, and every repeated entry, fails when the prompt is parsed, as a `Frontmatter` parse error (see [Declaration errors](06-arguments.md#declaration-errors)), before anything runs. A declared Pack that the Host lacks is a different failure, caught later when the run is prepared, as shown above. The parse error for a malformed entry includes the entry's own line and column in the file.
+Every mistake in a `uses:` entry, and every repeated entry, fails when the prompt is parsed, as a `Frontmatter` parse error (see [Declaration errors](06-arguments.md#declaration-errors)), before anything runs. A declared Pack that the Host lacks is a different failure, caught later on the run's first step, as shown above. The parse error for a malformed entry includes the entry's own line and column in the file.
 
 Each entry must be a plain string. An entry that is any other value, such as a number or a YAML map of settings, fails with a message that contains:
 
@@ -233,7 +233,7 @@ Three name shapes are easy to mix up:
 - a fully qualified name is a vendor and name pair, such as `runvil/web`
 - a tool id starts with the Pack id and adds the tool's own segment, such as `web/fetch`
 
-The first two go under `uses:`. A bare Pack id means the `runvil` Pack of that id, and a fully qualified name names the vendor as well, so `web` and `runvil/web` are the same entry and `acme/web` is another vendor's Pack. A tool id has the same two-segment shape as a fully qualified name, so `web/fetch` under `uses:` reads as the Pack `fetch` of a vendor named `web`, and unless the Host has such a Pack, the run is refused at prepare with `- fetch is unavailable: web/fetch is not installed`. Everywhere else a Pack id is one segment, so `tools.packs.get('acme/web')` reads `nil`, and `tools.offer('acme/web')`, a string with a slash, is read as a tool id and raises `tools.offer: "acme/web" is not a tool in this run`.
+The first two go under `uses:`. A bare Pack id means the `runvil` Pack of that id, and a fully qualified name names the vendor as well, so `web` and `runvil/web` are the same entry and `acme/web` is another vendor's Pack. A tool id has the same two-segment shape as a fully qualified name, so `web/fetch` under `uses:` reads as the Pack `fetch` of a vendor named `web`, and unless the Host has such a Pack, the run is refused on its first step with `- fetch is unavailable: web/fetch is not installed`. Everywhere else a Pack id is one segment, so `tools.packs.get('acme/web')` reads `nil`, and `tools.offer('acme/web')`, a string with a slash, is read as a tool id and raises `tools.offer: "acme/web" is not a tool in this run`.
 
 The Engine reserves two Pack ids, so no Pack of any vendor takes either: `adhoc` holds a section entry's own tools, the tools a prompt defines with `tools.adhoc` (see [Adhoc tools with `tools.adhoc`](#adhoc-tools-with-toolsadhoc)), and `dynamic` holds the Engine's two discovery tools (see [Finding and calling dynamic tools](#finding-and-calling-dynamic-tools)). The Host's Pack registry refuses a Pack whose Pack id is reserved when a Plugin adds it, with ``Pack `{fqn}` cannot take the Pack id {id}, which the Engine reserves``, where `{fqn}` is the Pack's fully qualified name, such as `acme/adhoc`, and `{id}` is the reserved Pack id, such as `adhoc`. A run whose tool catalog or Pack roster still names a reserved Pack id is refused before it starts, and its requirements notice holds the line `- the run's tool catalog or Pack roster names the Pack id {id}, which the Engine reserves` once for each reserved Pack id it names (see [The requirements notice](04-how-a-prompt-runs.md#the-requirements-notice)).
 
@@ -2766,7 +2766,7 @@ A prelude function called from a block can also use the [store operations](09-th
 
 A prelude can call `store` operations at its top level while it loads. During the install they run directly instead of suspending, and once the install ends, any store function the prelude captured suspends like your own store calls.
 
-Because a prelude's top-level code runs again in every section entry's VM, a top-level `store.write` repeats in every arm. With two arms, both installs run `store.write('seeded.txt', 'seed')`, the second arm's install-time write conflicts with the first, and the run ends with run error kind `Determinism` (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)). That happens even when the prelude wraps the write in `pcall`, as in `pcall(function() store.write('seeded.txt', 'seed') end)`.
+Because a prelude's top-level code runs again in every section entry's VM, a top-level `store.write` repeats in every arm. With two arms, both installs run `store.write('seeded.txt', 'seed')`, the second arm's install-time write conflicts with the first, and the run ends with run error kind `Vfs` (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)). That happens even when the prelude wraps the write in `pcall`, as in `pcall(function() store.write('seeded.txt', 'seed') end)`.
 
 ### `var` inside a prelude
 

@@ -289,7 +289,7 @@ The frontmatter holds `name`, `description`, and `runvil: 0`, plus a `models:` k
 - `models:` declares model roles, such as the `writer` role here.
 - `args:` types the prompt's arguments (see [Declaring arguments in frontmatter](06-arguments.md#declaring-arguments-in-frontmatter)).
 
-The parser checks only the shape of these keys. Prepare (see [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run)) satisfies them against the run's environment.
+The parser checks only the shape of these keys. The run checks them against its environment on its first step (see [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run)).
 
 ### Setup Lua in the H1 body
 
@@ -370,7 +370,7 @@ The frontmatter declares one model role, `writer: {}`, under `models:`. The H1 b
 
 ### A prompt with no contract keys
 
-A prompt that declares none of the contract keys passes prepare and runs on its Lua alone, with no model and no tool:
+A prompt that declares none of the contract keys passes the requirements check and runs on its Lua alone, with no model and no tool:
 
 ````markdown
 ---

@@ -1435,7 +1435,7 @@ The caught store error, raised again with `error(err)`, ends the run with `Vfs` 
 
 Two failures happen before any block runs, and both end the run with `Vfs`: a run whose Host handle declares no store fails before its first block, rather than on its first store call, with `this run declares no store, so no store operation can run`, and a store backend that fails as the run starts, for example by refusing its session, fails the run at its first step with a message that starts `store operation failed: ` followed by the store's own error text. [When the store cannot start](#when-the-store-cannot-start) covers both.
 
-A store problem that ends a run has one of two run error kinds: `Vfs` for a store failure, and `Determinism` for a claims conflict, such as a library write that races across two [arms](14-fanout.md#what-an-arm-sees). A claims conflict is never raised at the call. It ends the run on the spot as `Determinism`, even when a `pcall` surrounds the call, so a library that runs `local ok = pcall(function() store.write('seeded.txt', 'seed') end)` in two racing arms still ends the run with `Determinism`. [Races, claims, and determinism](#races-claims-and-determinism) explains when a conflict happens.
+A store problem that ends a run has run error kind `Vfs`, whether it is an ordinary store failure or a claims conflict, such as a library write that races across two [arms](14-fanout.md#what-an-arm-sees). A claims conflict is never raised at the call. It ends the run on the spot as `Vfs`, even when a `pcall` surrounds the call, so a library that runs `local ok = pcall(function() store.write('seeded.txt', 'seed') end)` in two racing arms still ends the run with `Vfs`. [Races, claims, and determinism](#races-claims-and-determinism) explains when a conflict happens.
 
 ## Sharing files across sections, calls, and tasks
 
@@ -1578,7 +1578,7 @@ part gamma
 
 Each arm writes its own path, built from its `sys.index` and its `item` (see [What an arm sees](14-fanout.md#what-an-arm-sees)). After `tasks.fanout` returns, or after `tasks.join` or `tasks.join_any` delivers a task, the caller can read, glob, and merge that task's files freely, as `## Parent` does here. A fanout arm can write a store path with `store.write(path, text)` and append to one with `store.append(path, text)`, so two sections that run inside one arm, one after the other, can both append to `order.txt`, which then holds both lines. Store files written by sections inside a fanout arm stay in the run's store after the arm and the run finish.
 
-The delivery has to come first. Reading a task's file after a timed `tasks.join` ran out of time (see [Time limits on waits](15-tasks.md#time-limits-on-waits)) and before any delivery of that task ends the run with a `Determinism` error, even if the task has already written the file.
+The delivery has to come first. Reading a task's file after a timed `tasks.join` ran out of time (see [Time limits on waits](15-tasks.md#time-limits-on-waits)) and before any delivery of that task ends the run with a claims conflict, even if the task has already written the file.
 
 Joins carry writes along transitively. A section that joins a task which itself joined tasks it spawned can read those tasks' files too: when a task spawns two more tasks that write `sub-one.md` and `sub-two.md` and joins them, the section that delivers the outer task with `tasks.join_any` reads both files. A chain's end also joins every task it owns, so everything its tasks did counts as happening before the chain's own end, even for tasks no wait ever delivered, and nested work is ordered transitively.
 
@@ -1660,7 +1660,7 @@ store.append('log.txt', item .. ';')
 ```
 ````
 
-This run never reaches its `return`. Both arms append to `log.txt`, nothing orders one arm after the other, and the run fails with run error kind `Determinism` and a message of this form, where each identity names one of the two arms:
+This run never reaches its `return`. Both arms append to `log.txt`, nothing orders one arm after the other, and the run fails with run error kind `Vfs` and a message of this form, where each identity names one of the two arms:
 
 ````text
 store determinism violation: write on log.txt by {id} conflicts with a write claim by {other}
@@ -1670,7 +1670,7 @@ Every store call claims what it touches for the chain that made it, so the store
 
 Read claims never conflict with each other, whether they come from `store.read`, `store.read_numbered`, `store.exists`, or `store.glob`. A chain never conflicts with itself either, so a chain may write a path, overwrite it, append to it, and read it back freely.
 
-A store write leaves a standing write claim on its path for the rest of the run. So when two fanout arms write or append to one path, whichever reaches the store second always meets the first's claim and fails with a claims conflict, however the run interleaves. The whole run then ends with a fatal `Determinism` error whose message names the conflicting path, as `race` shows. `Determinism` is the run error kind for a store operation that conflicts under the claims model, a determinism violation.
+A store write leaves a standing write claim on its path for the rest of the run. So when two fanout arms write or append to one path, whichever reaches the store second always meets the first's claim and fails with a claims conflict, however the run interleaves. The whole run then ends with a fatal claims conflict whose message names the conflicting path, as `race` shows. A store operation that conflicts under the claims model is a determinism violation, and it ends the run with run error kind `Vfs`, the same kind as any other store failure, except that no Lua code can catch it.
 
 Store race detection is deterministic. Whether an access conflicts depends only on the order that spawns, joins, and chain ends set, never on how the arms or tasks happen to interleave in time, so a prompt gets the same store verdicts and the same file contents in every interleaving. A race in your prompt shows up on every run, not only on unlucky ones.
 
@@ -1729,9 +1729,9 @@ The spawn and join rules from [Forks and joins between tasks](#forks-and-joins-b
 
 Reading a task's store files without a delivery that joined the task is a conflict, and the verdict depends only on the prompt's structure, never on which task happened to finish first. Reading a sibling's files without a join always fails, because sibling arms are never ordered after each other.
 
-A store read that is not ordered after another task's write, because no wait has delivered that task yet, ends the run with `Determinism`. When a section spawns two tasks, waits with [`tasks.join_any`](15-tasks.md#waiting-with-tasksjoin_any-and-tasksjoin), and then reads the file of the task `tasks.join_any` did not return, the run fails whichever task finished first. The failure does not depend on timing: an unordered read fails even in runs where the other task's write has already finished.
+A store read that is not ordered after another task's write, because no wait has delivered that task yet, ends the run with a claims conflict. When a section spawns two tasks, waits with [`tasks.join_any`](15-tasks.md#waiting-with-tasksjoin_any-and-tasksjoin), and then reads the file of the task `tasks.join_any` did not return, the run fails whichever task finished first. The failure does not depend on timing: an unordered read fails even in runs where the other task's write has already finished.
 
-A timed wait works the same way. Reading a late member's file after a timed join, such as `tasks.join` with a `timeout` (see [Time limits on waits](15-tasks.md#time-limits-on-waits)), ran out of time, but before a later wait delivers that member, fails the run with `Determinism`.
+A timed wait works the same way. Reading a late member's file after a timed join, such as `tasks.join` with a `timeout` (see [Time limits on waits](15-tasks.md#time-limits-on-waits)), ran out of time, but before a later wait delivers that member, fails the run with a claims conflict.
 
 ### Calls that leave no claim
 
@@ -1739,9 +1739,9 @@ A store call refused by argument or path validation, by the Host's store policy,
 
 Of two conflicting accesses, the second detects the conflict and never reaches the store, so the first one's write is the one that lands. In `race`, `log.txt` ends up holding exactly one arm's append, `alpha;` or `beta;`.
 
-### The `Determinism` failure
+### A claims conflict ends the run
 
-Run error kind `Determinism` means two store accesses that no spawn or join ordered touched one store region in conflicting ways. No `pcall` catches it, not even around the store call inside the arm that loses:
+A claims conflict means two store accesses that no spawn or join ordered touched one store region in conflicting ways. It ends the run with run error kind `Vfs`, and no `pcall` catches it, not even around the store call inside the arm that loses:
 
 ````markdown
 ### Worker
@@ -1751,7 +1751,7 @@ local ok, err = pcall(store.append, 'notes.md', item .. '\n')
 ```
 ````
 
-With this `### Worker` in place of the one in `race`, and the same two members `alpha` and `beta`, the run still ends as `Determinism`. A claims conflict between two chains is never raised at the store call. It ends the run before the losing call returns, so the losing arm never resumes into Lua, and no Lua code or `pcall` can catch it. A claims conflict in the H1 pass still ends the run as `Determinism`, not as `RequirementsUnmet` the way an H1 Lua failure does (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)).
+With this `### Worker` in place of the one in `race`, and the same two members `alpha` and `beta`, the run still ends with the claims conflict. A claims conflict between two chains is never raised at the store call. It ends the run before the losing call returns, so the losing arm never resumes into Lua, and no Lua code or `pcall` can catch it. A claims conflict in the H1 pass still ends the run as `Vfs`, not as `RequirementsUnmet` the way an H1 Lua failure does (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)).
 
 When a claims conflict ends the run, no task or arm counts as failed. Every other live task is abandoned with the run, and at most the arm whose access came first completes. Store writes still in flight when the run ends finish before the run completes, so the write that landed is in the store even though the run fails.
 
@@ -1767,9 +1767,9 @@ The message begins with the fixed prefix `store determinism violation: `, names 
 
 ### Conflicts in library code
 
-A claims conflict in library code while it loads (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)) ends the run with run error kind `Determinism`, exactly as in block code. That includes two fanout arms that each `require` a library whose top-level code writes the same path, such as a library that runs `store.write('seeded.txt', 'seed')`.
+A claims conflict in library code while it loads (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)) ends the run with run error kind `Vfs`, exactly as in block code. That includes two fanout arms that each `require` a library whose top-level code writes the same path, such as a library that runs `store.write('seeded.txt', 'seed')`.
 
-A load-time conflict cannot be caught with `pcall` either. A library that wraps its own write in `pcall`, as in `local ok = pcall(function() store.write('seeded.txt', 'seed') end)`, still ends the run with `Determinism` when two arms load it.
+A load-time conflict cannot be caught with `pcall` either. A library that wraps its own write in `pcall`, as in `local ok = pcall(function() store.write('seeded.txt', 'seed') end)`, still ends the run with the claims conflict when two arms load it.
 
 A store function captured at load time behaves like `store.*` when it is called after the load (see [Capturing a store function](#capturing-a-store-function)). When a library captures a store function as it loads and hands it out as `save_note`, and each arm runs `pcall(save_note, 'note.txt', item)`, the two arms racing on `note.txt` end the run with a determinism violation even though each arm catches its own failure with `pcall`.
 
@@ -1917,7 +1917,7 @@ Once a run ends, its claims no longer count (see [Claims shared with tools and o
 
 Runs the Host prepares over the same mounts share one claims table, the shared set of claims [Claims shared with tools and other runs](#claims-shared-with-tools-and-other-runs) describes. While one run is live, another run cannot write a file the first has written, whether that file is in the store or in a real directory beside it. When run a writes `/shared.txt` in a real directory mounted at `/` beside the store, and run b writes the same file while run a's claim is live, run b's write fails with a conflict whose message names the path, `/shared.txt`.
 
-Through `store.*`, that conflict ends the run on the spot with run error kind [`Determinism`](#races-claims-and-determinism), and `pcall` cannot catch it. The conflict holds no matter how many other paths the first run touches in between, and whether the second run started before or after those accesses. After the conflicting write is refused, the file still holds the first run's bytes, so `/shared.txt` still reads `from a`.
+Through `store.*`, that conflict ends the run on the spot as a [claims conflict](#races-claims-and-determinism), with run error kind `Vfs`, and `pcall` cannot catch it. The conflict holds no matter how many other paths the first run touches in between, and whether the second run started before or after those accesses. After the conflicting write is refused, the file still holds the first run's bytes, so `/shared.txt` still reads `from a`.
 
 The Host is held to the same claims. While a run is live, a Host write to a store file the run has read is refused as a conflict, the file keeps its contents, and the run still finishes. While a run that has read `notes.md` waits on [`input.ask`](05-lua-environment.md#asking-the-operator), the Host's write of `Ship on Monday.` to `notes.md` is refused, `notes.md` still reads `Ship on Friday.`, and the run result is `Ship on Friday. Approved.`
 
@@ -2408,7 +2408,7 @@ Each `store` call runs over a store view derived from the access of the chain ru
 
 A `store.write` call pauses its chain until the write is answered, and the Lua code then continues with the next statement. With `store.write('notes.md', 'kept')`, the chain waits for the answer before its next line runs, so anything the block does after the write, such as starting another chain, happens only once the write is answered. While one run waits on its store write, another run started beside it starts and runs, because each run waits only on its own Harness work.
 
-An ordinary store failure is raised right at the store call, at your own call site, where a `pcall` around the call can catch it, as [When a store call fails](#when-a-store-call-fails) shows. A claims conflict, between two chains or between two runs, is the exception, since it ends the run on the spot (see [The `Determinism` failure](#the-determinism-failure)).
+An ordinary store failure is raised right at the store call, at your own call site, where a `pcall` around the call can catch it, as [When a store call fails](#when-a-store-call-fails) shows. A claims conflict, between two chains or between two runs, is the exception, since it ends the run on the spot (see [A claims conflict ends the run](#a-claims-conflict-ends-the-run)).
 
 A stop never cuts a `store` call short, because the Harness answers every `store` call as the run makes it, so no `store` call is ever waiting when a [stop](01-what-a-prompt-is.md#effects-and-harness-work) lands. Even when the store write itself raises the stop, the write completes and the run still finishes with its final text.
 

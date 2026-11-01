@@ -435,7 +435,7 @@ The `runvil:` value must be a non-negative integer that fits in 32 bits, `0` thr
 
 ### When the version is checked
 
-A file parses whether or not it has a `runvil:` key, and the run checks the declared version when it starts, before any section runs. The run checks the version before it checks the run's store, so a prompt with a missing or unsupported version reports the version failure even when the run also has no usable store.
+A file parses whether or not it has a `runvil:` key, and the run checks the declared version on its first step, before any section runs. The run checks the version first, then its store, then its requirements, so a prompt with a missing or unsupported version reports the version failure even when the run also has no usable store or an environment that falls short of the prompt.
 
 A prompt whose `runvil` version is missing or unsupported fails before any section runs. None of its sections run, nothing is reported beyond that one failure, and its own `return` never runs.
 
@@ -461,14 +461,14 @@ return "ran"
 The run ends on its first step with run error kind `Parse`, as a `Structure` parse error with this message:
 
 ````text
-not a runvil prompt: no runvil version
+not a runvil prompt: no runvil version (prompt version-zero)
 ````
 
-The error's location names the prompt by its frontmatter `name`, here `version-zero`.
+The message ends by naming the prompt by its frontmatter `name`, here `version-zero`.
 
 ### An unsupported version
 
-A file that declares a major other than `0` still parses, but this build does not support that major, so the run ends on its first step with run error kind `Version`. The version check never falls back to major 0. A prompt runs only when it declares `runvil: 0`, and any other declared major fails the run with an error that names that major:
+A file that declares a major other than `0` still parses, but this build does not support that major, so the run ends on its first step with run error kind `Parse`. The version check never falls back to major 0. A prompt runs only when it declares `runvil: 0`, and any other declared major fails the run with an error that names that major:
 
 ````markdown
 ---
@@ -519,7 +519,7 @@ This table lists the nine keys in the order this chapter teaches them, with what
 |---|---|---|
 | `name` | yes | the parse fails |
 | `description` | yes | the parse fails |
-| `runvil` | no, but needed to run | no declared version: the file parses, and running it fails with `not a runvil prompt: no runvil version` |
+| `runvil` | no, but needed to run | no declared version: the file parses, and running it fails with `not a runvil prompt: no runvil version (prompt {name})` |
 | `max_tool_iterations` | no | the built-in round cap stays in force |
 | `input` | no | no declared input file |
 | `output` | no | no declared output file |
@@ -541,9 +541,9 @@ The contract keys are `uses`, `args`, and `models` (see [Putting the parts toget
 
 - `uses` lists the Packs the prompt requires, and each one listed is required.
 - `args` types the arguments the prompt takes.
-- `models` declares the model roles (see [Model roles instead of models](10-models.md#model-roles-instead-of-models)) that concrete models are bound to when the run is prepared.
+- `models` declares the model roles (see [Model roles instead of models](10-models.md#model-roles-instead-of-models)) that concrete models are bound to when the run is built.
 
-Checking these declarations against the caller's environment happens when the run is prepared, not at parse time. For example, a `checker` role that asks for the `no-thinking` keyword is reported as an unmet requirement when the supplied model falls short of it.
+Checking these declarations against the caller's environment happens on the run's first step, not at parse time. For example, a `checker` role that asks for the `no-thinking` keyword is reported as an unmet requirement when the supplied model falls short of it.
 
 All three contract keys can sit together in one frontmatter block alongside `name`, `description`, and `runvil: 0`, next to `input:` and `output:`, and each reads back as declared:
 
@@ -667,14 +667,14 @@ The Harness's run report carries the output file's text only for a completed run
 
 The parser accepts a declared `path` as written. The store's path rules (see [Store paths](09-the-store.md#store-paths)) apply only when the Harness stages the input or reads the output, so a path the store refuses shows up when the run starts, not at parse time.
 
-Each input problem refuses the run before any section runs, and the run ends as failed with kind `Input`. Every such refusal carries the message `the prompt's declared input file cannot be put in place`, and its cause tells the problems apart:
+Each input problem refuses the run before any section runs, and the run ends as failed. The run error kind and the message tell the problems apart:
 
-| Situation | What the cause says |
-|---|---|
-| The launch supplies input text, but the prompt declares no `input:` file for it to go to | that the text has no declared file to go to |
-| The prompt declares an `input:` file that is neither supplied at launch nor already in the store | the missing path, such as `paper.md` |
-| The store refuses the write that stages the input, for example because the store requires approval for the write | the declared path, with the store's own error (see [When a store call fails](09-the-store.md#when-a-store-call-fails)) |
-| The store refuses the declared `input:` path under its path rules | the declared path, with the store's own error |
+| Situation | Run error kind | What the message says |
+|---|---|---|
+| The launch supplies input text, but the prompt declares no `input:` file for it to go to | `RequirementsUnmet` | ``the launch supplied input text, but the prompt declares no `input:` file`` |
+| The prompt declares an `input:` file that is neither supplied at launch nor already in the store | `RequirementsUnmet` | the missing path, as in ``the prompt declares the input file `paper.md`, but the launch supplied no input text and the store has no such file`` |
+| The store refuses the write that stages the input, for example because the store requires approval for the write | `Vfs` | ``the input file `{path}` could not be staged``, then the store's own error (see [When a store call fails](09-the-store.md#when-a-store-call-fails)) |
+| The store refuses the declared `input:` path under its path rules | `Vfs` | ``the input file `{path}` could not be staged``, then the store's own error |
 
 A missing output file is not a run failure. A prompt that declares an `output:` file but never writes it still runs to success, and the run report then carries this error in place of the output text, naming the declared path:
 
