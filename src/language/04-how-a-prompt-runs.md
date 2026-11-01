@@ -26,7 +26,7 @@ return 'hello'
 hello
 ````
 
-This run is as short as a run gets. The start checks find nothing missing, because the frontmatter declares no Packs and no model roles. The H1 body under `# Hello` is empty, so there is no H1 pass. The walk enters `## Main`, the block returns `hello`, and the run ends in success with `hello` as its run result. A block that only returns a literal value asks the Harness for no work at all, so this run finishes without waiting on anything outside the prompt.
+This run is as short as a run gets. The start checks find nothing missing, because the frontmatter declares no Packs and no model requirements. The H1 body under `# Hello` is empty, so there is no H1 pass. The walk enters `## Main`, the block returns `hello`, and the run ends in success with `hello` as its run result. A block that only returns a literal value asks the Harness for no work at all, so this run finishes without waiting on anything outside the prompt.
 
 ### The stages in order
 
@@ -43,7 +43,7 @@ Before it parses, the Harness draws the run's seed and start time, begins the ru
 
 ### A run can be refused before it starts
 
-The start checks run before any of your Lua, so a prompt the environment cannot satisfy fails before its first section runs. This prompt declares a model role that needs a large context window:
+The start checks run before any of your Lua, so a prompt the environment cannot satisfy fails before its first section runs. This prompt requires a large context window for its `strong` model role:
 
 ````markdown
 ---
@@ -51,7 +51,7 @@ name: needs-context
 description: Needs a model with a large context window.
 runvil: 0
 models:
-  reader:
+  strong:
     min_context: 200000
 ---
 
@@ -64,14 +64,14 @@ return 'done'
 ```
 ````
 
-Run on a Host whose current model has a 32000-token context window, this prompt never returns `done`. The run fails with run error kind `RequirementsUnmet`, and its message is this requirements notice:
+Run on a Host whose model for the `strong` role has a 32000-token context window, this prompt never returns `done`. The run fails with run error kind `RequirementsUnmet`, and its message is this requirements notice:
 
 ````text
 the environment cannot satisfy this prompt:
-- role 'reader': requires a context of at least 200000 tokens; the model filling it provides 32000
+- role 'strong': requires a context of at least 200000 tokens; the model filling it provides 32000
 ````
 
-The `reader` role is a model role (see [Model roles instead of models](10-models.md#model-roles-instead-of-models)), and `min_context` is one of its keys (see [Declaring roles under `models:`](10-models.md#declaring-roles-under-models)). [Model roles at prepare](#model-roles-at-prepare) shows how the run checks the role, and [The requirements notice](#the-requirements-notice) explains each line of the message.
+The `strong` role is one of the five model roles every prompt has (see [Model roles instead of models](10-models.md#model-roles-instead-of-models)), and `min_context` is one of the two keys a role can declare (see [Declaring roles under `models:`](10-models.md#declaring-roles-under-models)). [Model roles at prepare](#model-roles-at-prepare) shows how the run checks the role, and [The requirements notice](#the-requirements-notice) explains each line of the message.
 
 ### What a run starts with
 
@@ -103,7 +103,7 @@ return store.read('default.txt')
 stock
 ````
 
-Neither section creates or passes a store handle: `store` is ready when the first block runs, and `## Second` reads back what `## First` wrote. Because each run has its own store, two runs that both write `paper.md` each read back their own copy. Every model role the frontmatter declares is likewise already bound when the first block runs, so on a declared `writer` role, `models.use('writer')` reaches the model directly.
+Neither section creates or passes a store handle: `store` is ready when the first block runs, and `## Second` reads back what `## First` wrote. Because each run has its own store, two runs that both write `paper.md` each read back their own copy. On a Host that supplies a model, the five model roles are likewise already filled when the first block runs, so `models.use('strong')` reaches the model directly, and a `models.infer` call before any `models.use` runs on the `default` role.
 
 ### The work the Harness does
 
@@ -156,7 +156,7 @@ The H1 block's `local secret = 42` compiles during the parse, but none of it run
 
 The whole prompt file is parsed, and every Lua block in it compiled, before any part of the prompt runs. A prompt with a parse error never starts. An invalid prompt file is rejected as a whole, never accepted in part, so none of its sections run. Parsing needs no network access and no connection to a model, so you can check a prompt's structure offline.
 
-Parsing checks only the shape of the frontmatter's contract keys and what the file's text shows: keys, names, duplicates, ranges, and default types. A prompt whose contract has a valid shape parses even when the environment that runs it cannot satisfy it. Matching the Packs under `uses:` and the roles under `models:` against the environment happens on the run's first step, and the tool catalog and the model reach the prompt only when the Harness prepares the run. The tool catalog holds the tools of the run's Packs that can serve it, every `runvil` Pack and each third-party Pack the prompt declares (see [The Engine, the Harness, and the Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host)). A prompt that declares Pack `web` in an environment without it parses first, and then the requirements notice reports the gap:
+Parsing checks only the shape of the frontmatter's contract keys and what the file's text shows: keys, names, duplicates, ranges, and default types. A prompt whose contract has a valid shape parses even when the environment that runs it cannot satisfy it. Matching the Packs under `uses:` and the requirements under `models:` against the environment happens on the run's first step, and the tool catalog and the model reach the prompt only when the Harness prepares the run. The tool catalog holds the tools of the run's Packs that can serve it, every `runvil` Pack and each third-party Pack the prompt declares (see [The Engine, the Harness, and the Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host)). A prompt that declares Pack `web` in an environment without it parses first, and then the requirements notice reports the gap:
 
 ````text
 the environment cannot satisfy this prompt:
@@ -223,7 +223,7 @@ After this section you can say what prepare sets up and what the start checks lo
 ````markdown
 ---
 name: no-requirements
-description: Declares no Packs and no model roles.
+description: Declares no Packs and no model requirements.
 runvil: 0
 ---
 
@@ -240,11 +240,11 @@ return 'no Packs'
 no Packs
 ````
 
-Prepare is the stage before a run starts in which the Harness sets up everything the frontmatter asks for and builds the run. The run's first step then makes the start checks, which make sure the environment provides what the prompt needs. This prompt declares no Packs under `uses:` and no model roles under `models:`, so the requirements check finds no gaps and never refuses it. A prompt like this one, which also calls no model, runs to completion on a Host with no Packs and no model configured.
+Prepare is the stage before a run starts in which the Harness sets up everything the frontmatter asks for and builds the run. The run's first step then makes the start checks, which make sure the environment provides what the prompt needs. This prompt declares no Packs under `uses:` and has no `models:` key, so the requirements check finds no gaps and never refuses it. A prompt like this one, which also calls no model, runs to completion on a Host with no Packs and no model configured.
 
 ### What the start checks look at
 
-The run's first step makes three start checks before any section runs, in this order: the `runvil` version, the store, which the run must declare and whose backend must pass its probe, and the requirements. The requirements check compares the Packs the prompt declares with the Packs the Harness took for the run and the services the run provides, and compares the model roles the prompt declares with the Host's current model. A start check that fails ends the run on that first step, and the run reports no run events.
+The run's first step makes three start checks before any section runs, in this order: the `runvil` version, the store, which the run must declare and whose backend must pass its probe, and the requirements. The requirements check compares the Packs the prompt declares with the Packs the Harness took for the run and the services the run provides, and compares the requirements the prompt declares for its model roles with the models that fill those roles. A start check that fails ends the run on that first step, and the run reports no run events.
 
 A prompt the environment cannot satisfy is refused before any of its blocks run. `RequirementsUnmet` is the run error kind of that refusal: the run ends as failed, and its message is the requirements notice, which lists what is missing, one line per gap. The requirements check refuses the run with `RequirementsUnmet` when any of these holds:
 
@@ -252,7 +252,8 @@ A prompt the environment cannot satisfy is refused before any of its blocks run.
 - a declared Pack is unavailable, because the Host has it but it cannot serve, for example because it failed to build, or because the Host lacks a declared `vendor/name` entry, or has a bare entry's Pack id only from other vendors
 - a declared Pack needs a service the run lacks
 - a tool in the run's catalog or a Pack in its roster has a Pack id the Engine reserves, `adhoc` or `dynamic`
-- the current model falls short of a declared role's context minimum or one of its hard keywords
+- the model that fills a role falls short of that role's declared context minimum or `thinking` requirement
+- the run's role map has entries but none for the `default` role
 
 An unavailable Pack is one the Host has that cannot serve the run or lacks a service it needs, a declared `vendor/name` entry the Host lacks, or a bare entry whose reason tells you which vendor's Pack to write instead. The run proceeds only when every model role requirement is met, the Host has every required Pack, each one can serve and has the services it needs, and nothing in the run takes a reserved Pack id. [Packs at prepare](#packs-at-prepare) shows each Pack case.
 
@@ -265,6 +266,7 @@ the environment cannot satisfy this prompt:
 - the run's tool catalog or Pack roster names the Pack id {id}, which the Engine reserves
 - role '{role}': requires a context of at least {required} tokens; the model filling it provides {actual}
 - role '{role}': requires '{required}'; the thinking capability of the model filling it is {actual}
+- role 'default': requires a model; the caller's role map has no 'default' entry
 ````
 
 A real notice holds a line only for each gap the run has. [The requirements notice](#the-requirements-notice) explains every line.
@@ -280,7 +282,7 @@ Before any section runs, the Harness and the run work in a fixed order:
 5. It picks the run's Packs from the prompt's `uses:` entries.
 6. It waits for the run's Packs to be ready.
 7. It takes the snapshot of the run's Packs.
-8. It builds the run, which binds the declared model roles.
+8. It builds the run with a role map that holds the Host's current model under `default`, which fills the five model roles.
 9. The run's first step checks the `runvil` version, then the store, then the requirements, and refuses the run when one of them fails.
 
 The model lookup lists the Host's models and finds the one the Host selected, or takes the first model listed when the Host selected none. When the list cannot be fetched, the run ends as failed with run error kind `Completion`, and when the list does not hold the selected model, the run ends as failed with `RequirementsUnmet`. The message is the lookup error with its chain of causes, such as ``the selected model `{id}` is absent from the fetched catalog``. A cancel that comes before the run or during the lookup ends the run as cancelled. A run that ends here has not parsed, so its record holds no events.
@@ -303,7 +305,7 @@ After the wait, each run takes one snapshot of its Packs. That snapshot supplies
 
 ### Binding model roles
 
-When it builds the run, prepare binds every model role the prompt declares to the Host's current model, and the run's first step checks each role's context minimum and hard keywords against that model. A role requiring `thinking` fails on a model whose thinking capability is `Never`, and a role requiring `no-thinking` fails on a model whose thinking capability is `Always`. Soft keywords only record your intent and are not checked (see [Keywords and thinking](10-models.md#keywords-and-thinking)). When the Host has no current model, no role is bound and nothing is checked. [Model roles at prepare](#model-roles-at-prepare) shows each case.
+Every prompt has five model roles: `default`, `strong`, `small`, `fast`, and `creative`. When the Harness builds the run in prepare, it gives the run a role map from roles to models, and that map holds the Host's current model under `default`. A role with no entry of its own uses the `default` entry, so that one model fills all five roles. The `models:` key only attaches requirements to the roles, and the run's first step checks each declared context minimum and `thinking` requirement against the model that fills the role. A role requiring `thinking: true` fails on a model whose thinking capability is `Never`, and a role requiring `thinking: false` fails on a model whose thinking capability is `Always` (see [The thinking requirement](10-models.md#the-thinking-requirement)). When the Host has no current model, the map is empty, no role is filled, and nothing is checked. [Model roles at prepare](#model-roles-at-prepare) shows each case.
 
 ### An H1 gate failure reads like a refusal
 
@@ -404,16 +406,16 @@ Offering an unavailable Pack with `tools.offer` raises `tools.offer: the {pack} 
 
 ## Model roles at prepare
 
-After this section you can predict how prepare binds each model role you declare, which checks the run makes against the Host's current model, and what an unmet requirement looks like.
+After this section you can predict which model fills each of the five model roles when prepare builds the run, which checks the run makes against the models that fill the roles you declare, and what an unmet requirement looks like.
 
 ````markdown
 ---
 name: roles
-description: Declares two model roles.
+description: Declares requirements for two model roles.
 runvil: 0
 models:
-  writer: {}
-  reader:
+  fast: {}
+  strong:
     min_context: 200000
 ---
 
@@ -426,21 +428,21 @@ return 'done'
 ```
 ````
 
-On a Host whose current model has a context window of exactly 200000 tokens, the run returns:
+On a Host whose only model has a context window of exactly 200000 tokens, the run returns:
 
 ````text
 done
 ````
 
-Before the run starts, prepare binds every model role declared under `models:` to the Host's current model, one binding per role, so each role is ready the first time Lua uses it. This prompt declares two roles and gets two bindings. The `writer` role, declared as `writer: {}`, is usable through `models.use('writer')`. The `reader` role needs a window of at least 200000 tokens, and a model whose context window equals a role's `min_context` meets it; only a smaller window falls short. A role with `min_context: 200000` therefore runs on a model whose window is exactly 200000 tokens.
+When prepare builds the run, the Engine fills the five model roles from the role map the run is given, one binding per role, so each role is ready the first time Lua uses it. A role with an entry of its own in the map uses that entry's model, and a role with no entry uses the `default` entry, so a map that holds only a `default` entry fills all five roles with that one model. The Harness gives the run a map with only a `default` entry, the Host's current model, or an empty map when the Host has no model. Every prompt gets all five roles, whether or not it declares them, and `models:` only attaches requirements to them. This prompt attaches requirements to two roles. The `fast` role, declared as `fast: {}`, adds no requirement. The `strong` role needs a window of at least 200000 tokens, and a model whose context window equals a role's `min_context` meets it; only a smaller window falls short. A role with `min_context: 200000` therefore runs on a model whose window is exactly 200000 tokens.
 
-Every declared role binds to the same current model, whatever keywords it has, so roles `scout` and `sprinter` with different keywords both bind to that one model. A label the prompt does not declare gets no binding.
+The run checks a role's requirements against the model that fills that role. With a one-model map, every role is filled by that model, so `fast` and `strong` both read the same model here. A map that gives `strong` an entry of its own, which only a caller that drives the Engine directly passes, checks the `strong` requirement against that model and checks the other roles against the `default` entry's model. A name other than the five roles, or a key other than `min_context` and `thinking`, fails the parse (see [Mistakes inside `models:`](10-models.md#mistakes-inside-models)).
 
-A prompt whose only declaration is a role with no keys, `models: { writer: {} }`, passes the requirements check when the Host supplies a model. A prompt with no `models:` key gives the run no roles to bind or check, so no model requirement can stop it; a prompt whose frontmatter declares only `uses: [web]` starts with no model requirement to meet. When the Host sets no current model, the run skips the role binding and the keyword and context checks, so no role is bound and no model requirement is reported.
+A prompt whose only declaration is a role with no requirements, `models: { fast: {} }`, passes the requirements check when the Host supplies a model. A prompt with no `models:` key declares no requirements, so no model requirement can stop it; a prompt whose frontmatter declares only `uses: [web]` starts with no model requirement to meet. When the Host gives no model, the map is empty and no role is filled, so the run checks no role requirement and reports no model requirement. A prompt that never calls a model still runs to completion on such a Host, and a model round fails with `model binding required for section {section}` (see [When the Host gives no model](10-models.md#when-the-host-gives-no-model)).
 
 ### The model role check
 
-The model role check is the comparison the run makes when it is built, between each declared model role and the Host's current model, and the run's first step reports any shortfall it finds. It checks the role's `min_context` and its hard keywords, `thinking` and `no-thinking`, and it reports the context minimum and each hard keyword separately.
+The model role check is the comparison the run makes when it is built, between each declared role requirement and the model that fills the role, and the run's first step reports any shortfall it finds. It checks the role's `min_context` and its `thinking` requirement, `thinking: true` or `thinking: false`, and it reports the context minimum and the thinking requirement separately.
 
 ````markdown
 ---
@@ -448,9 +450,9 @@ name: analysis
 description: Needs a large context window and a thinking model.
 runvil: 0
 models:
-  analyst:
-    keywords: [thinking]
+  strong:
     min_context: 200000
+    thinking: true
 ---
 
 # Analysis
@@ -462,26 +464,26 @@ return 'done'
 ```
 ````
 
-On a model with a 32000-token window that never thinks, `analyst` falls short on both checks, and the run is refused on its first step, before any section runs. The run fails with run error kind `RequirementsUnmet`, and the notice opens with `the environment cannot satisfy this prompt:`, followed by one line per shortfall:
+When the model that fills `strong` has a 32000-token window and never thinks, the role falls short on both checks, and the run is refused on its first step, before any section runs. The run fails with run error kind `RequirementsUnmet`, and the notice opens with `the environment cannot satisfy this prompt:`, followed by one line per shortfall:
 
 ````text
 the environment cannot satisfy this prompt:
-- role 'analyst': requires a context of at least 200000 tokens; the model filling it provides 32000
-- role 'analyst': requires 'thinking'; the thinking capability of the model filling it is Never
+- role 'strong': requires a context of at least 200000 tokens; the model filling it provides 32000
+- role 'strong': requires 'thinking: true'; the thinking capability of the model filling it is Never
 ````
 
-The notice reports each failed check on its own line. A role that meets its context minimum but fails a keyword gets exactly one line, and a role that fails both its context minimum and a keyword gets two lines, as `analyst` does here.
+The notice reports each failed check on its own line. A role that meets its context minimum but fails its `thinking` requirement gets exactly one line, and a role that fails both its context minimum and its `thinking` requirement gets two lines, as `strong` does here.
 
-Whether a hard keyword is met depends on the current model's thinking capability:
+Whether a `thinking` requirement is met depends on the thinking capability of the model that fills the role:
 
-| Keyword | `Never` | `Switchable` | `Always` |
+| Requirement | `Never` | `Switchable` | `Always` |
 |---|---|---|---|
-| `thinking` | falls short | met | met |
-| `no-thinking` | met | met, with thinking turned off | falls short |
+| `thinking: true` | falls short | met | met |
+| `thinking: false` | met | met, with thinking turned off | falls short |
 
-`thinking` fails only on a model that never thinks, and `no-thinking` fails only on a model that always thinks, so a model whose thinking is switchable meets both hard keywords. A `no-thinking` role on a switchable model prepares and runs, with thinking turned off on its requests.
+`thinking: true` fails only on a model that never thinks, and `thinking: false` fails only on a model that always thinks, so a model whose thinking is switchable meets both. A `thinking: false` role on a switchable model prepares and runs, with thinking turned off on its requests, and a `thinking: true` role turns thinking on for its requests (see [The thinking switch](10-models.md#the-thinking-switch)).
 
-The run checks only the hard keywords `thinking` and `no-thinking`. Any other keyword on a role, such as `frontier`, `fast`, `small`, `creative`, or `chat`, records your intent and never causes a shortfall, even on a 32000-token model that never thinks.
+The run checks only `min_context` and `thinking`, the two keys a role can declare. A role that declares neither, such as `fast: {}`, never causes a shortfall, even on a 32000-token model that never thinks.
 
 ### The two role lines
 
@@ -491,19 +493,30 @@ A context window below a role's `min_context` shows as this line, with both numb
 - role '{role}': requires a context of at least {required} tokens; the model filling it provides {actual}
 ````
 
-A failed hard keyword shows as this line, where `{required}` is the keyword and `{actual}` is `Never` when `thinking` fails and `Always` when `no-thinking` fails:
+A failed `thinking` requirement shows as this line, where `{required}` is `thinking: true` or `thinking: false`, and `{actual}` is `Never` when `thinking: true` fails and `Always` when `thinking: false` fails:
 
 ````text
 - role '{role}': requires '{required}'; the thinking capability of the model filling it is {actual}
 ````
 
-So a `writer` role with `keywords: [no-thinking]` on a model that always thinks gives `- role 'writer': requires 'no-thinking'; the thinking capability of the model filling it is Always`. Each shortfall line in the notice starts with `- `, so for a role `reader` that needs 200000 tokens on a 32000-token model, the whole notice is the two lines shown in [How a run proceeds](#how-a-run-proceeds).
+So a `small` role with `thinking: false` on a model that always thinks gives `- role 'small': requires 'thinking: false'; the thinking capability of the model filling it is Always`. Each shortfall line in the notice starts with `- `, so for a role `strong` that needs 200000 tokens on a 32000-token model, the whole notice is the two lines shown in [How a run proceeds](#how-a-run-proceeds).
+
+### A role map without a default entry
+
+A role map with entries but none for `default` leaves the run no model to fall back on. The run is refused on its first step, no declared role requirement is checked, and the notice holds one model line, whatever role requirements the prompt declares:
+
+````text
+the environment cannot satisfy this prompt:
+- role 'default': requires a model; the caller's role map has no 'default' entry
+````
+
+An empty map is not this case. It means the Host has no model, and the run checks nothing. The Harness never passes a map without `default`, because its map holds the Host's one model under `default` or nothing at all, so only a caller that drives the Engine directly meets this refusal.
 
 ### Unmet requirements are recorded, not raised
 
-An unmet requirement is one shortfall the model role check finds, recorded when the run is built and reported on its first step rather than raised as an error. Because of that, a model that cannot serve a role never surfaces as an error partway through a run. A role `checker` that needs `no-thinking` on a model that always thinks gives exactly one unmet requirement, and the run is refused before any section has run.
+An unmet requirement is one shortfall the model role check finds, recorded when the run is built and reported on its first step rather than raised as an error. Because of that, a model that cannot serve a role never surfaces as an error partway through a run. A role `small` that needs `thinking: false` on a model that always thinks gives exactly one unmet requirement, and the run is refused before any section has run.
 
-The check never repairs. A role that fails a keyword or context check stays bound to the current model, and nothing looks for a different model to serve it.
+The check never repairs. A role that fails a `thinking` or context check stays filled by the same model, and nothing looks for a different model to serve it.
 
 ## The requirements notice
 
@@ -516,9 +529,9 @@ description: Needs two Packs and a large thinking model.
 runvil: 0
 uses: [web, user-input]
 models:
-  analyst:
-    keywords: [frontier, thinking]
+  strong:
     min_context: 200000
+    thinking: true
 ---
 
 # Deep analysis
@@ -530,17 +543,17 @@ return 'done'
 ```
 ````
 
-Run this prompt on a Host that has no `web` Pack from any vendor, that has `runvil/user-input` but has no operator to ask, and whose current model has a 32000-token window and never thinks. The run fails with run error kind `RequirementsUnmet`, and its message is this requirements notice:
+Run this prompt on a Host that has no `web` Pack from any vendor, that has `runvil/user-input` but has no operator to ask, and whose model for `strong` has a 32000-token window and never thinks. The run fails with run error kind `RequirementsUnmet`, and its message is this requirements notice:
 
 ````text
 the environment cannot satisfy this prompt:
 - missing required Pack: web
 - user-input is unavailable: the run lacks the services it needs: runvil/input-broker
-- role 'analyst': requires a context of at least 200000 tokens; the model filling it provides 32000
-- role 'analyst': requires 'thinking'; the thinking capability of the model filling it is Never
+- role 'strong': requires a context of at least 200000 tokens; the model filling it provides 32000
+- role 'strong': requires 'thinking: true'; the thinking capability of the model filling it is Never
 ````
 
-The requirements notice is the text the run's first step reports when the requirements check refuses the run. When a prompt's requirements are unmet, the run is refused before any section or Lua runs, so nothing in the prompt can catch the refusal. Any unmet requirement, including an unmet model role requirement, makes the refusal a run error of kind `RequirementsUnmet` whose message is the notice, word for word. When nothing blocks the run, there is no refusal. The `frontier` keyword adds no line, because it is a soft keyword.
+The requirements notice is the text the run's first step reports when the requirements check refuses the run. When a prompt's requirements are unmet, the run is refused before any section or Lua runs, so nothing in the prompt can catch the refusal. Any unmet requirement, including an unmet model role requirement, makes the refusal a run error of kind `RequirementsUnmet` whose message is the notice, word for word. When nothing blocks the run, there is no refusal.
 
 ### The notice's fixed layout
 
@@ -553,8 +566,9 @@ The notice is written for a model to read: concise, factual, and self-contained.
 | `- missing required Pack: {id}` | a bare entry whose Pack id no Pack of the Host has, from any vendor |
 | `- {pack} is unavailable: {reason}` | a declared Pack that the Host has but that cannot serve or lacks a service it needs, a declared `vendor/name` entry the Host lacks, or a bare entry whose Pack id only other vendors' Packs have |
 | `- the run's tool catalog or Pack roster names the Pack id {id}, which the Engine reserves` | a catalog tool or a roster Pack under a reserved Pack id, `adhoc` or `dynamic` |
-| `- role '{role}': requires a context of at least {required} tokens; the model filling it provides {actual}` | a role whose `min_context` is above the current model's window |
-| `- role '{role}': requires '{required}'; the thinking capability of the model filling it is {actual}` | a role whose hard keyword the current model fails |
+| `- role '{role}': requires a context of at least {required} tokens; the model filling it provides {actual}` | a role whose `min_context` is above the window of the model filling it |
+| `- role '{role}': requires '{required}'; the thinking capability of the model filling it is {actual}` | a role whose `thinking` requirement the model filling it fails |
+| `- role 'default': requires a model; the caller's role map has no 'default' entry` | a role map that has entries but none for `default` |
 | `- the H1 gate failed` | an uncaught Lua error in the H1 pass |
 
 ### Pack lines in the notice
@@ -573,13 +587,13 @@ Each Pack appears under its real cause only. A Pack that lacks a host service is
 
 ### Role lines in the notice
 
-Each unmet model role requirement gets its own line under the opening line, starting with `- role '{role}':` and naming the role by its label. The notice names every failed check across all roles, each on its own line with required against actual, so a role that fails both its context check and a keyword check gets two lines, as `analyst` does above.
+Each unmet model role requirement gets its own line under the opening line, starting with `- role '{role}':` and naming the role by its name, one of `default`, `strong`, `small`, `fast`, and `creative`. The notice names every failed check across all roles, each on its own line with required against actual, so a role that fails both its context check and its `thinking` check gets two lines, as `strong` does above.
 
-When the bound model's context window is smaller than a role's `min_context`, set at `models.{label}.min_context`, the line is `- role '{role}': requires a context of at least {required} tokens; the model filling it provides {actual}`. The comparison is strict, so a model whose window equals the minimum passes.
+When the context window of the model filling a role is smaller than the role's `min_context`, set at `models.{role}.min_context`, the line is `- role '{role}': requires a context of at least {required} tokens; the model filling it provides {actual}`. The comparison is strict, so a model whose window equals the minimum passes.
 
-An unmet hard keyword gives the line `- role '{role}': requires '{required}'; the thinking capability of the model filling it is {actual}`, where `{required}` is the keyword. `{actual}` reads `Never` for an unmet `thinking` and `Always` for an unmet `no-thinking`, capitalized as shown, and a `Switchable` model meets both keywords. A role with the `no-thinking` keyword on a model that always thinks gives `- role '{role}': requires 'no-thinking'; the thinking capability of the model filling it is Always`.
+An unmet `thinking` requirement gives the line `- role '{role}': requires '{required}'; the thinking capability of the model filling it is {actual}`, where `{required}` is `thinking: true` or `thinking: false`. `{actual}` reads `Never` for an unmet `thinking: true` and `Always` for an unmet `thinking: false`, capitalized as shown, and a `Switchable` model meets both. A role with `thinking: false` on a model that always thinks gives `- role '{role}': requires 'thinking: false'; the thinking capability of the model filling it is Always`.
 
-Only `min_context` and the hard keywords `thinking` and `no-thinking` can add role lines. Soft keywords such as `frontier` or `fast` are never checked and never refuse a run. The notice lists only the roles that fall short and leaves out roles the model meets. When the Host sets no current model, the notice has no role lines, because the run skips the role checks.
+Only `min_context` and `thinking` can add these role lines, and the one other model line is the `default` line that [A role map without a default entry](#a-role-map-without-a-default-entry) describes. The notice lists only the roles that fall short and leaves out roles the model meets. When the Host gives no model, the notice has no role lines, because the run skips the role checks.
 
 ### The H1 gate line
 
@@ -587,13 +601,13 @@ The `- the H1 gate failed` line does not come from a refusal. An uncaught Lua er
 
 ### The order of the lines
 
-Notice lines appear in a fixed order: missing Packs first, then unavailable Packs, including those that lack a host service, then the lines for reserved Pack ids, in sorted order, then unmet model role requirements. Missing required Packs come before unavailable Packs, no matter which gap was found first. Missing and unavailable Packs each keep the order in which the prompt declares them. Role lines are listed in sorted label order, and within a role the context line comes first, then the keyword lines in the order the keywords are declared.
+Notice lines appear in a fixed order: missing Packs first, then unavailable Packs, including those that lack a host service, then the lines for reserved Pack ids, in sorted order, then unmet model role requirements. Missing required Packs come before unavailable Packs, no matter which gap was found first. Missing and unavailable Packs each keep the order in which the prompt declares them. Role lines are listed in role order, `default`, `strong`, `small`, `fast`, `creative`, and within a role the context line comes first, then the `thinking` line.
 
 Each gap appears once. The check looks up each declared Pack once in the run's roster, so each declared Pack gets at most one line, and an unavailable Pack is listed with its own reason.
 
 ### How the gaps are gathered
 
-The requirements are gathered once, when the run is built, and the run's first step reports them after the version and store checks pass. The check looks at every Pack the prompt declares, every reserved Pack id in the run's catalog and roster, and every declared model role, so one refusal names every gap. Unmet requirements never make prepare fail: the run is built all the same, and its first step fails with the notice. When the notice would have no lines, nothing blocks the run.
+The requirements are gathered once, when the run is built, and the run's first step reports them after the version and store checks pass. The check looks at every Pack the prompt declares, every reserved Pack id in the run's catalog and roster, and every requirement a declared model role carries, so one refusal names every gap. Unmet requirements never make prepare fail: the run is built all the same, and its first step fails with the notice. When the notice would have no lines, nothing blocks the run.
 
 ### When a cancel comes first
 
@@ -1204,13 +1218,13 @@ The H1 counts as section 0 of the prompt, and its blocks run once, together, as 
 
 Lua in the H1 body can make the same Engine calls a section can, including model rounds, `require`, [`prompt.section` and `prompt.list`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptlist), `call`, `jump`, and [`tasks.fanout`](14-fanout.md#fanout-in-one-call). It can spawn tasks with `tasks.spawn`, and it can call the store functions, such as `store.read` and `store.write`, just as section code does. Because the H1 block runs before any `##` section, a `store.write` there is the run's first effect.
 
-Prompt-wide settings made during the H1 pass stay in force for every later section, because the whole run shares them. That makes the H1 the place to choose the prompt-wide default with [`models.default`](10-models.md#the-prompt-wide-default-with-modelsdefault):
+The model an H1 block selects stays in force for the walk, because the main walk starts on the model the H1 pass ended on (see [Where a chain starts](10-models.md#where-a-chain-starts)). That makes the H1 the place to move every section onto another role with [`models.use`](10-models.md#selecting-a-role-with-modelsuse):
 
 ````lua
-models.default('writer')
+models.use('strong')
 ````
 
-With this block in the H1 body, the default stays in force for every section walked afterward, where `writer` is a [model role](10-models.md#model-roles-instead-of-models) the prompt declares. A default that a library sets while the H1 loads it with `require` stays visible to the walk the same way.
+With this block in the H1 body, every section walked afterward starts on the `strong` [model role](10-models.md#model-roles-instead-of-models) until a section calls `models.use` again. A prompt whose H1 selects nothing starts the walk on the `default` role.
 
 The H1 is also the place to validate and repair the prompt's parsed input in `argv` (see [Reading parsed input from `argv`](06-arguments.md#reading-parsed-input-from-argv)). An `assert` on `argv` checks it, and assigning a repaired `argv` table in the H1 body means every later section sees the repaired value.
 
@@ -1443,7 +1457,7 @@ Task errors stay `Lua` rather than becoming `RequirementsUnmet`. That covers an 
 
 ### Errors raised again after a catch
 
-An error you catch with `pcall` in the H1 pass and raise again keeps the failure it came from when you raise it before the block makes another call that waits on the Harness, such as a model round, so its own run error kind holds. Raised again after such a call, some errors are rebuilt as an ordinary Lua error and fail the gate as `RequirementsUnmet`. The rebuilt errors are any error whose `kind` is `lua`, `model_failure`, `model_required`, `internal`, `out_of_scope_tool`, `unbound_tool`, or `tasks_live`, and any `task_not_owned` or `task_consumed` error missing its `task` field.
+An error you catch with `pcall` in the H1 pass and raise again keeps the failure it came from when you raise it before the block makes another call that waits on the Harness, such as a model round, so its own run error kind holds. Raised again after such a call, some errors are rebuilt as an ordinary Lua error and fail the gate as `RequirementsUnmet`. The rebuilt errors are any error whose `kind` is `lua`, `model_failure`, `model_required`, `internal`, `out_of_scope_tool`, `unbound_tool`, `model_only_tool`, or `tasks_live`, and any `task_not_owned` or `task_consumed` error missing its `task` field.
 
 ### Failures outside the gate
 

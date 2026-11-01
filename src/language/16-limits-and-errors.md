@@ -49,7 +49,7 @@ The same section gives the defaults of the two request limits the gateway client
 A failure belongs to one of four failure families, and each family has its own vocabulary:
 
 - A parse failure is found before anything runs, and it has a parse error kind: `Frontmatter`, `Structure`, `Fence`, `List`, or `Lua`, plus `Internal` for a fault in the parser itself. See [Parse errors and their kinds](#parse-errors-and-their-kinds).
-- A failure inside Lua is an [error value](05-lua-environment.md#error-values), the table an Engine failure raises in Lua, whose `kind` is one of fifteen lowercase error kinds, such as `lua`, `tool_loop_exhausted`, or `model_failure`. See [Error kinds in Lua and the run error they become](#error-kinds-in-lua-and-the-run-error-they-become).
+- A failure inside Lua is an [error value](05-lua-environment.md#error-values), the table an Engine failure raises in Lua, whose `kind` is one of sixteen lowercase error kinds, such as `lua`, `tool_loop_exhausted`, or `model_failure`. See [Error kinds in Lua and the run error they become](#error-kinds-in-lua-and-the-run-error-they-become).
 - A failed run has a [run error kind](04-how-a-prompt-runs.md#the-run-result-and-outcomes), the stable name of what failed. See [Run error kinds](#run-error-kinds).
 - A Host cancel ends the run with the cancelled outcome, which has no error kind. See [Cancellation and stops](#cancellation-and-stops).
 
@@ -81,8 +81,6 @@ runvil: 0
 max_tool_iterations: 3
 uses:
   - web
-models:
-  writer: {}
 ---
 
 # Capped
@@ -90,7 +88,6 @@ models:
 ## Ask
 
 ```lua
-models.use('writer')
 tools.offer('web/search')
 messages:user('Find the tallest building in Paris, then answer in one sentence.')
 local ok, err = pcall(models.loop)
@@ -117,7 +114,7 @@ A run observes four limits, each with a default:
 
 | Limit | Default | Applies to | Who changes it |
 |---|---|---|---|
-| Round cap | 24 model rounds | each `models.loop` call or model handle `loop` call | the prompt's `max_tool_iterations`, or the Harness |
+| Round cap | 24 model rounds | each `models.loop` call | the prompt's `max_tool_iterations`, or the Harness |
 | Concurrency limit | 8 tasks at once | every task the run admits, fanout arms included | the Harness, and `tasks.concurrency` lowers it for a chain's own spawns |
 | Memory ceiling | 64 MiB | the Lua heap of each section VM | the Harness |
 | Log event quota | 1024 `log` events | each section VM | the Harness |
@@ -139,7 +136,7 @@ The response cap is at least 1 byte, so it can never be zero.
 
 `max_tool_iterations` is the only run limit a prompt's frontmatter can change (see [Optional keys and unknown keys](02-file-structure.md#optional-keys-and-unknown-keys)), and the other three run limits come from the Harness that runs the prompt. A prompt's own `max_tool_iterations` value replaces the run's round cap. Without the key, the run's cap applies, which is 24 unless the Harness sets another.
 
-The round cap allows 24 model rounds by default in each `models.loop` call or model handle `loop` call. Each call starts its own count at zero, so two loop calls in one section can each use up to the full cap.
+The round cap allows 24 model rounds by default in each `models.loop` call. Each call starts its own count at zero, so two loop calls in one section can each use up to the full cap.
 
 Reaching the round cap fails the loop call with an error value whose `kind` is `tool_loop_exhausted` and whose message is `tool-call loop did not converge`, as `capped` shows. Without a `max_tool_iterations` key, this happens after exactly the run's default number of model rounds. Left uncaught, that error ends the run with run error kind `Tool`.
 
@@ -459,12 +456,12 @@ uses:
 invalid frontmatter: Pack id web is declared more than once under uses
 ````
 
-A frontmatter key or value the prompt contract rejects fails with `Frontmatter` and that key's own message, with the line and column. That covers an unknown entry field, a bad arg name, type, or default, a malformed `uses:` entry, an unknown model keyword, a role label outside the [prompt-local alias grammar](02-file-structure.md#the-name-grammar-for-role-labels-arg-names-and-adhoc-tool-names), a zero `min_context`, and an out-of-range `max_tool_iterations`.
+A frontmatter key or value the prompt contract rejects fails with `Frontmatter` and that key's own message, with the line and column. That covers an unknown entry field, a bad arg name, type, or default, a malformed `uses:` entry, a `models:` key that is not one of the five [model roles](10-models.md#declaring-roles-under-models), an unknown field in a role declaration, a non-boolean `thinking`, a zero `min_context`, and an out-of-range `max_tool_iterations`. A role name outside the five gives a message that contains ``expected one of `default`, `strong`, `small`, `fast`, `creative` ``, and an unknown field in a role declaration, such as `tier`, gives one that contains ``unknown field `tier`, expected `min_context` or `thinking` ``.
 
-A file whose frontmatter has no `runvil:` key still parses, but running it fails before any section runs, with run error kind `Parse` and this message:
+A file whose frontmatter has no `runvil:` key still parses, but running it fails before any section runs, with run error kind `Parse` and a message that ends with the prompt's name:
 
 ````text
-not a runvil prompt: no runvil version
+not a runvil prompt: no runvil version (prompt {name})
 ````
 
 ### Heading messages
@@ -813,13 +810,13 @@ A failed run reports one run error kind from a fixed set of ten:
 | `Parse` | the prompt fails to parse, a Lua block does not compile, or the `runvil:` key is missing or declares a major version other than `0` |
 | `Binding` | a section entry's first loop round fails to freeze its tool sets because two tools share a wire name, a tool's wire name is invalid, or its parameter schema is not a JSON object, unless an adhoc tool in the same set shadows it, or because a render answer breaks the render rules |
 | `Completion` | a model call fails, an `empty_model_reply` goes uncaught, or the Harness cannot fetch the Host's list of models |
-| `Tool` | a tool fails, is out of scope or unknown, or the tool-call loop reaches its round cap |
+| `Tool` | a tool fails, is out of scope or unknown, a script calls a model-only tool, or the tool-call loop reaches its round cap |
 | `Vfs` | a `store` operation fails uncaught, a store call meets a claims conflict, the run declares no store, the store backend fails as the run starts, or the store refuses to stage the input file |
 | `Lua` | a section's Lua fails at run time or returns an unusable value, or a Pack prelude cannot install |
 | `Quota` | a log quota runs out, or a call nests past the call depth cap |
 | `ContextExhausted` | a request overflows the model's context window and compaction does not make it fit, or a direct `compactors.fail(reason)` call with any reason goes uncaught |
 | `Internal` | an Engine invariant breaks, or the Harness has nothing to wait for while the run is still pending |
-| `RequirementsUnmet` | the environment falls short of what the prompt needs, a model round has no model, the launch input does not match the `input:` declaration, or the Host's selected model is missing |
+| `RequirementsUnmet` | the environment falls short of what the prompt needs, a model round runs when the Host gave no model, the launch input does not match the `input:` declaration, or the Host's selected model is missing |
 
 A failed `{{ }}` substitution is an ordinary Lua error that `pcall` can catch, and it reports `Lua` when uncaught. A cancelled run ends as cancelled, never as a failed run, so no run error kind stands for a cancel.
 
@@ -837,7 +834,7 @@ A run also fails with kind `Parse` when the prompt's [`runvil:` key](02-file-str
 
 ### `Binding`, `Completion`, and `Tool`
 
-A run fails with kind `Binding` when a section entry's first loop round cannot freeze its tool sets (see [When an offer takes effect](12-tools.md#when-an-offer-takes-effect) and [What a Pack's render can change](12-tools.md#what-a-packs-render-can-change)). The run reports `tool_scope_validation_failed`, the round sends no request and freezes nothing, so offers still work after it, and the `models.loop` or `handle:loop` call raises an error value of kind `internal` that `pcall` catches. Left uncaught, it ends the run with kind `Binding`, and the run's message begins with the error's own message (see [The failed run's message](#the-failed-runs-message)). Each failure has its own message, where `{tool}` reads `{id} of the {pack} Pack in the {set}` and `{set}` is `Static Set` or `Dynamic Set`:
+A run fails with kind `Binding` when a section entry's first loop round cannot freeze its tool sets (see [When an offer takes effect](12-tools.md#when-an-offer-takes-effect) and [What a Pack's render can change](12-tools.md#what-a-packs-render-can-change)). The run reports `tool_scope_validation_failed`, the round sends no request and freezes nothing, so offers still work after it, and the `models.loop` call raises an error value of kind `internal` that `pcall` catches. Left uncaught, it ends the run with kind `Binding`, and the run's message begins with the error's own message (see [The failed run's message](#the-failed-runs-message)). Each failure has its own message, where `{tool}` reads `{id} of the {pack} Pack in the {set}` and `{set}` is `Static Set` or `Dynamic Set`:
 
 - A tool whose wire name breaks the wire-name rule gives `model-facing schema build failure for tool alias "{name}": invalid tool wire name "{name}": expected [A-Za-z][A-Za-z0-9_-]{0,63}`, and a tool whose parameter schema is not a JSON object gives `model-facing schema build failure for tool alias "{name}": tool "{name}" parameters schema must be a JSON object`, with the tool's wire name as `{name}`.
 - Two tools that share a wire name give `the tools {tool} and {tool} share the wire name "{name}", and a wire name names one tool across a section's Static Set and Dynamic Set; offer only one of them`.
@@ -848,7 +845,13 @@ A run fails with kind `Binding` when a section entry's first loop round cannot f
 
 A run fails with kind `Completion` when a model call fails at the transport, backend, or decode layer, such as an overloaded backend, or when an `empty_model_reply` error goes uncaught, and the message is the model call's own error text. [Model request limits and failures](#model-request-limits-and-failures) lists those messages. The Harness also ends a run with `Completion` before it parses the prompt when it cannot fetch the Host's list of models, and the message then starts with `the model catalog could not be fetched`.
 
-A run fails with kind `Tool` when a dispatched tool fails, the model calls a tool outside the section entry's [tool scope](12-tools.md#tool-scope), a `tools.call` names an id that is neither a defined adhoc tool nor a tool in the run's catalog, or the tool-call loop reaches its round cap before the model gives a final reply (see [Tool errors](12-tools.md#tool-errors)).
+A run fails with kind `Tool` when a dispatched tool fails, the model calls a tool outside the section entry's [tool scope](12-tools.md#tool-scope), a `tools.call` names an id that is neither a defined adhoc tool nor a tool in the run's catalog, a `tools.call` names a catalog tool marked `model_only_call`, or the tool-call loop reaches its round cap before the model gives a final reply (see [Tool errors](12-tools.md#tool-errors)).
+
+A tool marked `model_only_call` is one only a model may call (see [Model-only tools](12-tools.md#model-only-tools)), so a script's `tools.call` of it is refused, whether the script names it by id or passes its Tool object. The tool stays in the catalog, a section can still offer it with `tools.offer`, and the model's own call of it goes through. The refusal raises an error value of kind `model_only_tool` whose `name` field holds the name the script passed, and `pcall` catches it like any other error value. Left uncaught, it ends the run with kind `Tool` and this message, where `{name}` is the id the script passed and `{id}` is the catalog tool's own id:
+
+````text
+tool "{name}" ({id}) is model-only: a render shapes its arguments for the model that receives them, so a script cannot call it; offer it with tools.offer and let the model call it
+````
 
 ### `Vfs`
 
@@ -887,7 +890,23 @@ A run fails with kind `ContextExhausted` when a request overflows the model's co
 
 Run error kind `Internal` means an Engine invariant breaks, a fault in the Engine rather than in the prompt. That includes Harness mistakes such as an answer of the wrong kind, an answer for an id never issued, or a second answer to one effect. The message starts with `internal invariant violated: {message}` and ends with ` (at {file}:{line})`, which names an Engine source file and line rather than a place in the prompt. The Harness also ends a run with `Internal` when the run is still pending but the Harness has nothing to wait for, which means it lost track of an effect, and the message is then `the effect loop has nothing to await for a pending run`.
 
-A run fails with kind `RequirementsUnmet` when the environment falls short of what the prompt needs: a required Pack is missing, unavailable, or needs a service the run lacks, the bound model fails a declared requirement such as a context minimum or a hard keyword, a tool in the run's catalog or a Pack in its roster has a Pack id the Engine reserves, `adhoc` or `dynamic`, or an H1 block fails the prompt's [hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate). It also covers a model round that has no model to run on: an uncaught [missing-model error](10-models.md#infer-errors-and-the-missing-model-error) from [`models.infer`](10-models.md#running-a-round-with-modelsinfer) or [`models.loop`](11-conversations.md#how-the-loop-runs) fails the run with the message `model binding required for section {section}`. Prose by itself never requires a model; only an explicit `models.infer` of it does. Before the run starts, the Harness also ends a run with `RequirementsUnmet` when the launch input does not match the prompt's `input:` declaration, or when the Host's selected model is missing from its list of models.
+A run fails with kind `RequirementsUnmet` when the environment falls short of what the prompt needs: a required Pack is missing, unavailable, or needs a service the run lacks, the model that fills a role fails a [requirement the prompt declared](10-models.md#what-the-run-checks) for it, a `min_context` or a `thinking` setting, the Host gave a role map that holds models but has no `default` entry, a tool in the run's catalog or a Pack in its roster has a Pack id the Engine reserves, `adhoc` or `dynamic`, or an H1 block fails the prompt's [hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate). It also covers a model round that has no model to run on because the Host gave none: an uncaught [missing-model error](10-models.md#infer-errors-and-the-missing-model-error) from [`models.infer`](10-models.md#running-a-round-with-modelsinfer) or [`models.loop`](11-conversations.md#how-the-loop-runs) fails the run with the message `model binding required for section {section}`. Prose by itself never requires a model; only an explicit `models.infer` of it does. Before the run starts, the Harness also ends a run with `RequirementsUnmet` when the launch input does not match the prompt's `input:` declaration, or when the Host's selected model is missing from its list of models.
+
+The message of a refused run starts with `the environment cannot satisfy this prompt:` and adds one line for each gap. Pack lines come first, then the model lines in role order (`default`, `strong`, `small`, `fast`, `creative`), and for one role the context line comes before the thinking line. A model requirement that the filling model fails reads like one of these, and the thinking line names the required setting, `thinking: true` or `thinking: false`, and the model's thinking capability, `Never` or `Always`:
+
+````text
+- role 'strong': requires a context of at least 200000 tokens; the model filling it provides 32000
+- role 'strong': requires 'thinking: true'; the thinking capability of the model filling it is Never
+- role 'small': requires 'thinking: false'; the thinking capability of the model filling it is Always
+````
+
+A role map that holds models but has no `default` entry gives one model line and no other, because no declared requirement is checked in that case:
+
+````text
+- role 'default': requires a model; the caller's role map has no 'default' entry
+````
+
+[How the Host fills and checks roles](10-models.md#how-the-host-fills-and-checks-roles) covers each check. The run is refused at its first step, before any section runs.
 
 ### Cancelled runs and runs that end before they start
 
@@ -912,15 +931,9 @@ After this section you can read the error kind of a caught failure and predict t
 name: summary
 description: Turns a failed model call into the section's result.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Summary
-
-```lua
-models.default('writer')
-```
 
 ## Draft
 
@@ -940,15 +953,15 @@ error(reply)
 
 When the model call succeeds, the run result is the model's reply. When it fails outside the prompt, for example because the backend cannot answer, the run result is `skipped: ` followed by the failure's message. Any other failure is raised again unchanged, so the run ends exactly as it would have without the `pcall`.
 
-### Fifteen error kinds
+### Sixteen error kinds
 
-Every Engine failure that reaches Lua carries exactly one of fifteen error kinds in its error value's `kind` field: `lua`, `context_exhausted`, `empty_model_reply`, `model_failure`, `model_required`, `cancelled`, `tool_loop_exhausted`, `tasks_live`, `task_not_owned`, `task_consumed`, `out_of_scope_tool`, `unbound_tool`, `tool`, `store`, and `internal`.
+Every Engine failure that reaches Lua carries exactly one of sixteen error kinds in its error value's `kind` field: `lua`, `context_exhausted`, `empty_model_reply`, `model_failure`, `model_required`, `cancelled`, `tool_loop_exhausted`, `tasks_live`, `task_not_owned`, `task_consumed`, `out_of_scope_tool`, `unbound_tool`, `model_only_tool`, `tool`, `store`, and `internal`.
 
 Error kinds and run error kinds are separate vocabularies. An error kind is what Lua sees at the call, and a run error kind is what the Host reports when a failure ends the run. One error kind can lead to different run error kinds depending on its source, as `internal` does when it ends the run as `Binding` or `Internal`.
 
 ### The `model_failure` and `model_required` error kinds
 
-The `model_failure` error kind marks a model call that failed outside the prompt: a transport, backend, or decode failure, or a disabled gateway. An empty reply is the one model call failure with a kind of its own, `empty_model_reply`. The `model_required` error kind marks the [missing-model error](10-models.md#infer-errors-and-the-missing-model-error), a model call with no model selected.
+The `model_failure` error kind marks a model call that failed outside the prompt: a transport, backend, or decode failure, or a disabled gateway. An empty reply is the one model call failure with a kind of its own, `empty_model_reply`. The `model_required` error kind marks the [missing-model error](10-models.md#infer-errors-and-the-missing-model-error), a `models.infer` or `models.loop` round that finds the Host gave no model. [`models.use`, `models.get`, and `models.current`](10-models.md#when-the-host-gives-no-model) raise an ordinary error of kind `lua` instead when the Host gave no model for the role.
 
 Neither value has extra fields. Left uncaught, a `model_failure` value ends the run as `Completion`, and a `model_required` value ends it as `RequirementsUnmet`.
 
@@ -970,7 +983,7 @@ A caught error value raised again with `error(err)` before the block makes anoth
 
 That is what `summary` relies on. A section can turn a caught `model_failure`, a model call the Harness cannot complete, into its result, and raise every other kind again with `error(reply)` before any other suspending call, so the run ends exactly as it would have without the `pcall`.
 
-A model call's transport, backend, or decode failure, or a disabled gateway, raises a `model_failure` error value, and an empty model reply raises `empty_model_reply` instead. The missing-model error raises `model_required`, and a failure with no kind of its own, such as a failed tool freeze or an Engine fault, raises an `internal` error value. This holds inside a `tasks.fanout` arm too, where an arm's `models.infer` with no model access configured surfaces the disabled-gateway failure as `model_failure`.
+A model call's transport, backend, or decode failure, or a disabled gateway, raises a `model_failure` error value, and an empty model reply raises `empty_model_reply` instead. The missing-model error raises `model_required`, a script's `tools.call` of a model-only tool raises `model_only_tool`, and a failure with no kind of its own, such as a failed tool freeze or an Engine fault, raises an `internal` error value. This holds inside a `tasks.fanout` arm too, where an arm's `models.infer` with no model access configured surfaces the disabled-gateway failure as `model_failure`.
 
 Left uncaught in a walked section, a [`models.loop`](11-conversations.md#loop-arguments-and-errors) failure ends the run like this:
 
@@ -993,23 +1006,15 @@ Raised again later, after another suspending call, each error kind ends the run 
 | `tool_loop_exhausted`, `tool` | `Tool` |
 | `store` | `Vfs` |
 | `task_not_owned`, `task_consumed`, with their `task` field | `Lua`, in the H1 pass too |
-| `out_of_scope_tool`, `unbound_tool`, `tasks_live`, `lua`, `model_failure`, `model_required`, `internal` | `Lua`, or `RequirementsUnmet` in the H1 pass |
+| `out_of_scope_tool`, `unbound_tool`, `model_only_tool`, `tasks_live`, `lua`, `model_failure`, `model_required`, `internal` | `Lua`, or `RequirementsUnmet` in the H1 pass |
 
-An `empty_model_reply` value raised again later keeps its message. An `out_of_scope_tool`, `unbound_tool`, `tasks_live`, `lua`, `model_failure`, `model_required`, or `internal` value raised again later is rebuilt as a plain Lua failure that keeps only its message.
+An `empty_model_reply` value raised again later keeps its message. An `out_of_scope_tool`, `unbound_tool`, `model_only_tool`, `tasks_live`, `lua`, `model_failure`, `model_required`, or `internal` value raised again later is rebuilt as a plain Lua failure that keeps only its message.
 
 A value missing its kind's fields is rebuilt as a plain Lua failure too. A `context_exhausted` value without a valid `reason`, or a `task_not_owned` or `task_consumed` value without a valid `task`, raised again later ends the run as `Lua`, or as `RequirementsUnmet` in the H1 pass. A `store` value without a recognized `reason` still ends the run as `Vfs`. A `cancelled` value raised again later ends the run with the cancelled outcome, as [Cancellation and stops](#cancellation-and-stops) explains.
 
-### Task, alias, and heading errors
+### Task and heading errors
 
 When a task error ends the run uncaught, in any chain and in the H1 pass too, the run error kind is `Lua`. That covers a leaked task, a task reached for by a chain that does not own it, a result waited on twice, and a `cancelled` value re-raised right after the wait (see [Ownership, leaked tasks, and abandonment](15-tasks.md#ownership-leaked-tasks-and-abandonment)).
-
-Left uncaught, an invalid alias error ends the run as `Lua`, or as `RequirementsUnmet` when it reaches the H1 body's own Lua. Its message reads:
-
-````text
-invalid alias "{alias}": expected [A-Za-z][A-Za-z0-9_-]{0,63}
-````
-
-A valid alias starts with a letter and continues with at most 63 letters, digits, underscores, or hyphens.
 
 Left uncaught, a heading-not-found error or a malformed heading reference error ends the run as `Lua`, or as `RequirementsUnmet` when it reaches the H1 body's own Lua (see [Resolving heading references](08-jump-and-call.md#resolving-heading-references)). The not-found message reads:
 
@@ -1028,15 +1033,9 @@ After this section you can catch a failed model call, read its completion error 
 name: summary
 description: Turns a failed model call into the section's result.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Summary
-
-```lua
-models.default('writer')
-```
 
 ## Draft
 
@@ -1202,15 +1201,9 @@ After this section you can tell from a failed run whether running it again may h
 name: brief
 description: Sends one model round and returns the reply.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Brief
-
-```lua
-models.default('writer')
-```
 
 ## Write
 
@@ -1250,7 +1243,7 @@ Every failure other than a transient model call failure is never retryable:
 - substitution failures
 - an exhausted tool loop
 - task failures: tasks still live, a task the prompt does not own, a task already consumed, or a cancelled task
-- a tool call outside the prompt's scope or to an unbound tool
+- a tool call outside the prompt's scope, to an unbound tool, or from a script to a model-only tool
 - a required model that is missing
 - an unsupported version
 - unmet requirements
@@ -1345,15 +1338,9 @@ The Host can [stop the round](01-what-a-prompt-is.md#effects-and-harness-work) i
 name: patient
 description: Returns a marker when the Host stops its model round.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Patient
-
-```lua
-models.default('writer')
-```
 
 ## Draft
 

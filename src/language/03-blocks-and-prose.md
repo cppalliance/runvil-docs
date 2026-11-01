@@ -167,15 +167,9 @@ You can put Lua before and after a section's prose, and know what each position 
 name: tides
 description: A prologue, prose, and an epilog in one section
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Tides
-
-```lua
-models.default('writer')
-```
 
 ## Explain
 
@@ -190,7 +184,7 @@ return models.infer(prose)
 ```
 ````
 
-The H1 body's fence calls `models.default('writer')` (see [The prompt-wide default with `models.default`](10-models.md#the-prompt-wide-default-with-modelsdefault)). In `## Explain`, the first fence is the section's prologue, the prose after it is the section prose, and the second fence is the epilog, so the block sequence is exactly Lua, prose, Lua. The model is asked `Explain tides in one sentence.`, and its reply is the run result.
+In `## Explain`, the first fence is the section's prologue, the prose after it is the section prose, and the second fence is the epilog, so the block sequence is exactly Lua, prose, Lua. The prompt has no `models:` block, so the epilog's `models.infer` runs on the model of the `default` role, which is the model the Host supplies (see [The current model](10-models.md#the-current-model)). The model is asked `Explain tides in one sentence.`, and its reply is the run result.
 
 This is the common section shape. The prologue runs before the prose and stores a value in `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)). The prose uses that value through a `{{ var.topic }}` placeholder. The epilog runs after the prose, reads the pending prose through `prose`, and sends the finished prose to a model with `return models.infer(prose)` (see [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer)).
 
@@ -282,15 +276,9 @@ You can place several `lua` fences in one section, interleaved with prose, to sp
 name: tour
 description: Two questions in one section, the second using the first reply
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Tour
-
-```lua
-models.default('writer')
-```
 
 ## Landmark
 
@@ -356,15 +344,9 @@ A prologue prepares values for the prose, and an epilog acts on the finished pro
 name: save
 description: An epilog that saves the model reply to the store
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Save
-
-```lua
-models.default('writer')
-```
 
 ## Ask
 
@@ -481,15 +463,9 @@ You send prose to a model by passing `prose` to `models.infer` in a Lua block:
 name: hello
 description: Ask the model to say hello
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Hello
-
-```lua
-models.default('writer')
-```
 
 ## Greet
 
@@ -511,15 +487,9 @@ The H1 body and each section collect their own pending prose, so each part's pro
 name: twoquestions
 description: H1 prose and section prose each feed their own model round
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Two questions
-
-```lua
-models.default('writer')
-```
 
 Name one planet.
 
@@ -536,7 +506,7 @@ return models.infer(prose)
 ```
 ````
 
-The prompt asks `Name one planet.` first, during the H1 pass, and then `Name one ocean.` from `## Answer`, and the result is the ocean reply. The H1 pass and each section keep separate pending prose buffers, so each reads only its own prose through `prose`, and prose written between `lua` fences in the H1 body collects into a buffer that `prose` reads the same way. H1 prose never drives inference on its own: with no `models:` entry, a prompt whose H1 prose stays unread still runs, while an H1 block running `return models.infer(prose)` fails because no model is configured.
+The prompt asks `Name one planet.` first, during the H1 pass, and then `Name one ocean.` from `## Answer`, and the result is the ocean reply. The H1 pass and each section keep separate pending prose buffers, so each reads only its own prose through `prose`, and prose written between `lua` fences in the H1 body collects into a buffer that `prose` reads the same way. H1 prose never drives inference on its own: on a Host that supplies no model, a prompt whose H1 prose stays unread still runs, while an H1 block running `return models.infer(prose)` fails there because the chain has no model (see [When a section has no model](10-models.md#when-a-section-has-no-model)).
 
 ### What resets pending prose
 
@@ -606,7 +576,7 @@ ok
 
 Every piece of prose in this prompt is commentary:
 
-- Pending prose in the H1 body that no Lua block reads is discarded when the H1 pass ends, without error, even when it holds a placeholder like `{{ var.omit }}`. Unread H1 prose sends nothing to a model, so the prompt needs no `models:` entry, and H1 prose meant only for human readers can stay unread.
+- Pending prose in the H1 body that no Lua block reads is discarded when the H1 pass ends, without error, even when it holds a placeholder like `{{ var.omit }}`. Unread H1 prose sends nothing to a model, so it needs no model, and H1 prose meant only for human readers can stay unread.
 - Prose at the end of a section with no Lua fence after it is discarded when the section ends, without being rendered, so a placeholder naming a missing value, such as `{{ var.missing }}`, cannot fail the run.
 - A block that never reads `prose` is untouched even by an unclosed `{{` in the prose above it.
 - Markdown left after the final `lua` fence of a body is inert trailing commentary: no fence reads it, its placeholders are never filled, and it never raises an error, so `Trailing {{ var.missing }} commentary.` leaves the result `ok`. Prose left pending after a section's last fence is not a parse error either.
@@ -1934,7 +1904,7 @@ Any section with a Lua block can serve as a library, whether it holds only Lua o
 
 `require` takes the heading of a library section within reach in the prompt. It loads sections only, never a file from disk or native code, and it reads its argument as a section heading every time, so Lua's `os` and `package` tables stay `nil` however you call it.
 
-When a library section returns nothing, you call `require` as a bare statement purely for its effects. A `## setup` library that only runs [`models.default`](10-models.md#the-prompt-wide-default-with-modelsdefault) as `models.default('writer')` works this way.
+When a library section returns nothing, you call `require` as a bare statement purely for its effects. A `## setup` library that only runs [`models.use('strong')`](10-models.md#selecting-a-role-with-modelsuse) works this way. The choice belongs to the chain, so the block that called `require` and every later section of that chain make their model rounds on the `strong` role until the next `models.use`.
 
 ### What `require` returns
 
@@ -2107,7 +2077,7 @@ Library blocks run inside the calling block, so a library block can make every c
 
 - A library that calls [`call`](08-jump-and-call.md#calling-a-section) during its load pauses the caller's block until the called section returns, and the library receives the call's result.
 - Library code that calls `models.infer` while it loads runs one model round under the model the caller is using.
-- An H1 that calls `require` lets the library set prompt-wide state that every later section sees, such as the default model through `models.default`.
+- An H1 that calls `require` lets the library set state that every later section sees, such as the current model through [`models.use`](10-models.md#selecting-a-role-with-modelsuse). The choice belongs to the chain, and the section walk starts on the model the H1 pass ended on.
 
 ### Library functions resolve names when called
 

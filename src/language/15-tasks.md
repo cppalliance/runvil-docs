@@ -286,9 +286,9 @@ return 'index=' .. tostring(sys.index) .. ' item=' .. item.name .. ' args=' .. a
 index=7 item=alpha args=child args k=1
 ````
 
-`## Child` reads all three seeds, and it also reads `var.k`, which it gets from the `var` snapshot described below. The options table itself is optional: you can call `tasks.spawn` with a heading reference alone, such as `tasks.spawn('### Gather')`, and a missing `opts` counts as an empty table. Leaving `input`, `item`, or `index` out starts the task without that seed, so `tasks.spawn(target)` alone gives no argument override, no `item`, and no `sys.index`, and it still copies `var`. The target, the `input`, `item`, and `index` seeds, and the `var` snapshot are all fixed on the task by the `tasks.spawn` call, before the task first runs.
+`## Child` reads all three seeds, and it also reads `var.k`, which it gets from the `var` snapshot described below. The options table itself is optional: you can call `tasks.spawn` with a heading reference alone, such as `tasks.spawn('### Gather')`, and a missing `opts` counts as an empty table. Leaving `input`, `item`, or `index` out starts the task without that seed, so `tasks.spawn(target)` alone gives no argument override, no `item`, and no `sys.index`, and it still copies `var`. The target, the `input`, `item`, and `index` seeds, the `var` snapshot, and the model the task starts on are all fixed on the task by the `tasks.spawn` call, before the task first runs.
 
-The options argument is a table. Any other value raises an error of kind `lua` whose message names the type it got, `tasks.spawn opts must be a table, got {type}`, such as `tasks.spawn opts must be a table, got integer`. The error is raised at the call site, so `pcall` around the call catches it and gives `false` as its first value (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)).
+The options argument is a table. Any other value raises an error of kind `lua` whose message names the type it got, `tasks.spawn opts must be a table, got {type}`, such as `tasks.spawn opts must be a table, got integer`. The error is raised at the call site, so `pcall` around the call catches it and gives `false` as its first value (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)). The table has no key for a model, and [The model a task starts on](#the-model-a-task-starts-on) says which model a task uses.
 
 ### Replacing the argument string with `input`
 
@@ -384,6 +384,45 @@ saw a|saw b|b
 ````
 
 Task `a` starts with the `var` values as they stood when it was spawned, so it reads `'a'` even though `## Main` set `var.who = 'b'` before spawning `b`. Later changes the owner makes to its `var` never reach a task, and each task's `var.who = 'changed'` stays inside that task, so `## Main` still reads `b`. In the same way, a section that sets `var.k = 1` before the spawn sees its task log `k=1`.
+
+### The model a task starts on
+
+`tasks.spawn` has no model argument or option of its own. A task starts on a copy of its spawner's current model, taken when `tasks.spawn` runs and not when the scheduler admits the task (see [Children and fanout arms](10-models.md#children-and-fanout-arms)). A task that is still queued is not changed by a later `models.use` in its spawner:
+
+````markdown
+---
+name: task-model
+description: Starts two tasks on strong, then switches the spawner to fast.
+runvil: 0
+---
+
+# Task model
+
+## Main
+
+```lua
+models.use('strong')
+local a = tasks.spawn('## Child')
+local b = tasks.spawn('## Child')
+models.use('fast')
+local results = tasks.join({ a, b })
+return results[1].result .. '|' .. results[2].result .. '|' .. models.current().label
+```
+
+## Child
+
+```lua
+return models.current().label
+```
+````
+
+````text
+strong|strong|fast
+````
+
+Both tasks are spawned while `## Main` is on `strong`, and neither runs until `## Main` parks on `tasks.join`, which comes after the switch to `fast`. Each task still reads `strong`, because its model was copied at the spawn, and `## Main` reads `fast` afterward. The `label` field is the role name, so the result holds on any Host that supplies a model. A `models.use` inside a task stays in that task, so it never reaches the spawner or a sibling. To run a task on another model, switch the spawner with `models.use` before the spawn, or have the task call `models.use` itself.
+
+A task that is not spawned from the main walk follows the same rule. A task spawned inside a `call` chain copies that chain's current model, and the tasks a task spawns copy the model of the task that spawns them. A [fanout](14-fanout.md#running-arms-on-a-model) arm is a task, so it starts the same way, and `tasks.fanout(model, worker, collection)` is the way to give every arm a model of its own.
 
 ### The freeform pattern
 
@@ -1207,15 +1246,9 @@ This prompt reads every field twice, once while its task waits on a [model round
 name: status-snapshot
 description: Reads a task's status during and after its model round.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Status snapshot
-
-```lua
-models.default('writer')
-```
 
 ## Main
 
@@ -1470,15 +1503,9 @@ A timed `tasks.join_any` returns a single `nil` when no member ends in time, so 
 name: still-working
 description: Gives a task five seconds, then waits for it with no limit.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Still working
-
-```lua
-models.default('writer')
-```
 
 ## Main
 
@@ -1512,15 +1539,9 @@ A member of a timed-out `tasks.join_any` keeps running, and `tasks.status(t).sta
 name: timed-join
 description: Joins two tasks with a time limit, then collects the late one.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Timed join
-
-```lua
-models.default('writer')
-```
 
 ## Main
 
@@ -1919,7 +1940,7 @@ A spawned task can itself spawn and join tasks, so tasks nest. Here `## Main` sp
 
 ### When a spawned task is admitted
 
-Each [suspending call](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals), meaning `models.infer`, `handle:infer`, `models.loop`, `handle:loop`, `tools.call`, `call`, and every `store` operation, pauses only the current block and hands control to the scheduler, so other chains, such as spawned tasks and `tasks.fanout` arms, run while it waits.
+Each [suspending call](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals), meaning `models.infer`, `models.loop`, `tools.call`, `call`, and every `store` operation, pauses only the current block and hands control to the scheduler, so other chains, such as spawned tasks and `tasks.fanout` arms, run while it waits.
 
 `tasks.spawn`, `tasks.ready`, `tasks.status`, `tasks.pending`, `tasks.note`, `tasks.concurrency`, and `tasks.cancel` answer right away and never park the caller. A queued task is admitted only when no chain is ready to run, so a loop that does nothing but call these functions never lets a queued task start.
 
@@ -1927,6 +1948,8 @@ After `tasks.spawn` returns, the new task waits in the admission queue, with its
 
 - When the spawner parks on a model round right after spawning, as in `tasks.spawn('## Child')` followed by `models.infer('wait')`, the task is admitted and starts its own model round, so both rounds are in flight together and go out together.
 - While the spawning section is parked on a store operation, a spawned task can run all the way to completion, and the spawner resumes only after the store operation is answered.
+
+A queued task holds no Lua VM yet, but its model is already fixed. It starts on the copy of the spawner's current model that `tasks.spawn` took, so a `models.use` the spawner makes while the task waits for a slot does not change it (see [The model a task starts on](#the-model-a-task-starts-on)).
 
 Tasks admitted together first run in spawn order, so their first model requests go out in spawn order. In `nested-tasks`, `## Main` parks on its `tasks.join_any`, which admits `### Outer`, and `### Outer` parks on its `tasks.join`, which admits both `#### Inner` tasks.
 
@@ -2004,6 +2027,7 @@ A task runs the same Lua as any chain, and these rules cover what happens when i
 
 - A section reached by `call` inside a task shares that task's `sys.taskid`, so it can read the task's status too.
 - When two tasks each run a `call`, the called chains can finish in either order, one finishing while the other is still running, and each `call` still returns its own result to its own task.
+- A section reached by `call` inside a task starts on a copy of the task's current model, taken when the `call` is made, and a `models.use` inside the called chain does not reach the task.
 - A `models.infer` reply made inside a `call` chain of a task flows back through `call` to the task's result and then to the spawner's `tasks.join`. For example, `## Main` joins `### Caller`, which runs `return call('#### Leaf')`, and `#### Leaf` runs `return models.infer(var.who)`, so the reply reaches `## Main` as the result of `### Caller`.
 - An adhoc tool handler runs inside the calling chain, so it can start and wait on tasks just as block code can (see [How adhoc tool handlers run](12-tools.md#how-adhoc-tool-handlers-run)).
 - Each task keeps its own round count starting at zero, so its rounds are numbered on its own counter and never add to its spawner's count, and its `tasks.status` reads `turns` as 0 while its first `models.infer` round is in flight and 1 after it returns.

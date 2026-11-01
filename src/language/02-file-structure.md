@@ -107,7 +107,7 @@ Sections can also nest deeper than `##`. In a prompt titled `# Fanout`, a `### W
 
 You write the frontmatter in YAML at the very top of the file. The first line of the file must be `---`, and spaces before or after the dashes on that line are ignored. A file that starts any other way is rejected with the message `file must begin with a --- frontmatter delimiter`, which [Frontmatter delimiters, byte-order mark, and line endings](#frontmatter-delimiters-byte-order-mark-and-line-endings) covers with the other delimiter rules.
 
-The frontmatter declares the prompt's files with the optional `input` and `output` keys, its Packs with the `uses` list, its arguments with `args`, and its model roles with `models`. None of these is needed for a prompt to parse and run. A frontmatter of only `name`, `description`, and `runvil: 0` between the `---` lines is complete:
+The frontmatter declares the prompt's files with the optional `input` and `output` keys, its Packs with the `uses` list, its arguments with `args`, and requirements on its model roles with `models`. None of these is needed for a prompt to parse and run. A frontmatter of only `name`, `description`, and `runvil: 0` between the `---` lines is complete:
 
 ````markdown
 ---
@@ -221,15 +221,14 @@ runvil: 0
 uses:
   - web
 models:
-  analyst:
+  strong:
     min_context: 40000
-    description: A model suited for careful analysis
 ---
 
 # Analyst Example
 ````
 
-You write the frontmatter as YAML, and the parser decodes that YAML into the set of frontmatter keys a prompt accepts. This prompt writes its nested values in YAML block style: the key sits alone on its line, and more-indented lines under it hold `key: value` map entries or `- ` list items. Here `models:` holds a map two levels deep, with `analyst:` under it and `min_context: 40000` and `description: A model suited for careful analysis` under that, and `uses:` holds the single list item `- web`.
+You write the frontmatter as YAML, and the parser decodes that YAML into the set of frontmatter keys a prompt accepts. This prompt writes its nested values in YAML block style: the key sits alone on its line, and more-indented lines under it hold `key: value` map entries or `- ` list items. Here `models:` holds a map two levels deep, with `strong:` under it and `min_context: 40000` under that, and `uses:` holds the single list item `- web`.
 
 ### Flow style
 
@@ -241,13 +240,13 @@ name: analyst_example
 description: Demonstrate frontmatter model roles and models.use for careful model selection.
 runvil: 0
 uses: [web]
-models: { analyst: { min_context: 40000, description: A model suited for careful analysis } }
+models: { strong: { min_context: 40000 } }
 ---
 
 # Analyst Example
 ````
 
-Both files decode to the same frontmatter. Flow style suits short declarations, such as `uses: [web]`, `models: { writer: { keywords: [fast] } }`, or `args: { times: { type: integer, optional: true, default: 1 }, name: { type: string } }`.
+Both files decode to the same frontmatter. Flow style suits short declarations, such as `uses: [web]`, `models: { strong: { thinking: true } }`, or `args: { times: { type: integer, optional: true, default: 1 }, name: { type: string } }`.
 
 The two styles mix, so a block-style `models:` key can hold a flow-style entry on its indented line:
 
@@ -257,7 +256,7 @@ name: hello
 description: Say hello
 runvil: 0
 models:
-  writer: {}
+  fast: {}
 ---
 
 # Hello World
@@ -525,13 +524,13 @@ This table lists the nine keys in the order this chapter teaches them, with what
 | `output` | no | no declared output file |
 | `uses` | no | no Packs |
 | `args` | no | the default declaration of one optional `string` argument named `prose` |
-| `models` | no | no model roles |
+| `models` | no | no requirements on any model role |
 
 Because every key besides `name` and `description` has a default, a frontmatter of just those two parses, and so does a prompt with none of the contract keys. `max_tool_iterations` accepts a value from 1 to 1000, and [Tool rounds and the round cap](11-conversations.md#tool-rounds-and-the-round-cap) covers what it controls. [Input and output file declarations](#input-and-output-file-declarations) teaches `input` and `output`.
 
 ### Adding keys a prompt needs
 
-The `hello` prompt under [Flow style](#flow-style) shows the pattern. The shipped `hello` prompt's frontmatter holds only `name`, `description`, `runvil`, and `models`, and leaves out `max_tool_iterations`, `input`, `output`, `uses`, and `args` because it does not need them. Its `models:` key declares a `writer: {}` role next to the usual three keys, and its H1 body then calls `models.default("writer")`.
+The `hello` prompt under [Flow style](#flow-style) shows the pattern. Its frontmatter holds only `name`, `description`, `runvil`, and `models`, and leaves out `max_tool_iterations`, `input`, `output`, `uses`, and `args` because it does not need them. Its `models:` key names a `fast: {}` role next to the usual three keys. The shipped `hello.md` prompt declares no model requirements, so it leaves out `models` too, and its frontmatter holds only `name`, `description`, and `runvil`.
 
 The optional `input:` and `output:` declarations sit in the same frontmatter block as the other keys, as in a prompt whose frontmatter reads `name: files`, `description: d`, `runvil: 0`, then an `input:` map and an `output:` map.
 
@@ -541,9 +540,9 @@ The contract keys are `uses`, `args`, and `models` (see [Putting the parts toget
 
 - `uses` lists the Packs the prompt requires, and each one listed is required.
 - `args` types the arguments the prompt takes.
-- `models` declares the model roles (see [Model roles instead of models](10-models.md#model-roles-instead-of-models)) that concrete models are bound to when the run is built.
+- `models` attaches requirements to the five built-in model roles (see [Model roles instead of models](10-models.md#model-roles-instead-of-models)): a minimum context and a thinking switch for each role it names.
 
-Checking these declarations against the caller's environment happens on the run's first step, not at parse time. For example, a `checker` role that asks for the `no-thinking` keyword is reported as an unmet requirement when the supplied model falls short of it.
+Checking these declarations against the caller's environment happens on the run's first step, not at parse time. For example, a `small` role that sets `thinking: false` is reported as an unmet requirement when the model filling that role always thinks.
 
 All three contract keys can sit together in one frontmatter block alongside `name`, `description`, and `runvil: 0`, next to `input:` and `output:`, and each reads back as declared:
 
@@ -556,13 +555,13 @@ input: { path: names.md, description: The names to greet }
 output: { path: note.md, description: The note the greeter leaves }
 uses: [web]
 args: { times: { type: integer, optional: true, default: 1 }, name: { type: string } }
-models: { writer: { keywords: [fast] } }
+models: { strong: { min_context: 40000 } }
 ---
 
 # Greeter
 ````
 
-A frontmatter with `uses: [web, user-input]`, an `args:` map holding `use_mcp`, and a `models:` map holding `analyst` and `triage` parses and reads back the same way.
+A frontmatter with `uses: [web, user-input]`, an `args:` map holding `use_mcp`, and a `models:` map holding `strong` and `fast` parses and reads back the same way.
 
 ### Unknown keys
 
@@ -581,7 +580,7 @@ usse: [web]
 
 The message has the `invalid frontmatter: {message}` form, and `{message}` names the offending key, here `usse`.
 
-Unknown keys are rejected inside nested declarations too. An `input:` or `output:` declaration accepts only `path` and `description`, an arg entry and a model role each accept only their own fixed set of keys, and any other key inside them fails the parse with parse error kind `Frontmatter`.
+Unknown keys are rejected inside nested declarations too. An `input:` or `output:` declaration accepts only `path` and `description`, an arg entry and a model role each accept only their own fixed set of keys (a model role takes only `min_context` and `thinking`), and any other key inside them fails the parse with parse error kind `Frontmatter`.
 
 ## Input and output file declarations
 
@@ -682,9 +681,9 @@ A missing output file is not a run failure. A prompt that declares an `output:` 
 the run completed without writing its declared output file `{path}`
 ````
 
-## The name grammar for role labels, arg names, and adhoc tool names
+## The name grammar for arg names and adhoc tool names
 
-After this section you can choose names for role labels, arg names, and adhoc tool names that both the parser and the Engine accept.
+After this section you can choose names for args and adhoc tools that both the parser and the Engine accept, and you know why the keys under `models:` are outside that grammar.
 
 ````markdown
 ---
@@ -692,23 +691,23 @@ name: contract_names
 description: d
 runvil: 0
 args: { use_mcp: { type: boolean }, max_items: { type: integer, optional: true, default: 1 } }
-models: { analyst: {}, triage: {}, fast-model: {} }
+models: { strong: {}, fast: {} }
 ---
 
 # Contract Names
 ````
 
-This frontmatter parses. The keys under `models:` are role labels, and the keys under `args:` are arg names. A role label is the key that names a model role, such as `analyst`. An arg name is the key that names one argument, and the argument reaches Lua as a field of `argv`. Both follow the same name grammar as an adhoc tool name, which is the `name` Lua code gives an adhoc tool (see [Effects and Harness work](01-what-a-prompt-is.md#effects-and-harness-work)) in the attrs table of `tools.adhoc` (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)).
+This frontmatter parses. The keys under `args:` are arg names, and the keys under `models:` are role names. An arg name is the key that names one argument, and the argument reaches Lua as a field of `argv`. An arg name follows the same name grammar as an adhoc tool name, which is the `name` Lua code gives an adhoc tool (see [Effects and Harness work](01-what-a-prompt-is.md#effects-and-harness-work)) in the attrs table of `tools.adhoc` (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)). A role name is one of the five built-in model roles, `default`, `strong`, `small`, `fast`, and `creative`, so the grammar does not apply to it.
 
 ### The prompt-local alias grammar
 
-Every role label, arg name, and adhoc tool name follows the prompt-local alias grammar:
+Every arg name and adhoc tool name follows the prompt-local alias grammar:
 
 ````text
 [A-Za-z][A-Za-z0-9_-]{0,63}
 ````
 
-In words, a name is 1 to 64 ASCII characters: a letter first, then letters, digits, `_`, or `-`. Names such as `search`, `fetch`, `writer`, `analyst`, `use_mcp`, `limit`, `query`, `fast-model`, and `max_items` are all valid. Rule by rule:
+In words, a name is 1 to 64 ASCII characters: a letter first, then letters, digits, `_`, or `-`. Names such as `search`, `fetch`, `use_mcp`, `limit`, `query`, `fast-model`, and `max_items` are all valid. Rule by rule:
 
 - Length: a name is 1 to 64 characters long, so it always has at least one character. A name of exactly 64 characters is valid, and 64 is the limit.
 - First character: an ASCII letter of either case, `A` to `Z` or `a` to `z`.
@@ -723,37 +722,30 @@ Put the other way, a name fails the grammar when it is empty or longer than 64 c
 
 ### Where the grammar applies
 
-At parse time, the grammar applies to every key under `models:` and `args:`, such as the role labels `analyst` and `triage` and the arg name `use_mcp` above. Role labels and arg names such as `writer`, `checker`, `times`, and `name` are valid too, with `times` and `name` under `args:` and `writer` and `checker` under `models:`.
+At parse time, the grammar applies to every key under `args:`, such as the arg name `use_mcp` above. Arg names such as `times` and `name` are valid too. A key under `models:` is not checked against the grammar. It must be one of the five role names, spelled exactly, so a key such as `reviewer` or `Fast` is rejected even though both fit the grammar. Lua code refers to a role by its name as a string, as in `models.use("strong")`.
 
-Shipped prompts name each model role with a plain lowercase label, such as `writer` or `researcher`, and Lua code refers to the role by that same string, as in `models.default("writer")` and `models.default("researcher")`.
+At run time, the Engine enforces the same grammar for the `name` Lua passes to `tools.adhoc`, with the same length, first-character, and later-character rules.
 
-At run time, the Engine enforces the same grammar, with the same length, first-character, and later-character rules. Role labels and adhoc tool names share that one rule, so a name that is valid as one is valid as the other, and `models.use` checks its label with the same rule that `tools.adhoc` applies to its `name`. The grammar applies when Lua passes a name to these calls (see [Model roles instead of models](10-models.md#model-roles-instead-of-models)):
-
-- `tools.adhoc`, for its `name`
-- `models.use`, for its label
-- `models.default`, for its label
-- `models.get`, only for a name that matches none of the prompt's model roles, since a declared role's handle comes back first
-
-When the Host allows raw model ids, `models.get` skips the grammar for a name that matches no declared role and reads the name as a raw model id instead, the name a gateway model is listed under, because model names can contain `/`, `.`, and `:`. With raw model ids allowed, `models.get('qwen/qwen3-8b')` returns a handle bound to `gateway/qwen/qwen3-8b`, whose `model_id` is `qwen/qwen3-8b`. Without them, `models.get('ghost')` fails because `ghost` is not a bound model role.
+`models.use` and `models.get` apply no grammar. `models.use` compares the name with the five role names, so a name outside the grammar and a well-formed name that is not a role fail with the same message, which [Run-time name errors](#run-time-name-errors) gives. `models.get` does the same unless the Host allows raw model ids. With raw model ids allowed, `models.get` reads a name outside the five as a raw model id instead, the name a gateway model is listed under, because model names can contain `/`, `.`, and `:`, so `models.get('qwen/qwen3-8b')` returns a handle bound to `gateway/qwen/qwen3-8b`, whose `model_id` is `qwen/qwen3-8b`. A role name always resolves as the role, with or without raw model ids.
 
 ### Contract maps and duplicate keys
 
-A contract map is the `models:` map or the `args:` map. The two share one set of key rules, so the grammar check and the uniqueness check apply the same way to both. Each key appears once within its map. Keys are compared exactly, so labels that differ only in case, such as `Fast` and `fast`, are two distinct entries.
+A contract map is the `models:` map or the `args:` map. The two share the uniqueness check: each key appears once within its map. Keys are compared exactly, so arg names that differ only in case, such as `Times` and `times`, are two distinct entries.
 
-A repeated key fails the parse with parse error kind `Frontmatter`, and the message names the key kind and the repeated key, where the key kind `{what}` is `model role label` for `models:` and `arg name` for `args:`:
+A repeated key fails the parse with parse error kind `Frontmatter`, and the message names the key kind and the repeated key, where the key kind `{what}` is `model role` for `models:` and `arg name` for `args:`:
 
 ````text
 duplicate {what} `{key}`: contract map keys must be unique
 ````
 
-The parser checks each key against the grammar first and for uniqueness second, and it checks a key before it reads the key's value. It walks the keys in source order and stops at the first bad one, so:
+The parser checks each key first, against the grammar for `args:` and against the five role names for `models:`, and for uniqueness second, and it checks a key before it reads the key's value. It walks the keys in source order and stops at the first bad one, so:
 
 - A map with several bad keys reports only the first one.
 - An entry with both a bad key and a bad value reports the key error.
 
 ### Reserved names
 
-A reserved name is a name that is already taken in a section entry's Lua environment, such as the global `store`, the Lua function `pairs`, or the keyword `end` (see [The sandbox](05-lua-environment.md#the-sandbox)). Role labels and arg names are not checked against reserved names, because neither becomes a Lua global: an arg is a field of `argv`, and Lua code reaches a role through `models.get(label)`. So every reserved name the grammar allows works as a role label, and `prose`, `store`, and `end` work as arg names:
+A reserved name is a name that is already taken in a section entry's Lua environment, such as the global `store`, the Lua function `pairs`, or the keyword `end` (see [The sandbox](05-lua-environment.md#the-sandbox)). Arg names are not checked against reserved names, because an arg does not become a Lua global: it is a field of `argv`. So every reserved name the grammar allows works as an arg name, and `prose`, `store`, and `end` are all accepted:
 
 ````markdown
 ---
@@ -761,30 +753,36 @@ name: reserved
 description: d
 runvil: 0
 args: { prose: { type: string }, store: { type: string }, end: { type: boolean } }
-models: { 'store': {} }
 ---
 
 # Reserved
 ````
 
-This frontmatter declares three args, named `prose`, `store`, and `end`, and the prompt holds a role under the name `store`. A reserved name such as `pairs` or `end` works as a role label the same way.
+This frontmatter declares three args, named `prose`, `store`, and `end`. A reserved name such as `pairs` works as an arg name the same way.
 
 ### Parse-time name errors
 
-A key outside the grammar fails the parse with parse error kind `Frontmatter`. The `{message}` of the `invalid frontmatter: {message}` message names the key kind and the offending key, and it shows the grammar:
+A key under `args:` that is outside the grammar fails the parse with parse error kind `Frontmatter`. The `{message}` of the `invalid frontmatter: {message}` message names the offending key and shows the grammar:
 
 ````text
-invalid {what} `{key}`: expected [A-Za-z][A-Za-z0-9_-]{0,63}
-````
-
-The key kind `{what}` reads `model role label` for a key under `models:` and `arg name` for a key under `args:`, because `args:` keys go through the same key rules as `models:` keys. So the two details read:
-
-````text
-invalid model role label `{key}`: expected [A-Za-z][A-Za-z0-9_-]{0,63}
 invalid arg name `{key}`: expected [A-Za-z][A-Za-z0-9_-]{0,63}
 ````
 
-Writing `models:` or `args:` as something other than a map, such as a list or a scalar, fails with parse error kind `Frontmatter` and this detail, where `{found}` is the YAML reader's description of the value you gave and `{what}` is again `model role label` or `arg name`:
+A key under `models:` that is not one of the five role names fails the parse with parse error kind `Frontmatter` too. The message contains the YAML reader's own text for an unknown name, which names the key and lists the five roles:
+
+````text
+unknown variant `{key}`, expected one of `default`, `strong`, `small`, `fast`, `creative`
+````
+
+Inside a role, a field other than `min_context` and `thinking` fails the same way, with a message that contains this text, where `{field}` is the rejected field:
+
+````text
+unknown field `{field}`, expected `min_context` or `thinking`
+````
+
+So a role that carries a `description:` field is rejected, even though `input:`, `output:`, and the prompt itself take one.
+
+Writing `models:` or `args:` as something other than a map, such as a list or a scalar, fails with parse error kind `Frontmatter` and this detail, where `{found}` is the YAML reader's description of the value you gave and `{what}` is `model role` or `arg name`:
 
 ````text
 invalid type: {found}, expected a map of {what} keys to declarations
@@ -792,17 +790,23 @@ invalid type: {found}, expected a map of {what} keys to declarations
 
 Each grammar, duplicate, and map-type error from `models:` and `args:` reports the file line and column of the offending entry, such as line 5, column 5.
 
-Every grammar violation, whether an empty name, a name that is too long, a bad first character, or a bad later character, produces the same single message form. The message shows the grammar but not which rule failed, so check the name against every rule in [The prompt-local alias grammar](#the-prompt-local-alias-grammar).
+Every arg name violation, whether an empty name, a name that is too long, a bad first character, or a bad later character, produces the same single message form. The message shows the grammar but not which rule failed, so check the name against every rule in [The prompt-local alias grammar](#the-prompt-local-alias-grammar).
 
 ### Run-time name errors
 
-When a role label passed to a Lua call breaks the grammar, the call fails with a `Lua` error. Its message names the rejected alias and the grammar, again in one form for every rule:
+When the name passed to `models.use` is not one of the five role names, the call fails with a `Lua` error. Its message names the rejected label and lists the five roles, in one form for every rejected name:
 
 ````text
-invalid alias "{alias}": expected [A-Za-z][A-Za-z0-9_-]{0,63}
+models.use label "{label}" is not a model role: expected default, strong, small, fast or creative
 ````
 
-The rejected alias appears in double quotes with escaping, so a quote, backslash, or control character in the name appears escaped.
+`models.get` fails the same way when the name is not a role and the Host has not allowed raw model ids, with `models.get` in place of `models.use`:
+
+````text
+models.get label "{label}" is not a model role: expected default, strong, small, fast or creative
+````
+
+The rejected label appears in double quotes with escaping, so a quote, backslash, or control character in the name appears escaped. For example, `models.use('reviewer')` fails with `models.use label "reviewer" is not a model role: expected default, strong, small, fast or creative`.
 
 When the `name` passed to `tools.adhoc` breaks the grammar, the `tools.adhoc` call fails with a `Lua` error whose message names the rejected name and the grammar, again in one form for every rule:
 

@@ -1,6 +1,6 @@
 # Fanout
 
-`tasks.fanout` runs one worker section once for each member of a collection, and each of those runs is an arm. The arms run concurrently, and the call hands back their results in collection order, whatever order the arms finish in. This chapter shows how to name the worker section, build the collection, read the results, and keep arms from colliding in the store, so you can spread one piece of work over many inputs and still get the same result on every run.
+`tasks.fanout` runs one worker section once for each member of a collection, and each of those runs is an arm. The arms run concurrently, and the call hands back their results in collection order, whatever order the arms finish in. This chapter shows how to name the worker section, build the collection, choose the model the arms run on, read the results, and keep arms from colliding in the store, so you can spread one piece of work over many inputs and still get the same result on every run.
 
 ## Fanout in one call
 
@@ -37,7 +37,7 @@ The [section walk](04-how-a-prompt-runs.md#the-section-walk) enters `## Parent`,
 
 ### Writing the call
 
-`fanout` lives in the `tasks` table and is not a global of its own, so you always write `tasks.fanout`. The first argument is the worker section's heading reference as a string, such as `'### Worker'`, with its `#` markers included (see [Heading references](02-file-structure.md#heading-references)). The second argument is the collection. [Choosing the worker section](#choosing-the-worker-section) covers which sections the first argument can name, and [Collections and member order](#collections-and-member-order) covers what the second argument can hold.
+`fanout` lives in the `tasks` table and is not a global of its own, so you always write `tasks.fanout`. The worker argument is the worker section's heading reference as a string, such as `'### Worker'`, with its `#` markers included (see [Heading references](02-file-structure.md#heading-references)). The collection argument comes after it. In the two-argument form `tasks.fanout(worker, collection)` the worker is first, and in the three-argument form `tasks.fanout(model, worker, collection)` a model handle comes before both and every arm runs on that model. [Choosing the worker section](#choosing-the-worker-section) covers which sections the worker argument can name, [Collections and member order](#collections-and-member-order) covers what the collection can hold, and [Running arms on a model](#running-arms-on-a-model) covers the model argument.
 
 ### Arms and collection order
 
@@ -50,15 +50,9 @@ The arms run concurrently with each other, not one after another. In this versio
 name: fanout-rounds
 description: Sends two prompts from each of two arms.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Fanout rounds
-
-```lua
-models.default('writer')
-```
 
 ## Parent
 
@@ -158,7 +152,7 @@ x-done
 
 ### Matching the heading reference
 
-You name the worker section in the first argument of `tasks.fanout` by its heading reference, `#` markers included, the same form `call` and `jump` take. The heading reference must match a visible section's level and name exactly: one or more `#` markers equal to the section's level, then whitespace, then the section's non-empty name. A section matches only when both its level and its name are equal, so a `### Worker` child is named `'### Worker'`, and in `sibling-worker` the string `'## Worker'` names the top-level `## Worker`.
+You name the worker section in the worker argument of `tasks.fanout` by its heading reference, `#` markers included, the same form `call` and `jump` take. The heading reference must match a visible section's level and name exactly: one or more `#` markers equal to the section's level, then whitespace, then the section's non-empty name. A section matches only when both its level and its name are equal, so a `### Worker` child is named `'### Worker'`, and in `sibling-worker` the string `'## Worker'` names the top-level `## Worker`.
 
 ### The caller's visible set
 
@@ -380,7 +374,7 @@ return item .. '-done'
 alpha-done,beta-done
 ````
 
-The collection is `tasks.fanout`'s second argument, and it must be a Lua table with at least one member, where a member is one entry of the collection. Each member gets one arm. Here the collection comes from the list section `### Items`, and `r[1].item` and `r[2].item` hand back the member each arm ran on, as [Reading the results](#reading-the-results) explains.
+The collection is `tasks.fanout`'s last argument, and it must be a Lua table with at least one member, where a member is one entry of the collection. Each member gets one arm. Here the collection comes from the list section `### Items`, and `r[1].item` and `r[2].item` hand back the member each arm ran on, as [Reading the results](#reading-the-results) explains.
 
 ### List collections
 
@@ -594,15 +588,9 @@ In the worker section's prose, the `{{ item }}` placeholder (see [Inserting the 
 name: replies
 description: Asks the model about each member.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Replies
-
-```lua
-models.default('writer')
-```
 
 ## Parent
 
@@ -677,17 +665,69 @@ A fanout arm starts with no call input of its own (see [Call input and `var`](08
 
 An arm inherits its caller's context whole, so the run's models and tools work in it as in any section. A worker section can run `tools.call('web/fetch', { url = item })` over a collection of URLs, or `return models.infer(prose)`, and reach the tool or the model. A fanout arm gets the same section Lua environment setup as a walked section, including the [sandbox](05-lua-environment.md#the-sandbox), and only its seeded `item` and `sys.index` differ.
 
-A [`models.default`](10-models.md#the-prompt-wide-default-with-modelsdefault) call in the H1 body sets the prompt-wide default role, and that default holds in every arm. With `writer: {}` declared under `models:` in the frontmatter and `models.default('writer')` in the H1 body, as in the `replies` prompt, an arm's `return models.infer(prose)` reaches the model.
+An arm starts on a copy of its caller's current model, taken when `tasks.fanout` spawns the arm (see [Children and fanout arms](10-models.md#children-and-fanout-arms)). A prompt that never calls `models.use` runs every arm on the `default` role's model, so in the `replies` prompt an arm's `return models.infer(prose)` reaches the model with no `models:` block and no setup in the H1 body. A `models.use('strong')` in the H1 body, or in the calling section before the fanout, puts every arm on `strong`. An arm's own `models.use` changes only that arm, and the caller's model is the same after the fanout as before it. To give the arms a model of their own, pass a handle as the first argument, as [Running arms on a model](#running-arms-on-a-model) shows.
 
-Worker section Lua can also call the model directly through a [model handle](10-models.md#model-handles) with `handle:infer(...)`. Each arm runs in its own section VM with its own empty [`messages`](11-conversations.md#messages-is-the-section-entrys-conversation) list, which it fills and drives with [`models.loop`](11-conversations.md#starting-a-conversation), so the arms' conversations stay separate and each arm opens its own first round.
+Worker section Lua can also run one round on a different model through a [model handle](10-models.md#model-handles) with `models.infer(handle, prompt)`, which leaves the arm's own model as it is. Each arm runs in its own section VM with its own empty [`messages`](11-conversations.md#messages-is-the-section-entrys-conversation) list, which it fills and drives with [`models.loop`](11-conversations.md#starting-a-conversation), so the arms' conversations stay separate and each arm opens its own first round.
 
-A fanout arm can call the run's bound tools with [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls), such as `tools.call('web/search', { query = item })` in a prompt that declares `uses: [web]`. Inside an arm, [`sys.model`](05-lua-environment.md#run-facts-in-sys-and-ui) reads the name part of the selected model's id, without the server namespace, once the arm's first `tools.call` has run, as in any section, so a worker section that runs `tools.call('web/search', { query = item })` and then `return sys.model .. ':' .. item` gives a text such as `claude-sonnet-4-6:a` when that model's id is `gateway/claude-sonnet-4-6`.
+A fanout arm can call the run's bound tools with [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls), such as `tools.call('web/search', { query = item })` in a prompt that declares `uses: [web]`. Inside an arm, [`sys.model`](05-lua-environment.md#run-facts-in-sys-and-ui) reads the name part of the id of the arm's current model, without the server namespace, as the model stood at the arm's first `tools.call`, and the name stays fixed for the rest of the arm, as in any section, so a worker section that runs `tools.call('web/search', { query = item })` and then `return sys.model .. ':' .. item` gives a text such as `claude-sonnet-4-6:a` when that model's id is `gateway/claude-sonnet-4-6`.
 
 Inside an arm, and in a chain the arm starts with `call`, `sys.section_count` is the run's top-level section count, so a child worker section does not add to it. With `## Parent` as the only top-level section and the worker section under it, the arm and a `### Sub` it calls both read `sys.section_count == 1`.
 
 A library loaded with [`require`](03-blocks-and-prose.md#sharing-code-with-require) inside a fanout arm runs in the arm's environment, so its top-level code reads the arm's `item`. [`call` and `require` inside an arm](#call-and-require-inside-an-arm) shows an example.
 
 A fanout arm sees every [Pack prelude](12-tools.md#pack-preludes) global, so where `greeter` is a prelude global, an arm block `return greeter.greet(item)` yields `hello arm`. Each arm runs every prelude afresh in its own Lua environment, so a prelude's install-time side effects happen once per arm. With `tasks.fanout('### Worker', { 'alpha', 'beta' })`, a prelude whose install-time code writes a store file writes it in both arms, so the second arm's write is a [store conflict](#store-conflicts) that ends the run with `Vfs`, even when the prelude wraps the write in `pcall`.
+
+## Running arms on a model
+
+In this section you run every arm of one fanout on a model you choose, and see what the call leaves unchanged.
+
+`tasks.fanout` has two forms. In `tasks.fanout(worker, collection)`, every arm starts on a copy of the caller's current model, taken when the arm is spawned. In `tasks.fanout(model, worker, collection)`, a [model handle](10-models.md#model-handles) comes first and every arm starts on that handle's model instead:
+
+````markdown
+---
+name: fanout-on-a-model
+description: Runs every arm on the fast role while the caller stays on strong.
+runvil: 0
+---
+
+# Fanout on a model
+
+## Parent
+
+```lua
+models.use('strong')
+local r = tasks.fanout(models.get('fast'), '### Arm', {'a', 'b'})
+return table.concat(r, ',') .. '|' .. models.current().label
+```
+
+### Arm
+
+```lua
+return models.current().label
+```
+````
+
+````text
+fast,fast|strong
+````
+
+`models.use('strong')` puts `## Parent` on the `strong` role. `models.get('fast')` returns a handle for the `fast` role and leaves the caller's model alone (see [Getting handles with `models.get`](10-models.md#getting-handles-with-modelsget)). Both arms start on `fast`, so each arm's `models.current().label` is `fast`, and after the call `## Parent` is still on `strong`. The `label` field is the role name. Returning `models.current().model_id` from the arm and from `## Parent` instead gives the Host's model for each role. On a Host whose role map gives `strong` the model `model-b` and `fast` the model `model-c`, that prompt returns `model-c,model-c|model-b`. With a one-model map every role reads the same `model_id`.
+
+### The first argument
+
+With three arguments, the first must be a model handle, whether it came from `models.get`, `models.current`, or `models.use`. Anything else raises an error value of kind `lua` with the message `tasks.fanout: the first argument must be a model handle, got {type}`, where `{type}` is the Lua type name of what you passed. So `tasks.fanout('fast', '### Arm', {'a'})` fails with `got string`, and a number or a `nil` first argument fails with `got number` or `got nil`. A role name is not a handle, so write `models.get('fast')`.
+
+Any argument count other than two or three raises `tasks.fanout takes (worker, collection) or (model, worker, collection)`. A trailing `nil` counts as an argument, so `tasks.fanout('### Worker', {'a'}, nil)` has three arguments and fails the first-argument check with `got string`, not the count error.
+
+`tasks.fanout` checks the argument count and the first argument before it reads the collection, so a refused call changes nothing: no arm is spawned and no model is switched.
+
+### The caller's model after the call
+
+The caller's own model is the same after the call as before it. While `tasks.fanout` spawns the arms, it sets the caller's current model to the given handle, so each arm copies that model as it is spawned. It puts the caller's model back before it first waits on an arm. It also puts it back when a spawn fails part-way, before it raises the error, and a failing arm raises after the model is already back. So a `pcall(tasks.fanout, models.get('fast'), '### Arm', {'a'})` that catches a failure finds the caller on the model it had before the call. No code of yours runs between the switch and the put-back, so your code never sees the switch.
+
+An arm's own `models.use` stays inside that arm. If only the arm for `a` calls `models.use('creative')` in the example above, and each arm returns `models.current().label`, the arm texts are `creative` and `fast`, and the caller is still on `strong`, so the example returns `creative,fast|strong`. The given model is where each arm starts and nothing more, so `models.use('default')` inside an arm selects the `default` role, not the model the call gave the arm.
+
+With the two-argument form, nothing is switched. Each arm starts on a copy of the caller's current model, taken when the arm is spawned, so after `models.use('strong')` a `tasks.fanout('### Arm', {'a', 'b'})` runs both arms on `strong`. The arms of one fanout all start on the same model.
 
 ## Returning, jumping, and nesting inside an arm
 
@@ -931,6 +971,8 @@ worker:tail-reply:alpha
 
 `### Sub` returns nothing and falls through to `### Tail`, whose `'tail-reply'` comes back to the arm as the value of `call`. The arm's own `item` is still `alpha` after the call returns.
 
+The called chain starts on a copy of the arm's current model, taken when the `call` is made, so a `models.use` inside the called chain does not reach the arm.
+
 Code the worker section loads with `require` behaves differently from a called section. A library the worker section loads runs in the arm's environment, so its top-level code reads the arm's `item`. A worker section that runs `require '## capture'`, where the `## capture` library's top-level code sets `captured_by_library = item`, sees `captured_by_library` set to its own member, and in the arm for `alpha` the run text comes out as `alpha|alpha`.
 
 ### Nested fanouts
@@ -1154,15 +1196,9 @@ In this section you see how arms interleave, how many run at once, and how to ch
 name: one-at-a-time
 description: Runs two arms one at a time.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # One at a time
-
-```lua
-models.default('writer')
-```
 
 ## Parent
 
@@ -1606,7 +1642,7 @@ The arm for `boom` raises `fatal arm error`. The fanout fails with that arm's ow
 
 `tasks.fanout` is fail-fast: when any arm fails with an error other than hitting the round cap, the whole fanout fails. Every sibling arm still running is cancelled without waiting on its pending model rounds, members whose arms have not started never run, and the failure is raised from the `tasks.fanout` call.
 
-The error `tasks.fanout` raises is the failing arm's own error value, with its original kind and message. It is not wrapped and it is not a cancellation error, so an arm that called `error('message')` produces an error of kind `lua`. Any other arm error fails the fanout the same way, for example a failed model round, or a `models.get` call inside the arm that names a role label with no bound model role, such as `models.get('ghost'):infer('ping')`.
+The error `tasks.fanout` raises is the failing arm's own error value, with its original kind and message. It is not wrapped and it is not a cancellation error, so an arm that called `error('message')` produces an error of kind `lua`. Any other arm error fails the fanout the same way, for example a failed model round, or a `models.use` call inside the arm that names something that is not one of the five model roles, such as `models.use('ghost')`.
 
 A fanout failure is raised as an ordinary Lua error at the `tasks.fanout` call, inside the section that made the call. If nothing catches it, that section's Lua block fails, and the whole run ends with the arm's error. An arm that called `error('arm deliberately failed')` ends the run with run error kind `Lua` and a run error message that keeps the arm's original message text, and any other uncaught arm error ends the run with that error's message.
 
@@ -1623,15 +1659,9 @@ A late model reply meant for a cancelled sibling arm is thrown away instead of f
 name: carry-on
 description: Catches a fanout failure and runs another model round.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Carry on
-
-```lua
-models.default('writer')
-```
 
 ## Parent
 
@@ -1735,9 +1765,13 @@ The empty collection raises a collection error, the ordinary error value of kind
 
 `tasks.fanout` checks its collection at the call. It checks every rule except whether values nested inside a member can be represented as JSON before it spawns any arm, so a broken collection never runs the worker section.
 
-The checks run in a fixed order, and the first broken rule is the one reported: first the check that the collection is a table, then each array-part member in position order, then each keyed pair with its key checked before its member, then the empty check. Only then does `tasks.fanout` spawn arms.
+The checks run in a fixed order, and the first broken rule is the one reported: first the argument count and, with three arguments, the check that the first one is a model handle (see [Argument errors](#argument-errors)), then the check that the collection is a table, then each array-part member in position order, then each keyed pair with its key checked before its member, then the empty check. Only then does `tasks.fanout` spawn arms.
 
 The empty-collection error fires at the call site before any arm is spawned. The worker section never runs, its store writes never land, no arm start is reported, and the call never hands back a zero-result list. An empty collection means no work, which is likely a bug, such as a list section that parsed empty or a wrong variable.
+
+### Argument errors
+
+A call with the wrong number of arguments raises an error value of kind `lua` with the message `tasks.fanout takes (worker, collection) or (model, worker, collection)`. So `tasks.fanout('### Worker')` fails with that message. In the three-argument form, a first argument that is not a model handle raises `tasks.fanout: the first argument must be a model handle, got {type}`, naming the Lua type of what you passed, so `tasks.fanout('fast', '### Worker', {'a'})` fails with `got string`. Both checks run before the collection is read. [Running arms on a model](#running-arms-on-a-model) covers the model argument.
 
 ### Each collection error
 
@@ -1753,7 +1787,7 @@ Every broken collection rule raises an error value of kind `lua` whose `message`
 | The collection has at least one member | `tasks.fanout('### Worker', {})` | `tasks.fanout over an empty collection: no work is likely a bug` |
 | Nested values can be represented as JSON | `tasks.fanout('### Worker', {{ f = function() end }})` | `item must be a JSON-representable value: {error}` |
 
-The second argument to `tasks.fanout` must be a Lua table, and any other value, such as the heading string `'### Items'`, the number `5`, or `true`, raises that message. To fan out over a list section, pass `prompt.list(heading)` as the collection, as in `local replies = tasks.fanout('### Worker', prompt.list('### Topics'))`. Passing the heading string itself fails with the message that points to `prompt.list(heading)`, and so does passing the `nil` that `prompt.list` returns when no visible section has the heading.
+The collection argument to `tasks.fanout` must be a Lua table, and any other value, such as the heading string `'### Items'`, the number `5`, or `true`, raises that message. The message says `second parameter` in the three-argument form too. To fan out over a list section, pass `prompt.list(heading)` as the collection, as in `local replies = tasks.fanout('### Worker', prompt.list('### Topics'))`. Passing the heading string itself fails with the message that points to `prompt.list(heading)`, and so does passing the `nil` that `prompt.list` returns when no visible section has the heading.
 
 Members must be data, so a member that is a function, userdata, or thread raises `fanout collection member at index {index} is a {type}; members must be data`. For an array-part member, `{index}` is its position, as in the table above. For a keyed member, `{index}` is the key as plain text: a string key's own text, `true` or `false`, an integer's decimal digits, or a float in its usual form such as `2.5`. So a function stored under the key `cb`, as in `{cb = function() end}`, raises `fanout collection member at index cb is a function; members must be data`. A `json.null` member passes this check, so `tasks.fanout('### Worker', { json.null })` runs one arm, and in that arm `item == json.null` is true and `item == nil` is false.
 

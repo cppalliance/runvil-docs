@@ -75,7 +75,7 @@ local results = tasks.join({ a, b })
 return results[1].result .. '|' .. results[2].result
 ````
 
-Statements in a block run top to bottom. In a block that runs a `store.write`, then switches model role with [`models.use`](10-models.md#selecting-a-role-per-section-entry-with-modelsuse), then calls [`models.infer`](10-models.md#running-a-round-with-modelsinfer), the three happen in that order, and a `store.read` after the write sees what was written (see [Writing and reading files](09-the-store.md#writing-and-reading-files)).
+Statements in a block run top to bottom. In a block that runs a `store.write`, then switches model role with [`models.use`](10-models.md#selecting-a-role-with-modelsuse), then calls [`models.infer`](10-models.md#running-a-round-with-modelsinfer), the three happen in that order, and a `store.read` after the write sees what was written (see [Writing and reading files](09-the-store.md#writing-and-reading-files)).
 
 A block can also loop without end, as in `local n = 0` followed by `while true do n = n + 1 end`. Such a block still compiles and loads normally, because nothing rejects an unbounded loop before it runs.
 
@@ -172,13 +172,13 @@ Every section VM, in the H1 pass and in walked sections alike, starts with these
 
 Two more Engine globals are installed only in some section VMs. `ui` is installed when the run has an application-state snapshot (see [Run facts in `sys` and `ui`](#run-facts-in-sys-and-ui)), and `item` is installed in a spawned chain, such as a fanout arm (see [What an arm sees](14-fanout.md#what-an-arm-sees)). That makes 20 Engine globals in all.
 
-Together they give every section's Lua logging through `log` (see [Logging and lifecycle reports](#logging-and-lifecycle-reports)), tool scoping through `tools`, store operations through `store`, and the `var` and `argv` globals, all inside the sandboxed section VM. `prose` is the global that reads pending prose (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)), `prompt` holds the section reads (see [Reading sections with `prompt.section` and `prompt.list`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptlist)), and `models` holds [`models.infer`](10-models.md#running-a-round-with-modelsinfer). The rest are taught where they are used: `args` in [The argument string in `args`](06-arguments.md#the-argument-string-in-args), `argv` in [Reading parsed input from `argv`](06-arguments.md#reading-parsed-input-from-argv), `store` in [What the store is](09-the-store.md#what-the-store-is), `untrusted` in [Handing store text to a model with `untrusted`](09-the-store.md#handing-store-text-to-a-model-with-untrusted), `json` in [Encoding and decoding JSON with `json`](#encoding-and-decoding-json-with-json), `messages`, the section entry's own conversation that each new section VM starts empty, in [`messages` is the section entry's conversation](11-conversations.md#messages-is-the-section-entrys-conversation), `compactors` in [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion), `tools` in [The members of `tools`](12-tools.md#the-members-of-tools), and `tasks` in [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn).
+Together they give every section's Lua logging through `log` (see [Logging and lifecycle reports](#logging-and-lifecycle-reports)), tool scoping through `tools`, store operations through `store`, and the `var` and `argv` globals, all inside the sandboxed section VM. `prose` is the global that reads pending prose (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)), `prompt` holds the section reads (see [Reading sections with `prompt.section` and `prompt.list`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptlist)), and `models` holds the model functions: [`models.infer`](10-models.md#running-a-round-with-modelsinfer), `models.loop`, and `models.compact` run model rounds, and `models.use`, `models.get`, and `models.current` choose and read the model (see [The `models` global](10-models.md#the-models-global)). The rest are taught where they are used: `args` in [The argument string in `args`](06-arguments.md#the-argument-string-in-args), `argv` in [Reading parsed input from `argv`](06-arguments.md#reading-parsed-input-from-argv), `store` in [What the store is](09-the-store.md#what-the-store-is), `untrusted` in [Handing store text to a model with `untrusted`](09-the-store.md#handing-store-text-to-a-model-with-untrusted), `json` in [Encoding and decoding JSON with `json`](#encoding-and-decoding-json-with-json), `messages`, the section entry's own conversation that each new section VM starts empty, in [`messages` is the section entry's conversation](11-conversations.md#messages-is-the-section-entrys-conversation), `compactors` in [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion), `tools` in [The members of `tools`](12-tools.md#the-members-of-tools), and `tasks` in [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn).
 
 The Engine installs no global beyond these 20. Fanout is `tasks.fanout`, a function on the `tasks` table (see [Fanout in one call](14-fanout.md#fanout-in-one-call)), and reading a list section goes through `prompt.list`.
 
 The H1 pass and every walked section see the same set of globals. The one difference is `argv`: it is writable in the H1 pass, so H1 code can assign it (see [Checking and repairing `argv` in the H1 pass](06-arguments.md#checking-and-repairing-argv-in-the-h1-pass)), and frozen in every other section.
 
-The role label of a declared [model role](10-models.md#model-roles-instead-of-models) and an offered tool never become globals of their own. With the role `writer` bound, `type(writer)` is `nil`. You read a role's model handle with [`models.get(label)`](10-models.md#getting-handles-with-modelsget), so `models.get('writer').name` reads `writer`, and you read a tool with [`tools.get(id)`](12-tools.md#tool-objects-pack-objects-and-toolspacks), so in a prompt that declares `web`, `tools.get('web/search').id` reads `web/search`.
+The name of a [model role](10-models.md#model-roles-instead-of-models) and an offered tool never become globals of their own. `type(strong)` is `nil`. You read a role's model handle with [`models.get(role)`](10-models.md#getting-handles-with-modelsget), so `models.get('strong').name` reads `strong`, and you read a tool with [`tools.get(id)`](12-tools.md#tool-objects-pack-objects-and-toolspacks), so in a prompt that declares `web`, `tools.get('web/search').id` reads `web/search`.
 
 Every section VM is set up in one fixed order. The same order applies to every section entry, the H1 pass, every fanout arm, and every spawned task chain:
 
@@ -234,7 +234,7 @@ Both store calls suspend. The block pauses at `store.write` while the Harness wr
 
 These are the suspending calls:
 
-- `models.infer` and the `infer` method of a [model handle](10-models.md#model-handles)
+- `models.infer`, which takes the prompt alone or a [model handle](10-models.md#model-handles) and the prompt
 - `models.loop` (see [Starting a conversation](11-conversations.md#starting-a-conversation))
 - `tools.call` (see [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls))
 - `call`
@@ -497,7 +497,7 @@ at (1,2) 3
 
 String and number elements join as they are, as in stock Lua. `table.concat` also joins elements that render through `tostring`, converting each one with `tostring` first:
 
-- Every userdata element, such as an Engine handle with a `__tostring` metamethod. `table.concat` decides by type alone here, because `getmetatable` cannot read an Engine handle's metatable, so a userdata element never raises an error. This covers the Engine's own values, such as model handles.
+- Every userdata element, such as an Engine handle with a `__tostring` metamethod. `table.concat` decides by type alone here, because `getmetatable` cannot read an Engine handle's metatable, so a userdata element never raises an error. This covers the Engine's own values.
 - Every table element whose `getmetatable` result is a table with a `__tostring` field. This covers fanout result entries and your own objects made with `setmetatable(t, { __tostring = f })`, such as `point` above, where `table.concat({ 'at', point }, ' ')` returns `at (1,2)`.
 
 So `table.concat` over a [`tasks.fanout`](14-fanout.md#fanout-in-one-call) result list joins each arm's text with the separator: `table.concat(r, ',')` over three arms returns `a:x1+y2+z3,b:x1+y2+z3,c:x1+y2+z3`.
@@ -1894,18 +1894,16 @@ Comparing two `sys.when` strings as text does not reliably order them in time. T
 ````markdown
 ---
 name: model-name
-description: Reads the bound model's name before and after the first tool call.
+description: Reads the current model's name before and after the first tool call.
 runvil: 0
 uses:
   - user-input
-models:
-  writer: {}
 ---
 
 # Model name
 
 ```lua
-models.default('writer')
+models.use('strong')
 ```
 
 ## Main
@@ -1923,21 +1921,21 @@ return var.before .. ' / ' .. prose
 ```
 ````
 
-The H1 block makes `writer` the prompt-wide default (see [The prompt-wide default with `models.default`](10-models.md#the-prompt-wide-default-with-modelsdefault)), so `## Main` has a model. In a run where prepare binds `writer` to the model `gateway/claude-sonnet-4-6`, once the operator answers the ask, the run result is:
+The H1 block selects the `strong` role, and the walk starts on that model (see [The current model](10-models.md#the-current-model)), so `## Main` runs on `strong`. On a Host whose role map fills `strong` with the model `gateway/claude-sonnet-4-6` (a one-model map fills every role with that model), once the operator answers the ask, the run result is:
 
 ````text
 no tool call yet / Model name is claude-sonnet-4-6.
 ````
 
-`sys.model` is a string holding the name part of the bound model's model id, without the server namespace, so it reads `fast` for a model whose id is `gateway/fast`, and `claude-sonnet-4-6` for `writer` above, bound to `gateway/claude-sonnet-4-6`. It is the same name that role's model handle reads as `model_id` (see [Model handles](10-models.md#model-handles)), never the alias or role label the prompt uses for that model. It becomes readable only after the section entry's first tool call, and only when the entry has a model. Here the first tool call is the [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls) to the ask tool from [Asking the operator](#asking-the-operator), so the `pcall` before it finds no field and the placeholder after it renders the name.
+`sys.model` is a string holding the name part of the current model's model id, without the server namespace, so it reads `fast` for a model whose id is `gateway/fast`, and `claude-sonnet-4-6` for `strong` above, filled by `gateway/claude-sonnet-4-6`. It is the same name that role's model handle reads as `model_id` (see [Model handles](10-models.md#model-handles)), never the role name the prompt uses for that model. It becomes readable only after the section entry's first tool call, and only when the entry has a model. Here the first tool call is the [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls) to the ask tool from [Asking the operator](#asking-the-operator), so the `pcall` before it finds no field and the placeholder after it renders the name.
 
-At the section entry's first tool call, `sys.model` takes the entry's model, the model the entry selected for itself or else the prompt-wide default, and stays fixed for the rest of the section entry. A section entered again with `jump`, a fanout arm, a task, and a section run with `call` each start without the field and fill it at their own first tool call. From that call on, later `{{ sys.model }}` prose placeholders and later Lua blocks alike read that same name, so a later `return sys.model` returns `claude-sonnet-4-6` too.
+At the section entry's first tool call, `sys.model` takes the chain's current model at that moment, the model the chain last selected with `models.use` or else the model it started on, and stays fixed for the rest of the section entry. A switch made in an earlier section of the same chain shows up: after `models.use('strong')` in one section, `sys.model` at the first tool call of the next section names the `strong` model. A section entered again with `jump`, a fanout arm, a task, and a section run with `call` each start without the field and fill it at their own first tool call. From that call on, later `{{ sys.model }}` prose placeholders and later Lua blocks alike read that same name, so a later `return sys.model` returns `claude-sonnet-4-6` too.
 
-`sys.model` appears at the section entry's first tool call: a call to a catalog tool or an adhoc tool, or the model's call to a discovery tool, refused calls included, whether a Lua block makes it with `tools.call` or the model makes it during a conversation, such as a tool call inside [`models.loop`](11-conversations.md#starting-a-conversation). A model round, one request to a model and its reply, never sets `sys.model` by itself, so a [`models.infer`](10-models.md#running-a-round-with-modelsinfer) or `models.loop` round with no tool call leaves it unreadable. A section entry that makes no tool call, or has no model when its first tool call runs, never gets the field.
+`sys.model` appears at the section entry's first tool call: a call to a catalog tool or an adhoc tool, or the model's call to a discovery tool, whether a Lua block makes it with `tools.call` or the model makes it during a conversation, such as a tool call inside [`models.loop`](11-conversations.md#starting-a-conversation). A discovery call that the Engine answers with refusal text still counts as that first call. A call refused before it is dispatched does not: a `tools.call` that fails with `unbound_tool` or `model_only_tool`, and a model call that fails with `out_of_scope_tool`, create neither `sys.model` nor `tools.stats`. A model round, one request to a model and its reply, never sets `sys.model` by itself, so a [`models.infer`](10-models.md#running-a-round-with-modelsinfer) or `models.loop` round with no tool call leaves it unreadable. A section entry that makes no tool call, or has no model when its first tool call runs, never gets the field.
 
-Reading `sys.model` before the section entry's first tool call raises an error whose message reads `unknown sys field 'model'`, even when the H1 pass set a prompt-wide default such as `models.default('writer')`. That holds whether the read is in the section's opening Lua block or inside a function from a library the section loads with [`require`](03-blocks-and-prose.md#sharing-code-with-require), as in `require '## sys_reader'` followed by `return read_sys_model()`.
+Reading `sys.model` before the section entry's first tool call raises an error whose message reads `unknown sys field 'model'`, even when the H1 pass selected a model with `models.use('strong')`. That holds whether the read is in the section's opening Lua block or inside a function from a library the section loads with [`require`](03-blocks-and-prose.md#sharing-code-with-require), as in `require '## sys_reader'` followed by `return read_sys_model()`.
 
-Inside a fanout arm, once the arm's first tool call has been dispatched, `sys.model` reads the name part of the selected model's id in the same way, so an arm for the member `a` that returns `sys.model .. ':' .. item` gives `claude-sonnet-4-6:a`.
+Inside a fanout arm, once the arm's first tool call has been dispatched, `sys.model` reads the name part of the arm's current model's id in the same way. In the two-argument form `tasks.fanout(worker, collection)`, an arm starts on the model its parent was on when the arm was dispatched, so an arm for the member `a` that returns `sys.model .. ':' .. item`, with the parent on `strong` as above, gives `claude-sonnet-4-6:a`. With `tasks.fanout(model, worker, collection)`, every arm starts on the given handle's model instead.
 
 ### The Host's state in `ui()`
 
@@ -2592,7 +2590,7 @@ The message is the root cause's own text. It names the error the Engine function
 
 One family of messages starts with a prefix. A refusal that a Runvil guard raises as a plain runtime error, such as reading a `sys` field that does not exist or assigning to `sys`, is caught as an error value of kind `lua` whose message starts with `runtime error: ` and then gives the refusal. Reading `sys.nothing` gives `runtime error: unknown sys field 'nothing'`, and the refusal of `sys.extra = 1` reads `sys is read-only; cannot set 'extra'` after the same prefix. A failure from an Engine call, such as [`models.infer`](10-models.md#running-a-round-with-modelsinfer), has no such prefix.
 
-Messages you meet through `tostring(err)` include `models.infer takes (prompt)`, `handle:infer takes (prompt)`, `lua log event budget exceeded`, `the model replied with no text and no tool calls`, `empty model reply`, ``section heading `## Missing` not found``, `call recursion exceeded cap of 8`, and `argv is frozen outside H1: assign it in H1 only`.
+Messages you meet through `tostring(err)` include `models.infer takes (prompt) or (model, prompt)`, `models.loop takes (compactor?) or (model, compactor?)`, `lua log event budget exceeded`, `the model replied with no text and no tool calls`, `empty model reply`, ``section heading `## Missing` not found``, `call recursion exceeded cap of 8`, and `argv is frozen outside H1: assign it in H1 only`.
 
 Because `kind` is a string and `tostring` gives the message, one expression can report a failure in full:
 
@@ -2602,9 +2600,9 @@ Because `kind` is a string and `tostring` gives the message, one expression can 
 - `err.kind .. '|' .. err.tasks .. '|' .. tostring(err)` reports a `tasks_live` failure with its `tasks` field.
 - An argument rejected for not being a positive whole number gives kind `lua` and a message containing `positive whole number`.
 
-### The fifteen error kinds
+### The sixteen error kinds
 
-An error value's `kind` is always one of exactly fifteen strings. The set is closed, so every failure falls into one of them, and each string names exactly one kind, so you match a kind by comparing `err.kind` against its string, as in `err.kind == 'store'`. The table lists each kind with the fields it adds beside `kind` and `message`:
+An error value's `kind` is always one of exactly sixteen strings. The set is closed, so every failure falls into one of them, and each string names exactly one kind, so you match a kind by comparing `err.kind` against its string, as in `err.kind == 'store'`. The table lists each kind with the fields it adds beside `kind` and `message`:
 
 | Kind | Fields beside `kind` and `message` |
 | --- | --- |
@@ -2621,6 +2619,7 @@ An error value's `kind` is always one of exactly fifteen strings. The set is clo
 | `task_consumed` | `task` |
 | `out_of_scope_tool` | `name` |
 | `unbound_tool` | `name` |
+| `model_only_tool` | `name` |
 | `store` | the store fields, such as `path` and `reason` |
 | `tool` | none |
 
@@ -2633,11 +2632,12 @@ Each kind comes from the feature that raises it:
 - `context_exhausted` comes from a model round that runs out of context, through `models.infer` or `models.loop`.
 - `empty_model_reply`, `tool_loop_exhausted`, `out_of_scope_tool`, `unbound_tool`, and `cancelled` can each come from `models.loop`. `out_of_scope_tool` names a tool that is not offered in the section entry (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)).
 - `tool` reports a tool failure from [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls).
+- `model_only_tool` comes from a script's `tools.call` of a tool that only a model may call, and its `name` field holds the name the script passed (see [Model-only tools](12-tools.md#model-only-tools)).
 - `tasks_live`, `task_not_owned`, and `task_consumed` come from the task functions (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) and [Waiting with `tasks.join_any` and `tasks.join`](15-tasks.md#waiting-with-tasksjoin_any-and-tasksjoin)).
 - `store` comes from store operations, and only from failures the store itself reports.
 - `cancelled` reports a cancellation, and carries `task` when what was cancelled is a task.
 - `model_failure` comes from a model call's transport, backend, or decode failure, or a disabled gateway, through `models.infer` or `models.loop`.
-- `model_required` comes from a model call with no model selected, the [missing-model error](10-models.md#infer-errors-and-the-missing-model-error).
+- `model_required` comes from a model call on a run whose Host gave it no model, the [missing-model error](10-models.md#infer-errors-and-the-missing-model-error).
 - `internal` comes from a failure that has no kind of its own: a section entry's failed tool freeze (see [`Binding`, `Completion`, and `Tool`](16-limits-and-errors.md#binding-completion-and-tool)), an Engine fault, or an Engine function failure caused by the Lua runtime's own machinery rather than by an authoring or argument problem.
 - `lua` covers every failure on the Lua side, as shown next.
 
@@ -2671,9 +2671,9 @@ local ok, err = pcall(models.infer, 'yo', { temperature = 0 })
 return err.kind .. '|' .. tostring(err)
 ````
 
-`models.infer` takes only the prompt, so this block returns `lua|models.infer takes (prompt)` and finishes without making a model request.
+`models.infer` takes the prompt, or a model handle and the prompt, so this block returns `lua|models.infer takes (prompt) or (model, prompt)` and finishes without making a model request. Sampling options such as `temperature` belong to [`models.use`](10-models.md#sampling-options-on-modelsuse).
 
-A caught argument error has a message of fixed text that names the argument. Argument errors from `tools.call` are worded and shaped exactly like the others, failures from the `tasks` functions, `tasks.fanout` included, arrive in the same shape as every other Engine failure, and so do the errors `models.loop` builds itself. Rendered as `err.kind .. ':' .. tostring(err)`, every argument error from `models.loop` starts with `lua:`, as in `lua:models.loop takes (compactor?)` (see [Argument errors](11-conversations.md#argument-errors)), and the errors the loop raises about the compactor passed as its argument are kind `lua` too.
+A caught argument error has a message of fixed text that names the argument. Argument errors from `tools.call` are worded and shaped exactly like the others, failures from the `tasks` functions, `tasks.fanout` included, arrive in the same shape as every other Engine failure, and so do the errors `models.loop` builds itself. Rendered as `err.kind .. ':' .. tostring(err)`, every argument error from `models.loop` starts with `lua:`, as in `lua:models.loop takes (compactor?) or (model, compactor?)` (see [Argument errors](11-conversations.md#argument-errors)), and the errors the loop raises about the compactor passed as its argument are kind `lua` too.
 
 Argument type errors on every Engine function, the `store` functions included, are kind `lua`. Only failures the store itself reports are kind `store`, so `pcall(function() store.write(123, 'x') end)` catches `err.kind == 'lua'`.
 

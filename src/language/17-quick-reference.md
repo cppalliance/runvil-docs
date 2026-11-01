@@ -19,15 +19,14 @@ Frontmatter is YAML between two `---` delimiter lines at the very top of the fil
 | `output.description` | string giving the output file's purpose | yes | none | [Input and output file declarations](02-file-structure.md#input-and-output-file-declarations) |
 | `output.path` | store path of the output file, such as `report.md` | yes | none | [Input and output file declarations](02-file-structure.md#input-and-output-file-declarations) |
 | `uses` | list of Pack ids or `vendor/name` entries, such as `[web, acme/poop]`, each Pack id named once | no | none | [Tools, Packs, and the `uses:` key](12-tools.md#tools-packs-and-the-uses-key) |
-| `args` | map of arg name to arg declaration, each name once and matching `[A-Za-z][A-Za-z0-9_-]{0,63}` | no | one optional `string` arg named `prose` | [The name grammar for role labels, arg names, and adhoc tool names](02-file-structure.md#the-name-grammar-for-role-labels-arg-names-and-adhoc-tool-names) |
+| `args` | map of arg name to arg declaration, each name once and matching `[A-Za-z][A-Za-z0-9_-]{0,63}` | no | one optional `string` arg named `prose` | [The name grammar for arg names and adhoc tool names](02-file-structure.md#the-name-grammar-for-arg-names-and-adhoc-tool-names) |
 | `args.<name>.default` | value whose YAML kind matches `type`, or `null` for none | no | none | [Optional arguments, defaults, and descriptions](06-arguments.md#optional-arguments-defaults-and-descriptions) |
 | `args.<name>.description` | string, kept as written | no | none | [Optional arguments, defaults, and descriptions](06-arguments.md#optional-arguments-defaults-and-descriptions) |
 | `args.<name>.optional` | boolean | no | `false` | [Optional arguments, defaults, and descriptions](06-arguments.md#optional-arguments-defaults-and-descriptions) |
 | `args.<name>.type` | `string`, `boolean`, `integer`, or `number` | yes | none | [Argument types](06-arguments.md#argument-types) |
-| `models` | map of role label to role declaration, each label once and matching `[A-Za-z][A-Za-z0-9_-]{0,63}` | no | none | [The name grammar for role labels, arg names, and adhoc tool names](02-file-structure.md#the-name-grammar-for-role-labels-arg-names-and-adhoc-tool-names) |
-| `models.<label>.description` | free prose, kept as written | no | the bound model's own description | [Declaring roles under `models:`](10-models.md#declaring-roles-under-models) |
-| `models.<label>.keywords` | list from hard `thinking`, `no-thinking` and soft `frontier`, `fast`, `small`, `creative`, `chat` | no | empty list | [Declaring roles under `models:`](10-models.md#declaring-roles-under-models) |
-| `models.<label>.min_context` | whole number of tokens from 1 to 4294967295 | no | none | [Declaring roles under `models:`](10-models.md#declaring-roles-under-models) |
+| `models` | map of role name to role declaration, each name once and one of `default`, `strong`, `small`, `fast`, `creative` | no | none | [Declaring roles under `models:`](10-models.md#declaring-roles-under-models) |
+| `models.<role>.min_context` | whole number of tokens from 1 to 4294967295 | no | none | [Declaring roles under `models:`](10-models.md#declaring-roles-under-models) |
+| `models.<role>.thinking` | boolean: `true` requires a model that can think, `false` requires one that can run without thinking | no | none | [Declaring roles under `models:`](10-models.md#declaring-roles-under-models) |
 
 ## Lua globals and members
 
@@ -51,8 +50,9 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `err.anchor` | field | Anchor text passed to a failed `store.str_replace` | [Editing, deleting, and checking files](09-the-store.md#editing-deleting-and-checking-files) |
 | `err.count` | field | Times the anchor matched: `0` absent, `2` or more ambiguous | [Editing, deleting, and checking files](09-the-store.md#editing-deleting-and-checking-files) |
 | `err.finish_reason` | field | Empty round's finish reason, such as `stop` or `length`; `nil` if unreported | [Empty replies and finish reasons](11-conversations.md#empty-replies-and-finish-reasons) |
-| `err.kind` | field | Lowercase error kind string, one of fifteen, to branch on | [Error values](05-lua-environment.md#error-values) |
+| `err.kind` | field | Lowercase error kind string, one of sixteen, to branch on | [Error values](05-lua-environment.md#error-values) |
 | `err.message` | field | Message text; `tostring(err)` and `..` give the same text | [Error values](05-lua-environment.md#error-values) |
+| `err.name` | field | Tool name the call used, on `unbound_tool`, `model_only_tool`, and `out_of_scope_tool` only | [Tool errors](12-tools.md#tool-errors) |
 | `err.path` | field | Path or pattern as passed; `not_a_directory` may name the blocking file | [When a store call fails](09-the-store.md#when-a-store-call-fails) |
 | `err.reason` | field | Store tag such as `not_found`, or a `context_exhausted` reason such as `precheck` or `provider` | [When a store call fails](09-the-store.md#when-a-store-call-fails) |
 | `err.rule` | field | Broken rule's snake_case tag, such as `traversal` or `wildcard` | [Store paths](09-the-store.md#store-paths) |
@@ -62,18 +62,15 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `error` | function | Raises a string or table and stops the current block | [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors) |
 | `getfenv` | removed | Reads nil; no function environments | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `getmetatable` | function | Reads a metatable, as in stock Lua on values other than `_G` | [The sandbox](05-lua-environment.md#the-sandbox) |
-| `handle.capabilities` | field | Role's keywords, a sequence of kebab-case strings in declaration order | [Model handles](10-models.md#model-handles) |
 | `handle.context` | field | Bound model's context window in tokens, a positive integer | [Model handles](10-models.md#model-handles) |
-| `handle.description` | field | Role's `description:`, or the bound model's catalog description | [Model handles](10-models.md#model-handles) |
-| `handle.label` | field | Role label or raw model id, the same string as `handle.name` | [Model handles](10-models.md#model-handles) |
+| `handle.description` | field | Bound model's catalog description, which can be empty; on a raw-id handle, the id itself | [Model handles](10-models.md#model-handles) |
+| `handle.label` | field | Role name, or the raw model id when the Host passed a Host-state snapshot, the same string as `handle.name` | [Model handles](10-models.md#model-handles) |
 | `handle.max_tokens` | field | `max_tokens` option from `models.use`, or `nil` | [Model handles](10-models.md#model-handles) |
 | `handle.model_id` | field | Name part of the bound model's model id | [Model handles](10-models.md#model-handles) |
-| `handle.name` | field | Role label, or the raw model id, as a string | [Model handles](10-models.md#model-handles) |
+| `handle.name` | field | Role name, or the raw model id when the Host passed a Host-state snapshot, as a string | [Model handles](10-models.md#model-handles) |
 | `handle.provider` | field | Provider id the model catalog records, or `nil` | [Model handles](10-models.md#model-handles) |
 | `handle.temperature` | field | `temperature` option from `models.use`, or `nil` | [Model handles](10-models.md#model-handles) |
-| `handle.thinking` | field | `true` for `thinking`, `false` for `no-thinking`, `nil` for neither | [Model handles](10-models.md#model-handles) |
-| `handle:infer` | method | Runs one round on the handle's model and returns the reply | [Model handles](10-models.md#model-handles) |
-| `handle:loop` | method | Runs the section entry's `messages` on the handle's model, optional compactor; returns `nil` | [How the loop runs](11-conversations.md#how-the-loop-runs) |
+| `handle.thinking` | field | `true` for `thinking: true`, `false` for `thinking: false`, `nil` when the role declares no `thinking` | [Model handles](10-models.md#model-handles) |
 | `input.ask` | function | Returns the operator's next message as typed; needs `user-input` declared | [Asking the operator](05-lua-environment.md#asking-the-operator) |
 | `io` | not loaded | Never loaded; no file or stream I/O | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `ipairs` | function | Walks an array table in order | [The sandbox](05-lua-environment.md#the-sandbox) |
@@ -92,7 +89,8 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `kind = "internal"` | error kind | A failure with no kind of its own, such as a failed tool freeze or an Engine fault | [Error kinds in Lua and the run error they become](16-limits-and-errors.md#error-kinds-in-lua-and-the-run-error-they-become) |
 | `kind = "lua"` | error kind | An authoring or runtime failure, such as a compile or argument error | [Error values](05-lua-environment.md#error-values) |
 | `kind = "model_failure"` | error kind | A model call's transport, backend, or decode failure, or a disabled gateway | [Error kinds in Lua and the run error they become](16-limits-and-errors.md#error-kinds-in-lua-and-the-run-error-they-become) |
-| `kind = "model_required"` | error kind | A model call with no model selected, the missing-model error | [Error kinds in Lua and the run error they become](16-limits-and-errors.md#error-kinds-in-lua-and-the-run-error-they-become) |
+| `kind = "model_only_tool"` | error kind | A script `tools.call` names a catalog tool marked `model_only_call`; carries `name` | [Model-only tools](12-tools.md#model-only-tools) |
+| `kind = "model_required"` | error kind | A `models.infer` or `models.loop` round when the Host gave no model, the missing-model error | [Error kinds in Lua and the run error they become](16-limits-and-errors.md#error-kinds-in-lua-and-the-run-error-they-become) |
 | `kind = "out_of_scope_tool"` | error kind | Model calls a tool outside the scope, raised at `models.loop` | [Tool errors](12-tools.md#tool-errors) |
 | `kind = "store"` | error kind | Any failure the store itself reports for an operation | [When a store call fails](09-the-store.md#when-a-store-call-fails) |
 | `kind = "task_consumed"` | error kind | A wait names a task whose result is already delivered | [Waiting with `tasks.join_any` and `tasks.join`](15-tasks.md#waiting-with-tasksjoin_any-and-tasksjoin) |
@@ -115,13 +113,15 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `messages:tool` | method | Appends a `tool` record answering a `tool_call_id`, optional `meta`; returns the list | [Building a message list](11-conversations.md#building-a-message-list) |
 | `messages:user` | method | Appends a `user` record, optional `meta`; returns the list | [Building a message list](11-conversations.md#building-a-message-list) |
 | `messages[i]` | field | Read-only view of record `i`, or `nil` past the end | [Reading records](11-conversations.md#reading-records) |
-| `models` | global | Table that selects model roles by label and runs rounds | [Model roles instead of models](10-models.md#model-roles-instead-of-models) |
+| `models` | global | Table that selects model roles by name and runs rounds | [Model roles instead of models](10-models.md#model-roles-instead-of-models) |
 | `models.compact` | function | Runs `compactor(reason)` once over `messages` outside any loop, checking the structural rules; returns `nil` | [Compacting on demand with `models.compact`](11-conversations.md#compacting-on-demand-with-modelscompact) |
-| `models.default` | function | Sets the prompt-wide default role and returns its handle | [The prompt-wide default with `models.default`](10-models.md#the-prompt-wide-default-with-modelsdefault) |
-| `models.get` | function | Returns a handle for a role label or raw model id | [Getting handles with `models.get`](10-models.md#getting-handles-with-modelsget) |
-| `models.infer` | function | Runs one round on the section entry's model and returns the reply | [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer) |
+| `models.current` | function | Returns a handle for the chain's current model; takes no arguments | [Reading the current model with `models.current`](10-models.md#reading-the-current-model-with-modelscurrent) |
+| `models.get` | function | Returns a handle for a role name, or for a raw model id when the Host passed a Host-state snapshot, leaving the chain's current model as it is | [Getting handles with `models.get`](10-models.md#getting-handles-with-modelsget) |
+| `models.infer` | function | Runs one round on the chain's current model and returns the reply | [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer) |
+| `models.infer (model, prompt)` | form | Runs one round on the given model handle, leaving the chain's current model as it is, and returns the reply | [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer) |
 | `models.loop` | function | Runs the section entry's `messages` to a final reply, appending records, optional compactor; its first round fixes the section entry's tool list; returns `nil` | [Starting a conversation](11-conversations.md#starting-a-conversation) |
-| `models.use` | function | Selects a role for the current section entry and returns its handle | [Selecting a role per section entry with `models.use`](10-models.md#selecting-a-role-per-section-entry-with-modelsuse) |
+| `models.loop (model, compactor)` | form | Runs every round of the loop on the given model handle, optional compactor; returns `nil` | [Starting a conversation](11-conversations.md#starting-a-conversation) |
+| `models.use` | function | Takes a role name or a model handle as the chain's current model until the next `models.use`, and returns a handle for it | [Selecting a role with `models.use`](10-models.md#selecting-a-role-with-modelsuse) |
 | `models.use (max_tokens)` | option | Response token limit, a whole number from 1 to 4294967295 | [Sampling options on `models.use`](10-models.md#sampling-options-on-modelsuse) |
 | `models.use (temperature)` | option | Sampling temperature, a finite number from 0.0 to 2.0 | [Sampling options on `models.use`](10-models.md#sampling-options-on-modelsuse) |
 | `next` | function | Steps through keys in the same fixed order as `pairs` | [Deterministic table iteration](05-lua-environment.md#deterministic-table-iteration) |
@@ -178,7 +178,7 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `sys.execution` | field | The run's name, which the Harness assigns | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
 | `sys.id` | field | Current section entry id, such as `0.1` | [Section entry ids](05-lua-environment.md#section-entry-ids) |
 | `sys.index` | field | An arm's 1-based position in collection order, or a task's `index` seed | [What an arm sees](14-fanout.md#what-an-arm-sees) |
-| `sys.model` | field | Name part of the bound model's model id, such as `fast` for `gateway/fast`, readable after the section entry's first tool call | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
+| `sys.model` | field | Name part of the current model's model id, such as `fast` for `gateway/fast`, readable after the section entry's first tool call | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
 | `sys.section_count` | field | Number of top-level sections in the prompt | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
 | `sys.section_name` | field | Running section's name; the H1 title in the H1 pass | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
 | `sys.taskid` | field | Nearest enclosing task's id, `'0'` on the main walk | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
@@ -189,6 +189,7 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `tasks.cancel` | function | Ends a task the caller owns and returns nothing | [Cancelling and listing tasks](15-tasks.md#cancelling-and-listing-tasks) |
 | `tasks.concurrency` | function | Sets or reads the chain's concurrency limit, returning the effective limit | [Concurrency and the admission window](14-fanout.md#concurrency-and-the-admission-window) |
 | `tasks.fanout` | function | Runs a worker section once per member, results in collection order | [Fanout in one call](14-fanout.md#fanout-in-one-call) |
+| `tasks.fanout (model, worker, collection)` | form | Runs every arm on the given model handle, results in collection order; the caller's own model is unchanged | [Running arms on a model](14-fanout.md#running-arms-on-a-model) |
 | `tasks.join` | function | Waits for all tasks; returns `{ task, ok, result }` entries, then `timed_out` | [Waiting with `tasks.join_any` and `tasks.join`](15-tasks.md#waiting-with-tasksjoin_any-and-tasksjoin) |
 | `tasks.join_any` | function | Waits for the first task to end; returns handle, `ok`, result | [Waiting with `tasks.join_any` and `tasks.join`](15-tasks.md#waiting-with-tasksjoin_any-and-tasksjoin) |
 | `tasks.join_any (timeout)` | option | Wait limit in seconds, also on `tasks.join`; never cancels tasks | [Time limits on waits](15-tasks.md#time-limits-on-waits) |
@@ -203,6 +204,7 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `tonumber` | function | Turns a value such as a numeric string into a number | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `tool.description` | field | The tool's description: the catalog text, or an adhoc tool's `description` attr | [Tool objects, Pack objects, and `tools.packs`](12-tools.md#tool-objects-pack-objects-and-toolspacks) |
 | `tool.id` | field | The tool's canonical tool id, such as `web/search` or `adhoc/grab` | [Tool objects, Pack objects, and `tools.packs`](12-tools.md#tool-objects-pack-objects-and-toolspacks) |
+| `tool.model_only_call` | field | `true` when only a model may call the tool, so a script's `tools.call` refuses it; always `false` for an adhoc tool | [Tool objects, Pack objects, and `tools.packs`](12-tools.md#tool-objects-pack-objects-and-toolspacks) |
 | `tool.pack` | field | Pack object of the Pack named by the tool id; the adhoc Pack for an adhoc tool | [Tool objects, Pack objects, and `tools.packs`](12-tools.md#tool-objects-pack-objects-and-toolspacks) |
 | `tool.parameters` | field | Fresh table holding the tool's parameter schema, converted the way `json.decode` converts | [Tool objects, Pack objects, and `tools.packs`](12-tools.md#tool-objects-pack-objects-and-toolspacks) |
 | `tools` | global | Table holding every tool operation | [Tools, Packs, and the `uses:` key](12-tools.md#tools-packs-and-the-uses-key) |
@@ -319,9 +321,9 @@ A failed run reports exactly one run error kind, and a failed `{{ }}` placeholde
 | `NullValue` | substitution kind | a path that lands on JSON null, under every root except `item` | [Substitution error kinds](07-substitution.md#substitution-error-kinds) |
 | `Parse` | run error kind | the frontmatter or the body's structure fails to parse, a Lua block does not compile, or the `runvil:` key is missing or declares a major version other than `0` | [Run error kinds](16-limits-and-errors.md#run-error-kinds) |
 | `Quota` | run error kind | a block runs out its `log` event or byte quota, or a `call`, `tasks.spawn`, or `tasks.fanout` arm nests past the call depth cap | [The recursion depth cap](08-jump-and-call.md#the-recursion-depth-cap) |
-| `RequirementsUnmet` | run error kind | the environment falls short of what the prompt needs, an H1 block fails the hard gate, a model round has no model, the launch input does not match the `input:` declaration, or the Host's selected model is missing | [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run) |
+| `RequirementsUnmet` | run error kind | the environment falls short of what the prompt needs, an H1 block fails the hard gate, a model round runs when the Host gave no model, the launch input does not match the `input:` declaration, or the Host's selected model is missing | [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run) |
 | `Serialize` | substitution kind | a bare global that is not JSON data, and `{{ prose }}` | [Inserting Lua globals by bare name](07-substitution.md#inserting-lua-globals-by-bare-name) |
-| `Tool` | run error kind | a dispatched tool fails, the model calls a tool outside its round's scope, a `tools.call` names an id that is neither a defined adhoc tool nor a catalog tool, or `models.loop` reaches its round cap | [Tool rounds and the round cap](11-conversations.md#tool-rounds-and-the-round-cap) |
+| `Tool` | run error kind | a dispatched tool fails, the model calls a tool outside its round's scope, a `tools.call` names an id that is neither a defined adhoc tool nor a catalog tool, a script's `tools.call` names a catalog tool marked `model_only_call`, or `models.loop` reaches its round cap | [Tool rounds and the round cap](11-conversations.md#tool-rounds-and-the-round-cap) |
 | `Unclosed` | substitution kind | a `{{` with no `}}` anywhere later in the prose | [Substitution error kinds](07-substitution.md#substitution-error-kinds) |
 | `UnknownNamespace` | substitution kind | a first segment that is neither a root nor a set global, as in `{{ ghost }}` | [Inserting Lua globals by bare name](07-substitution.md#inserting-lua-globals-by-bare-name) |
 | `Vfs` | run error kind | an uncaught `store` failure, a claims conflict, which no `pcall` catches, a run that declares no store, a store backend that fails as the run starts, or a store that refuses to stage the input file | [When a store call fails](09-the-store.md#when-a-store-call-fails) |

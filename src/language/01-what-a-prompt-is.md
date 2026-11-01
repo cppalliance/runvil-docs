@@ -216,7 +216,7 @@ return 'hello'
 hello
 ````
 
-The block's return value is the run result. This prompt declares no model roles (see [Model roles instead of models](10-models.md#model-roles-instead-of-models)), no tools, and no Packs, so it runs on Lua alone: the block's `return` is the whole result, and no model round happens.
+The block's return value is the run result. This prompt has no `models:` key (see [Model roles instead of models](10-models.md#model-roles-instead-of-models)), no tools, and no Packs, so it runs on Lua alone: the block's `return` is the whole result, and no model round happens.
 
 ### Leaving out the runvil version
 
@@ -252,15 +252,9 @@ Here you walk one complete prompt from its frontmatter to its run result and see
 name: greet
 description: Has the model repeat a greeting.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Greet
-
-```lua
-models.default("writer")
-```
 
 ## Main
 
@@ -283,17 +277,15 @@ Repeat exactly, with no extra words: Hello, Ada!
 
 ### The frontmatter and the contract keys
 
-The frontmatter holds `name`, `description`, and `runvil: 0`, plus a `models:` key. `uses:`, `models:`, and `args:` are the contract keys, three optional keys that state what the prompt needs from its run:
+The frontmatter holds `name`, `description`, and `runvil: 0`. `uses:`, `models:`, and `args:` are the contract keys, three optional keys that state what the prompt needs from its run, and this prompt uses none of them:
 
 - `uses:` names the Packs the run requires (see [Tools, Packs, and the `uses:` key](12-tools.md#tools-packs-and-the-uses-key)).
-- `models:` declares model roles, such as the `writer` role here.
+- `models:` attaches requirements to the five built-in model roles, `default`, `strong`, `small`, `fast`, and `creative` (see [Declaring roles under `models:`](10-models.md#declaring-roles-under-models)).
 - `args:` types the prompt's arguments (see [Declaring arguments in frontmatter](06-arguments.md#declaring-arguments-in-frontmatter)).
 
 The parser checks only the shape of these keys. The run checks them against its environment on its first step (see [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run)).
 
-### Setup Lua in the H1 body
-
-Under `# Greet`, a Lua block calls `models.default("writer")` (see [The prompt-wide default with `models.default`](10-models.md#the-prompt-wide-default-with-modelsdefault)), which makes the `writer` role the prompt-wide default.
+A prompt without a `models:` key declares no model requirements. Its `models.infer(prose)` round runs on the Host's model, the model of the `default` role.
 
 ### Prose and Lua in one section
 
@@ -301,7 +293,7 @@ Under `# Greet`, a Lua block calls `models.default("writer")` (see [The prompt-w
 
 The prose then uses the placeholder `{{ var.greeting }}` (see [Placeholders in prose](07-substitution.md#placeholders-in-prose)), which renders the stored value into the text. The last block passes that prose to `models.infer(prose)`, and `return` makes the model's reply the run result. Data moves from Lua, through prose, to the model.
 
-The shipped `greet.md` prompt has this shape, with setup Lua under `# Greet` and a `## Main` section that ends in `return models.infer(prose)`.
+The shipped `greet.md` prompt has this shape, with a `## Main` section that ends in `return models.infer(prose)`.
 
 ### Calling a tool from a section
 
@@ -340,22 +332,16 @@ The rest of a complete Pack-using prompt is the same shape as before: an H1 titl
 
 ### A prompt that sends prose to a model
 
-A prompt that sends prose to a model needs one model role in its frontmatter, a default set in its H1 body, and a section that infers from its prose:
+A prompt that sends prose to a model needs only a section that infers from its prose. It declares no model requirements, so it runs on the Host's model:
 
 ````markdown
 ---
 name: hello
 description: Says hello.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Hello World
-
-```lua
-models.default("writer")
-```
 
 ## Greet
 
@@ -366,11 +352,11 @@ return models.infer(prose)
 ```
 ````
 
-The frontmatter declares one model role, `writer: {}`, under `models:`. The H1 body makes `writer` the default with `models.default("writer")`, and the `## Greet` block sends the section's prose to the model with `return models.infer(prose)`, so the model's reply to `Say "Hello, world!"` is the run result. The shipped `hello.md` prompt, which describes itself as `A minimal test prompt.`, has this shape.
+The frontmatter has no `models:` key. The `## Greet` block sends the section's prose to the model with `return models.infer(prose)`, and the model's reply to `Say "Hello, world!"` is the run result. The Host's model, the model of the `default` role, answers the round. A prompt can attach requirements to the five built-in roles, `default`, `strong`, `small`, `fast`, and `creative`, with the `models:` key (see [Declaring roles under `models:`](10-models.md#declaring-roles-under-models)), and it can switch to another role with `models.use` (see [Selecting a role with `models.use`](10-models.md#selecting-a-role-with-modelsuse)). The shipped `hello.md` prompt, which describes itself as `A minimal test prompt.`, has this shape.
 
 ### A prompt with no contract keys
 
-A prompt that declares none of the contract keys passes the requirements check and runs on its Lua alone, with no model and no tool:
+A prompt that declares none of the contract keys passes the requirements check. When its Lua also calls no model and no tool, it runs on that Lua alone:
 
 ````markdown
 ---
@@ -401,7 +387,7 @@ One block can combine store calls, a model round, and a tool call to produce its
 
 ````lua
 store.write('note.md', 'hello')
-models.use('writer')
+models.use('fast')
 local reply = models.infer(store.read('note.md'))
 local shout = tools.adhoc({ name = 'shout', description = 'Returns the text in capital letters.', parameters = { text = 'string' } }, function(args)
   return string.upper(args.text)
@@ -415,7 +401,7 @@ When the model replies `hi there`, the run ends with:
 HI THERE
 ````
 
-The block writes `hello` to `note.md` in the store, selects the `writer` role with `models.use` (see [Selecting a role per section entry with `models.use`](10-models.md#selecting-a-role-per-section-entry-with-modelsuse)), sends the note's text to the model with `models.infer`, defines the adhoc tool `shout` with `tools.adhoc`, and passes the reply to it with `tools.call`. No model sees `shout`, since the block calls it from Lua and never offers it. The tool's answer, the model's reply in capital letters, is the run result.
+The block writes `hello` to `note.md` in the store, selects the `fast` role with `models.use` (see [Selecting a role with `models.use`](10-models.md#selecting-a-role-with-modelsuse)), sends the note's text to the model with `models.infer`, defines the adhoc tool `shout` with `tools.adhoc`, and passes the reply to it with `tools.call`. No model sees `shout`, since the block calls it from Lua and never offers it. The tool's answer, the model's reply in capital letters, is the run result.
 
 ### A helper section and a nested section
 
@@ -459,7 +445,7 @@ When a Host starts a run of this prompt, the Harness hands the file's text to th
 
 ### Run policy and cancelling
 
-The Host launches runs and sets run policy, the settings that govern a run, such as which model the run uses and whether anyone can answer `input.ask()` (see [Asking the operator](05-lua-environment.md#asking-the-operator)). The Host can also cancel a run.
+The Host launches runs and sets run policy, the settings that govern a run, such as which models the run uses and whether anyone can answer `input.ask()` (see [Asking the operator](05-lua-environment.md#asking-the-operator)). The Host can also cancel a run.
 
 ### Packs and the tool catalog
 
@@ -510,13 +496,13 @@ nil
 Besides cancelling a run, the Host can stop the model round in flight, which is called stopping a round. The dropped round raises an error value whose error kind is `cancelled` (see [Error values](05-lua-environment.md#error-values)), and `pcall` can catch it so the run goes on (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)):
 
 ````lua
-local ok, err = pcall(writer.infer, writer, 'Take your time.')
+local ok, err = pcall(models.infer, 'Take your time.')
 if not ok then
   return err.kind
 end
 ````
 
-Here `writer` is a model handle (see [Model handles](10-models.md#model-handles)). When the Host stops the round while it is in flight, the block catches the error and the run completes with:
+Here `models.infer` runs the round on the run's current model (see [The current model](10-models.md#the-current-model)). When the Host stops the round while it is in flight, the block catches the error and the run completes with:
 
 ````text
 cancelled
@@ -597,7 +583,7 @@ There are exactly five kinds of Harness work:
 
 A model round is one request to a model and its reply. The Harness answers it with the model's reply or with the reason the round failed.
 
-A render asks the Harness how each Pack the entry offered tools from shows those tools to the model, for that entry and the model of its first loop round, the first round a `models.loop` or a handle's `loop` sends (see [Starting a conversation](11-conversations.md#starting-a-conversation)). It happens before that round's request goes out, once per freeze attempt, and the round then freezes the entry's Static Set and Dynamic Set from its answer (see [Tool scope](12-tools.md#tool-scope)); a freeze that fails attaches nothing, so the entry's next round freezes again, rendering first only when its offers name a catalog tool. The Harness asks each of those Packs, and a Pack's render may rename its tools, reshape their descriptions and schemas, drop some, or add tools only the model sees, while a Pack that does not render passes its tools through as offered (see [What a Pack's render can change](12-tools.md#what-a-packs-render-can-change)). The run's record shows each render ahead of the round that asked for it: the request names the entry's `sys.id`, the role label the round runs under, and the ids of the tools offered from each Pack, and the answer holds the tools each Pack shows the model. An entry that offers only adhoc tools, or that runs no loop round, has no render.
+A render asks the Harness how each Pack the entry offered tools from shows those tools to the model, for that entry and the model of its first loop round, the first round a `models.loop` sends (see [Starting a conversation](11-conversations.md#starting-a-conversation)). It happens before that round's request goes out, once per freeze attempt, and the round then freezes the entry's Static Set and Dynamic Set from its answer (see [Tool scope](12-tools.md#tool-scope)); a freeze that fails attaches nothing, so the entry's next round freezes again, rendering first only when its offers name a catalog tool. The Harness asks each of those Packs, and a Pack's render may rename its tools, reshape their descriptions and schemas, drop some, or add tools only the model sees, while a Pack that does not render passes its tools through as offered (see [What a Pack's render can change](12-tools.md#what-a-packs-render-can-change)). The run's record shows each render ahead of the round that asked for it: the request names the entry's `sys.id`, the role the round runs under (for a [raw-id handle](10-models.md#raw-model-ids-and-the-host-state-snapshot), the raw id), and the ids of the tools offered from each Pack, and the answer holds the tools each Pack shows the model. An entry that offers only adhoc tools, or that runs no loop round, has no render.
 
 Asking the operator with `input.ask()` is a call to a Pack's tool. The operator is the person who answers `input.ask` during a run. The user-input Pack defines `input.ask` to end in `return tools.call(pack .. "/ask")`, so every ask reaches the Harness as an ordinary tool call, and the wait for the operator's answer is Harness work.
 
@@ -634,7 +620,7 @@ Every prompt shipped in the repository's `prompts` directory, including the prom
 - `echo.md` returns its argument unchanged with `return args` and makes no model round; [The argument string in `args`](06-arguments.md#the-argument-string-in-args) teaches `args`.
 - `hello.md` has the model say hello through the prose `Say "Hello, world!"` and `return models.infer(prose)`; [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer) teaches `models.infer`.
 - `greet.md` builds a greeting from its argument with `var.greeting = "Hello, " .. args .. "!"` and has the model repeat it through `{{ var.greeting }}` in its prose; [Placeholders in prose](07-substitution.md#placeholders-in-prose) teaches placeholders.
-- `analyst-example.md` declares an `analyst` model role under `models:` and calls `models.use("analyst")` before `return models.infer(prose)`; [Model roles instead of models](10-models.md#model-roles-instead-of-models) teaches model roles.
+- `analyst-example.md` sets `min_context: 40000` for the `strong` role under `models:` and calls `models.use("strong")` before `return models.infer(prose)`; [Model roles instead of models](10-models.md#model-roles-instead-of-models) teaches model roles.
 
 Runvil also ships `research-person.md`, which researches a person. Its `## Research` section calls `tools.offer({"web/search", "web/fetch"})` (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)), and the prompt runs end to end to a factual summary. [What the web Pack gives a prompt](13-web-fetch-and-search.md#what-the-web-pack-gives-a-prompt) teaches `web/search` and `web/fetch`.
 
