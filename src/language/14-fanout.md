@@ -1767,7 +1767,7 @@ The empty collection raises a collection error, the ordinary error value of kind
 
 The checks run in a fixed order, and the first broken rule is the one reported: first the argument count and, with three arguments, the check that the first one is a model handle (see [Argument errors](#argument-errors)), then the check that the collection is a table, then each array-part member in position order, then each keyed pair with its key checked before its member, then the empty check. Only then does `tasks.fanout` spawn arms.
 
-The empty-collection error fires at the call site before any arm is spawned. The worker section never runs, its store writes never land, no arm start is reported, and the call never hands back a zero-result list. An empty collection means no work, which is likely a bug, such as a list section that parsed empty or a wrong variable.
+The empty-collection error fires at the call site before any arm is spawned. The worker section never runs, its store writes never land, no arm start is reported, and the call never hands back a zero-result list. An empty collection means no work, which is likely a bug, such as a table a loop never filled or a wrong variable.
 
 ### Argument errors
 

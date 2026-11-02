@@ -405,11 +405,12 @@ The frontmatter is decoded before the body is checked, so a frontmatter failure 
 1. The frontmatter delimiters.
 2. YAML decoding and the contract checks inside it.
 3. Duplicate Pack ids.
-4. The H1's presence and count.
-5. An empty H1 title.
-6. The fence rule.
-7. The H1's blocks and their Lua.
-8. Each section, in document order.
+4. Reserved Pack ids.
+5. The H1's presence and count.
+6. An empty H1 title.
+7. The fence rule.
+8. The H1's blocks and their Lua.
+9. Each section, in document order.
 
 Only the first fence error in a file is reported, so a later offending fence is not reported.
 
@@ -520,12 +521,11 @@ return 1
 section `S` prologue `lua` fence is not closed
 ````
 
-The `{label}` depends on where the fence sits. It is the first form below for a fence that opens its section, the second for the last fence, and the third for any other, and `{section}` is the H1 title for a fence in the H1 body:
+The `{label}` depends on where the fence sits. It is the first form below for a fence that opens its section and the second for any other, and `{section}` is the H1 title for a fence in the H1 body:
 
 ````text
 section `{section}` prologue `lua`
 section `{section}` epilog `lua`
-section `{section}` `lua`
 ````
 
 A line of four spaces followed by three backticks, or three backticks followed by ` x`, does not close the fence. It leaves the fence open, so it also gives ``section `S` prologue `lua` fence is not closed``.
@@ -658,7 +658,7 @@ This file fails with parse error kind `Frontmatter` and `invalid frontmatter: {m
 
 A frontmatter YAML failure has no byte span, so its only location is its line and column, and it never reports a span. A frontmatter failure's line and column come from the YAML error. An invalid-YAML failure reports the 1-based file line that the YAML parser gave, and reports no line when the YAML error has no location.
 
-The YAML decoder counts lines from the start of the frontmatter, so the reported line is the decoder's line plus one, to account for the opening `---`. The column passes through unchanged, and each is absent when the decoder gives no position or gives zero. That is why a YAML slip such as `: : :` on the fourth line of the file is reported at line 4, which is 1-based and counts the opening `---` as line 1. The 1-based file column of the YAML error comes alongside the line, when the column is known.
+The YAML decoder counts lines from the start of the frontmatter, so the reported line is the decoder's line plus one, to account for the opening `---`. The column passes through unchanged, and each is absent when the decoder gives no position or gives zero. The column counts characters, as the YAML parser does, unlike a body failure's byte column. That is why a YAML slip such as `: : :` on the fourth line of the file is reported at line 4, which is 1-based and counts the opening `---` as line 1. The 1-based file column of the YAML error comes alongside the line, when the column is known.
 
 A frontmatter decode failure, whether invalid YAML or a value the contract rejects, gives a 1-based line and a 1-based column when the YAML decoder reports a position. For a rejected value, that position is where the value starts, so a rejection inside a contract key points at the line and column of the offending value instead of giving a bare message:
 

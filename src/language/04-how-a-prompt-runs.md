@@ -32,7 +32,7 @@ This run is as short as a run gets. The start checks find nothing missing, becau
 
 Every run goes through these stages, in this order:
 
-1. Parse. The whole file is parsed and every Lua block is compiled, and nothing runs yet. See [Parsing comes first](#parsing-comes-first).
+1. Parse. The whole file is parsed and every Lua block in the H1 body and the sections is compiled, and nothing runs yet. See [Parsing comes first](#parsing-comes-first).
 2. Prepare. The Harness stages the declared input file, readies the run's Packs, and builds the run. See [Preparing the run](#preparing-the-run).
 3. The start checks. The run's first step checks the `runvil` version, the store, and the requirements, and refuses a run that fails one of them. See [Preparing the run](#preparing-the-run).
 4. The H1 pass. The H1 body's blocks run before the first section, but only when the H1 body holds a `lua` block or prose. See [The H1 pass](#the-h1-pass).
@@ -154,7 +154,7 @@ The H1 block's `local secret = 42` compiles during the parse, but none of it run
 
 ### The whole file parses before anything runs
 
-The whole prompt file is parsed, and every Lua block in it compiled, before any part of the prompt runs. A prompt with a parse error never starts. An invalid prompt file is rejected as a whole, never accepted in part, so none of its sections run. Parsing needs no network access and no connection to a model, so you can check a prompt's structure offline.
+The whole prompt file is parsed, and every Lua block in its H1 body and sections compiled, before any part of the prompt runs. A prompt with a parse error never starts. An invalid prompt file is rejected as a whole, never accepted in part, so none of its sections run. Parsing needs no network access and no connection to a model, so you can check a prompt's structure offline.
 
 Parsing checks only the shape of the frontmatter's contract keys and what the file's text shows: keys, names, duplicates, ranges, and default types. A prompt whose contract has a valid shape parses even when the environment that runs it cannot satisfy it. Matching the Packs under `uses:` and the requirements under `models:` against the environment happens on the run's first step, and the tool catalog and the model reach the prompt only when the Harness prepares the run. The tool catalog holds the tools of the run's Packs that can serve it, every `runvil` Pack and each third-party Pack the prompt declares (see [The Engine, the Harness, and the Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host)). A prompt that declares Pack `web` in an environment without it parses first, and then the requirements notice reports the gap:
 
@@ -198,7 +198,7 @@ local after = 2
 
 The parse now reports two `lua_compilation_started` and `lua_compilation_succeeded` pairs named `S`, after the pair named `T` and before `parse_succeeded`. A prose-only section, like the first version of `S`, adds no compilation events.
 
-A Lua block that fails to compile reports `lua_compilation_started` and then `lua_compilation_failed`, and the whole parse fails. That parse reports exactly four events: `parse_started`, those two, and `parse_failed`. The compile error names the failing block by its section and its place in it, such as ``section `Private section` prologue``, or the epilog when the epilog fails.
+A Lua block that fails to compile reports `lua_compilation_started` and then `lua_compilation_failed`, and the whole parse fails. That parse reports `parse_started`, a `lua_compilation_started` and `lua_compilation_succeeded` pair for each block compiled before the failing one, the failing block's `lua_compilation_started` and `lua_compilation_failed`, and `parse_failed`, so a failure in the prompt's first Lua block gives exactly four events. The compile error names the failing block by its section and its place in it, such as ``section `Private section` prologue``, or the epilog when the epilog fails.
 
 A prompt that breaks a Lua fence rule (see [Exact fence rules and fence errors](03-blocks-and-prose.md#exact-fence-rules-and-fence-errors)) fails its parse before any Lua compiles. Its parse reports only `parse_started` and `parse_failed`, both named `Prompt` rather than the H1 title, even when the H1 body holds Lua.
 

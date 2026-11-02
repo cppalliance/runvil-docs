@@ -338,7 +338,7 @@ By convention, prompts write `name` as a lowercase snake_case identifier, with w
 
 The `name` value does not have to match the file name. The file `research-person.md` declares `name: research_person`, `analyst-example.md` declares `name: analyst_example`, and `prologue-prose-epilog.md` declares `name: phase_boundaries`.
 
-Every parse error found past the frontmatter reports the prompt's `name`, beside its line and column when the error has them, so you can tell which prompt failed. A duplicate `## S` section heading in a prompt with `name: dup` fails with parse error kind `Structure` and names `dup` (see [Sibling name uniqueness](#sibling-name-uniqueness)). A frontmatter failure, such as malformed YAML, fails with parse error kind `Frontmatter` and reports no name.
+Every `Structure`, `Fence`, or `List` error found past the frontmatter reports the prompt's `name`, beside its line and column when the error has them, so you can tell which prompt failed; a Lua compile failure and an internal fault report none. A duplicate `## S` section heading in a prompt with `name: dup` fails with parse error kind `Structure` and names `dup` (see [Sibling name uniqueness](#sibling-name-uniqueness)). A frontmatter failure, such as malformed YAML, fails with parse error kind `Frontmatter` and reports no name.
 
 ### The `description` key
 

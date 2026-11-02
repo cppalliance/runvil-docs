@@ -2988,7 +2988,7 @@ Errors from two sections with the same name stay separate: each reports its own 
 
 ### Compile errors
 
-A compile error is a Lua block that does not compile as Lua 5.5, such as one with a syntax error. Every Lua block is compiled, without being run, when the prompt file is parsed, so a compile error stops the prompt before the run begins and before any of its code runs:
+A compile error is a Lua block that does not compile as Lua 5.5, such as one with a syntax error. Every Lua block in the H1 body and the sections is compiled, without being run, when the prompt file is parsed, so a compile error stops the prompt before the run begins and before any of its code runs:
 
 ````markdown
 ---
