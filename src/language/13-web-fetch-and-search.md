@@ -97,11 +97,11 @@ A tool call reaches the web tool that its tool name names, the last segment of t
 
 ### When the web Pack is missing or unavailable
 
-When a prompt declares `web` and the Host has no Pack with the Pack id `web`, the run is refused before any section runs. The run fails with run error kind `RequirementsUnmet` (see [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run)), and its requirements notice reads:
+When a prompt declares `web` and the Host has no Pack with the Pack id `web`, the run is refused before any section runs. The run fails with run error kind `RequirementsUnmet` (see [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run)), and its requirements notice reads as follows, ending with the prompt file and its `uses:` line (see [Where an error points](16-limits-and-errors.md#where-an-error-points)):
 
 ````text
 the environment cannot satisfy this prompt:
-- missing required Pack: web
+- missing required Pack: web (at {file}:{line})
 ````
 
 The web Pack can also fail to build when the Host sets up, which leaves it unavailable (see [Packs at prepare](04-how-a-prompt-runs.md#packs-at-prepare)). It fails when the configuration the Host passes the web Plugin holds anything but `null` or `{}` under its `web` key, when the Host provides no search provider, or when it provides no Tokio runtime service, and then no run receives `web/fetch` or `web/search`.
@@ -110,7 +110,7 @@ When a prompt declares `web` and the web Pack is unavailable, the run is refused
 
 ````text
 the environment cannot satisfy this prompt:
-- web is unavailable: web needs runvil/search-provider, and this host provides none
+- web is unavailable: web needs runvil/search-provider, and this host provides none (at {file}:{line})
 ````
 
 Each setup problem has its own reason:
@@ -574,24 +574,24 @@ end
 The run result is:
 
 ````text
-refused: url must not contain userinfo
+refused: {file}:{line}: url must not contain userinfo
 ````
 
-Your Lua cannot read which web tool failure happened from a field on the error value, because every web tool failure reaches Lua with `err.kind` set to `tool` and no extra fields. To tell which fetch failure you caught, search `tostring(err)` for the tool's message text, as in `string.find(tostring(err), 'userinfo', 1, true)`, because `tostring(err)` returns the error's message, such as `url must not contain userinfo`.
+Your Lua cannot read which web tool failure happened from a field on the error value, because every web tool failure reaches Lua with `err.kind` set to `tool` and no extra fields, and its `code` names only the class of tool failure, such as `tool_invalid_arguments`. To tell which fetch failure you caught, search `tostring(err)` for the tool's message text, as in `string.find(tostring(err), 'userinfo', 1, true)`, because `tostring(err)` returns the error's message, the `tools.call` line and then the tool's own message, such as `{file}:{line}: url must not contain userinfo` (see [Where an error points](16-limits-and-errors.md#where-an-error-points)).
 
 Catch a search failure the same way: wrap the call in `pcall` and check `err.kind == 'tool'`, just as for a hard fetch failure. Both a search provider failure and a result with an empty `url` fail the call like this.
 
-An uncaught hard fetch failure ends the run with run error kind `Tool` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)). Without the `pcall`, the fetch above ends the run with this text:
+An uncaught hard fetch failure ends the run with run error kind `Tool` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)). Without the `pcall`, the fetch above ends the run with this text, which ends with the line of the `tools.call`:
 
 ````text
-tool call failure: url must not contain userinfo
+tool call failure: url must not contain userinfo (at {file}:{line})
 ````
 
-An uncaught search failure ends the run the same way, with run error kind `Tool` and the text `tool call failure: {message}`. Under Workshop, when the search gateway is missing, unusable, or cannot be reached, that text is `tool call failure: web_search: request failed`.
+An uncaught search failure ends the run the same way, with run error kind `Tool` and the text `tool call failure: {message} (at {file}:{line})`. Under Workshop, when the search gateway is missing, unusable, or cannot be reached, that text is `tool call failure: web_search: request failed (at {file}:{line})`.
 
 ### Messages reach you unchanged
 
-A web tool's output and errors reach the caller exactly as the fetch or search tool produces them, and the Pack adds no wrapping of its own. The tools' own messages keep fixed prefixes. Fetch argument errors start with `web_fetch:`, such as `web_fetch: missing url argument`, `web_fetch: max_chars must be a positive integer`, and `web_fetch: raw must be a boolean`. Every search error starts with `web_search:`, such as `web_search: malformed search response: ...` and `web_search: the results could not be rendered`.
+A web tool's output and errors reach the caller exactly as the fetch or search tool produces them, and the Pack adds no wrapping of its own. A caught error's message only gains the call's `{file}:{line}: ` in front, and a model reads the message alone. The tools' own messages keep fixed prefixes. Fetch argument errors start with `web_fetch:`, such as `web_fetch: missing url argument`, `web_fetch: max_chars must be a positive integer`, and `web_fetch: raw must be a boolean`. Every search error starts with `web_search:`, such as `web_search: malformed search response: ...` and `web_search: the results could not be rendered`.
 
 ### Offering a web tool to the model
 
@@ -653,7 +653,7 @@ The prose also tells the model that everything `web_fetch` returns is untrusted 
 
 ### Failures inside `models.loop`
 
-Inside `models.loop`, soft and hard fetch failures alike reach the model as the result text of its tool call, wrapped in the untrusted envelope, and the loop goes on so the model can try a different URL. A search failure reaches the model the same way, as the result text of its tool call, wrapped in the untrusted envelope, and the loop goes on. So a hard failure that the model's tool call meets does not end the run the way an uncaught failure in your own `tools.call` does.
+Inside `models.loop`, soft and hard fetch failures alike reach the model as the result text of its tool call, wrapped in the untrusted envelope, and the loop goes on so the model can try a different URL. A hard failure reaches the model as the tool's own message alone, with no location in front. A search failure reaches the model the same way, as the result text of its tool call, wrapped in the untrusted envelope, and the loop goes on. So a hard failure that the model's tool call meets does not end the run the way an uncaught failure in your own `tools.call` does.
 
 ### Tool objects for the web tools
 
@@ -1364,10 +1364,10 @@ end
 ```
 ````
 
-A `count` of 30 is out of range, so the call raises an error value holding the message `web_search: count must be between 1 and 20`, and the run result is:
+A `count` of 30 is out of range, so the call raises an error value holding the message `web_search: count must be between 1 and 20` after the `tools.call` line, and the run result is:
 
 ````text
-refused: web_search: count must be between 1 and 20
+refused: {file}:{line}: web_search: count must be between 1 and 20
 ````
 
 Your Lua sees every `web/search` failure, whatever its tool error kind, as an error value of kind `tool` holding the `web_search:` message, and catches it with `pcall` and a check of `err.kind == 'tool'`, as [Catching a hard failure](#catching-a-hard-failure) shows.

@@ -207,7 +207,7 @@ runvil: 0
 frontmatter was not closed with ---
 ````
 
-Neither delimiter error names a prompt, because the prompt's name is not known yet when the error is raised.
+Both errors point at line 1, where the frontmatter opens or should open, and neither names a prompt, because the prompt's name is not known yet when the error is raised.
 
 ## Writing YAML in the frontmatter
 
@@ -338,7 +338,7 @@ By convention, prompts write `name` as a lowercase snake_case identifier, with w
 
 The `name` value does not have to match the file name. The file `research-person.md` declares `name: research_person`, `analyst-example.md` declares `name: analyst_example`, and `prologue-prose-epilog.md` declares `name: phase_boundaries`.
 
-Every `Structure`, `Fence`, or `List` error found past the frontmatter reports the prompt's `name`, beside its line and column when the error has them, so you can tell which prompt failed; a Lua compile failure and an internal fault report none. A duplicate `## S` section heading in a prompt with `name: dup` fails with parse error kind `Structure` and names `dup` (see [Sibling name uniqueness](#sibling-name-uniqueness)). A frontmatter failure, such as malformed YAML, fails with parse error kind `Frontmatter` and reports no name.
+Every parse error found past the frontmatter, a `Lua` compile failure included, reports the prompt's `name`, beside its line and column when the error has them, so you can tell which prompt failed; only an internal fault reports none. A duplicate `## S` section heading in a prompt with `name: dup` fails with parse error kind `Structure` and names `dup` (see [Sibling name uniqueness](#sibling-name-uniqueness)). A frontmatter failure, such as malformed YAML, fails with parse error kind `Frontmatter` and reports no name.
 
 ### The `description` key
 
@@ -486,10 +486,10 @@ return "ran"
 ````
 
 ````text
-unsupported runvil version: 1 (this build supports major 0)
+unsupported runvil version: 1 (this build supports major 0) (at version-zero.md:4)
 ````
 
-The message always has the form `unsupported runvil version: {n} (this build supports major 0)`, where `{n}` is the declared number, so `runvil: 2` or `runvil: 7` gives the same message with its own number. A failure caused by an unsupported `runvil` version is not retryable.
+The error's message always has the form `unsupported runvil version: {n} (this build supports major 0)`, where `{n}` is the declared number, so `runvil: 2` or `runvil: 7` gives the same message with its own number. The run's message then ends with ` (at {file}:{line})`, the line of the `runvil:` key, here line 4 (see [Where a run error's message points](16-limits-and-errors.md#where-a-run-errors-message-points)). A failure caused by an unsupported `runvil` version is not retryable.
 
 ## Optional keys and unknown keys
 
@@ -794,7 +794,7 @@ Every arg name violation, whether an empty name, a name that is too long, a bad 
 
 ### Run-time name errors
 
-When the name passed to `models.use` is not one of the five role names, the call fails with a `Lua` error. Its message names the rejected label and lists the five roles, in one form for every rejected name:
+When the name passed to `models.use` is not one of the five role names, the call fails with a `Lua` error whose text names the rejected label and lists the five roles, in one form for every rejected name:
 
 ````text
 models.use label "{label}" is not a model role: expected default, strong, small, fast or creative
@@ -806,9 +806,9 @@ models.use label "{label}" is not a model role: expected default, strong, small,
 models.get label "{label}" is not a model role: expected default, strong, small, fast or creative
 ````
 
-The rejected label appears in double quotes with escaping, so a quote, backslash, or control character in the name appears escaped. For example, `models.use('reviewer')` fails with `models.use label "reviewer" is not a model role: expected default, strong, small, fast or creative`.
+The rejected label appears in double quotes with escaping, so a quote, backslash, or control character in the name appears escaped. For example, `models.use('reviewer')` fails with `models.use label "reviewer" is not a model role: expected default, strong, small, fast or creative`. Caught with `pcall`, the error value's message puts the file and line of the call in front of that text and the default text for a Lua failure after it (see [Where a caught error's message points](16-limits-and-errors.md#where-a-caught-errors-message-points)), and the same holds for every error in this section.
 
-When the `name` passed to `tools.adhoc` breaks the grammar, the `tools.adhoc` call fails with a `Lua` error whose message names the rejected name and the grammar, again in one form for every rule:
+When the `name` passed to `tools.adhoc` breaks the grammar, the `tools.adhoc` call fails with a `Lua` error whose text names the rejected name and the grammar, again in one form for every rule:
 
 ````text
 tools.adhoc: invalid name "{name}": expected [A-Za-z][A-Za-z0-9_-]{0,63}
@@ -822,7 +822,7 @@ local _, err = pcall(tools.adhoc, { name = 'web/search', description = 'x' }, fu
 
 After this line, `tostring(err)` contains `tools.adhoc: invalid name "web/search"`.
 
-Each adhoc tool name can be defined once in a section entry. A second `tools.adhoc` call with a name that is already defined fails with this message:
+Each adhoc tool name can be defined once in a section entry. A second `tools.adhoc` call with a name that is already defined fails with this text:
 
 ````text
 tools.adhoc name "{name}" is already registered
@@ -830,7 +830,7 @@ tools.adhoc name "{name}" is already registered
 
 So defining the name `gh_search` a second time fails with `tools.adhoc name "gh_search" is already registered`.
 
-An adhoc tool's id is `adhoc/` followed by its name in lowercase, so two names that differ only in letter case would share one id. The second of them fails with this message, where `{id}` is that shared id, `adhoc/` followed by the name in lowercase, and `{other}` is the name that already holds the id:
+An adhoc tool's id is `adhoc/` followed by its name in lowercase, so two names that differ only in letter case would share one id. The second of them fails with this text, where `{id}` is that shared id, `adhoc/` followed by the name in lowercase, and `{other}` is the name that already holds the id:
 
 ````text
 tools.adhoc name "{name}" has the id {id}, which "{other}" already holds
@@ -977,7 +977,7 @@ A prompt with no H1 title, or with more than one H1 title, fails to parse with p
 | More than one H1 | `prompt must contain exactly one H1 title, found {count} at lines {lines}` |
 | An empty or whitespace-only H1 | `prompt H1 title must not be empty` |
 
-These three errors name no section and give no line or column. Only the more-than-one message lists line numbers, inside its text.
+These three errors name no section. A missing H1 gives no line or column, a repeated H1 points at the line of the second H1, and an empty H1 points at its own line, each at column 1. Only the more-than-one message also lists line numbers inside its text.
 
 This file goes straight from the frontmatter to prose and a section, with no H1:
 
@@ -1273,7 +1273,7 @@ q
 duplicate sibling section name `S`: first declared at line 8, again at line 12; sibling section names must be unique
 ````
 
-The message names the section and the lines of both headings. The line numbers count from the top of the prompt file, including the frontmatter, so with this four-line frontmatter the two `## S` headings are at lines 8 and 12. The failure also reports the prompt's frontmatter `name`, here `dup`, and the line and column of the second same-named heading, line 12, column 1. It also carries a non-empty byte span over the second heading, with offsets measured in the prompt body, after the frontmatter and any leading byte-order mark.
+The message names the section and the lines of both headings. The line numbers count from the top of the prompt file, including the frontmatter, so with this four-line frontmatter the two `## S` headings are at lines 8 and 12. The failure also reports the prompt's frontmatter `name`, here `dup`, and the line and column of the second same-named heading, line 12, column 1. Its location covers that whole heading line and ends at line 13, column 1 (see [Location fields](16-limits-and-errors.md#location-fields)).
 
 This file has no `runvil:` key, which is fine for showing a parse error, because the version is checked only when a run starts.
 

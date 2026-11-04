@@ -457,7 +457,7 @@ Strings share a metatable whose `__index` is the `string` library, so `getmetata
 
 - `string.upper` and `string.lower` change case, so `return string.upper(args)` with the argument string `hi` returns `HI`, and `return string.lower(value)` lowers a value.
 - `string.match` matches a Lua pattern and returns its captures, so `string.match(s, '^(%d+):([%d%.]+)$')` returns two captures. Anchored patterns work on message content too, so `messages[2].content:match('^Answer: (.+)$')` returns the captured text after the prefix. Pattern escapes work as in standard Lua, as `%-` does in `tostring(err):match('read%-only')`.
-- `string.find` finds a pattern, as in `string.find(wrapped, "untrusted_input_")`. With its plain-find flag it searches for literal text: `string.find(m.content, 'Answer:', 1, true) == 1` tests for a prefix, and `err:find(']:2: undefined global undefined_here', 1, true)` finds that exact text. A plain search returns `nil` when the text is absent, so `tostring(err):find('include more surrounding text', 1, true) ~= nil` tests whether a message contains that text.
+- `string.find` finds a pattern, as in `string.find(wrapped, "untrusted_input_")`. With its plain-find flag it searches for literal text: `string.find(m.content, 'Answer:', 1, true) == 1` tests for a prefix, and `err:find(']:2: undefined global undefined_here', 1, true)` finds that exact text. A plain search returns `nil` when the text is absent, so `tostring(err):find('appears exactly once', 1, true) ~= nil` tests whether a message contains that text.
 - `string.sub` takes negative indexes that count from the end, inside sections and fanout arms alike, as in `tostring(sys.index) == string.sub(item, -1)`. Its positions count bytes, not characters, so a cut can split a multibyte character, and [the `utf8` library](#the-utf8-library) finds the character boundaries to cut on.
 - `string.rep(s, n)` repeats `s` `n` times, so `messages:user(string.rep('x', 100000))` builds a 100000-character user message.
 - `string.char` builds a string from raw byte values, which can produce bytes that are not valid UTF-8. `log` rejects the string from `string.char(255)` as not UTF-8 (see [Logging and lifecycle reports](#logging-and-lifecycle-reports)).
@@ -1232,7 +1232,7 @@ After `local t = {} for i = 1, 40 do t = { t, t } end`, the write `var.x = t` ra
 
 The guard raises its error at the assigning statement itself, not later when `var` is saved. That is why a `pcall` around that one write catches it, the block keeps running, and later `var` writes still work, as `var.kept = 'yes'` does in the `guarded` prompt. A rejected write stores nothing, so `var` holds only the writes that passed the guard: after a rejected `var.t.f = function() end` following `var.t.kept = 'yes'`, `var` reads back as exactly `{ "t": { "kept": "yes" } }`.
 
-`pcall` returns `false` and an [error value](#error-values) whose `tostring` text contains the guard's message, so `tostring(err):match('must be JSON data')` finds it. In a section, the caught error value has error kind `lua`, its `message` field is the guard's text, and `tostring(err)` returns that message. [Raising and catching errors](#raising-and-catching-errors) covers `pcall` in full.
+`pcall` returns `false` and an [error value](#error-values) whose `tostring` text contains the guard's message, so `tostring(err):match('must be JSON data')` finds it. In a section, the caught error value has error kind `lua`, and its `message` field gives the guard's text as [author prose](#reading-kind-and-message) after the assigning line, so in the `guarded` prompt `tostring(err)` returns `guarded.md:12: var.handler must be JSON data, got function. The Lua code failed at runtime. Fix the code at this location.` [Raising and catching errors](#raising-and-catching-errors) covers `pcall` in full.
 
 Left uncaught, assigning a non-JSON value such as a function to a `var` field fails the run at the assigning line with [run error kind](04-how-a-prompt-runs.md#the-run-result-and-outcomes) `Lua`.
 
@@ -1244,7 +1244,7 @@ Change `var` only through its fields, and keep the `var` global itself in place.
 the `var` global was reassigned; write `var.<field>` instead
 ````
 
-The run error kind is `Lua`. When a section entry has reassigned the `var` global, the read-back at the entry's end or at its `jump` fails the run, and the entry does not count as completed. In the H1 pass the run error kind stays `Lua` rather than `RequirementsUnmet` (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)), even when the H1 pass returns a scalar, because the read-back still runs before the scalar becomes the run result.
+The run error kind is `Lua`. When a section entry has reassigned the `var` global, the read-back at the entry's end or at its `jump` fails the run, and the entry does not count as completed. The run's message ends with ` (at {file}:{line})` for the first Lua line of the last block that ran, which is the block that called `jump` when the read-back comes at a jump. In the H1 pass the run error kind stays `Lua` rather than `RequirementsUnmet` (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)), even when the H1 pass returns a scalar, because the read-back still runs before the scalar becomes the run result.
 
 ## Encoding and decoding JSON with `json`
 
@@ -1284,7 +1284,7 @@ The run result is:
 
 `json` is in every section VM, the H1 pass, fanout arms, spawned tasks, and libraries loaded with `require` included, and a Pack prelude's functions can call it too, so you never import it. Encoding is strict: a value that is not JSON data raises an error that names exactly where the value sits, unless you ask for a [debug dump](#dumping-any-value-in-debug-mode). Output and error text are identical on every run, because object keys are written sorted and table keys are always checked in one fixed order. Nulls and lists are recognized by the values themselves, never by looking anything up in the `json` table, so reassigning one of its fields changes nothing about how a value encodes.
 
-Every error a `json` function raises is an [error value](#error-values) of kind `lua`, so `pcall` catches it, and `tostring(err)` gives its message with no prefix. Left uncaught, it ends the block like any other `lua` failure (see [What an uncaught error ends](#what-an-uncaught-error-ends)).
+Every error a `json` function raises is an [error value](#error-values) of kind `lua`, so `pcall` catches it, and `tostring(err)` gives its message: the error's own text, such as `json.decode: expected value at line 1 column 1`, as [author prose](#reading-kind-and-message) after the line of the failing call. The messages this section quotes are that own text. Left uncaught, it ends the block like any other `lua` failure (see [What an uncaught error ends](#what-an-uncaught-error-ends)).
 
 ### Decoding JSON text with `json.decode`
 
@@ -1338,7 +1338,7 @@ if not ok then
 end
 ````
 
-With `text` holding `x`, this block returns `bad JSON: json.decode: expected value at line 1 column 1`.
+With `text` holding `x`, this block returns `bad JSON: {file}:{line}: json.decode: expected value at line 1 column 1. The Lua code failed at runtime. Fix the code at this location.`, where `{file}:{line}` names the line of `pcall(json.decode, text)`.
 
 You decode only JSON that arrives as text, such as a plain tool's output, a store file, the argument string, or a model reply. A [structured tool](12-tools.md#structured-output) already hands your Lua a parsed table built the same way, with marked lists and `json.null`. A web tool's text arrives inside the untrusted envelope, so you cut the JSON out with `string.match` before decoding it, as [Decoding a fetched JSON body](13-web-fetch-and-search.md#decoding-a-fetched-json-body) shows.
 
@@ -1508,7 +1508,7 @@ return err.kind .. '|' .. tostring(err)
 The run result is:
 
 ````text
-lua|json.encode: value.items[2] must be JSON data, got function
+lua|encode-refused.md:10: json.encode: value.items[2] must be JSON data, got function. The Lua code failed at runtime. Fix the code at this location.
 ````
 
 Every message names the failing value by its path. The path starts at `value`, the value you passed, and adds `.name` for each string key and `[k]` for any other key, so `value.items[2]` is the second item of the `items` field. A string key that is not valid UTF-8 appears in the path with replacement characters. The size refusal is the one message with no path, because the walk stops wherever the budget runs out. These are the messages:
@@ -1810,7 +1810,7 @@ local ok, model = pcall(function() return sys.model end)
 return ok and model or 'no tool call yet'
 ````
 
-The run goes on whether or not the field is there. A caught unknown field error is an error value with error kind `lua`, and `tostring` on it reads `runtime error: unknown sys field '{field}'` (see [Reading `kind` and `message`](#reading-kind-and-message)), so here, where the read fails, `model` holds that error value and `tostring(model)` reads `runtime error: unknown sys field 'model'`.
+The run goes on whether or not the field is there. A caught unknown field error is an error value with error kind `lua`, and `tostring` on it reads `{file}:{line}: unknown sys field '{field}'. The Lua code failed at runtime. Fix the code at this location.`, with the line of the read (see [Reading `kind` and `message`](#reading-kind-and-message)), so here, where the read fails, `model` holds that error value and `tostring(model)` reads `where-am-i.md:12: unknown sys field 'model'. The Lua code failed at runtime. Fix the code at this location.`
 
 ### `sys` is sealed and read-only
 
@@ -1933,7 +1933,7 @@ At the section entry's first tool call, `sys.model` takes the chain's current mo
 
 `sys.model` appears at the section entry's first tool call: a call to a catalog tool or an adhoc tool, or the model's call to a discovery tool, whether a Lua block makes it with `tools.call` or the model makes it during a conversation, such as a tool call inside [`models.loop`](11-conversations.md#starting-a-conversation). A discovery call that the Engine answers with refusal text still counts as that first call. A call refused before it is dispatched does not: a `tools.call` that fails with `unbound_tool` or `model_only_tool`, and a model call that fails with `out_of_scope_tool`, create neither `sys.model` nor `tools.stats`. A model round, one request to a model and its reply, never sets `sys.model` by itself, so a [`models.infer`](10-models.md#running-a-round-with-modelsinfer) or `models.loop` round with no tool call leaves it unreadable. A section entry that makes no tool call, or has no model when its first tool call runs, never gets the field.
 
-Reading `sys.model` before the section entry's first tool call raises an error whose message reads `unknown sys field 'model'`, even when the H1 pass selected a model with `models.use('strong')`. That holds whether the read is in the section's opening Lua block or inside a function from a library the section loads with [`require`](03-blocks-and-prose.md#sharing-code-with-require), as in `require '## sys_reader'` followed by `return read_sys_model()`.
+Reading `sys.model` before the section entry's first tool call fails with `unknown sys field 'model'`, even when the H1 pass selected a model with `models.use('strong')`. That holds whether the read is in the section's opening Lua block or inside a function from a library the section loads with [`require`](03-blocks-and-prose.md#sharing-code-with-require), as in `require '## sys_reader'` followed by `return read_sys_model()`.
 
 Inside a fanout arm, once the arm's first tool call has been dispatched, `sys.model` reads the name part of the arm's current model's id in the same way. In the two-argument form `tasks.fanout(worker, collection)`, an arm starts on the model its parent was on when the arm was dispatched, so an arm for the member `a` that returns `sys.model .. ':' .. item`, with the parent on `strong` as above, gives `claude-sonnet-4-6:a`. With `tasks.fanout(model, worker, collection)`, every arm starts on the given handle's model instead.
 
@@ -2344,11 +2344,11 @@ All `log` calls in a section VM share a cumulative log byte quota of 256 bytes p
 
 Both quotas span every block in the section entry rather than resetting per block. Every `log` call counts against the section VM's log quotas, including calls a library section makes while `require` loads it, because a library loads into the requiring section entry's one environment. The next section entry starts with full `log` quotas.
 
-A call past either quota raises one of these messages:
+A call past either quota fails with one of these texts:
 
 ````text
-lua log event budget exceeded
-lua log cumulative byte budget exceeded
+lua log event quota exceeded
+lua log byte quota exceeded
 ````
 
 The first comes from a call past the log event quota and the second from a call past the log byte quota. The byte quota can refuse a call even while events remain in the event quota. A message whose UTF-8 byte length would overflow the byte quota is refused whole, and messages logged before it stay recorded. A refused call leaves the remaining byte quota unchanged, so a later shorter message that fits can still be logged, though the refused call has already spent its event unit.
@@ -2362,9 +2362,9 @@ log(string.rep('é', 200))
 return 'unreached'
 ````
 
-Each call costs 400 bytes, so exactly two checkpoints are recorded. A `log` call refused by the byte quota stops the block, so the `return` never runs, and the uncaught refusal ends the run with run error kind `Quota`. That holds for both quotas: an uncaught `log` quota refusal, event or byte, ends the run as `Quota`.
+Each call costs 400 bytes, so exactly two checkpoints are recorded. A `log` call refused by the byte quota stops the block, so the `return` never runs, and the uncaught refusal ends the run with run error kind `Quota` and the message `lua log byte quota exceeded (at {file}:{line})`, which names the line of the refused call. That holds for both quotas: an uncaught `log` quota refusal, event or byte, ends the run as `Quota`.
 
-`pcall` catches either refusal as an error value with error kind `lua` whose `message` is the refusal text, such as `lua log cumulative byte budget exceeded`. Only the Engine's own refusal counts as a quota refusal, so a block that raises the same text itself, as in `error('lua log event budget exceeded')`, fails as an ordinary Lua runtime error.
+`pcall` catches either refusal as an error value with error kind `lua` whose `message` gives the refusal text as [author prose](#reading-kind-and-message) after the line of the refused call, such as `{file}:{line}: lua log byte quota exceeded. The section logged more than its budget allows. Log less.` Only the Engine's own refusal counts as a quota refusal, so a block that raises the same text itself, as in `error('lua log event quota exceeded')`, fails as an ordinary Lua runtime error.
 
 ### Lifecycle reports
 
@@ -2439,11 +2439,11 @@ Your own Lua can call `input.ask()` in a section that never calls `tools.offer`,
 
 An input broker is the per-run service that delivers a question to the operator, and the Pack names it as the service `runvil/input-broker`. A run can have an optional input broker, and the run lends it to every tool call, so an ask tool can reach the operator.
 
-Every Pack a prompt declares is required, so a prompt that declares `user-input` needs a Host that can ask an operator. The Pack needs the environment to provide an input broker, so on a Host with nobody to ask, the prompt is refused before it starts, with run error kind `RequirementsUnmet`. The [requirements notice](04-how-a-prompt-runs.md#the-requirements-notice) names the missing service by its id:
+Every Pack a prompt declares is required, so a prompt that declares `user-input` needs a Host that can ask an operator. The Pack needs the environment to provide an input broker, so on a Host with nobody to ask, the prompt is refused before it starts, with run error kind `RequirementsUnmet`. The [requirements notice](04-how-a-prompt-runs.md#the-requirements-notice) names the missing service by its id and ends with where the prompt declares the Pack, here the `uses:` line of the `ask-once` prompt:
 
 ````text
 the environment cannot satisfy this prompt:
-- user-input is unavailable: the run lacks the services it needs: runvil/input-broker
+- user-input is unavailable: the run lacks the services it needs: runvil/input-broker (at ask-once.md:5)
 ````
 
 The ask tool is visible only in a run that has an operator input broker, because the Pack's declared needs keep a run without one from seeing the tool, and a Pack missing a service has its tools left out of the tool catalog. The refusal also gives you a guarantee: a section of a prompt that declares `user-input` always has an operator to ask, so it needs no connection check before calling `input.ask()`.
@@ -2529,12 +2529,12 @@ return result.kind .. ': ' .. tostring(result)
 When the Host's input broker fails the wait with the message `the operator's window closed`, the run result is:
 
 ````text
-tool: tool call failure: the operator's window closed
+tool: ask-safely.md:14: the operator's window closed
 ````
 
-When the input broker fails a wait, `input.ask()` raises at its call site an [error value](#error-values) of error kind `tool` whose `tostring` reads `tool call failure: {message}`, with the broker's failure text in place of `{message}`. So `local ok, result = pcall(input.ask)` returns `false` and the error value instead of the run ending, and the section keeps running to completion. The error value's `message` field holds the same text that `tostring` renders: `tool call failure: ` followed by the broker's message. Whatever kind of failure the broker reports, a failed ask reaches Lua as an error value of error kind `tool`.
+When the input broker fails a wait, `input.ask()` raises at its call site an [error value](#error-values) of error kind `tool` whose `tostring` reads `{file}:{line}: {message}`, with the line that called `input.ask` and the broker's failure text in place of `{message}`. So `local ok, result = pcall(input.ask)` returns `false` and the error value instead of the run ending, and the section keeps running to completion. The error value's `message` field holds the same text that `tostring` renders: the location, then the broker's message. Whatever kind of failure the broker reports, a failed ask reaches Lua as an error value of error kind `tool`.
 
-The broker's failure message reaches the prompt: a caught error value holds it, and when the model made the call, the model reads it as the tool's result, wrapped as untrusted text. A failed ask's text holds the broker's own failure message, such as `the operator's window closed`, while the broker's underlying cause stays behind it and is never added to the text, so `tostring` on the error value includes the operator-side failure message but never that hidden cause.
+The broker's failure message reaches the prompt: a caught error value holds it, and when the model made the call, the model reads it as the tool's result, wrapped as untrusted text. The model reads the broker's message alone, never the `{file}:{line}: ` that a caught error value puts in front of it. A failed ask's text holds the broker's own failure message, such as `the operator's window closed`, while the broker's underlying cause stays behind it and is never added to the text, so `tostring` on the error value includes the operator-side failure message but never that hidden cause.
 
 Left uncaught, a failed `input.ask()` ends the run as failed with run error kind `Tool`, while caught with `pcall` the same failure is an error value of error kind `tool`.
 
@@ -2562,12 +2562,16 @@ return type(err) .. '|' .. err.kind .. '|' .. tostring(err)
 The run result is:
 
 ````text
-table|lua|runtime error: unknown sys field 'nothing'
+table|lua|read-error.md:12: unknown sys field 'nothing'. The Lua code failed at runtime. Fix the code at this location.
 ````
 
-[`sys`](#run-facts-in-sys-and-ui) has no field named `nothing`, so the read fails, and `pcall` catches the failure instead of letting it end the block (see [Raising and catching errors](#raising-and-catching-errors)). What comes back is an error value: a Lua table holding a `kind` string, a `message` string, and any extra fields its kind defines. Every failure that an Engine call or an Engine function raises reaches your code as one, so `type(err)` is `table` and never a plain string, whether the failure came from a model round, a store operation, or a guard like the one on `sys`.
+[`sys`](#run-facts-in-sys-and-ui) has no field named `nothing`, so the read fails, and `pcall` catches the failure instead of letting it end the block (see [Raising and catching errors](#raising-and-catching-errors)). What comes back is an error value: a Lua table holding a `kind` string, a `code` string, a `message` string, and any extra fields its kind defines. Every failure that an Engine call or an Engine function raises reaches your code as one, so `type(err)` is `table` and never a plain string, whether the failure came from a model round, a store operation, or a guard like the one on `sys`.
+
+The message starts with where the failure happened, `read-error.md:12:`, the prompt file and the line of the `sys.nothing` read, and goes on with what failed and what to do about it, as [Reading `kind` and `message`](#reading-kind-and-message) explains.
 
 The error kind is the value's `kind` field, a lowercase snake_case string such as `lua`, `out_of_scope_tool`, or `empty_model_reply`. It names which failure occurred, so you read it at any call site and branch on it.
+
+The value's `code` field names the exact failure, as the stable tag of the Engine's error code: a lowercase snake_case string such as `lua_runtime`, `lua_quota`, `not_found`, or `overloaded`. One kind can hold several codes, so `code` tells apart failures that share a kind. A `lua` value's `code` is `lua_quota` for a refused `log` call, `call_depth_exceeded` for the call-depth cap, `substitution` for a failed `{{ }}` placeholder, and `lua_runtime` for a runtime, argument, or memory failure. A `cancelled` value's `code` is `interrupted` for a stopped run or call and `task_cancelled` for a cancelled task. A `model_failure` value's `code` is its [completion error kind](16-limits-and-errors.md#completion-errors-and-how-lua-sees-them) in snake_case, such as `overloaded` or `rate_limited`, and a `store` value's `code` is the same tag as its `reason`. Every error value has a `code`, including an argument error the Engine's own Lua raises, whose `code` is `lua_runtime`.
 
 An Engine function can fail in its own Lua code or inside the Engine itself, and both give the same error value, with the same shape and the same metatable, so your code never needs to tell the two apart.
 
@@ -2582,29 +2586,37 @@ if not ok and err.kind == 'lua' then
 end
 ````
 
-`err.message` is always a string and holds the failure's display text. When whatever raised the error gave no message, the message is the `kind` string itself, so `tostring(err)` shows the kind.
+`err.message` is always a string. For a failure the Engine places on a line of your prompt, it is `{file}:{line}: {prose}`: the prompt file, the line of your code that made the failing call, and the failure's prose. For a failure with no location it is the prose alone. An Engine fault never shows a location, because the place it broke is in the Engine's own source. When whatever raised the error gave no message, the message is the `kind` string itself, so `tostring(err)` shows the kind. [Where an error points](16-limits-and-errors.md#where-an-error-points) gives the rules for which file and which line.
 
-`tostring(err)` returns exactly the message, with no traceback and no position prefix, so you can print it, join it into other text, or search it with string functions, as in `tostring(err):find('not found', 1, true)`. The `..` operator gives the same text with the error value on either side, so `'context: ' .. err` and `err .. ' suffix'` each join the message with the other operand. `tostring` gives the message in the same way for the value that a failed `require` or a refused `setmetatable` call hands back.
+`tostring(err)` returns exactly the message, with no traceback, so you can print it, join it into other text, or search it with string functions, as in `tostring(err):find('not found', 1, true)`. The `..` operator gives the same text with the error value on either side, so `'context: ' .. err` and `err .. ' suffix'` each join the message with the other operand. `tostring` gives the message in the same way for the value that a failed `require` or a refused `setmetatable` call hands back.
 
-The message is the root cause's own text. It names the error the Engine function itself returned, not a callback frame or added context wrapped around it, and it never carries the stack traceback that the Lua runtime would otherwise add to an error from an Engine function. The Engine raises its errors at level 0 at the call site, the way `error(result, 0)` does, so no `file:line:` position prefix is added and the first line is exactly the Engine's text: a model round that fails with `model is down` gives a message whose first line is `model is down`.
+The prose comes from the root cause. It names the error the Engine function itself returned, not a callback frame or added context wrapped around it, and the message never holds the stack traceback that the Lua runtime would otherwise add to an error from an Engine function. The Engine raises its errors at the call site the way `error(result, 0)` does, so Lua adds no position of its own, and the only position is the `{file}:{line}: ` in front: a model round that fails with `model is down` gives `{file}:{line}: model is down`, with the line of the [`models.infer`](10-models.md#running-a-round-with-modelsinfer) call.
 
-One family of messages starts with a prefix. A refusal that a Runvil guard raises as a plain runtime error, such as reading a `sys` field that does not exist or assigning to `sys`, is caught as an error value of kind `lua` whose message starts with `runtime error: ` and then gives the refusal. Reading `sys.nothing` gives `runtime error: unknown sys field 'nothing'`, and the refusal of `sys.extra = 1` reads `sys is read-only; cannot set 'extra'` after the same prefix. A failure from an Engine call, such as [`models.infer`](10-models.md#running-a-round-with-modelsinfer), has no such prefix.
+The prose depends on what caused the failure. A failure your prompt's own Lua caused has author prose, `{what}. {default prose}`: what failed, then the default prose for that kind of failure. That covers a Lua error, an exhausted `log` quota, the call-depth cap, a failed substitution, a misused task, and a `tasks_live` leak, and it covers the refusals of Runvil's guards, so reading `sys.nothing` gives `unknown sys field 'nothing'. The Lua code failed at runtime. Fix the code at this location.` after its location, and the refusal of `sys.extra = 1` gives `sys is read-only; cannot set 'extra'. The Lua code failed at runtime. Fix the code at this location.` A failure from a tool, the store, a model, or the context window keeps its own prose instead, as `model is down` does. The prose never names a file or a line. Where this guide quotes what a failure says, such as `unknown sys field '{field}'` or a `log` rule's refusal, that text is the `{what}` of its author prose.
 
-Messages you meet through `tostring(err)` include `models.infer takes (prompt) or (model, prompt)`, `models.loop takes (compactor?) or (model, compactor?)`, `lua log event budget exceeded`, `the model replied with no text and no tool calls`, `empty model reply`, ``section heading `## Missing` not found``, `call recursion exceeded cap of 8`, and `argv is frozen outside H1: assign it in H1 only`.
+Messages you meet through `tostring(err)` include these, shown without the `{file}:{line}: ` that a located one starts with:
+
+- `models.infer takes (prompt) or (model, prompt)`, an argument error the Engine's own Lua raises, which has no location (see [Argument errors](#argument-errors))
+- `models.loop takes (compactor?) or (model, compactor?). The Lua code failed at runtime. Fix the code at this location.`
+- `lua log event quota exceeded. The section logged more than its budget allows. Log less.`
+- `the model replied with no text and no tool calls`
+- ``section heading `## Missing` not found; available sections: {sections}. The Lua code failed at runtime. Fix the code at this location.``
+- ``recursion exceeded cap of 8. Calls nest deeper than the cap allows. Nest `call`, `tasks.spawn`, and `tasks.fanout` less deeply.``
+- `argv is frozen outside H1: assign it in H1 only. The Lua code failed at runtime. Fix the code at this location.`
 
 Because `kind` is a string and `tostring` gives the message, one expression can report a failure in full:
 
-- `err.kind .. '|' .. err.name .. '|' .. tostring(err)`, after a model calls a tool that is not offered in its section entry, gives text that starts `out_of_scope_tool|rogue|tool "rogue" is not in this section's scope;`.
-- `err.kind .. '|' .. tostring(err)`, after a tool-call loop that never settles, gives `tool_loop_exhausted|tool-call loop did not converge`.
+- `err.kind .. '|' .. err.name .. '|' .. tostring(err)`, after a model calls a tool that is not offered in its section entry, gives text that starts `out_of_scope_tool|rogue|{file}:{line}: tool "rogue" is not in this section's scope;`, with the line of the `models.loop` call.
+- `err.kind .. '|' .. tostring(err)`, after a tool-call loop that never settles, gives `tool_loop_exhausted|{file}:{line}: The tool-call limit was reached before a final reply. Stop calling tools and reply with what you have.`
 - `err.kind .. '|' .. tostring(err.finish_reason) .. '|' .. tostring(err)` reports an `empty_model_reply` failure with its finish reason.
 - `err.kind .. '|' .. err.tasks .. '|' .. tostring(err)` reports a `tasks_live` failure with its `tasks` field.
 - An argument rejected for not being a positive whole number gives kind `lua` and a message containing `positive whole number`.
 
 ### The sixteen error kinds
 
-An error value's `kind` is always one of exactly sixteen strings. The set is closed, so every failure falls into one of them, and each string names exactly one kind, so you match a kind by comparing `err.kind` against its string, as in `err.kind == 'store'`. The table lists each kind with the fields it adds beside `kind` and `message`:
+An error value's `kind` is always one of exactly sixteen strings. The set is closed, so every failure falls into one of them, and each string names exactly one kind, so you match a kind by comparing `err.kind` against its string, as in `err.kind == 'store'`. The table lists each kind with the fields it adds beside `kind`, `code`, and `message`:
 
-| Kind | Fields beside `kind` and `message` |
+| Kind | Fields beside `kind`, `code`, and `message` |
 | --- | --- |
 | `lua` | none |
 | `internal` | none |
@@ -2623,7 +2635,7 @@ An error value's `kind` is always one of exactly sixteen strings. The set is clo
 | `store` | the store fields, such as `path` and `reason` |
 | `tool` | none |
 
-You read a kind's fields from the same error value after branching on `kind`, with ordinary table access such as `err.reason`. They are plain fields with no metamethod behind them, so `err.kind`, `err.reason`, and `err.finish_reason` on an error from [`models.loop`](11-conversations.md#starting-a-conversation) read like any other table field. A kind with no fields gives a value holding only `kind` and `message`.
+You read a kind's fields from the same error value after branching on `kind`, with ordinary table access such as `err.reason`. They are plain fields with no metamethod behind them, so `err.kind`, `err.reason`, and `err.finish_reason` on an error from [`models.loop`](11-conversations.md#starting-a-conversation) read like any other table field. A kind with no fields gives a value holding only `kind`, `code`, and `message`.
 
 Every field is a string, except two `store` fields that are integers: `count`, on an anchor failure, and `valid_up_to`, on content that is not valid UTF-8 (see [When a store call fails](09-the-store.md#when-a-store-call-fails)). `type` returns `'number'` for these and `%` works on them, so `type(err.count) == 'number' and err.count % 1 == 0` holds.
 
@@ -2645,22 +2657,22 @@ Each kind comes from the feature that raises it:
 
 Kind `lua` covers every failure on the Lua side whenever it reaches your code as an error value, your own `error` and `assert` calls included. When a spawned task's section runs `error('beta boom')`, the section that joins it finds `results[1].result.kind == 'lua'` in the `tasks.join` result, and `tostring` of that result contains `beta boom`.
 
-A `lua` error value marks an authoring or runtime failure, and its message is the error's own text, such as the unknown field or the store path. These failures are all kind `lua`:
+A `lua` error value marks an authoring or runtime failure, and its message gives the error's own text, such as the unknown field or the store path, as author prose after the failing line, except for an argument error the Engine's own Lua raises, which is that text alone (see [Argument errors](#argument-errors)). These failures are all kind `lua`:
 
 - a compile error (see [Compile errors](#compile-errors))
 - a runtime error in your own code, or a syntax error raised from inside an Engine function call
 - an argument or misuse error from an Engine function, including a value it cannot convert to the type it expects and a value it fails to serialize or deserialize
 - an exhausted log quota, as with a refused `log` call (see [Logging and lifecycle reports](#logging-and-lifecycle-reports))
 - a placeholder or substitution in prose that fails to render (see [Placeholders in prose](07-substitution.md#placeholders-in-prose))
-- a `call` or `tasks.fanout` recursion past its depth cap
+- a `call`, `tasks.spawn`, or `tasks.fanout` that nests past the call-depth cap
 - running out of Lua memory
 - an Engine function failure caused by an outside error that is not one of the Engine's own errors
 
-None of these has fields of its own, so a `lua` error value holds only `kind` and `message`. Its message text is the only thing that tells runtime errors, argument errors, memory refusals, refused `log` calls, and failed substitutions apart.
+None of these has fields of its own, so a `lua` error value holds only `kind`, `code`, and `message`. Its `code` sets a refused `log` call, the call-depth cap, and a failed substitution apart, while a runtime error, an argument error, and a memory refusal share the `code` `lua_runtime`, so only the message text tells those three apart.
 
-Recursing past the depth cap of [`call`](08-jump-and-call.md#calling-a-section) or [`tasks.fanout`](14-fanout.md#fanout-in-one-call) raises a `lua` error value whose message names the cap: `call recursion exceeded cap of 8` or `tasks.fanout recursion exceeded cap of 8`. A `pcall(tasks.spawn, ...)` in the deepest spawner catches it, with `tostring(err)` reading `call recursion exceeded cap of 8`.
+Nesting a [`call`](08-jump-and-call.md#calling-a-section), a `tasks.spawn`, or a [`tasks.fanout`](14-fanout.md#fanout-in-one-call) arm past the call-depth cap raises a `lua` error value on the line of the call that went too deep, and its message names the cap the same way whichever call it was: ``{file}:{line}: recursion exceeded cap of 8. Calls nest deeper than the cap allows. Nest `call`, `tasks.spawn`, and `tasks.fanout` less deeply.`` A `pcall(tasks.spawn, ...)` in the deepest spawner catches it, with `tostring(err)` reading that message for the line of its own `tasks.spawn` call.
 
-Left uncaught, a `lua` failure ends the run with one of two run error kinds (see [The run result and outcomes](04-how-a-prompt-runs.md#the-run-result-and-outcomes)). A runtime, compile, or argument failure ends it as `Lua`. An exhausted Engine quota, such as a refused `log` call, or a recursion-cap refusal ends it as `Quota`, so an uncaught call-depth refusal ends the run as `Quota` with the message `call recursion exceeded cap of 8`.
+Left uncaught, a `lua` failure ends the run with one of two run error kinds (see [The run result and outcomes](04-how-a-prompt-runs.md#the-run-result-and-outcomes)). A runtime, compile, or argument failure ends it as `Lua`. An exhausted Engine quota, such as a refused `log` call, or a recursion-cap refusal ends it as `Quota`, so an uncaught call-depth refusal ends the run as `Quota` with the message `recursion exceeded cap of 8 (at {file}:{line})`, which names the line of the call that went too deep.
 
 ### Argument errors
 
@@ -2673,7 +2685,7 @@ return err.kind .. '|' .. tostring(err)
 
 `models.infer` takes the prompt, or a model handle and the prompt, so this block returns `lua|models.infer takes (prompt) or (model, prompt)` and finishes without making a model request. Sampling options such as `temperature` belong to [`models.use`](10-models.md#sampling-options-on-modelsuse).
 
-A caught argument error has a message of fixed text that names the argument. Argument errors from `tools.call` are worded and shaped exactly like the others, failures from the `tasks` functions, `tasks.fanout` included, arrive in the same shape as every other Engine failure, and so do the errors `models.loop` builds itself. Rendered as `err.kind .. ':' .. tostring(err)`, every argument error from `models.loop` starts with `lua:`, as in `lua:models.loop takes (compactor?) or (model, compactor?)` (see [Argument errors](11-conversations.md#argument-errors)), and the errors the loop raises about the compactor passed as its argument are kind `lua` too.
+A caught argument error names the argument in fixed text. When the Engine's own Lua raises it, as `models.infer` does here, the message is that text alone, with no location. When the Engine raises it from inside the call, the message gives that text as author prose after the line of your call. Argument errors from `tools.call` are worded and shaped exactly like the others, failures from the `tasks` functions, `tasks.fanout` included, arrive in the same shape as every other Engine failure, and so do the errors `models.loop` builds itself. Rendered as `err.kind .. ':' .. tostring(err)`, every argument error from `models.loop` starts with `lua:`, as in `lua:{file}:{line}: models.loop takes (compactor?) or (model, compactor?). The Lua code failed at runtime. Fix the code at this location.` (see [Argument errors](11-conversations.md#argument-errors)), and the errors the loop raises about the compactor passed as its argument are kind `lua` too.
 
 Argument type errors on every Engine function, the `store` functions included, are kind `lua`. Only failures the store itself reports are kind `store`, so `pcall(function() store.write(123, 'x') end)` catches `err.kind == 'lua'`.
 
@@ -2689,7 +2701,7 @@ A string argument has three messages:
 
 ### Engine errors keep their own kind
 
-An Engine call that succeeds returns its values directly, and one the Engine rejects raises an error instead of returning a failure flag. When an Engine function raises one of the Engine's own errors, the caught value keeps that error's kind, message, and fields, and is never reported under the generic `lua` or `internal` kinds:
+An Engine call that succeeds returns its values directly, and one the Engine rejects raises an error instead of returning a failure flag. When an Engine function raises one of the Engine's own errors, the caught value keeps that error's kind, code, message, and fields, and is never reported under the generic `lua` or `internal` kinds:
 
 ````lua
 local ok, err = pcall(store.read, 'missing.txt')
@@ -2698,7 +2710,7 @@ return err.kind .. '|' .. err.reason .. '|' .. err.path
 
 When the store holds no `missing.txt`, this block returns `store|not_found|missing.txt`.
 
-A model round fails the same way. A `pcall(models.infer, 'hi')` that runs out of context returns `false` and an error value of kind `context_exhausted` with `reason` set to `provider`, and the value keeps that `reason` wherever you pass it. Every failure the Engine answers to your Lua has a kind, a spent limit included, such as kind `lua` with the message `lua log event budget exceeded`.
+A model round fails the same way. A `pcall(models.infer, 'hi')` that runs out of context returns `false` and an error value of kind `context_exhausted` with `reason` set to `provider`, and the value keeps that `reason` wherever you pass it. Every failure the Engine answers to your Lua has a kind, a spent limit included, such as kind `lua` for an exhausted `log` quota, whose message gives `lua log event quota exceeded` as author prose.
 
 The usual way to handle a failure from Harness work, such as a model round, is to branch on `kind`, read the kind's own fields, and pass on anything you do not handle:
 
@@ -2713,7 +2725,7 @@ end
 return result
 ````
 
-`tostring(result)` gives the Harness's message unchanged, and `error(result, 0)` raises the same error value again, as [Raising and catching errors](#raising-and-catching-errors) explains.
+`tostring(result)` gives the failure's own prose after the line of the `models.infer` call, and `error(result, 0)` raises the same error value again, as [Raising and catching errors](#raising-and-catching-errors) explains.
 
 The Engine recognizes its own error values by a metatable they share, not by their fields. All error values in one section VM share a single metatable, so `getmetatable` returns the same table for any two caught errors. A table you build yourself therefore never becomes an Engine failure of the kind it names: `error({ kind = 'tool_loop_exhausted', message = 'x' }, 0)`, left uncaught, ends the block as an ordinary Lua runtime error, because only a table with the shared metatable is an error value.
 
@@ -2800,8 +2812,10 @@ Reading or assigning `prose` can fail with the read-only, recursive, and missing
 Every failure the Engine raises into Lua reaches `pcall` as an error value, Engine-raised kinds such as `tool_loop_exhausted` included, so `type(err)` is `'table'` and you decide what to do by branching on `err.kind`. Three routes lead there:
 
 - An argument error from an Engine call, such as a badly shaped argument to `models.infer`, `models.loop`, `call`, `tasks.fanout`, `tasks.spawn`, `tools.call`, or a `store` function, is raised at the calling line as a `lua` error value rather than failing the whole block, so a `pcall` around the call catches it.
-- A failed Harness request, such as a model round, arrives as an error value whose `kind` names the failure, such as `context_exhausted`, with the kind's own fields beside it and `tostring` giving the error's display text unchanged. An interrupted chat call wrapped in `pcall` likewise comes back as `false` and an error value carrying both `kind` and `message`.
-- An Engine function that fails on the spot, such as a failing [`tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer), a read of an unknown `sys` field such as `sys.nothing`, or the `var` guard, gives the same indexable error value. `err.kind` and `err.message` work on it at the call site, and `tostring(err)` is the message with no traceback appended. A refused `var` write gives a message containing `var is read-only` (see [Keeping state in `var`](#keeping-state-in-var)), and a runtime error raised inside a built-in call is kind `lua`.
+- A failed Harness request, such as a model round, arrives as an error value whose `kind` names the failure, such as `context_exhausted`, with the kind's own fields beside it and `tostring` giving the failure's own prose after the line that made the call. An interrupted chat call wrapped in `pcall` likewise comes back as `false` and an error value carrying both `kind` and `message`.
+- An Engine function that fails on the spot, such as a failing [`tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer), a read of an unknown `sys` field such as `sys.nothing`, or the `var` guard, gives the same indexable error value. `err.kind` and `err.message` work on it at the call site, and `tostring(err)` is the message, author prose after the line that was running when it failed, with no traceback appended. A refused `var` write gives a message containing `var is read-only` (see [Keeping state in `var`](#keeping-state-in-var)), and a runtime error raised inside a built-in call is kind `lua`.
+
+Apart from an argument error the Engine's own Lua raises, which has no location, each of these is placed on your own line: a suspending call on the line that made the call, an Engine function that fails on the spot, such as [`jump`](08-jump-and-call.md#jumping-to-a-section), on the line running when it failed, and a failure inside a function you pass to `pcall` or `xpcall` on the line of the failing call in that function, not the `pcall` line. [Where an error points](16-limits-and-errors.md#where-an-error-points) gives the full rules, tail calls included.
 
 The `pcall` and `xpcall` globals you call are the Engine's own versions, which make this conversion, and they replace the standard library's.
 
@@ -2829,7 +2843,7 @@ return 'checked'
 ```
 ````
 
-The run fails with run error kind `Lua`, the run error's text contains `the answer must be yes`, and `return 'checked'` never runs.
+The run fails with run error kind `Lua`, the run error's text contains `the answer must be yes` and ends with ` (at checked.md:13)`, the line of the `assert`, and `return 'checked'` never runs.
 
 `assert(condition, message)` raises an error carrying `message` when `condition` is false, and returns normally and silently when it is true, so the block goes on to its next statement. `assert` works everywhere in prompt Lua, in sections, in fanout arms (see [What an arm sees](14-fanout.md#what-an-arm-sees)), and in [adhoc tool](01-what-a-prompt-is.md#effects-and-harness-work) handlers, for checking a condition mid-run with a message that says what was expected. Called with no message, as in `assert(false)`, it raises a Lua runtime error whose text is `assertion failed!`, after a location prefix such as ``section `Web Search` epilog:51:`` (see [Error line numbers and locations](#error-line-numbers-and-locations)).
 
@@ -2849,11 +2863,11 @@ Rebinding `error` or `math` in your code does not change how Engine functions ra
 
 ### What an uncaught error ends
 
-An uncaught Lua runtime error ends the block with an error instead of a return value. An uncaught Lua failure, a runtime error in your code or an error you raise on purpose, then ends the run with run error kind `Lua`, holding the failure's message, wherever it happens: a walked section, a `call` [chain](04-how-a-prompt-runs.md#the-section-walk), a task, a fanout arm, or a library's load.
+An uncaught Lua runtime error ends the block with an error instead of a return value. An uncaught Lua failure, a runtime error in your code or an error you raise on purpose, then ends the run with run error kind `Lua`, holding the failure's message, wherever it happens: a walked section, a `call` [chain](04-how-a-prompt-runs.md#the-section-walk), a task, a fanout arm, or a library's load. The run's message is the failure's text, its causes included, followed by where it happened: ` (at {file}:{line})` for a failure on a line of the prompt file, after the stack traceback when the failure has one (see [Where an error points](16-limits-and-errors.md#where-an-error-points)).
 
-In the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass), an uncaught failure such as `assert(false, message)` or `error(message)` is a failed gate instead. The run ends before the walk with run error kind `RequirementsUnmet` instead of `Lua`, the Lua failure's message is kept as the error's cause text, and no later block runs (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)).
+In the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass), an uncaught failure such as `assert(false, message)` or `error(message)` is a failed gate instead. The run ends before the walk with run error kind `RequirementsUnmet` instead of `Lua`, the Lua failure's message is kept as the error's cause text, the run's message points at the line of the failure that tripped the gate, and no later block runs (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)).
 
-When an Engine operation fails and the block does not catch the failure, the block fails with the error the operation returned. The run ends with that call's own specific error, such as a `context_exhausted` failure from `models.infer`, rather than a plain string or a generic Lua runtime error. An uncaught error from a built-in Lua function ends the run with run error kind `Lua`, and its message names the calling function, as in `tools.offer: ...`. The exception is a `context_exhausted` raise: an uncaught `compactors.fail` call ends the run with run error kind `ContextExhausted`. An uncaught `models.loop` error ends the run according to its error kind: `tool_loop_exhausted` with run error kind `Tool`, `context_exhausted` with `ContextExhausted`, and `empty_model_reply` with `Completion`. A `lua`-kind loop error, such as a call with the wrong arguments or a loop started while another runs, fails the run as a Lua runtime error with run error kind `Lua`, and its message keeps the loop's own text.
+When an Engine operation fails and the block does not catch the failure, the block fails with the error the operation returned. The run ends with that call's own specific error, placed on the line of the call, such as a `context_exhausted` failure from `models.infer`, rather than a plain string or a generic Lua runtime error. An uncaught error from a built-in Lua function ends the run with run error kind `Lua`, and its message names the calling function, as in `tools.offer: ...`. The exception is a `context_exhausted` raise: an uncaught `compactors.fail` call ends the run with run error kind `ContextExhausted`. An uncaught `models.loop` error ends the run according to its error kind: `tool_loop_exhausted` with run error kind `Tool`, `context_exhausted` with `ContextExhausted`, and `empty_model_reply` with `Completion`. A `lua`-kind loop error, such as a call with the wrong arguments or a loop started while another runs, fails the run as a Lua runtime error with run error kind `Lua`, and its message keeps the loop's own text.
 
 An uncaught Lua failure leaves its block in one of two forms: a Lua error, which holds a message, or a Lua runtime error, which holds a message plus further details. A Lua runtime error's message already holds the Lua error's text, so a printout of the error and its causes shows that text once rather than repeating it. A store failure you do not catch keeps its own error instead and ends the run with run error kind `Vfs`, in the H1 pass too (see [When a store call fails](09-the-store.md#when-a-store-call-fails)).
 
@@ -2869,13 +2883,13 @@ end
 return reply
 ````
 
-Raised again unchanged, with `error(err)` or `error(err, 0)`, before any other suspending call, a caught error value ends the block and fails the run with the original error, its kind and fields included, and the same run error kind, exactly as if it had never been caught. Raising the value with `error(err)` and catching it again yields the same error value, not a new one wrapped around it.
+Raised again unchanged, with `error(err)` or `error(err, 0)`, before any other suspending call, a caught error value ends the block and fails the run with the original error, its kind, fields, and line included, and the same run error kind, exactly as if it had never been caught, so the run's message points at the line of the call that failed, not at the `error` line. Raising the value with `error(err)` and catching it again yields the same error value, not a new one wrapped around it.
 
-Only the exact error value you caught keeps the original error. Catching an error and raising anything else, even a value with the same message, makes the failure the block's own error, and the run reports the new error instead of the original. A string built from the value, such as `error(tostring(err), 0)` or `error(err.message)`, fails as an ordinary Lua runtime error even when the text matches, and that runtime error uses the string as its message, so the original text, such as `model is down`, still appears in it.
+Only the exact error value you caught keeps the original error. Catching an error and raising anything else, even a value with the same message, makes the failure the block's own error, and the run reports the new error instead of the original. A string built from the value, such as `error(tostring(err), 0)` or `error(err.message)`, fails as an ordinary Lua runtime error even when the text matches, and that runtime error uses the string as its message, so the original text, such as `{file}:{line}: model is down`, still appears in it, while the run now points at the `error` line.
 
 The Engine reads a raised value back as a structured error only when it is one of its own error values. Your own table, even one with `kind` and `message` fields such as `{ kind = 'tool_loop_exhausted', message = 'x' }`, fails the block as an ordinary Lua runtime error when it goes uncaught.
 
-A `lua` error value that leaves a block, whether raised again or uncaught, ends the block as an ordinary Lua runtime error that keeps the same message, names the source block, and gives the absolute prompt line, as in ``section `Test` prologue:41:``.
+A `lua` error value raised again after another suspending call ends the block as an ordinary Lua runtime error that keeps the same message, names the source block, and gives the absolute prompt line, as in ``section `Test` prologue:41:``.
 
 ### Raising an error value after another suspending call
 
@@ -2891,13 +2905,11 @@ Once another suspending call has run, the run ends according to the error value'
 
 | Error value raised after another suspending call | How the run ends |
 | --- | --- |
-| `context_exhausted` with its `reason`, `tool_loop_exhausted`, `empty_model_reply`, or `tool` | with that error's own run error kind |
-| `store` | with run error kind `Vfs` and the original message |
-| `cancelled` | with the cancelled run outcome |
-| `task_not_owned` or `task_consumed` that still has its `task` field | with run error kind `Lua`, in the H1 pass too |
-| any other kind, or a value missing its fields | with run error kind `Lua`, or `RequirementsUnmet` in the H1 pass |
+| `lua` | as an ordinary Lua runtime error at the `error` line, with run error kind `Lua`, or `RequirementsUnmet` in the H1 pass |
+| `cancelled` from a stopped run or call, with no `task` field | with the cancelled run outcome |
+| any other kind, a cancelled task's `cancelled` value included | with the original error and its own run error kind, such as `Vfs` for `store`, `Completion` for `model_failure`, or `Lua` for `task_consumed`, in the H1 pass too |
 
-An error value of any kind except `lua` keeps its kind and fields in the run failure this way instead of being flattened to its message string, so a `context_exhausted` value keeps its `reason`, such as `precheck`. The fragment above ends the run with run error kind `Vfs` (see [When a store call fails](09-the-store.md#when-a-store-call-fails)), and a cancelled outcome is one of the run outcomes in [The run result and outcomes](04-how-a-prompt-runs.md#the-run-result-and-outcomes).
+An error value of any kind except `lua` keeps its kind, code, fields, and line in the run failure this way instead of being flattened to its message string, so a `context_exhausted` value keeps its `reason`, such as `precheck`. The fragment above ends the run with run error kind `Vfs` and the store's original message, which still points at the line of the failed `store.read` rather than the `call` or the `error` line (see [When a store call fails](09-the-store.md#when-a-store-call-fails)), and a cancelled outcome is one of the run outcomes in [The run result and outcomes](04-how-a-prompt-runs.md#the-run-result-and-outcomes).
 
 ### Message handlers with `xpcall`
 
@@ -2943,9 +2955,9 @@ The run fails with run error kind `Lua`, and the first line of its message is:
 section `Check` prologue:14: runtime error: section `Check` prologue:14: the answer must be yes
 ````
 
-``section `Check` prologue`` is the block's location label, and `14` is the absolute prompt line of the `error` call: line 14 of the file, counting the frontmatter. The label and line appear twice, once as a prefix at the head of the message and once where Lua's own position marker stood, with `runtime error:` between them, and a stack traceback follows on the next lines.
+``section `Check` prologue`` is the block's location label, and `14` is the absolute prompt line of the `error` call: line 14 of the file, counting the frontmatter. The label and line appear twice, once as a prefix at the head of the message and once where Lua's own position marker stood, with `runtime error:` between them, and a stack traceback follows on the next lines. After the traceback, the message ends with ` (at verify-answer.md:14)`, the prompt file and the same line (see [Where an error points](16-limits-and-errors.md#where-an-error-points)).
 
-An absolute prompt line is a line number counted from the top of the prompt file, with the frontmatter's opening `---` as line 1. A location label names the Lua block an error came from, by its section and its place in the section.
+An absolute prompt line is a line number counted from the top of the prompt file, with the frontmatter's opening `---` as line 1. A location label names the Lua block an error came from, by its section and its place in the section. A caught [error value](#error-values) names the same line another way, with the prompt file instead of the label, in the `{file}:{line}: ` its message starts with.
 
 ### Absolute prompt lines
 
@@ -3009,7 +3021,7 @@ return secret
 ```
 ````
 
-The parse fails with parse error kind `Lua` (see [Parsing comes first](04-how-a-prompt-runs.md#parsing-comes-first)), and the message starts with ``lua compilation error at section `Check` epilog (line 14): `` followed by the Lua compiler's diagnostic. A compile error has this form:
+The parse fails with parse error kind `Lua` (see [Parsing comes first](04-how-a-prompt-runs.md#parsing-comes-first)), and the message starts with ``lua compilation error at section `Check` epilog (line 14): `` followed by `syntax error: ` and the Lua compiler's diagnostic. A compile error has this form:
 
 ````text
 lua compilation error at {location} (line {source_line}): {message}
@@ -3017,29 +3029,29 @@ lua compilation error at {location} (line {source_line}): {message}
 
 - `{location}` is the block's location label, so the message tells you which block the problem is in, such as ``section `Transform` epilog``.
 - `(line {source_line})` is the block's first Lua line, the line after its opening fence, counted from the top of the file with the frontmatter included. It is not the line of the fault, so an epilog whose fence opens on line 12 reports ``lua compilation error at section `Check` epilog (line 13): {message}``.
-- `{message}` is the Lua 5.5 compiler's own diagnostic, unchanged. It names the block `[string "line {source_line}"]`, where `{source_line}` is the block's first prompt line, such as `[string "line 1"]` for a block that starts on line 1.
+- `{message}` is the Lua 5.5 compiler's own diagnostic, unchanged, after a `syntax error: ` label. It names the block `[string "line {source_line}"]`, where `{source_line}` is the block's first prompt line, such as `[string "line 1"]` for a block that starts on line 1.
 
 The compiler's diagnostic is never rewritten to file lines, so the `{k}` in its `[string "line {source_line}"]:{k}:` marker counts from the top of the block, and the faulting file line is `{source_line}` + `{k}` - 1. In the prompt above, the diagnostic names `[string "line 14"]`, so its `{k}` added to 14, less one, is the file line of the fault.
 
 Every block compiles this way, whether it sits in a library, under the H1 title, or in any section, the last block of the last section included: an unclosed `return (` in a final epilog fails the parse as ``section `Transform` epilog``. A syntax error in a section's prologue fence is located as ``section `{name}` prologue``, such as ``section `Private section` prologue``, and one in its epilog fence as ``section `{name}` epilog``. The compile error also carries the full Lua source of the block that failed, such as `private_payload =`.
 
-The compile error's text is the parse error's whole message, with nothing added in front. The message states the position itself, and the parse error carries no separate span, name, line, or column. A compile error in a prompt's own blocks always fails the parse, so no run starts. A compile error during a run, such as one in a [Pack prelude](12-tools.md#pack-preludes), ends the run with run error kind `Lua`.
+The compile error's text is the parse error's whole message, with nothing added in front, and because the Harness finds it before the run starts, the failed run's message is that text with no location added. The parse error itself points at the faulting file line, the one the diagnostic's `{k}` names, in its own location fields, which a Host such as Workshop reads (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). A compile error in a prompt's own blocks always fails the parse, so no run starts. A compile error during a run, such as one in a [Pack prelude](12-tools.md#pack-preludes), ends the run with run error kind `Lua`.
 
 ### Runtime error messages and tracebacks
 
 Compile and runtime errors both name a block by its location label: a compile error as `at {location}`, and a runtime error as `{location}:{absolute}:`, the form Lua uses for a file. Before mapping, Lua's own position marker for a block reads `[string "line {source_line}"]:{k}:`, where `{source_line}` is the block's first prompt line and `{k}` is the line inside the block, so a block at prompt line 120 renders as `[string "line 120"]`. When a runtime error fails a block, the Engine rewrites every marker that belongs to the failing block or to a library it loaded with `require`, so no `[string "line {source_line}"]` from those blocks survives in the message. Lua's raw `[string "line 50"]:2: assertion failed!` becomes text that starts ``section `Web Search` epilog:51: ``.
 
-The mapped message opens with one `{location}:{absolute}: ` prefix, taken from the first marker it rewrote, so its head shows the location and absolute line twice: once as that prefix and once in place of Lua's own marker. The run reports this mapped diagnostic as the entire message of its Lua runtime error, with no extra type label in front.
+The mapped message opens with one `{location}:{absolute}: ` prefix, taken from the first marker it rewrote, so its head shows the location and absolute line twice: once as that prefix and once in place of Lua's own marker. The run reports this mapped diagnostic as the entire message of its Lua runtime error, with no extra type label in front, and the failed run's message adds ` (at {file}:{line})` after the traceback, for the line that prefix names.
 
 Below its first line, an uncaught Lua runtime error carries a `stack traceback:` whose frames each start with a location label and an absolute prompt line, as in ``section `lib` prologue:51: in`` and ``section `Main` prologue:31: in``, and go on with Lua's description of the frame, such as `function 'boom'` or `main chunk`. The traceback is taken where the error was raised, with the failing frames still on the stack, so it shows your own frames mapped to prompt lines rather than the Engine's wrapper around the block. It never shows `?:` placeholders, because blocks compile with their debug information kept.
 
-Error text that names no Lua block reaches you unchanged, with no location or line added, and a runtime error message that carries no line from the failing block passes through unchanged too.
+The mapping leaves error text that names no Lua block unchanged, adding no location label or line to it, and a runtime error message that holds no line from the failing block passes through it unchanged too.
 
 ### Errors that pass through several blocks
 
 An error from one Lua block is never mapped onto the lines of another block in the same section, and an error from one H1 block is never mapped onto the lines of another H1 block. When an error passes through several blocks, each frame maps using the starting line of the block it came from, so the calling section's frame reports its own prompt line, as when a `boom()` call on prompt line 13 appears as ``section `Main` prologue:13:``.
 
-An error that surfaces through a parent block keeps the child's already absolute line, while the parent's own frames map to the parent's lines, so a message can start with ``section `Main` prologue:24: `` and still hold the child's line 51 intact. An error raised in a fanout arm or a called section traces back through its caller the same way, with each frame's line pointing at its own block's prompt line, so a child's ``section `lib` prologue:51: deep fault`` raised again in the parent stays at line 51.
+An error that surfaces through a parent block keeps the child's already absolute line, while the parent's own frames map to the parent's lines, so a message can start with ``section `Main` prologue:24: `` and still hold the child's line 51 intact. An error raised in a fanout arm or a called section traces back through its caller the same way, with each frame's line pointing at its own block's prompt line, so a child's ``section `lib` prologue:51: deep fault`` raised again in the parent stays at line 51. An error value that a called or spawned chain hands back keeps the line where it happened in that chain the same way, so its `{file}:{line}: ` names the child's line, not the parent's `call`, `tasks.fanout`, or wait.
 
 In a traceback that passes through an Engine function, your own frames still map to absolute prompt lines, as in ``section `Test` prologue:41: in``. The frames of Engine functions written in Lua, such as `tasks.fanout`, the other `tasks` functions, the `store` functions, and the Lua code behind other Engine calls, appear as bare `file:line:` references to the built-in helper's own file. Those frames are never rewritten.
 
@@ -3078,7 +3090,7 @@ The run fails with run error kind `Lua`, and the first line of its message is:
 section `lib` prologue:20: runtime error: section `lib` prologue:20: deep fault
 ````
 
-The first line of an uncaught library error carries exactly one leading prefix naming the raise point, then `runtime error:`, then the mapped message. The prefix names the library line where the raise happened, line 20 inside `boom`, even though the call came from ``section `Main` prologue``. The traceback below it shows each frame mapped once to its own prompt line, covering both the library frame, ``section `lib` prologue:20: in``, and the calling section's frame, ``section `Main` prologue:13: in``.
+The first line of an uncaught library error carries exactly one leading prefix naming the raise point, then `runtime error:`, then the mapped message. The prefix names the library line where the raise happened, line 20 inside `boom`, even though the call came from ``section `Main` prologue``. The traceback below it shows each frame mapped once to its own prompt line, covering both the library frame, ``section `lib` prologue:20: in``, and the calling section's frame, ``section `Main` prologue:13: in``. After the traceback, the message ends with ` (at lib-fault.md:20)`, the same library line.
 
 - A raise during a library's load reports the library block's location and the line of the raise, not the requiring block's line, so a library block whose Lua starts on line 40 and raises on its fourth line reports ``section `lib` prologue:43: load fault``.
 - A raise from a library function called after the load reports the line inside the function body where the raise happened, so `error('later fault')` on the library block's second line reports ``section `lib` prologue:41: later fault``.

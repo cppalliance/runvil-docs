@@ -356,19 +356,19 @@ Writing to a nested path, with directory names separated by `/` as in `src/b.rs`
 
 The store holds text, so a table goes through [`json.encode`](05-lua-environment.md#encoding-and-decoding-json-with-json) before a write and `json.decode` after a read. The `path` and `contents` you pass to `store.write` and `store.append` must be valid UTF-8, and an argument that is not raises `path must be a valid UTF-8 string` or `contents must be a valid UTF-8 string`, naming the argument. Every file your prompt creates with `store.write` therefore reads back as text.
 
-Reading needs UTF-8 as well. `store.read`, `store.read_numbered`, and `store.str_replace` need the file's contents to be UTF-8, and reading or editing a file whose bytes are not valid UTF-8 fails with a `store` error whose reason is `not_utf8`. The error value has a string `path` field and an integer `valid_up_to` field, and its message has this form:
+Reading needs UTF-8 as well. `store.read`, `store.read_numbered`, and `store.str_replace` need the file's contents to be UTF-8, and reading or editing a file whose bytes are not valid UTF-8 fails with a `store` error whose reason is `not_utf8`. The error value has a string `path` field and an integer `valid_up_to` field, and the store's message for it, the store's own wording that [Store error messages](#store-error-messages) describes, has this form:
 
 ````text
 file in store is not UTF-8 after byte {valid_up_to}: {path}
 ````
 
-`valid_up_to` is the length in bytes of the longest valid UTF-8 prefix of the contents, which is the byte offset where valid UTF-8 ends and so locates the first bad byte, and the message repeats it. A file `a.bin` whose first four bytes are valid gives `file in store is not UTF-8 after byte 4: a.bin`, and a file whose bytes are `a` followed by two invalid bytes gives a `valid_up_to` of 1.
+`valid_up_to` is the length in bytes of the longest valid UTF-8 prefix of the contents, which is the byte offset where valid UTF-8 ends and so locates the first bad byte, and the store's message repeats it. A file `a.bin` whose first four bytes are valid gives `file in store is not UTF-8 after byte 4: a.bin`, and a file whose bytes are `a` followed by two invalid bytes gives a `valid_up_to` of 1.
 
 A store the Host backs with a real directory also needs the names of its real files and directories to be UTF-8. A real file or directory whose name is not valid UTF-8 gives the same `not_utf8` reason, and then `valid_up_to` measures the name and `path` names the directory holding the bad name. Either way, `path` is a logical store path in the form the prompt uses, and never the Host's own path, even when the Host mounts the store away from the root.
 
 ### Reading a file that does not exist
 
-Reading a store file that does not exist raises an [error value](05-lua-environment.md#error-values) of kind `store` with reason `not_found` and a `path` field. Its message has the form `file not found in store: {path}`, naming the path as the prompt wrote it. [`pcall`](05-lua-environment.md#raising-and-catching-errors) catches the error so the block can read its fields:
+Reading a store file that does not exist raises an [error value](05-lua-environment.md#error-values) of kind `store` with reason `not_found` and a `path` field. The store's message for it has the form `file not found in store: {path}`, naming the path as the prompt wrote it. [`pcall`](05-lua-environment.md#raising-and-catching-errors) catches the error so the block can read its fields:
 
 ````markdown
 ---
@@ -388,10 +388,10 @@ return err.reason .. ': ' .. tostring(err)
 ````
 
 ````text
-not_found: file not found in store: missing.txt
+not_found: missing.md:12: That path does not exist. Check the path, or list its directory to find the right one.
 ````
 
-`err.reason` is `not_found`, and `tostring(err)` gives the message. [When a store call fails](#when-a-store-call-fails) lists every store reason and the fields each one has.
+`err.reason` is `not_found`, and `tostring(err)` gives the error value's message: the file and line of the failing `store.read`, then the fixed prose for `not_found`. The store's message reaches you only when nothing catches the failure, as the run's failure message followed by the call's location (see [Store failures that end the run](#store-failures-that-end-the-run)). [When a store call fails](#when-a-store-call-fails) lists every store reason and the fields each one has.
 
 ### When a write or an append fails
 
@@ -493,11 +493,13 @@ return err.reason .. ' ' .. err.rule .. ' ' .. err.path
 invalid_path traversal ../x
 ````
 
-The message has the form `invalid path "{path}": {reason}`, where `{reason}` is the broken rule as a sentence, such as `path is empty` or `path contains a traversal segment`. The path sits in double quotes exactly as supplied but escaped, so a backslash shows doubled and control characters appear as escapes. For `../x`, `tostring(err)` reads:
+The store's message for it has the form `invalid path "{path}": {reason}`, where `{reason}` is the broken rule as a sentence, such as `path is empty` or `path contains a traversal segment`. The path sits in double quotes exactly as supplied but escaped, so a backslash shows doubled and control characters appear as escapes. For `../x`, the store's message reads:
 
 ````text
 invalid path "../x": path contains a traversal segment
 ````
+
+A caught error value's `tostring(err)` gives the call's file and line and the fixed prose for `invalid_path` instead, as [When a store call fails](#when-a-store-call-fails) shows.
 
 Every store call except `store.glob` uses this message form, and `store.glob` says `invalid glob pattern` instead (see [Finding files with `store.glob`](#finding-files-with-storeglob)). Every store error names its path in the same store-relative form the prompt uses, such as `absent.txt`, never with the store's root or another internal prefix, even when the Host roots the store at a directory such as `/my/store`.
 
@@ -547,7 +549,7 @@ A store path holds no control character, meaning any byte below `0x20` or the by
 
 ### Backslashes
 
-The only separator in a store path is `/`. A path holding a backslash, such as `notes\today.md`, fails with rule `backslash` and the message `path contains a backslash`, because some kinds of storage treat a backslash as a separator and others as a literal byte. In Lua source that path is the string `'notes\\today.md'`, and the message shows the backslash doubled:
+The only separator in a store path is `/`. A path holding a backslash, such as `notes\today.md`, fails with rule `backslash` and the message `path contains a backslash`, because some kinds of storage treat a backslash as a separator and others as a literal byte. In Lua source that path is the string `'notes\\today.md'`, and the store's message shows the backslash doubled:
 
 ````text
 invalid path "notes\\today.md": path contains a backslash
@@ -699,7 +701,7 @@ A wrong-typed line bound fails with an error value of kind `lua`, not `store`, s
 
 ### Line range errors
 
-Line bounds that `store.read` or `store.read_numbered` cannot honor raise a `store` error with reason `invalid_range` and the message `invalid line range for {path}: {reason}`. The reason is a short human-readable explanation, and the path is the file exactly as the prompt wrote it. In place of the block in `## Main` of `slices`, this block catches one:
+Line bounds that `store.read` or `store.read_numbered` cannot honor raise a `store` error with reason `invalid_range` and the store's message `invalid line range for {path}: {reason}`. The reason is a short human-readable explanation, and the path is the file exactly as the prompt wrote it. In place of the block in `## Main` of `slices`, this block catches one:
 
 ````lua
 store.write('notes.md', 'one\ntwo\nthree')
@@ -708,10 +710,10 @@ return err.reason .. ': ' .. tostring(err)
 ````
 
 ````text
-invalid_range: invalid line range for notes.md: start must be at least 1
+invalid_range: slices.md:13: That line range is not valid. Use a range within the file's lines.
 ````
 
-The error value has a string `path` field naming the file and no other range details, so the specific rule that failed appears only in the message. A range error gives one of three reasons:
+The error value has a string `path` field naming the file and no other range details, and its message gives only the call's location and the fixed prose for `invalid_range`, so the specific rule that failed appears only in the store's message, which an uncaught failure's run message shows. A range error gives one of three reasons:
 
 | Reason in the message | When the read raises it |
 |---|---|
@@ -780,7 +782,7 @@ return store.read('fox.txt')
 the brown fox
 ````
 
-Each argument must be a Lua string of valid UTF-8. Any other value raises an error of kind `lua`, not `store`, with the message `{name} must be a string, got {type}`, where `{name}` is `path`, `old`, or `new`, and a string that is not valid UTF-8 raises `{name} must be a valid UTF-8 string`. The file has to be UTF-8 too, and editing a file whose bytes are not valid UTF-8 fails with reason `not_utf8` (see [Store files hold UTF-8 text](#store-files-hold-utf-8-text)).
+Each argument must be a Lua string of valid UTF-8. Any other value raises an error of kind `lua`, not `store`, with the refusal `{name} must be a string, got {type}`, where `{name}` is `path`, `old`, or `new`, and a string that is not valid UTF-8 raises `{name} must be a valid UTF-8 string`. The file has to be UTF-8 too, and editing a file whose bytes are not valid UTF-8 fails with reason `not_utf8` (see [Store files hold UTF-8 text](#store-files-hold-utf-8-text)).
 
 ### Making an anchor match once
 
@@ -806,13 +808,13 @@ return tostring(err) .. '\n' .. store.read('notes.md')
 ````
 
 ````text
-anchor "TODO" occurs 3 times in notes.md, expected exactly one; include more surrounding text so it matches once
+checklist.md:13: The text to replace was empty, missing, or found more than once. Use text that appears exactly once in the file.
 TODO: draft
 DONE: docs
 TODO: release
 ````
 
-The first edit is refused because `TODO` occurs three times, and the refused edit leaves the file exactly as it was. Its message gives the count and tells you to include more surrounding text. `TODO: docs` occurs once, so the second edit succeeds.
+The first edit is refused because `TODO` occurs three times, and the refused edit leaves the file exactly as it was. Its message names the line of the refused call and asks for text that appears exactly once, and the error value's `count` field holds the 3 matches. `TODO: docs` occurs once, so the second edit succeeds.
 
 ### When an edit is refused
 
@@ -834,7 +836,7 @@ return err.reason .. ' ' .. err.anchor .. ' ' .. err.count
 anchor na 3
 ````
 
-The message depends on why the anchor failed:
+The store's message depends on why the anchor failed:
 
 | Failure | `count` | Message |
 |---|---|---|
@@ -894,7 +896,7 @@ return err.reason .. ': ' .. tostring(err)
 ````
 
 ````text
-directory_not_empty: directory not empty in store: notes
+directory_not_empty: cleanup.md:13: That directory is not empty. Remove it recursively, or empty it first.
 ````
 
 So deleting `notes` fails while `notes/a.txt` exists, and succeeds once that file is gone. After `store.delete` removes a file, `store.read` on its path fails with the not-found message `file not found in store: {path}`. `store.delete` also fails when the policy denies it, when another access holds a conflicting claim that is not ordered before it, or when the storage behind the store fails for any reason other than the path being absent.
@@ -1125,12 +1127,12 @@ return err.kind .. ' ' .. err.reason .. ' ' .. err.rule .. ' ' .. err.path .. '\
 
 ````text
 store invalid_path wildcard a**b
-invalid glob pattern "a**b": pattern contains invalid wildcard grammar
+bad_pattern.md:12: That path is not valid. Use a relative path with no `.` or `..` segments, no backslashes, and no empty segments.
 ````
 
-The failure is an error value of error kind `store`, the kind every store failure has (see [When a store call fails](#when-a-store-call-fails)). Its `reason` is `invalid_path`, its `path` field names the pattern, and its `rule` field names the rule the pattern broke. Its message has the form `invalid glob pattern "{path}": {reason}`, with the pattern shown in quotes and the broken rule's reason text after the colon.
+The failure is an error value of error kind `store`, the kind every store failure has (see [When a store call fails](#when-a-store-call-fails)). Its `reason` is `invalid_path`, its `path` field names the pattern, and its `rule` field names the rule the pattern broke. Its message is the call's location and the fixed prose for `invalid_path`, while the store's message for it has the form `invalid glob pattern "{path}": {reason}`, with the pattern shown in quotes and the broken rule's reason text after the colon, as in `invalid glob pattern "a**b": pattern contains invalid wildcard grammar`.
 
-Each rule has a tag, which the `rule` field holds, and a reason text, which ends the message:
+Each rule has a tag, which the `rule` field holds, and a reason text, which ends the store's message:
 
 | Rule | The pattern breaks it when it | Reason text |
 |---|---|---|
@@ -1170,12 +1172,12 @@ return tostring(ok) .. ' ' .. err.kind .. ' ' .. tostring(err)
 ````
 
 ````text
-false store file not found in store: missing.md
+false store careful.md:12: That path does not exist. Check the path, or list its directory to find the right one.
 ````
 
 A failing store call raises its failure at your own call site: the error comes out of your `store.*` call itself. Wrapped in `pcall` (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)), the call returns `false` plus the failure as its second return value instead of ending the run. Both the short form `pcall(store.read, 'missing.md')` and the wrapped form `pcall(function() return store.read('missing.txt') end)` work, and afterward `ok` is `false` and `err` can be read field by field.
 
-The second value is a store error value: an error value whose error kind is `store`, and that carries a `message` and a `reason` field alongside the fields specific to that failure, such as `path`. Its `message` is the error's text, and `tostring(err)` returns that text, which is why `careful` returns `false store file not found in store: missing.md`.
+The second value is a store error value: an error value whose error kind is `store`, and that carries a `message` and a `reason` field alongside the fields specific to that failure, such as `path`. Its `message` is the file and line of the failing call, then the fixed prose the store reason has for a model to read, and `tostring(err)` returns that text, which is why `careful` returns `false store careful.md:12: That path does not exist. Check the path, or list its directory to find the right one.` The line is that of the `store.*` call itself, even inside a function that `pcall` runs (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). The store's own message for the failure, here `file not found in store: missing.md`, is what the run's failure message shows when nothing catches the error.
 
 A store failure reaches you in one of two ways. A `pcall` around the call catches it as a store error value, or, when nothing catches it, it ends the run as a run error (see [Store failures that end the run](#store-failures-that-end-the-run)). Every store operation, `store.exists` included, raises its failure the same way, as an error value of error kind `store` that aborts the current Lua block unless the call is wrapped in `pcall`.
 
@@ -1222,7 +1224,7 @@ The `reason` field holds the store reason: a stable tag that names the failure, 
 
 Every store reason is a string holding a lowercase snake_case tag. There are twenty-one of them, each naming exactly one failure, and no two failures share a tag: `not_found`, `already_exists`, `not_a_directory`, `is_a_directory`, `directory_not_empty`, `not_utf8`, `invalid_path`, `invalid_range`, `anchor`, `permission_denied`, `approval_required`, `scope_ended`, `read_only`, `outside_root`, `root_protected`, `no_store`, `cross_mount`, `io`, `unsupported`, `conflict`, and `backend`. Every store operation fails with this one family of reasons, so one branch on `reason` handles a failure from any `store.*` call.
 
-A missing file is the failure you meet most often. `store.read`, `store.read_numbered`, and `store.str_replace` on a missing file, whole or ranged, plain or numbered, fail with reason `not_found` and the message `file not found in store: {path}`, so `tostring(err)` gives `file not found in store: missing.txt` for a missing `missing.txt`. Two calls treat a missing file as normal instead: `store.delete` of a missing file succeeds, so removing the same path twice works, and `store.exists` reports absence as `false` without raising.
+A missing file is the failure you meet most often. `store.read`, `store.read_numbered`, and `store.str_replace` on a missing file, whole or ranged, plain or numbered, fail with reason `not_found` and the store's message `file not found in store: {path}`. So for a missing `missing.txt`, a caught failure's `tostring(err)` gives the call's file and line followed by `That path does not exist. Check the path, or list its directory to find the right one.`, and an uncaught one ends the run with `file not found in store: missing.txt` and the call's location. Two calls treat a missing file as normal instead: `store.delete` of a missing file succeeds, so removing the same path twice works, and `store.exists` reports absence as `false` without raising.
 
 ### Fields of a store error value
 
@@ -1247,21 +1249,21 @@ return err.kind .. '|' .. err.reason .. '|' .. err.path .. '|' .. tostring(err)
 ````
 
 ````text
-store|not_found|missing.txt|file not found in store: missing.txt
+store|not_found|missing.txt|fields.md:12: That path does not exist. Check the path, or list its directory to find the right one.
 ````
 
-The fields you can read are `err.kind`, `err.reason`, `err.path`, `err.anchor`, the integer `err.count`, and the others listed below, and the string ones concatenate as the example shows. Every store error value has `kind`, `message`, and `reason`. Besides those, it carries:
+The fields you can read are `err.kind`, `err.reason`, `err.path`, `err.anchor`, the integer `err.count`, and the others listed below, and the string ones concatenate as the example shows. Every store error value has `kind`, `code`, `message`, and `reason`, and its `code` holds the same tag as `reason`. Besides those, it carries:
 
 - `path`, a string, on every failure that names a path
 - `anchor` and `count` on an `anchor` failure
 - `rule` on an `invalid_path` failure
 - `valid_up_to` on a `not_utf8` failure, the failure for text that is not UTF-8
 
-`backend` and `no_store` failures name no path, and a `backend` error has no fields beyond `kind`, `message`, and `reason`. Any other detail, such as a denial reason, a range problem, an outside-root or cross-mount detail, an I/O message, or an unsupported-operation detail, appears only inside the message and never as its own field. So failures with reasons `invalid_range`, `permission_denied`, `approval_required`, `outside_root`, `cross_mount`, `io`, and `unsupported` carry only `path` as a field.
+`backend` and `no_store` failures name no path, and a `backend` error carries none of the extra fields above. Any other detail, such as a denial reason, a range problem, an outside-root or cross-mount detail, an I/O message, or an unsupported-operation detail, appears only inside the store's message and never as its own field, so a caught error value does not hold it. So failures with reasons `invalid_range`, `permission_denied`, `approval_required`, `outside_root`, `cross_mount`, `io`, and `unsupported` carry only `path` as a field.
 
-The `path` field names the path the failing call was given, exactly as you passed it, so a failed `store.read('missing.txt')` has `err.path == 'missing.txt'`. Only a `not_a_directory` failure differs: its `path` can name the file that sits where a directory is needed. Store errors name paths in the logical form you write, relative to the store root and without a leading `/`. When an error's prose embeds the path, as a permission denial's reason text or a conflict's detail does, that prose names the logical path too.
+The `path` field names the path the failing call was given, exactly as you passed it, so a failed `store.read('missing.txt')` has `err.path == 'missing.txt'`. Only a `not_a_directory` failure differs: its `path` can name the file that sits where a directory is needed. Store errors name paths in the logical form you write, relative to the store root and without a leading `/`. When the store's message embeds the path, as a permission denial's reason text or a conflict's detail does, it names the logical path too.
 
-The `valid_up_to` and `count` fields arrive in Lua as integers, capped at the largest 64-bit signed integer, 9223372036854775807. A store error value has the same fields whether the failure happens while a [Pack prelude](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals) is installing or during an ordinary store call, so Lua code sees no difference between the two. A failed read of `missing.txt` caught with `pcall` before the Pack preludes install still renders `store|not_found|missing.txt|file not found in store: missing.txt`.
+The `valid_up_to` and `count` fields arrive in Lua as integers, capped at the largest 64-bit signed integer, 9223372036854775807. A store error value has the same fields whether the failure happens while a [Pack prelude](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals) is installing or during an ordinary store call, so code that branches on `kind`, `reason`, or a field sees no difference between the two. Only the message differs: a store call made before the store functions take their run-time form, as while the Pack preludes install, puts the store's message ahead of the fixed prose, so a failed read of `missing.txt` there gives `file not found in store: missing.txt. That path does not exist. Check the path, or list its directory to find the right one.`, after the call's location when it has one.
 
 ### Store error messages
 
@@ -1285,12 +1287,12 @@ return 'context: ' .. err
 ````
 
 ````text
-context: file not found in store: missing.txt
+context: context.md:12: That path does not exist. Check the path, or list its directory to find the right one.
 ````
 
-`tostring(err)` returns the error value's model-facing message, because its `__tostring` returns its `message` field, so the wording you get is the same wording the store reports for a model to read. Concatenating the error value with a string, as in `'context: ' .. err`, gives the same message text as `tostring(err)`, so code that concatenates an error into a string works the same whether the error is a string or a store error value.
+`tostring(err)` returns the error value's `message` field, because its `__tostring` returns that field. For a store failure, that message is the file and line of the failing call, then the fixed prose for its reason, the text written for a model to read, which never carries the location itself. Concatenating the error value with a string, as in `'context: ' .. err`, gives the same message text as `tostring(err)`, so code that concatenates an error into a string works the same whether the error is a string or a store error value.
 
-The store's messages follow a few fixed rules:
+The store's message is a separate and more detailed text: the store's own wording for the failure, which names the path and the rule or detail that failed. It is the run's failure message when nothing catches the failure (see [Store failures that end the run](#store-failures-that-end-the-run)), while a caught error value keeps only the parts that have fields, such as `path`, `rule`, `anchor`, and `count`. The store's messages follow a few fixed rules:
 
 - A message is a lowercase phrase, and the store's own wording ends without a period, as in `file not found in store: {path}` and `store I/O failure on {path}: {message}`.
 - A message says what failed and, where there is a fix, how to make it. An anchor that occurs more than once gives a message ending `include more surrounding text so it matches once`, and an invalid path names the rule the path broke, as in `invalid path "../x": path contains a traversal segment`.
@@ -1326,10 +1328,10 @@ return e1.reason .. ' ' .. e1.path .. '\n' .. e2.reason .. ' ' .. e2.path .. '\n
 ````text
 is_a_directory notes
 not_a_directory a.txt
-not a directory in store: a.txt
+wrong_kind.md:15: That path is not a directory. Use a directory path for this operation.
 ````
 
-Once `notes/a.txt` exists, `notes` is a directory, so reading it fails with `is_a_directory` rather than `not_found`. Writing `a.txt/b.txt` while `a.txt` is a file fails with `not_a_directory`, and the error's `path` names the file `a.txt` that sits where a directory is needed. This table lists the messages for the reasons whose wording the store fixes, with the fields each carries beyond `kind`, `message`, and `reason`:
+Once `notes/a.txt` exists, `notes` is a directory, so reading it fails with `is_a_directory` rather than `not_found`. Writing `a.txt/b.txt` while `a.txt` is a file fails with `not_a_directory`, and the error's `path` names the file `a.txt` that sits where a directory is needed. The store's message for it is `not a directory in store: a.txt`. This table lists the store's messages for the reasons whose wording the store fixes, with the fields each carries beyond `kind`, `code`, `message`, and `reason`:
 
 | Reason | Message | Extra fields |
 |---|---|---|
@@ -1379,7 +1381,7 @@ lua
 
 Every `path`, `contents`, `old`, `new`, and `pattern` argument to a `store.*` call is a required string, and leaving one out or passing another type raises an error at the call. The Engine checks store arguments once, when it parses the call, so a bad argument to any `store.*` function raises at the call site, where `pcall` catches it.
 
-A store argument that fails its check raises an error value of error kind `lua`; only a failure the store itself reports has error kind `store`. The message has the form `{name} must be a string, got {type}`, worded the same for every store call, as in `path must be a string, got {type}` and `contents must be a string, got {type}`. Once a call's arguments pass their checks, any failure of the operation itself has error kind `store`.
+A store argument that fails its check raises an error value of error kind `lua`; only a failure the store itself reports has error kind `store`. Its message holds the refusal `{name} must be a string, got {type}` after the call's file and line, worded the same for every store call, as in `path must be a string, got {type}` and `contents must be a string, got {type}`. Once a call's arguments pass their checks, any failure of the operation itself has error kind `store`.
 
 ### Store failures that end the run
 
@@ -1401,7 +1403,7 @@ return store.read('missing.txt')
 ```
 ````
 
-This run never returns a result. The failed read stops the block at that call, and the run fails with run error kind `Vfs`, the run error kind for a store failure that ends a run. The run error carries the store's model-facing message, here `file not found in store: missing.txt`. Run error kinds as a whole are covered in [Run error kinds](16-limits-and-errors.md#run-error-kinds).
+This run never returns a result. The failed read stops the block at that call, and the run fails with run error kind `Vfs`, the run error kind for a store failure that ends a run. The run's failure message is the store's message followed by the location of the failing call, here `file not found in store: missing.txt (at uncaught.md:12)`. Run error kinds as a whole are covered in [Run error kinds](16-limits-and-errors.md#run-error-kinds).
 
 An uncaught failure stops the block at the failing call, and the store operations that already ran keep their success events (see [How store calls run and what they report](#how-store-calls-run-and-what-they-report)). A block that writes, reads, then makes a failing `store.str_replace` records the write and the read as succeeded and the replace as failed, in statement order, and the block ends with an error. An uncaught store failure in the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) ends the run with `Vfs` too, the same as in a section (see [The store in the H1 body](#the-store-in-the-h1-body)).
 
@@ -1431,7 +1433,7 @@ return 'tidied'
 ```
 ````
 
-The caught store error, raised again with `error(err)`, ends the run with `Vfs` and the original store message `file not found in store: missing.txt`. That holds even though another suspending call, `call('### Cleanup', '')` (see [Calling a section](08-jump-and-call.md#calling-a-section)), ran in between.
+The caught store error, raised again with `error(err)`, ends the run with `Vfs` and the original store message, still placed on the `store.read` line: `file not found in store: missing.txt (at reraise.md:12)`. That holds even though another suspending call, `call('### Cleanup', '')` (see [Calling a section](08-jump-and-call.md#calling-a-section)), ran in between.
 
 Two failures happen before any block runs, and both end the run with `Vfs`: a run whose Host handle declares no store fails before its first block, rather than on its first store call, with `this run declares no store, so no store operation can run`, and a store backend that fails as the run starts, for example by refusing its session, fails the run at its first step with a message that starts `store operation failed: ` followed by the store's own error text. [When the store cannot start](#when-the-store-cannot-start) covers both.
 
@@ -1660,10 +1662,10 @@ store.append('log.txt', item .. ';')
 ```
 ````
 
-This run never reaches its `return`. Both arms append to `log.txt`, nothing orders one arm after the other, and the run fails with run error kind `Vfs` and a message of this form, where each identity names one of the two arms:
+This run never reaches its `return`. Both arms append to `log.txt`, nothing orders one arm after the other, and the run fails with run error kind `Vfs` and a message of this form, where each identity names one of the two arms and the location is the losing arm's `store.append`:
 
 ````text
-store determinism violation: write on log.txt by {id} conflicts with a write claim by {other}
+store determinism violation: write on log.txt by {id} conflicts with a write claim by {other} (at race.md:19)
 ````
 
 Every store call claims what it touches for the chain that made it, so the store tracks which chain touches which region. That record is a claim. Two store accesses that touch the same region conflict only when at least one of them is a write and the two are concurrent, and such a clash is a claims conflict. Two accesses are concurrent when they come from different chains of the run and no spawn or join orders one before the other, or when they come from two runs sharing one Host store at the same time.
@@ -1761,7 +1763,7 @@ The message has the form `store determinism violation: {detail}`, and the detail
 store determinism violation: {kind} on {path} by {id} conflicts with a {other_kind} claim by {other}
 ````
 
-The message begins with the fixed prefix `store determinism violation: `, names the contested path as the prompt wrote it, says `conflicts with`, gives each claim as `read` or `write`, and names both chains' identities, each rendered as `ExecId(...)`. `{kind}` and `{id}` belong to the access that detected the conflict, the one that came second, and `{other_kind}` and `{other}` belong to the earlier claim it ran into.
+The message begins with the fixed prefix `store determinism violation: `, names the contested path as the prompt wrote it, says `conflicts with`, gives each claim as `read` or `write`, and names both chains' identities, each rendered as `ExecId(...)`. `{kind}` and `{id}` belong to the access that detected the conflict, the one that came second, and `{other_kind}` and `{other}` belong to the earlier claim it ran into. The run's failure message follows this text with ` (at {file}:{line})`, the line of the store call that detected the conflict, even though that call never resumes into Lua.
 
 `store.read`, `store.read_numbered`, `store.exists`, and `store.glob` show as a `read` claim, and `store.write`, `store.append`, `store.str_replace`, and `store.delete` show as a `write` claim. The path in the message is the path the detecting access named, or its pattern when that access is a `store.glob`, even when the clash is over an ancestor directory or over the other chain's glob pattern. So when a `store.glob('research/*')` runs second and meets a sibling's write of `research/5.md`, the message names `research/*`.
 
@@ -2029,7 +2031,7 @@ Under a Host in Ask mode, with `note.md` holding `hello`, the run result is:
 hello | approval_required
 ````
 
-A store change in Ask mode raises reason `approval_required` with the message `store path {path} needs approval, which this run cannot give: {op} on {path} needs user approval: the Ask mode refuses all mutations`. For the write above, that is `store path note.md needs approval, which this run cannot give: Write on note.md needs user approval: the Ask mode refuses all mutations`.
+A store change in Ask mode raises reason `approval_required` with the store's message `store path {path} needs approval, which this run cannot give: {op} on {path} needs user approval: the Ask mode refuses all mutations`. For the write above, that is `store path note.md needs approval, which this run cannot give: Write on note.md needs user approval: the Ask mode refuses all mutations`.
 
 In Plan mode a store change succeeds only when its path ends in `.md`:
 
@@ -2057,7 +2059,7 @@ Under a Host in Plan mode, the run result is:
 # ok | permission_denied | false
 ````
 
-Plan mode's markdown test is case-sensitive, so a change to a path ending in `.MD` is refused too. A store change to a non-markdown path in Plan mode raises reason `permission_denied` with the message `permission denied for store path {path}: {op} on {path} is refused: the Plan mode allows mutations only to markdown paths`. For the write above, that is `permission denied for store path data.bin: Write on data.bin is refused: the Plan mode allows mutations only to markdown paths`.
+Plan mode's markdown test is case-sensitive, so a change to a path ending in `.MD` is refused too. A store change to a non-markdown path in Plan mode raises reason `permission_denied` with the store's message `permission denied for store path {path}: {op} on {path} is refused: the Plan mode allows mutations only to markdown paths`. For the write above, that is `permission denied for store path data.bin: Write on data.bin is refused: the Plan mode allows mutations only to markdown paths`.
 
 A mode refusal's reason text starts with the operation's kind name, followed by `on {path}` with the path in logical form. The kind name is `Write` for `store.write` and `store.str_replace`, `Append` for `store.append`, and `Delete` for `store.delete`.
 

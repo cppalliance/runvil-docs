@@ -921,7 +921,13 @@ return prose
 ```
 ````
 
-The run fails with an error containing `global 'f' in {{ f }} is not JSON data`. The message does not name the Lua type, so when you see it, check what the global holds. The error text holds only the message, the substitution kind, and the byte offset, in the form `{message} [Serialize at byte {offset}]`.
+The run fails with this message, which gives the substitution's own text in the form `{message} [Serialize at byte {offset}]`, then the reason the lookup gave, then the placeholder's line:
+
+````text
+global 'f' in {{ f }} is not JSON data [Serialize at byte 5]: global `f` is a function; bare globals in prose must be JSON data (at not_data.md:15)
+````
+
+A caught error value names neither the Lua type nor the lookup's reason, so when `tostring(err)` says `is not JSON data`, check what the global holds.
 
 The section entry's `messages` list, and each [message record](11-conversations.md#message-records) read from it, are userdata, so a bare name whose global holds one fails under the same rule. After `messages:user('u')`, with `list = messages` and `record = messages[1]`, both `{{ list }}` and `{{ record }}` fail with substitution kind `Serialize`. A global holding `json.null` fails with substitution kind `NullValue` instead, as [Which values a bare global can hold](#which-values-a-bare-global-can-hold) describes. Under a strict `_G` metatable whose `__index` raises an error for unknown names, a bare name with no global fails at the `prose` read with substitution kind `Serialize` and the `is not JSON data` message, not `UnknownNamespace`, because the raised error comes back as a failed lookup.
 
@@ -1081,7 +1087,7 @@ The second fence's `prose` is `First: one.`, which `var.first` keeps, and the th
 
 ### Errors appear at the read
 
-Because rendering happens at the read, a bad placeholder costs nothing until the `prose` read that renders it. A substitution error is raised where your code touches `prose`, such as at `return prose`, not when the file is parsed and not when the section starts. When `return prose` is a block's only Lua, a placeholder such as `{{ reply }}` with no `reply` global fails right at that read. The prose `Missing: {{ var.missing }}.` with `return prose` fails the run with `missing {{ var.missing }}`, while the same kind of bad placeholder above a block that only does `return 'ok'` yields `ok`. Since the block starts normally, it can also catch the failure: `pcall(function() return prose end)` catches the `{{ var.missing }}` error, and the block can go on to return `caught`.
+Because rendering happens at the read, a bad placeholder costs nothing until the `prose` read that renders it. A substitution error is raised where your code touches `prose`, such as at `return prose`, not when the file is parsed and not when the section starts, and its location still names the placeholder's own line (see [What the error value holds](#what-the-error-value-holds)). When `return prose` is a block's only Lua, a placeholder such as `{{ reply }}` with no `reply` global fails right at that read. The prose `Missing: {{ var.missing }}.` with `return prose` fails the run with `missing {{ var.missing }}`, while the same kind of bad placeholder above a block that only does `return 'ok'` yields `ok`. Since the block starts normally, it can also catch the failure: `pcall(function() return prose end)` catches the `{{ var.missing }}` error, and the block can go on to return `caught`.
 
 ### Prose that is never read
 
@@ -1341,7 +1347,7 @@ The run result is:
 false
 ````
 
-The read of `prose` fails at the point where Lua reads it, with substitution kind `Serialize` and the message `global 'prose' in {{ prose }} is not JSON data`, because `prose` is not a substitution source. The message names `prose`, so `tostring(err):match('prose')` succeeds on the caught error, and the message does not include the underlying recursion refusal.
+The read of `prose` fails at the point where Lua reads it, with substitution kind `Serialize` and the message `global 'prose' in {{ prose }} is not JSON data`, because `prose` is not a substitution source. The caught error's message names `prose`, so `tostring(err):match('prose')` succeeds, and it does not include the underlying recursion refusal, which only the run's failure message carries when the read goes uncaught.
 
 ## Catching and reading substitution errors
 
@@ -1387,18 +1393,18 @@ return err.kind .. ' | ' .. err.message
 The run result is:
 
 ````text
-lua | missing {{ var.missing }} [MissingKey at byte 9]
+lua | caught.md:11: missing {{ var.missing }}. A placeholder in the section's prose could not be filled. Fix the placeholder, or set the value it reads before the prose is read.
 ````
 
-A caught substitution failure gives an error value whose error kind, its `kind` field, is always `lua`, whatever its substitution kind, so the substitution kind, here `MissingKey`, shows only in the text. The error value's `message` field holds that text, and `tostring(err)` returns the same string, so over the prose `Missing: {{ var.missing }}.`, `ok` is `false`, `err.kind` is `lua`, and `tostring(err)` is `missing {{ var.missing }} [MissingKey at byte 9]`. The error value has no fields beyond `kind` and `message`, so nothing but the text names the failing placeholder, path, or offset.
+A caught substitution failure gives an error value whose error kind, its `kind` field, is always `lua`, whatever its substitution kind. Its `message` field, which `tostring(err)` also returns, starts with the file and line of the failing placeholder, here `caught.md:11`, the line of `Missing: {{ var.missing }}.` rather than the line of the `prose` read (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). It goes on to name what failed and ends with the fixed prose for a failed substitution. It leaves out the substitution kind, here `MissingKey`, and the byte offset, which only the run's failure message shows (see [The error text](#the-error-text)), and the error value has no field for the substitution kind, the path, or the offset. Its `code` is `substitution` whatever the substitution kind.
 
 ### The error text
 
-Every substitution failure's text has the form `{message} [{Kind} at byte {offset}]`, such as `missing {{ var.x }} [MissingKey at byte 42]`. That same text is what `tostring(err)` returns under `pcall`, and what the run's failure message contains when the failure goes uncaught.
+Every substitution failure's own text has the form `{message} [{Kind} at byte {offset}]`, such as `missing {{ var.x }} [MissingKey at byte 42]`. When the failure goes uncaught, the run's failure message is that text followed by the location of the failing placeholder, as in `missing {{ var.x }} [MissingKey at byte 42] (at {file}:{line})`, and a `Serialize` failure puts the reason its lookup gave, after a colon, ahead of the location. Under `pcall`, `tostring(err)` gives `{file}:{line}: {message}.` followed by the fixed prose for a failed substitution instead, as [What the error value holds](#what-the-error-value-holds) shows, so the caught text never holds the kind or the offset.
 
 ### The byte offset
 
-The byte offset is the position of the failing placeholder's opening `{{`, counted in bytes from the start of the prose being substituted. In `Missing: {{ var.missing }}.` nine bytes come before the `{{`, so the offset is 9. That prose is the pending prose the Lua block read, trimmed of surrounding blank lines and starting after the nearest preceding heading, `lua` fence, or [thematic break](03-blocks-and-prose.md#thematic-breaks-and-setext-headings), so the offset is not a position in the file:
+The byte offset is the position of the failing placeholder's opening `{{`, counted in bytes from the start of the prose being substituted. In `Missing: {{ var.missing }}.` nine bytes come before the `{{`, so the offset is 9. That prose is the pending prose the Lua block read, trimmed of surrounding blank lines and starting after the nearest preceding heading, `lua` fence, or [thematic break](03-blocks-and-prose.md#thematic-breaks-and-setext-headings), so the offset is not a position in the file. The run's failure message shows the offset, with the file line after it:
 
 ````markdown
 ---
@@ -1418,18 +1424,17 @@ Draft notes.
 prefix {{ ghost.x }}
 
 ```lua
-local ok, err = pcall(function() return prose end)
-return tostring(err)
+return prose
 ```
 ````
 
-The run result is:
+The run fails with this message:
 
 ````text
-unknown namespace or global 'ghost' in {{ ghost.x }} [UnknownNamespace at byte 7]
+unknown namespace or global 'ghost' in {{ ghost.x }} [UnknownNamespace at byte 7] (at offset.md:15)
 ````
 
-The thematic break starts fresh pending prose, so `Draft notes.` is not counted, and the offset is 7, just past `prefix `. A body of `Draft notes.`, a `---` break, and `Ask the question.` before a fence leaves pending prose of exactly `Ask the question.` in the same way.
+The thematic break starts fresh pending prose, so `Draft notes.` is not counted, and the offset is 7, just past `prefix `, while the line, 15, counts from the top of the file. A body of `Draft notes.`, a `---` break, and `Ask the question.` before a fence leaves pending prose of exactly `Ask the question.` in the same way.
 
 ### How messages quote a path
 
@@ -1437,7 +1442,7 @@ When a substitution error message quotes the placeholder, it prints the path tri
 
 ### When a failure goes uncaught
 
-An uncaught substitution failure raised by reading `prose` fails the run with run error kind `Lua`. The run's error message contains the substitution's own text, so it names the failing placeholder, such as `missing {{ var.missing }}` for a Lua block that runs `return prose` over `Missing: {{ var.missing }}.` In the H1 pass, an uncaught substitution failure ends the run with run error kind `RequirementsUnmet` instead of `Lua`:
+An uncaught substitution failure raised by reading `prose` fails the run with run error kind `Lua`. The run's error message is the substitution's own text, which names the failing placeholder, followed by the placeholder's location, so with `return prose` in place of the block in the `caught` prompt, the run fails with `missing {{ var.missing }} [MissingKey at byte 9] (at caught.md:11)`. The H1 pass is no exception, because a failed substitution never counts as a failed [H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate):
 
 ````markdown
 ---
@@ -1461,11 +1466,10 @@ return var.text
 ```
 ````
 
-The run's message starts with the [requirements notice](04-how-a-prompt-runs.md#the-requirements-notice):
+The run fails with run error kind `Lua` and this message, which points at the placeholder's line in the H1 body:
 
 ````text
-the environment cannot satisfy this prompt:
-- the H1 gate failed
+missing {{ var.missing }} [MissingKey at byte 9] (at gate.md:9)
 ````
 
-The substitution failure follows the notice as its cause, after a colon and a space, so the message goes on to contain `missing {{ var.missing }} [MissingKey at byte 9]`. An uncaught substitution failure ends the run as run error kind `Lua`, or as run error kind `RequirementsUnmet` in the H1 pass.
+Unlike a failed H1 gate, the message has no [requirements notice](04-how-a-prompt-runs.md#the-requirements-notice) in front. An uncaught substitution failure ends the run as run error kind `Lua` wherever the `prose` read happens.

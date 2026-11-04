@@ -173,7 +173,7 @@ return 'topics ran'
 worker ran
 ````
 
-The heading reference `'### Worker'` resolves to the section with exactly that name at exactly that level, so among the level-3 siblings `Worker` and `Topics` it finds `Worker`. Change the call to `call('## Worker')` and the lookup fails, because no section that `## Main` can name sits at level 2 with the name `Worker`. The call raises the not-found error, whose message lists what `## Main` can name:
+The heading reference `'### Worker'` resolves to the section with exactly that name at exactly that level, so among the level-3 siblings `Worker` and `Topics` it finds `Worker`. Change the call to `call('## Worker')` and the lookup fails, because no section that `## Main` can name sits at level 2 with the name `Worker`. The call raises the not-found error, whose text lists what `## Main` can name:
 
 ````text
 section heading `## Worker` not found; available sections: ### Worker, ### Topics
@@ -380,13 +380,13 @@ Kid notes.
 Other notes.
 ````
 
-The run fails with run error kind `Lua`, and the not-found error's message names the missing heading and lists what `## Main` can name:
+The run fails with run error kind `Lua`. Its message is the not-found error's text, which names the missing heading and lists what `## Main` can name, followed by the line of the `call`:
 
 ````text
-section heading `## Missing` not found; available sections: ## Other, ### Kid
+section heading `## Missing` not found; available sections: ## Other, ### Kid (at missing-call.md:12)
 ````
 
-The message always has this form:
+The not-found error's text always has this form:
 
 ````text
 section heading `{heading}` not found; available sections: {list}
@@ -760,9 +760,9 @@ Each Lua block starts with no pending jump, so a `jump` affects only the block t
 
 At the call itself, `jump` checks only that its target is a string. The heading reference is looked up only after the jumping block has ended, and the walk then continues at that heading. The jumping section closes as completed, with its final `var` saved, before the heading is looked up, so it still reports that its section finished even when the target fails to resolve. Because the lookup runs after the jumping section has closed, a bad `jump` target never raises an error inside the jumping block, and `pcall` there cannot catch it.
 
-A `jump` whose heading matches no visible section fails the run with the not-found error, ``section heading `{heading}` not found; available sections: {list}``. The list names only the jumper's visible set, so a fanout worker section's failed `jump('## Parent')` lists the worker section's own sibling `### Items` and nothing else.
+A `jump` whose heading matches no visible section fails the run with the not-found error, ``section heading `{heading}` not found; available sections: {list}``, followed by ` (at {file}:{line})` with the line of the `jump` call (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). The list names only the jumper's visible set, so a fanout worker section's failed `jump('## Parent')` lists the worker section's own sibling `### Items` and nothing else.
 
-A `jump` whose heading reference is malformed, such as a bare name, a heading made only of `#` markers, or markers with no whitespace after them, also fails the run after the jumping block has ended, with the matching message from [Malformed heading references](#malformed-heading-references). Every failed `jump` lookup has run error kind `Lua`.
+A `jump` whose heading reference is malformed, such as a bare name, a heading made only of `#` markers, or markers with no whitespace after them, also fails the run after the jumping block has ended, with the matching message from [Malformed heading references](#malformed-heading-references). Every failed `jump` lookup has run error kind `Lua` and points at the line of the `jump` call.
 
 ### The adhoc tool handler refusal
 
@@ -775,7 +775,7 @@ jump is unavailable inside an adhoc tool handler: return a value from the handle
 So the handler returns a value, and the block calls `jump` after the tool call returns. The run fails if nothing catches the refusal. The rules around it:
 
 - `jump` is refused while an adhoc tool's handler runs, whether you called the tool with [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls) or the model called it during [`models.loop`](11-conversations.md#starting-a-conversation), and no jump lands in either case.
-- The refusal holds even when the handler calls `jump` through a reference saved before the adhoc tool was defined, such as `local j = jump` followed by `j('## Other')`. The error still begins `jump is unavailable inside an adhoc tool handler`.
+- The refusal holds even when the handler calls `jump` through a reference saved before the adhoc tool was defined, such as `local j = jump` followed by `j('## Other')`. The error still holds `jump is unavailable inside an adhoc tool handler`.
 - A refusal the handler does not catch fails the handler and is raised where the tool was called. So `pcall(tools.call, ...)` in the block catches it, returns `false` with the refusal text, and the block keeps running.
 - `jump` stays refused in an outer handler after a nested handler it called has returned. After the outer handler's `tools.call('adhoc/inner', {})` returns, where `adhoc/inner` is the id of another adhoc tool, named `inner`, `pcall(jump, '## Other')` inside the outer handler still fails with the refusal message.
 - `jump` works again in the block once the outermost adhoc tool handler returns or fails, whether the handlers ran under `tools.call` or `models.loop`, including after `pcall(tools.call, ...)` has caught the handler's own error.
@@ -1273,7 +1273,7 @@ Writes the called chain makes to its copy of `var` stay in the chain and are dis
 
 Because a called chain's `var` writes never reach the caller, pass results back as the chain's return value, which `call` hands to the caller, as `local r = call('## Sub')` gets `sub saw caller` from the `return` in `## Sub`.
 
-The snapshot needs the `var` global itself to stay in place. After you reassign the `var` global, as in `var = 5`, the next `call` or `tasks.fanout` fails at the call when it takes its copy of `var`, with an [error value](05-lua-environment.md#error-values) of kind `lua` and this message:
+The snapshot needs the `var` global itself to stay in place. After you reassign the `var` global, as in `var = 5`, the next `call` or `tasks.fanout` fails at the call when it takes its copy of `var`, with an [error value](05-lua-environment.md#error-values) of kind `lua` whose message holds this refusal after the file and line of the call:
 
 ````text
 the `var` global was reassigned; write `var.<field>` instead
@@ -1329,13 +1329,17 @@ Heading errors from `call` are raised at the call site as the call's own error, 
 
 ### What the caught error value holds
 
-A failed `call` raises the Engine's error value in the calling block, so `pcall(call, ...)` returns `false` and that error value. A failure inside a `call` reaches the caller as the called chain's own error value, with its `kind`, its message, and its kind's fields intact, and it is never rewrapped as a generic `call` failure. Here `## Leaky` starts a task with `tasks.spawn` and ends while that task is still live:
+A failed `call` raises the Engine's error value in the calling block, so `pcall(call, ...)` returns `false` and that error value. A failure inside a `call` reaches the caller as the called chain's own error value, with its `kind`, its message, and its kind's fields intact, and it is never rewrapped as a generic `call` failure. Its message keeps the line where the failure happened inside the called chain, not the line of the `call` (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). Here `## Leaky` starts a task with `tasks.spawn` and ends while that task is still live:
 
 ````lua
 local ok, err = pcall(call, '## Leaky')
 ````
 
-`ok` is `false`, `err.kind` is `'tasks_live'`, `err.tasks` is `'0.0.0'`, and the message names `0.0.0`.
+`ok` is `false`, `err.kind` is `'tasks_live'`, `err.tasks` is `'0.0.0'`, and `tostring(err)` gives this message, whose line is that of the `tasks.spawn` in `## Leaky` that started the task left running:
+
+````text
+{file}:{line}: chain ended with tasks still live: 0.0.0; wait on or cancel every task a chain spawns before it ends. The chain ended with tasks still running. Wait on or cancel every task the chain spawns before it ends.
+````
 
 ### What `pcall` cannot catch
 
@@ -1367,17 +1371,17 @@ return call('## Alpha')
 ```
 ````
 
-The prompt parses and runs until the recursion depth cap fires, and then the run fails with run error kind `Quota` and this message:
+The prompt parses and runs until the recursion depth cap fires, and then the run fails with run error kind `Quota` and this message, which points at the `call` in `## Alpha` that would have nested one level too deep:
 
 ````text
-call recursion exceeded cap of 8
+recursion exceeded cap of 8 (at ping-pong.md:12)
 ````
 
 ### Mutual recursion
 
 A section's visible set excludes the section itself, for `call` just as for `tasks.spawn`, so a section cannot target itself: `return call('## Self')` written in `## Self` fails with a `not found` error. Recursion has to go between two different sections that target each other, such as `## Alpha` and `## Beta` above. That is mutual recursion: two sections call each other back and forth, each nested call adding one level of call depth, until the recursion depth cap stops them. In the prompt above, `## Alpha` runs at depths 0, 2, 4, 6, and 8. The pair can be child sections too, such as `### X` running `return call('### Y')` and `### Y` running `return call('### X')`.
 
-The recursion depth cap is the limit of 8 nested calls along one call chain, so unbounded mutual recursion such as `## A` running `return call('## B')` and `## B` running `return call('## A')` fails the run when it reaches the cap of 8. Calls nest up to 8 levels deep, counting the first call, and the ninth nested call fails the run with the message `call recursion exceeded cap of 8`.
+The recursion depth cap is the limit of 8 nested calls along one call chain, so unbounded mutual recursion such as `## A` running `return call('## B')` and `## B` running `return call('## A')` fails the run when it reaches the cap of 8. Calls nest up to 8 levels deep, counting the first call, and the ninth nested call fails the run with the message `recursion exceeded cap of 8` and the location of that call.
 
 You can catch the refusal with `pcall` at the deepest level:
 
@@ -1425,33 +1429,36 @@ Each `call`, each task started by `tasks.spawn`, and each [fanout arm](14-fanout
 
 | Started by | Adds a level | Message at the cap |
 | --- | --- | --- |
-| `call` | yes | `call recursion exceeded cap of 8` |
-| `tasks.spawn` | yes | `call recursion exceeded cap of 8` |
-| A `tasks.fanout` arm | yes | `tasks.fanout recursion exceeded cap of 8` |
+| `call` | yes | `recursion exceeded cap of 8` |
+| `tasks.spawn` | yes | `recursion exceeded cap of 8` |
+| A `tasks.fanout` arm | yes | `recursion exceeded cap of 8` |
 | `jump` | no | none |
 
-Each `tasks.fanout` arm runs one call level deeper than the section that called `tasks.fanout`, so arms count against the same cap that `call` uses. A section at depth 7 can still fan out, but a `call` made inside one of its arms trips the cap: when `B` fans out at depth 7 over `W`, whose body is `return call('## C')`, the arm's `call` fails with `call recursion exceeded cap of 8`, and uncaught it fails the run with a `Quota` error.
+Each `tasks.fanout` arm runs one call level deeper than the section that called `tasks.fanout`, so arms count against the same cap that `call` uses. A section at depth 7 can still fan out, but a `call` made inside one of its arms trips the cap: when `B` fans out at depth 7 over `W`, whose body is `return call('## C')`, the arm's `call` fails with `recursion exceeded cap of 8`, and uncaught it fails the run with a `Quota` error.
 
-Call depth accumulates across a fanout boundary, so fanning out does not reset the depth, and a section already at the cap cannot fan out, because its arms would run one level deeper still. In a ping-pong like the one above where `## Alpha`, on its fifth run at depth 8, does `return tasks.fanout('## W', {'x'})` instead of calling `## Beta`, the run fails with a `Quota` error whose message contains `tasks.fanout recursion exceeded cap of 8`. Calling `tasks.fanout('### Worker', {'x'})` from any section at depth 8 fails the same way, with the depth cap error named after the fanout, since its arms would run at depth 9.
+Call depth accumulates across a fanout boundary, so fanning out does not reset the depth, and a section already at the cap cannot fan out, because its arms would run one level deeper still. In a ping-pong like the one above where `## Alpha`, on its fifth run at depth 8, does `return tasks.fanout('## W', {'x'})` instead of calling `## Beta`, the run fails with a `Quota` error whose message is `recursion exceeded cap of 8` followed by the location of that `tasks.fanout`. Calling `tasks.fanout('### Worker', {'x'})` from any section at depth 8 fails the same way, since its arms would run at depth 9.
 
-A fanout whose arms would pass the cap starts no arm. Every arm would run at the same depth, so the first arm's start is refused, the fanout stops, and it raises the depth cap error, which `pcall` reads as kind `lua`. Its message reads exactly `tasks.fanout recursion exceeded cap of 8`, with no `call` wording and no prefix, and it reaches the run unchanged through every enclosing `call` level, with no Lua runtime-error prefix or traceback. Even after eight nested `call` levels, the run's error text is exactly `tasks.fanout recursion exceeded cap of 8`.
+A fanout whose arms would pass the cap starts no arm. Every arm would run at the same depth, so the first arm's start is refused, the fanout stops, and it raises the depth cap error, which `pcall` reads as kind `lua`. Its text is `recursion exceeded cap of 8`, the same as for a `call`, and it reaches the run unchanged through every enclosing `call` level, with no Lua runtime-error prefix or traceback. Even after eight nested `call` levels, the run's message is `recursion exceeded cap of 8 (at {file}:{line})`, with the line of the `tasks.fanout` in the chain that went too deep.
 
-Tasks started by `tasks.spawn` run one call level deeper than the section that spawned them, count toward the same cap as `call`, and share `call`'s target resolution too. A task refused at the cap reads `call recursion exceeded cap of 8` when `tasks.spawn` started it, the same message as `call`, and `tasks.fanout recursion exceeded cap of 8` when it is a fanout arm. A `tasks.spawn` refused at the cap is the spawn's own answer, so `pcall(tasks.spawn, ...)` catches it in the spawning block instead of ending the run. With `local ok, err = pcall(tasks.spawn, '## Beta')` followed by `log(tostring(err))`, the deepest section logs `call recursion exceeded cap of 8`, and the run then ends with the `done` fallback or a `tasks_live` error rather than with the cap error. When nothing catches the refusal and it ends the run, it is a `Quota` error.
+Tasks started by `tasks.spawn` run one call level deeper than the section that spawned them, count toward the same cap as `call`, and share `call`'s target resolution too. A task refused at the cap reads `recursion exceeded cap of 8`, the same text as for `call`, whether `tasks.spawn` started it or it is a fanout arm. A `tasks.spawn` refused at the cap is the spawn's own answer, so `pcall(tasks.spawn, ...)` catches it in the spawning block instead of ending the run. With `local ok, err = pcall(tasks.spawn, '## Beta')` followed by `log(tostring(err))`, the deepest section logs this message, whose line is that of the refused `tasks.spawn`:
+
+````text
+{file}:{line}: recursion exceeded cap of 8. Calls nest deeper than the cap allows. Nest `call`, `tasks.spawn`, and `tasks.fanout` less deeply.
+````
+
+The run then ends with the `done` fallback or a `tasks_live` error rather than with the cap error. When nothing catches the refusal and it ends the run, it is a `Quota` error.
 
 The `depth` field of [`tasks.status`](15-tasks.md#checking-on-a-task-with-tasksstatus-tasksready-and-tasksnote) reports a task's call depth, the same count the cap checks, so `tasks.status(t).depth` reads 1 for a task spawned from the main walk.
 
 ### The `CallDepthExceeded` failure
 
-`CallDepthExceeded` is the dedicated depth cap error. Its message holds the cap of 8 and names the kind of call that tripped it, in the form `{via} recursion exceeded cap of 8`:
+`CallDepthExceeded` is the dedicated depth cap error. Its text holds the cap and nothing else, in the form `recursion exceeded cap of {cap}`, so it reads `recursion exceeded cap of 8` whether a `call`, a `tasks.spawn`, or a `tasks.fanout` arm went too deep. The error points at the line of the `call`, `tasks.spawn`, or `tasks.fanout` that would have started a chain past the cap.
 
-- `call recursion exceeded cap of 8` for a `call` or a `tasks.spawn`.
-- `tasks.fanout recursion exceeded cap of 8` for a `tasks.fanout` arm.
+Going past the cap fails with the text `recursion exceeded cap of 8`, exactly, whichever of the three went too deep.
 
-Going past the cap with `call` fails with the message `call recursion exceeded cap of 8`, exactly.
+Caught with `pcall`, the depth cap error is an error value of kind `lua`, the same kind as any Lua-phase failure, with no dedicated kind of its own, so a `pcall` handler that already branches on the `lua` kind keeps working, and its `code` is `call_depth_exceeded`. Its message is the file and line of the call that went too deep, then the text, then the fixed prose for the cap, as the logged message above shows, and the error value has no field for the depth reached or for the cap.
 
-Caught with `pcall`, the depth cap error is an error value of kind `lua`, the same kind as any Lua-phase failure, with no dedicated kind of its own, so a `pcall` handler that already branches on the `lua` kind keeps working. The caught error value holds only its kind and message, with no extra field for the depth reached or for the cap.
-
-Uncaught, the depth cap error reaches the run outcome unchanged through every calling section, so you see the specific depth cap error and its message rather than a generic wrapper. It fails the run with run error kind `Quota`, for both the `call` form and the `tasks.fanout` form of the message. So a `call` that would nest past the cap ends the run with run error kind `Quota` and a message that names the cap, `call recursion exceeded cap of 8`.
+Uncaught, the depth cap error reaches the run outcome unchanged through every calling section, so you see the specific depth cap error and its message rather than a generic wrapper, still pointing at the line where it happened. It fails the run with run error kind `Quota`, whichever construct went too deep. So a `call` that would nest past the cap ends the run with run error kind `Quota` and a message that names the cap and the line of that `call`, as `recursion exceeded cap of 8 (at ping-pong.md:12)` does for the prompt at the top of this section.
 
 ## Jump and call in the H1 pass
 
@@ -1579,14 +1586,14 @@ A heading that matches no top-level section fails differently for `call` and for
 
 When `call` in the H1 names a heading that matches no top-level section, such as `call('## Nope')`, it raises a resolution error whose message names the missing heading. It raises at the call site, so `pcall` catches it: `local ok, err = pcall(call, '## Nope'); return tostring(ok) .. ':' .. tostring(err)` gives a result that starts with `false:` and contains `## Nope`.
 
-An uncaught unknown-section error raised from the H1 ends the whole run, and you see it as the run's failure message. An uncaught heading error from `call` or `tasks.fanout` in an H1 block fails the [H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate), so the run ends with run error kind `RequirementsUnmet`. Its message is the notice line, then the gate line, then `: ` and the Lua error text as the cause, which names the heading:
+An uncaught unknown-section error raised from the H1 ends the whole run, and you see it as the run's failure message. An uncaught heading error from `call` or `tasks.fanout` in an H1 block fails the [H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate), so the run ends with run error kind `RequirementsUnmet`. Its message is the notice line, then the gate line, then `: ` and the Lua error text as the cause, which names the heading, and it ends with the line of the `call` or `tasks.fanout` that failed:
 
 ````text
 the environment cannot satisfy this prompt:
-- the H1 gate failed: {Lua error text}
+- the H1 gate failed: {Lua error text} (at {file}:{line})
 ````
 
-When a `jump` from the H1 block names a heading that matches no top-level section, such as `jump('## Nope')`, the run fails with a `Lua` resolution error whose message names the missing heading. A bad `jump` target from the H1 ends the run with run error kind `Lua`, not `RequirementsUnmet`, because the heading is looked up after the H1 block has finished. A `jump` heading from the H1 must be one or more `#` markers, then whitespace, then a non-empty name, and a malformed heading ends the run with run error kind `Lua` like any other bad `jump` target from the H1.
+When a `jump` from the H1 block names a heading that matches no top-level section, such as `jump('## Nope')`, the run fails with a `Lua` resolution error whose message names the missing heading and points at the line of the `jump`. A bad `jump` target from the H1 ends the run with run error kind `Lua`, not `RequirementsUnmet`, because the heading is looked up after the H1 block has finished. A `jump` heading from the H1 must be one or more `#` markers, then whitespace, then a non-empty name, and a malformed heading ends the run with run error kind `Lua` like any other bad `jump` target from the H1.
 
 ## Jump and call in arms, tasks, and tool handlers
 

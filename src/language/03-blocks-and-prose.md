@@ -156,7 +156,7 @@ local reply =
 ```
 ````
 
-The message starts with `lua compilation error at {location} (line {source_line}): ` and ends with the Lua compiler's own diagnostic. `{location}` is the block's location label, such as ``H1 `{title}` lua`` for a block in the H1 body, and here a label containing ``section `Transform` epilog``. `{source_line}` is the line of the prompt file where the block's Lua source starts. [How errors name each block](#how-errors-name-each-block) lists every location label.
+The message starts with `lua compilation error at {location} (line {source_line}): ` and ends with the Lua compiler's own diagnostic. `{location}` is the block's location label, such as ``H1 `{title}` lua`` for a block in the H1 body, and here a label containing ``section `Transform` epilog``. `{source_line}` is the line of the prompt file where the block's Lua source starts, here line 14. [How errors name each block](#how-errors-name-each-block) lists every location label. The parse error also points at line 14, the line the compiler's diagnostic names, and names the prompt `transform` (see [Lua compile failure positions](16-limits-and-errors.md#lua-compile-failure-positions)).
 
 ## Prologue, prose, and epilog
 
@@ -700,7 +700,7 @@ return prose
 Missing: found.
 ````
 
-Left uncaught, as in a bare `return prose` over `Missing: {{ var.missing }}.`, the substitution error fails the run with an error containing `missing {{ var.missing }}`.
+Left uncaught, as in a bare `return prose` over `Missing: {{ var.missing }}.`, the substitution error fails the run with an error containing `missing {{ var.missing }}`, and the run's message ends with ` (at {file}:{line})`, the line of the placeholder.
 
 Prose cannot refer to itself. A `{{ prose }}` placeholder inside prose makes the read of `prose` fail with an error naming `prose`, and that failure is catchable with `pcall` too.
 
@@ -734,13 +734,13 @@ return 'still: ' .. prose
 still: Keep this line.
 ````
 
-The refused assignment raises an error with this message:
+The refused assignment raises an error with this text:
 
 ````text
 prose is read-only: assign to `var` or a section global instead
 ````
 
-Reading `prose` gives the block's rendered prose, and every write is refused, whatever the value, including `prose = nil`. The refusal applies at any time: before or after the first read, during the H1 pass, and in a library too. During the H1 pass, `argv` is writable (see [Reading parsed input from `argv`](06-arguments.md#reading-parsed-input-from-argv)), but `prose` stays read-only with the same refusal message. The refusal is a separate runtime error that has no substitution kind and no `[{Kind} at byte {offset}]` suffix, only the bare message.
+Reading `prose` gives the block's rendered prose, and every write is refused, whatever the value, including `prose = nil`. The refusal applies at any time: before or after the first read, during the H1 pass, and in a library too. During the H1 pass, `argv` is writable (see [Reading parsed input from `argv`](06-arguments.md#reading-parsed-input-from-argv)), but `prose` stays read-only with the same refusal message. The refusal is a separate runtime error that has no substitution kind and no `[{Kind} at byte {offset}]` suffix. Caught with `pcall`, as in `keep`, its message holds the text above after `keep.md:14: `, the line of the assignment, and before the default text for a Lua failure (see [Where a caught error's message points](16-limits-and-errors.md#where-a-caught-errors-message-points)).
 
 `prose` is a reserved global in every section and in the H1 pass, and the Lua environment has no `rawget`, `rawset`, `rawequal`, `debug`, `load`, or other raw or code-loading route around it, so every read and write of `prose` gets the read-only, lazy behavior. A metatable you set on `_G`, including one with its own `__index` or `__newindex`, never sees or changes how `prose` reads or refuses assignment, because `prose` is served and refused before any metatable of yours runs. With a metatable on `_G`, including one a library sets, `prose` stays read-only and still renders at its first read, and the next fence still gets its fresh `prose` even when the metatable has a `__newindex` write hook.
 
@@ -1245,7 +1245,7 @@ An unclosed `lua` fence that is the only fence and sits at the top of its conten
 section `{section}` epilog `lua` fence is not closed
 ````
 
-An unclosed `lua` fence under the H1 uses the same section wording with the H1 title as `{section}`, so under the H1 `# Open` it reads ``section `Open` prologue `lua` fence is not closed``. A backtick line indented by four spaces, or three backticks followed by other text, cannot close a `lua` fence, so the fence stays open and the parse fails with the not-closed message. Unlike the rule errors, an unclosed fence error names its section and phase in the message but reports no line or column.
+An unclosed `lua` fence under the H1 uses the same section wording with the H1 title as `{section}`, so under the H1 `# Open` it reads ``section `Open` prologue `lua` fence is not closed``. A backtick line indented by four spaces, or three backticks followed by other text, cannot close a `lua` fence, so the fence stays open and the parse fails with the not-closed message. An unclosed fence error names its section and phase in the message, and like a rule error it points at a line, at column 1: the line where the fence opens, so `unclosed` reports line 11.
 
 ## List sections
 
@@ -1488,7 +1488,7 @@ Parent prose.
 - gamma
 ````
 
-The parse fails with kind `List` and this message:
+The parse fails with kind `List` and this message, and the error points at the empty marker, line 16, column 1:
 
 ````text
 empty bullet item in list section `Items`
@@ -2508,15 +2508,17 @@ end
 false
 ````
 
-`### deep` is a sibling's child, so it is out of reach from `## Main`. A well-formed `require` heading that matches no reachable section fails with a Lua error that names the trimmed heading and lists the reachable sections. Here the message is:
+`### deep` is a sibling's child, so it is out of reach from `## Main`. A well-formed `require` heading that matches no reachable section fails with a Lua error that names the trimmed heading and lists the reachable sections. Here the error's text is:
 
 ````text
 section heading `### deep` not found; available sections: ## other, ## helpers
 ````
 
+Caught as it is here, the error value's message holds that text after `require_miss.md:12: `, the line of the `pcall`, and before the default text for a Lua failure (see [Where a caught error's message points](16-limits-and-errors.md#where-a-caught-errors-message-points)).
+
 The list holds only the reachable sections, in search order: siblings, then children, then each ancestor's siblings moving outward to the top level, with the current section left out. `## other` is listed even though it holds only prose, while `## Main` and `### deep` are not. From `#### Self` in the tree above, a miss on `## Missing` gives `` section heading `## Missing` not found; available sections: #### Sibling, ##### Child, ### Uncle, ## Top, ## Last ``.
 
-Passing anything other than a string to `require` raises a Lua runtime error that names the argument's Lua type, and no section lookup happens. For a number, the message is:
+Passing anything other than a string to `require` raises a Lua runtime error that names the argument's Lua type, and no section lookup happens. For a number, the error's text is:
 
 ````text
 require takes a section heading string such as '## helpers', got integer
@@ -2755,7 +2757,7 @@ return 'done'
 ```
 ````
 
-The run fails, and its error message contains:
+The run fails, and its error message contains this text and ends with ` (at library_fault.md:19)`, the library's line:
 
 ````text
 section `lib` prologue:19: load fault
@@ -2790,18 +2792,18 @@ end
 ```
 ````
 
-The run fails, and its error message contains both of these locations:
+The run fails, and its error message contains both of these locations and ends with ` (at later_fault.md:20)`:
 
 ````text
 section `lib` prologue:20: later fault
 section `Main` prologue:13:
 ````
 
-The library's line 20 is where `error` runs. The caller's own frames in the traceback map to the caller's location and prompt lines as well, each frame mapped once with no raw `[string "..."]` marker left, so the message also shows line 13 of `## Main`, the caller's `boom()` line.
+The library's line 20 is where `error` runs, and it is the line the message ends with. The caller's own frames in the traceback map to the caller's location and prompt lines as well, each frame mapped once with no raw `[string "..."]` marker left, so the message also shows line 13 of `## Main`, the caller's `boom()` line.
 
 ### `jump` during a library load
 
-Load code cannot transfer control. Calling [`jump`](08-jump-and-call.md#jumping-to-a-section) from library code while the library loads through `require` raises a Lua error with this message:
+Load code cannot transfer control. Calling [`jump`](08-jump-and-call.md#jumping-to-a-section) from library code while the library loads through `require` raises a Lua error with this text:
 
 ````text
 jump is unavailable while a library loads: return a value from the library and call jump from the section after require returns

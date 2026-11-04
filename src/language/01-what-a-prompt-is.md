@@ -238,10 +238,10 @@ return 'hello'
 ````
 
 ````text
-not a runvil prompt: no runvil version
+not a runvil prompt: no runvil version (prompt greeter)
 ````
 
-The run stops before `## Say hi` or any other section runs. The error has the parse error kind `Structure`, names the prompt `greeter`, and carries the message above, so every prompt that runs declares `runvil: 0`.
+The run stops before `## Say hi` or any other section runs, so every prompt that runs declares `runvil: 0`. The error has the parse error kind `Structure`, names the prompt `greeter`, and carries the message `not a runvil prompt: no runvil version`, which the run's message follows with ` (prompt greeter)` (see [Where a run error's message points](16-limits-and-errors.md#where-a-run-errors-message-points)).
 
 ## Putting the parts together
 

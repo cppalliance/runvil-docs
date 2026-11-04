@@ -336,7 +336,7 @@ sub one, sub two
 
 Each `### Sub` task writes its own store path, `sub-one.md` holding `sub one` and `sub-two.md` holding `sub two`, and `## Main` reads both once the join has delivered the tasks.
 
-An `item` whose Lua type is `function`, `userdata`, or `thread` fails at the call site with a `lua` error naming the Lua type, `item must be JSON data, got {type}`, such as `item must be JSON data, got function`. That check runs first, on the value itself. `json.null` is the one userdata it accepts, as `item` itself or inside a table, and it is sent as JSON null, so `item = { a = json.null }` reaches the task as `{"a":null}`. Any other value that cannot convert, such as a table holding a function deeper inside, fails at the call site with a `lua` error whose message starts `item must be a JSON-representable value: ` and ends with the conversion failure.
+An `item` whose Lua type is `function`, `userdata`, or `thread` fails at the call site with a `lua` error naming the Lua type, `item must be JSON data, got {type}`, such as `item must be JSON data, got function`. That check runs first, on the value itself. `json.null` is the one userdata it accepts, as `item` itself or inside a table, and it is sent as JSON null, so `item = { a = json.null }` reaches the task as `{"a":null}`. Any other value that cannot convert, such as a table holding a function deeper inside, fails at the call site with a `lua` error whose refusal starts `item must be a JSON-representable value: ` and ends with the conversion failure.
 
 ### Seeding `sys.index` with `index`
 
@@ -586,7 +586,7 @@ error('beta boom')
 0.1 failed: lua
 ````
 
-`## Beta`'s uncaught `error('beta boom')` fails that task, and the run still ends with `## Main`'s result. `tasks.join` never raises because a member failed: it collects an entry for every member, the failed member's entry holds `ok == false` and the error value in `result`, and your code decides what to do with each outcome. The error value has the same shape as an error the Engine raises, with `kind`, `message`, and the kind's own fields, so `entry.result.kind` reads `lua` here and `tostring(entry.result)` holds text containing `beta boom`. A member that hit the instruction quota arrives the same way, with `err.kind` reading `lua` and `tostring(err)` reading `lua instruction quota exceeded`.
+`## Beta`'s uncaught `error('beta boom')` fails that task, and the run still ends with `## Main`'s result. `tasks.join` never raises because a member failed: it collects an entry for every member, the failed member's entry holds `ok == false` and the error value in `result`, and your code decides what to do with each outcome. The error value has the same shape as an error the Engine raises, with `kind`, `code`, `message`, and the kind's own fields, so `entry.result.kind` reads `lua` here and `tostring(entry.result)` reads `checked-join.md:35: beta boom. The Lua code failed at runtime. Fix the code at this location.`, keeping the line in `## Beta` where the task failed (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). A member that ran out of its log event quota arrives the same way, with `err.kind` reading `lua` and `tostring(err)` reading `{file}:{line}: lua log event quota exceeded. The section logged more than its budget allows. Log less.`, where `{line}` is the member's `log` call that ran out.
 
 ### Wait sets
 
@@ -600,7 +600,7 @@ The waits check their set before any wait starts, so a bad set raises at the cal
 | An empty table | `lua` | `{call} requires at least one task` |
 | A string member that is not a valid task id | `lua` | `` `{text}` is not a task id such as `0.1`: {error} `` |
 
-Every member must be a task handle or a valid task id string, and one string that is not a valid id fails the whole call.
+The first two messages are the error value's whole message. The third is a refusal the Engine makes, so the error value's message puts the wait's `{file}:{line}: ` in front of it and the Lua runtime prose after it (see [Valid task ids and id errors](#valid-task-ids-and-id-errors)). Every member must be a task handle or a valid task id string, and one string that is not a valid id fails the whole call.
 
 ### How `tasks.join_any` picks a member
 
@@ -643,13 +643,13 @@ return 'once'
 once|false|task_consumed|0.0
 ````
 
-The first wait takes `once`, and the second one raises. The `task_consumed` error value's `task` field holds the task id, and its message names the task:
+The first wait takes `once`, and the second one raises. The `task_consumed` error value's `task` field holds the task id, and its message points at the second wait and names the task:
 
 ````text
-task `{task}` was already delivered: a task's result is taken by one wait
+wait-once.md:14: task `0.0` was already delivered: a task's result is taken by one wait. The task's result was already delivered. Wait on each task only once.
 ````
 
-A `task_consumed` left uncaught ends the run with [run error kind](04-how-a-prompt-runs.md#the-run-result-and-outcomes) `Lua`, the same as any Lua fault.
+The refusal in the middle always reads `` task `{task}` was already delivered: a task's result is taken by one wait ``. A `task_consumed` left uncaught ends the run with [run error kind](04-how-a-prompt-runs.md#the-run-result-and-outcomes) `Lua`, the same as any Lua fault, and a message that is that refusal followed by ` (at {file}:{line})`.
 
 ### Waiting in finish order
 
@@ -801,15 +801,17 @@ A cancelled task does not fail its owner, so the owner's return value becomes th
 | Not a task handle or a string, such as `nil` or a number | `lua` | `tasks.cancel expects a Task handle or task id, got {type}` |
 | A string that is not a valid task id | `lua` | `` `{text}` is not a task id such as `0.1`: {error} `` |
 
-A task handle here is any table with a string `task` field. Cancelling a task the chain does not own, or an id that names no task, makes the Engine refuse, and `tasks.cancel` raises a [`task_not_owned`](#only-the-owner-may-touch-a-task) error value with the message `` task `{task}` is not a task this chain owns ``.
+The first message is the error value's whole message, while the second is a refusal the Engine makes, which the error value's message holds between the call's location and the Lua runtime prose. A task handle here is any table with a string `task` field. Cancelling a task the chain does not own, or an id that names no task, makes the Engine refuse, and `tasks.cancel` raises a [`task_not_owned`](#only-the-owner-may-touch-a-task) error value with the refusal `` task `{task}` is not a task this chain owns `` in its message.
 
 ### What a wait gives back for a cancelled task
 
-A wait on a cancelled task does not raise. It delivers the task with `ok = false` and an error value of kind `cancelled` whose `task` field names the task, with this message:
+A wait on a cancelled task does not raise. It delivers the task with `ok = false` and an error value of kind `cancelled` whose `task` field names the task, with this message, which points at the wait's line:
 
 ````text
-task `{task}` was cancelled
+{file}:{line}: The task was cancelled before it finished, so it has no result. Handle the cancellation where the task is waited on.
 ````
+
+The message does not name the task, which `err.task` holds. The run's message does when a re-raised one goes uncaught: `` task `{task}` was cancelled (at {file}:{line}) ``.
 
 In the opening prompt, `err.kind` is `cancelled` and `err.task` equals `t.task`. The value holds the task id as a string in `err.task` and leaves `err.reason` `nil`. Being cancelled is the only ending other than a finished result that a wait delivers; an abandoned task is never delivered, because its owner has ended.
 
@@ -817,10 +819,10 @@ A wait never raises a cancelled task's error value. It hands the error value bac
 
 A cancelled task holds no result to consume and is never consumed, so waiting on it again returns the same `cancelled` error value instead of raising `task_consumed`. A cancelled task's completed store writes are kept, and a wait that delivers it makes them readable to the owner from its next operation, however far the task got. Cancelling a task that has already finished, but whose result no wait has taken yet, leaves that result in place for a later wait.
 
-A cancelled task's error value shares kind `cancelled` with an interrupted run or call, and only the cancelled task's value carries a `task` field, which tells them apart. The other `cancelled` values come from a run or a call being stopped:
+A cancelled task's error value shares kind `cancelled` with an interrupted run or call, and only the cancelled task's value carries a `task` field and the `code` `task_cancelled` rather than `interrupted`, which tells them apart. The other `cancelled` values come from a run or a call being stopped:
 
 - A cancelled run, such as a Host cancel that reaches running Lua or a waiting call, ends that Lua with an error value of kind `cancelled`.
-- A model round, tool call, or other call stopped by cancellation raises an error value of kind `cancelled` with the message `interrupted: the run was cancelled or this call was stopped`.
+- A model round, tool call, or other call stopped by cancellation raises an error value of kind `cancelled` with the message `{file}:{line}: The operation was cancelled.`, pointing at the stopped call.
 - When the Host drops a model round, a [render](01-what-a-prompt-is.md#the-five-kinds-of-harness-work), a tool call, or a timer instead of answering it, the Lua waiting on it resumes with the same `cancelled` error a run cancel raises. `pcall` catches it and the run continues, and an uncaught one ends the run as cancelled rather than as a failure.
 - When the Host drops a tool call the model issued, `models.loop` raises an error of kind `cancelled` at the loop call site, and the section can catch it with `pcall` and finish with its own return value.
 
@@ -922,10 +924,10 @@ tasks.spawn('## Child')
 return 'done'
 ````
 
-Now the run fails with an error value of kind `tasks_live`, and its message names both leaked tasks:
+Now the run fails with `tasks_live`, and its message names both leaked tasks and ends with the line of the first one's `tasks.spawn`:
 
 ````text
-chain ended with tasks still live: 0.0, 0.1; wait on or cancel every task a chain spawns before it ends
+chain ended with tasks still live: 0.0, 0.1; wait on or cancel every task a chain spawns before it ends (at {file}:{line})
 ````
 
 ### The owner of a task
@@ -1008,11 +1010,13 @@ false task_not_owned 0.0
 
 Inside `## Child`, `tasks.status(me)` would work, but `pcall(tasks.cancel, me)` is refused, and so are `tasks.ready` and a wait such as `pcall(tasks.join_any, { me })` on its own id. A task that names its owner's task is refused too, such as `'0'` from a task the main walk spawned, since the main walk is task `0` and a caller may name only tasks it owns or its own task. An id that names no task at all is refused the same way, so a caller learns nothing about tasks it never started: `pcall(tasks.cancel, '9.9')` gives `err.kind == 'task_not_owned'` and `err.task == '9.9'`.
 
-The error's message names the task the caller reached for, such as `0.0`, and it sets the field `task`:
+The error's message points at the refused call and names the task the caller reached for, such as `0.0`, and the error sets the field `task`. In `not-owned` it reads:
 
 ````text
-task `{task}` is not a task this chain owns
+not-owned.md:21: task `0.0` is not a task this chain owns. The task is not one this chain owns. Wait on, inspect, or cancel only the tasks this chain spawned.
 ````
+
+The refusal in the middle always reads `` task `{task}` is not a task this chain owns ``.
 
 `task_not_owned` is a task error whose value has a `task` string field holding the offending task's id (see [Error values](05-lua-environment.md#error-values) for the groups of error kinds). A wait checks every member it names, so a wait fails outright with this error, rather than delivering a finished member, when the caller does not own any one of them, and `tasks.join` raises the same way because it runs the same wait. An uncaught `task_not_owned` keeps its kind and its `task` field rather than being flattened to a plain Lua error, and a run it ends reports run error kind `Lua`.
 
@@ -1051,10 +1055,10 @@ return 'child result'
 ````
 
 ````text
-chain ended with tasks still live: 0.0; wait on or cancel every task a chain spawns before it ends
+chain ended with tasks still live: 0.0; wait on or cancel every task a chain spawns before it ends (at leaky-walk.md:12)
 ````
 
-`## Launch` spawns `## Child` and falls through to `## Sibling`, whose `return 'done'` ends the walk with the task still live, so the run fails with `tasks_live` naming `0.0`. A `jump` settles nothing about owned tasks either, so ending `## Launch` with `jump('## Sibling')` gives the same failure. Waiting on the task in `## Sibling`, or cancelling it there, settles it. In the same way, when the walk returns while a task spawned in the H1 pass is still live, the run fails with `tasks_live` naming that task, such as `0.0`, and the task is abandoned.
+`## Launch` spawns `## Child` and falls through to `## Sibling`, whose `return 'done'` ends the walk with the task still live, so the run fails with `tasks_live` naming `0.0`. The failure points at the `tasks.spawn` of the first task left running, line 12 in `## Launch`, not at the `return` that ended the walk. A `jump` settles nothing about owned tasks either, so ending `## Launch` with `jump('## Sibling')` gives the same failure. Waiting on the task in `## Sibling`, or cancelling it there, settles it. In the same way, when the walk returns while a task spawned in the H1 pass is still live, the run fails with `tasks_live` naming that task, such as `0.0`, and the task is abandoned.
 
 At the main walk, `tasks_live` is the run's failure. Inside a called chain, `tasks_live` is the `call`'s error instead, so the caller can catch it with `pcall`, keep running, and return normally:
 
@@ -1089,18 +1093,18 @@ return 'child result'
 ````
 
 ````text
-tasks_live|0.0.0|chain ended with tasks still live: 0.0.0; wait on or cancel every task a chain spawns before it ends
+tasks_live|0.0.0|leak-check.md:19: chain ended with tasks still live: 0.0.0; wait on or cancel every task a chain spawns before it ends. The chain ended with tasks still running. Wait on or cancel every task the chain spawns before it ends.
 ````
 
-`## Leaky` spawns a task and returns `'leaked'`, so its caller receives kind `tasks_live` as the call's error, and the run continues with `## Main`'s result. Tasks spawned inside a `call` chain, including ones it leaks, are abandoned when that chain ends and returns to its caller (see [Catching call failures](08-jump-and-call.md#catching-call-failures)).
+`## Leaky` spawns a task and returns `'leaked'`, so its caller receives kind `tasks_live` as the call's error, and the run continues with `## Main`'s result. The error keeps the line of `## Leaky`'s `tasks.spawn`, line 19, rather than the `call` line in `## Main`. Tasks spawned inside a `call` chain, including ones it leaks, are abandoned when that chain ends and returns to its caller (see [Catching call failures](08-jump-and-call.md#catching-call-failures)).
 
-A `tasks_live` error value caught in Lua has `kind` equal to `'tasks_live'`. The kind carries one field of its own, `tasks`, and belongs to the cancellation and task lifetimes group of error kinds. `err.tasks` is one string of the leaked task ids in the order they were spawned, joined with `, `, such as `0.0, 0.1`, not a table, so it concatenates directly with `..`. The message names the same ids, and `tostring` on the error value gives that message:
+A `tasks_live` error value caught in Lua has `kind` equal to `'tasks_live'`. The kind carries one field of its own, `tasks`, and belongs to the cancellation and task lifetimes group of error kinds. `err.tasks` is one string of the leaked task ids in the order they were spawned, joined with `, `, such as `0.0, 0.1`, not a table, so it concatenates directly with `..`. The message names the same ids, and `tostring` on the error value gives that message, where `{line}` is the spawn line of the first task left running:
 
 ````text
-chain ended with tasks still live: {ids}; wait on or cancel every task a chain spawns before it ends
+{file}:{line}: chain ended with tasks still live: {ids}; wait on or cancel every task a chain spawns before it ends. The chain ended with tasks still running. Wait on or cancel every task the chain spawns before it ends.
 ````
 
-A `tasks_live` left uncaught ends the run with run error kind `Lua`, the same as any other fault in your program.
+A `tasks_live` left uncaught ends the run with run error kind `Lua`, the same as any other fault in your program, and a message that ends with ` (at {file}:{line})` for that spawn line, as `leaky-walk` shows.
 
 A chain that fails with its own error while it still owns live tasks keeps that error rather than becoming `tasks_live`, because the leak is the lesser fault. A section that runs `tasks.spawn('## Child')` and then `error('spawner boom')` fails with that error, and its live tasks are still abandoned along with their failed owner, with reason `owner_failed`. An owner that is itself being aborted produces no `tasks_live` for tasks it leaks, because no one receives its outcome, and a run that is ending reports no `tasks_live` for the tasks left live, for the same reason.
 
@@ -1441,7 +1445,7 @@ Each call fails for a different reason:
 | `tasks.note` given text that is not a string | `lua` | `tasks.note text must be a string, got {type}` |
 | `tasks.note` given text that is not valid UTF-8 | `lua` | `text must be a valid UTF-8 string` |
 
-The message for a string that is not a task id names the bad value, so `pcall(tasks.status, 'not-an-id')` gives a message that starts with `` `not-an-id` is not a task id such as `0.1`: ``. [Valid task ids and id errors](#valid-task-ids-and-id-errors) gives the rest of that message.
+The message for a string that is not a task id names the bad value, so `pcall(tasks.status, 'not-an-id')` gives a message whose refusal, after the call's location, starts with `` `not-an-id` is not a task id such as `0.1`: ``. [Valid task ids and id errors](#valid-task-ids-and-id-errors) gives the rest of that message.
 
 ## Time limits on waits
 
@@ -1734,7 +1738,7 @@ The rules, with the message each broken rule raises:
 
 - `opts`, when given, must be a table. Any other value fails with `{call} opts must be a table, got {type}`, a message that starts with the call's name, such as `tasks.join opts must be a table, got {type}`.
 - `timeout` must be a Lua number, written as `5` rather than `'5'`, because the wait never converts a string. Any non-number fails with `{call} timeout must be a number, got {type}`, which names the call and the value's Lua type, such as `tasks.join_any timeout must be a number, got string`.
-- `timeout` must be zero or more, finite, and small enough for a duration to hold. `tasks.join` and `tasks.join_any` both refuse any other number before the wait starts and before any timer exists, with `timeout must be a non-negative finite number of seconds, got {seconds}`. The message names `timeout` and prints the value: a negative value prints as written, such as `-1`, a NaN value such as `0/0` prints as `NaN`, an infinite value prints as `inf`, and a value beyond the range a duration can hold prints in full, such as `100000000000000000000` for `1e20`.
+- `timeout` must be zero or more, finite, and small enough for a duration to hold. `tasks.join` and `tasks.join_any` both refuse any other number before the wait starts and before any timer exists, with the refusal `timeout must be a non-negative finite number of seconds, got {seconds}`, which the Engine makes, so the error value's message puts the wait's `{file}:{line}: ` in front of it and the Lua runtime prose after it, while the two messages above have no location. The refusal names `timeout` and prints the value: a negative value prints as written, such as `-1`, a NaN value such as `0/0` prints as `NaN`, an infinite value prints as `inf`, and a value beyond the range a duration can hold prints in full, such as `100000000000000000000` for `1e20`.
 
 ## Task ids and handles
 
@@ -1887,15 +1891,15 @@ job done
 
 A valid task id is one or more numbers joined by single dots, where each number is one or more ASCII decimal digits with no sign or space and a value from 0 to 4294967295, such as `0`, `0.2`, or `0.12.0`.
 
-Passing a string that is not a valid task id, such as `0.x`, to `tasks.ready`, `tasks.status`, `tasks.cancel`, `tasks.join_any`, or `tasks.join` fails at the call site with an error value of kind `lua` whose message is:
+Passing a string that is not a valid task id, such as `0.x`, to `tasks.ready`, `tasks.status`, `tasks.cancel`, `tasks.join_any`, or `tasks.join` fails at the call site with an error value of kind `lua` whose message is the call's location, this refusal, and the Lua runtime prose:
 
 ````text
-`{text}` is not a task id such as `0.1`: invalid chain id `{text}`: required a dot-separated path of decimal components
+{file}:{line}: `{text}` is not a task id such as `0.1`: invalid chain id `{text}`: required a dot-separated path of decimal components. The Lua code failed at runtime. Fix the code at this location.
 ````
 
 In a wait set, one malformed member fails the whole call.
 
-A value that is neither a Task handle nor a string, such as `42` passed to `tasks.cancel`, fails with an error value of kind `lua` whose message is `{call} expects a Task handle or task id, got {type}`, naming the call and the value's type. `tasks.ready`, `tasks.status`, `tasks.cancel`, and each member of a wait set apply this check.
+A value that is neither a Task handle nor a string, such as `42` passed to `tasks.cancel`, fails with an error value of kind `lua` whose message is `{call} expects a Task handle or task id, got {type}`, with no location, naming the call and the value's type. `tasks.ready`, `tasks.status`, `tasks.cancel`, and each member of a wait set apply this check.
 
 ## Concurrency, nesting, and scheduling
 
@@ -2014,12 +2018,12 @@ return result
 ````
 
 ````text
-call recursion exceeded cap of 8
+deep-spawn.md:20: recursion exceeded cap of 8. Calls nest deeper than the cap allows. Nest `call`, `tasks.spawn`, and `tasks.fanout` less deeply.
 ````
 
-Each `## Beta` task spawns the next one level deeper. The task at depth 8 tries to spawn depth 9, and that `tasks.spawn` is refused with `call recursion exceeded cap of 8`. The refusal raises at the call site and is named after `call` rather than `tasks.spawn`, and `pcall` catches it, as in `local ok, err = pcall(tasks.spawn, '## Beta')`. A refused `tasks.fanout` arm names `tasks.fanout` instead. Each task returns the result it joined, so the message travels back up to `## Main` and becomes the run result.
+Each `## Beta` task spawns the next one level deeper. The task at depth 8 tries to spawn depth 9, and that `tasks.spawn` is refused with `recursion exceeded cap of 8`, the same words a `call` or a `tasks.fanout` past the cap gives. The refusal raises at the call site, on the line of the `tasks.spawn` that went too deep, and `pcall` catches it, as in `local ok, err = pcall(tasks.spawn, '## Beta')`. Its message adds the depth cap's prose after the refusal (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). Each task returns the result it joined, so the message travels back up to `## Main` and becomes the run result.
 
-Inside Lua the depth-cap refusal is an error value of kind `lua`, but left uncaught it ends the run with the [run error kind](04-how-a-prompt-runs.md#the-run-result-and-outcomes) `Quota`.
+Inside Lua the depth-cap refusal is an error value of kind `lua`, but left uncaught it ends the run with the [run error kind](04-how-a-prompt-runs.md#the-run-result-and-outcomes) `Quota` and the message `recursion exceeded cap of 8 (at {file}:{line})`.
 
 ### Calls, tools, and model rounds inside tasks
 
@@ -2121,13 +2125,13 @@ The run log tells a cancelled task, stopped on purpose, apart from an abandoned 
 
 The `tasks.*` functions check their arguments at the call site and raise an error of kind `lua` in the calling section, which `pcall` can catch (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)). The arguments are validated before the operation runs, so after a bad argument no task operation runs. Every mistake in a `tasks` call raises an error value (see [Error values](05-lua-environment.md#error-values)) carrying a `kind`, a `task` field naming the task where there is one, and a message you read with `tostring(err)`. Argument errors are structured error values with kind `lua` and a `message` field, raised at your own call site.
 
-Argument checks made by the `tasks` functions themselves give messages that start with the call's name, such as `tasks.spawn opts must be a table, got integer`, while other checks name only the field or value at fault. The type named at the end of a message is `integer` for a Lua integer such as `5`, `number` for a float such as `1.5`, and the Lua `type()` name for every other value, such as `string` or `table`.
+Argument checks made by the `tasks` functions themselves give messages that start with the call's name, such as `tasks.spawn opts must be a table, got integer`, with no location, while other checks, which the Engine makes, name only the field or value at fault, and their error value's message puts the call's `{file}:{line}: ` in front of that refusal and the Lua runtime prose after it (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). The type named at the end of a refusal is `integer` for a Lua integer such as `5`, `number` for a float such as `1.5`, and the Lua `type()` name for every other value, such as `string` or `table`.
 
 What each function takes, and the `lua` error message it raises for anything else:
 
 - The `tasks.spawn` target must be a string, the same rule `call` applies to its target (see [Calling a section](08-jump-and-call.md#calling-a-section)), and any other type raises the byte-identical error `call` raises, `section target must be a string, got {type}`, such as `section target must be a string, got integer`.
 - `tasks.spawn` takes a string `opts.input`, JSON data in `opts.item`, and a Lua integer of 0 or more in `opts.index`. Otherwise the call raises an error naming the field: `input must be a string, got {type}`, `item must be JSON data, got {type}`, or `index must be a non-negative integer, got {index}` for an integer below 0, while an `index` of another type, floats included, ends in its type name, such as `got number`.
-- Every call that names a task, `tasks.join_any`, `tasks.join`, `tasks.ready`, `tasks.status`, and `tasks.cancel`, takes a task handle or a task id string such as `0.1`. Any other value raises `{call} expects a Task handle or task id, got {type}`, and a string that is not a dot-separated id raises an error that starts `` `{text}` is not a task id such as `0.1`: ``.
+- Every call that names a task, `tasks.join_any`, `tasks.join`, `tasks.ready`, `tasks.status`, and `tasks.cancel`, takes a task handle or a task id string such as `0.1`. Any other value raises `{call} expects a Task handle or task id, got {type}`, and a string that is not a dot-separated id raises an error whose refusal starts `` `{text}` is not a task id such as `0.1`: ``.
 - `tasks.join_any` and `tasks.join` take a non-empty table of tasks and an optional `opts` table whose `timeout` is a non-negative finite number of seconds. Otherwise they raise one of these before any wait starts: `{call} expects a set of tasks, got {type}`, `{call} requires at least one task`, `{call} opts must be a table, got {type}`, `{call} timeout must be a number, got {type}`, or `timeout must be a non-negative finite number of seconds, got {seconds}`.
 - `tasks.pending` takes no arguments, and any argument other than `nil` raises `tasks.pending takes no arguments, got {type}`, such as `tasks.pending takes no arguments, got table`.
 - `tasks.note` takes a string, and otherwise raises `tasks.note text must be a string, got {type}`, such as `tasks.note text must be a string, got integer`.
@@ -2142,18 +2146,18 @@ local ok, err = pcall(tasks.spawn, '## Missing')
 return tostring(ok) .. '|' .. err.kind .. '|' .. err.message:match('^(.-);')
 ````
 
-The prompt has no `## Missing` section, so the block returns the message up to its first semicolon:
+The prompt has no `## Missing` section, so the block returns the message up to its first semicolon, which starts with the location of the `tasks.spawn` call:
 
 ````text
-false|lua|section heading `## Missing` not found
+false|lua|{file}:{line}: section heading `## Missing` not found
 ````
 
 Every spawn failure, including the depth cap, an unresolved target, a list-section target, and a setup failure, is raised as an error of that `tasks.spawn` call in the spawning code, so `pcall(tasks.spawn, ...)` catches it and the run continues. Bad arguments to `tasks.spawn` raise at the call site the same way. When the Engine rejects a spawn, `tasks.spawn` raises the Engine's error value and returns no handle.
 
-- When the target heading cannot be resolved, `tasks.spawn` raises an error value whose `kind` is `lua`, and `pcall(tasks.spawn, '## Missing')` returns `false`. The message is exactly the one `call` gives for the same heading, `` section heading `{heading}` not found; available sections: {list} ``, naming the heading with its markers and then listing the sections visible from the spawning section, so `tostring(err)` matches what `pcall(call, '## Missing')` gives (see [Resolving heading references](08-jump-and-call.md#resolving-heading-references)).
-- The depth cap lets depths 1 through 8 start and refuses depth 9 with a message reading `call recursion exceeded cap of 8` (see [The recursion depth cap](08-jump-and-call.md#the-recursion-depth-cap)). A depth-cap refusal left uncaught ends the run with run error kind `Quota`.
+- When the target heading cannot be resolved, `tasks.spawn` raises an error value whose `kind` is `lua`, and `pcall(tasks.spawn, '## Missing')` returns `false`. The refusal is exactly the one `call` gives for the same heading, `` section heading `{heading}` not found; available sections: {list} ``, naming the heading with its markers and then listing the sections visible from the spawning section, and the message puts the `tasks.spawn` line in front of it and the Lua runtime prose after it, so `tostring(err)` matches what `pcall(call, '## Missing')` gives on the same line (see [Resolving heading references](08-jump-and-call.md#resolving-heading-references)).
+- The depth cap lets depths 1 through 8 start and refuses depth 9 with the refusal `recursion exceeded cap of 8`, on the line of that `tasks.spawn` (see [The recursion depth cap](08-jump-and-call.md#the-recursion-depth-cap)). A depth-cap refusal left uncaught ends the run with run error kind `Quota`.
 - Spawning a list section, one made only of list items with neither a prologue nor an epilog, fails with a `lua` error whose message names the section without its markers, `` section `{name}` is a list section, not a worker template ``, such as `` section `Items` is a list section, not a worker template `` (see [List sections](03-blocks-and-prose.md#list-sections)).
-- Spawn failures are error values of kind `lua`, except a store refusal during task setup, which is kind `store` with a message that starts `store operation failed: ` followed by the store's own failure text (see [When a store call fails](09-the-store.md#when-a-store-call-fails)). When a Host-supplied store refuses to open store access for a new task, `tasks.spawn` fails with that error value, `pcall` can catch it, and no task is left started. The run's own in-memory store never refuses (see [Host stores, policies, and modes](09-the-store.md#host-stores-policies-and-modes)).
+- Spawn failures are error values of kind `lua`, except a store refusal during task setup, which is kind `store`: its message is the `tasks.spawn` line and then the fixed prose for its store reason, as for any caught store failure, and left uncaught, the run's message starts `store operation failed: ` followed by the store's own failure text (see [When a store call fails](09-the-store.md#when-a-store-call-fails)). When a Host-supplied store refuses to open store access for a new task, `tasks.spawn` fails with that error value, `pcall` can catch it, and no task is left started. The run's own in-memory store never refuses (see [Host stores, policies, and modes](09-the-store.md#host-stores-policies-and-modes)).
 
 ### Refusals the Engine raises
 

@@ -187,7 +187,7 @@ return item
 ```
 ````
 
-The call raises an error value of kind `lua` whose message has the form ``section heading `{heading}` not found; available sections: {list}``, naming the heading reference you passed and listing the sections the caller can name. Left uncaught, it ends the run.
+The call raises an error value of kind `lua` whose message has the form ``{file}:{line}: section heading `{heading}` not found; available sections: {list}. The Lua code failed at runtime. Fix the code at this location.``, pointing at the `tasks.fanout` line, naming the heading reference you passed, and listing the sections the caller can name (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). Left uncaught, it ends the run.
 
 ### Child worker sections and top-level worker sections
 
@@ -267,7 +267,7 @@ return item .. '-done'
 alpha-done,beta-done
 ````
 
-A section whose body is only list items, with no `lua` block, is a list section (see [List sections](03-blocks-and-prose.md#list-sections)), and a list section cannot be the worker section. Naming one raises an error value of kind `lua` with the message ``section `{name}` is a list section, not a worker template``, where `{name}` is the section name without its `#` markers. So `tasks.fanout('### Items', {'x'})`, aimed at a `### Items` section holding `- a` and `- b`, fails with ``section `Items` is a list section, not a worker template``. To run a fanout over a list section's entries, pass the list section as the collection instead, as [List collections](#list-collections) shows.
+A section whose body is only list items, with no `lua` block, is a list section (see [List sections](03-blocks-and-prose.md#list-sections)), and a list section cannot be the worker section. Naming one raises an error value of kind `lua` with the refusal ``section `{name}` is a list section, not a worker template`` in its message, between the call's location and the Lua runtime prose, where `{name}` is the section name without its `#` markers. So `tasks.fanout('### Items', {'x'})`, aimed at a `### Items` section holding `- a` and `- b`, fails with ``section `Items` is a list section, not a worker template``. To run a fanout over a list section's entries, pass the list section as the collection instead, as [List collections](#list-collections) shows.
 
 ### Fanout from the H1 body and from called sections
 
@@ -622,7 +622,7 @@ A section the normal walk reaches has no `item` global, so `item` there is nil a
 
 `sys.index` follows the same rule. It exists only in the first section an arm or a spawned task enters with an index, which is the arm's worker section or the target of a `tasks.spawn` given an `index` option. There it holds that option's value as given, so the child spawned above with `index = 7` reads `sys.index` as 7 and logs `index=7`.
 
-Reading `sys.index` in an ordinary walked section, outside any fanout arm, raises a Lua error that names the field, `unknown sys field 'index'`. So a walked `## Main` running `return tostring(sys.index)` fails with that message. A block can use this to tell a fanout arm from an ordinary section, by catching the error with [`pcall`](05-lua-environment.md#raising-and-catching-errors), checking that the caught error value's `kind` is `lua`, and raising any other error again with `error(result, 0)`:
+Reading `sys.index` in an ordinary walked section, outside any fanout arm, raises a Lua error that names the field, `unknown sys field 'index'`. So a walked `## Main` running `return tostring(sys.index)` fails the run with a message that contains it. A block can use this to tell a fanout arm from an ordinary section, by catching the error with [`pcall`](05-lua-environment.md#raising-and-catching-errors), checking that the caught error value's `kind` is `lua`, and raising any other error again with `error(result, 0)`:
 
 ````markdown
 ---
@@ -644,10 +644,10 @@ return 'not an arm: ' .. tostring(result)
 ````
 
 ````text
-not an arm: runtime error: unknown sys field 'index'
+not an arm: careful.md:12: unknown sys field 'index'. The Lua code failed at runtime. Fix the code at this location.
 ````
 
-`## Main` runs on the main walk, so outside an arm the caught text is `runtime error: unknown sys field 'index'`.
+`## Main` runs on the main walk, so outside an arm the caught text is `careful.md:12: unknown sys field 'index'. The Lua code failed at runtime. Fix the code at this location.`, which points at the failing read inside the protected function.
 
 ### A snapshot of `var`
 
@@ -1059,7 +1059,7 @@ The outer results come back in the order `a`, `b`, `c`, and each outer arm's inn
 
 ### The depth cap for arms
 
-A fanout arm runs one level deeper than the section that fanned out, so arms count toward the [recursion depth cap](08-jump-and-call.md#the-recursion-depth-cap) of 8. A `call` inside an arm that is already at depth 8 fails with `call recursion exceeded cap of 8`. A `tasks.fanout` requested from a chain already at depth 8 fails the run with exactly `tasks.fanout recursion exceeded cap of 8`, naming `tasks.fanout` rather than `call`, with no prefix or traceback.
+A fanout arm runs one level deeper than the section that fanned out, so arms count toward the [recursion depth cap](08-jump-and-call.md#the-recursion-depth-cap) of 8. A `call` inside an arm that is already at depth 8 fails with `recursion exceeded cap of 8`, and so does a `tasks.fanout` requested from a chain already at depth 8. Either failure points at the line of the `call` or `tasks.fanout` that went too deep: caught, its message is ``{file}:{line}: recursion exceeded cap of 8. Calls nest deeper than the cap allows. Nest `call`, `tasks.spawn`, and `tasks.fanout` less deeply.``, and left uncaught it fails the run with exactly `recursion exceeded cap of 8 (at {file}:{line})`, with no traceback.
 
 A `tasks.fanout` arm that would nest past the cap ends the run with run error kind `Quota` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)). The cap applies to each arm, the same as it does to a `call` or to a `tasks.spawn` task.
 
@@ -1333,7 +1333,7 @@ if not ok then
 end
 ````
 
-`tasks.concurrency` accepts whole numbers below 2^64. A whole number at or above 2^64 fails at the call site with an error value of kind `lua` whose message, `concurrency limit must be a positive whole number in 64-bit range, got {limit}`, shows the value, unlike the type-only message for other refused arguments. So `1e20` reads `got 100000000000000000000`. In both cases the message contains `positive whole number`, and `pcall` catches the error at the call site, as the block above does.
+`tasks.concurrency` accepts whole numbers below 2^64. A whole number at or above 2^64 fails at the call site with an error value of kind `lua` whose message, `{file}:{line}: concurrency limit must be a positive whole number in 64-bit range, got {limit}. The Lua code failed at runtime. Fix the code at this location.`, points at the call and shows the value, unlike the type-only message for other refused arguments, which has no location. So `1e20` reads `got 100000000000000000000`. In both cases the message contains `positive whole number`, and `pcall` catches the error at the call site, as the block above does.
 
 ## Arms as tasks, ids, and events
 
@@ -1373,7 +1373,7 @@ The main walk reads [`sys.taskid`](05-lua-environment.md#run-facts-in-sys-and-ui
 
 Each fanout arm is an ordinary task (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn)), because `tasks.fanout` is built on the same task machinery as `tasks.spawn` and starts one task per collection member. Each arm starts as its own task with the worker section as its target, through the same start request that `tasks.spawn` uses, rather than running as an inline function call inside the calling section.
 
-Because each arm starts the way a `tasks.spawn` task starts, it gets `call`'s target resolution and depth cap, and the same refusal of a list section as the target, so `tasks.fanout('### Items', {'x'})` over a list section fails with ``section `{name}` is a list section, not a worker template``. A fanout whose arms would pass the depth cap fails with `tasks.fanout recursion exceeded cap of 8`, naming `tasks.fanout`, where a `tasks.spawn` task past the cap names `call` instead. The difference comes from `tasks.fanout` marking each arm's start as a fanout arm, while a plain `tasks.spawn` carries no such mark.
+Because each arm starts the way a `tasks.spawn` task starts, it gets `call`'s target resolution and depth cap, and the same refusal of a list section as the target, so `tasks.fanout('### Items', {'x'})` over a list section fails with ``section `{name}` is a list section, not a worker template``. A fanout whose arms would pass the depth cap fails with `recursion exceeded cap of 8`, the same words a `tasks.spawn` task or a `call` past the cap gives, pointing at the `tasks.fanout` line.
 
 A task that an arm starts with `tasks.spawn` is a child of the arm's chain, so the first spawn from arm `0.0` is task `0.0.0`. In `pcall(tasks.fanout, '## Worker', {'spawner', 'boom'})`, the first arm runs `tasks.spawn('## Child')`, and that child is task `0.0.0`.
 
@@ -1636,15 +1636,15 @@ return item
 caught:lua
 ````
 
-The arm for `boom` raises `fatal arm error`. The fanout fails with that arm's own error value, `pcall` hands it to `## Parent` as `err`, and `## Parent` goes on to return `caught:lua`.
+The arm for `boom` raises `fatal arm error`. The fanout fails with that arm's own error value, `pcall` hands it to `## Parent` as `err`, and `## Parent` goes on to return `caught:lua`. The error value keeps the line where the arm failed, so `tostring(err)` reads `caught-arm.md:21: fatal arm error. The Lua code failed at runtime. Fix the code at this location.`, pointing into `### Worker` rather than at the `tasks.fanout` line.
 
 ### Fail-fast
 
 `tasks.fanout` is fail-fast: when any arm fails with an error other than hitting the round cap, the whole fanout fails. Every sibling arm still running is cancelled without waiting on its pending model rounds, members whose arms have not started never run, and the failure is raised from the `tasks.fanout` call.
 
-The error `tasks.fanout` raises is the failing arm's own error value, with its original kind and message. It is not wrapped and it is not a cancellation error, so an arm that called `error('message')` produces an error of kind `lua`. Any other arm error fails the fanout the same way, for example a failed model round, or a `models.use` call inside the arm that names something that is not one of the five model roles, such as `models.use('ghost')`.
+The error `tasks.fanout` raises is the failing arm's own error value, with its original kind and message, and its message keeps the line where the arm failed (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). It is not wrapped and it is not a cancellation error, so an arm that called `error('message')` produces an error of kind `lua`. Any other arm error fails the fanout the same way, for example a failed model round, or a `models.use` call inside the arm that names something that is not one of the five model roles, such as `models.use('ghost')`.
 
-A fanout failure is raised as an ordinary Lua error at the `tasks.fanout` call, inside the section that made the call. If nothing catches it, that section's Lua block fails, and the whole run ends with the arm's error. An arm that called `error('arm deliberately failed')` ends the run with run error kind `Lua` and a run error message that keeps the arm's original message text, and any other uncaught arm error ends the run with that error's message.
+A fanout failure is raised as an ordinary Lua error at the `tasks.fanout` call, inside the section that made the call. If nothing catches it, that section's Lua block fails, and the whole run ends with the arm's error. An arm that called `error('arm deliberately failed')` ends the run with run error kind `Lua` and a run error message that keeps the arm's original message text and ends with ` (at {file}:{line})` for the arm's line, and any other uncaught arm error ends the run with that error's message.
 
 When a fanout raises, you get no partial results, not even from arms that had already finished. When several arms have already ended by the time the fanout checks on them, the arm earliest in collection order is handled first, so when failures happen at the same time, the earliest arm's failure is the one raised.
 
@@ -1775,7 +1775,7 @@ A call with the wrong number of arguments raises an error value of kind `lua` wi
 
 ### Each collection error
 
-Every broken collection rule raises an error value of kind `lua` whose `message` is that rule's message. This table gives each rule, a call that breaks it, and the message it raises:
+Every broken collection rule raises an error value of kind `lua` whose `message` is that rule's message, with no location, except the last rule, which is checked as each arm spawns and whose message gains the call's location and the Lua runtime prose, as the end of this section shows. This table gives each rule, a call that breaks it, and the message it raises:
 
 | Rule | A call that breaks it | Message |
 |---|---|---|
@@ -1793,7 +1793,7 @@ Members must be data, so a member that is a function, userdata, or thread raises
 
 Every collection key must be a string, number, or boolean, and a key of any other type raises `fanout collection key must be a string, number, or boolean, got {type_name}`, naming the key's Lua type. Every number key must be finite, since a key that is not finite has no ordered position. Every string key must be valid UTF-8, and a key whose bytes are not valid UTF-8 raises a `lua` error that carries the Lua runtime's own string conversion message, with no fanout-specific wording.
 
-The call-time member check looks only at each member's own type and not inside it. A table member that holds a function, such as `{ f = function() end }`, passes the call-time check but fails when `tasks.fanout` spawns its arm, with `item must be a JSON-representable value: {error}`. The call then cancels the arms it already spawned and raises that `lua` error.
+The call-time member check looks only at each member's own type and not inside it. A table member that holds a function, such as `{ f = function() end }`, passes the call-time check but fails when `tasks.fanout` spawns its arm, with `item must be a JSON-representable value: {error}`. The call then cancels the arms it already spawned and raises that `lua` error. Because the arm's spawn refuses it rather than the call-time check, its message points at the `tasks.fanout` line, as `{file}:{line}: item must be a JSON-representable value: {error}. The Lua code failed at runtime. Fix the code at this location.`
 
 ### Catching a collection error
 

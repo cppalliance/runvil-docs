@@ -80,11 +80,11 @@ Listing a Pack under `uses:` declares that the prompt needs it and makes the Pac
 
 Declaring a Pack does not install it. A Host calls Plugins, each Plugin adds its Packs, zero or more, to the Host's Pack registry, and every registered Pack is built when the Host sets up, so a prompt can only declare Packs the Host already has. The Host never installs a Pack itself, never picks which Packs to build, and never picks a Pack id. A Pack id is always the second segment of the Pack's fully qualified name, so `runvil/web` has the Pack id `web`, and that Pack id prefixes its tools, as in `web/fetch`. A Pack id has no version part, so the entry `web` names exactly the Pack `runvil/web`.
 
-A declared Pack that the Host does not have refuses the run before it starts. The run fails with run error kind `RequirementsUnmet` (see [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run)), and its requirements notice opens with `the environment cannot satisfy this prompt:` and includes a line that names the Pack:
+A declared Pack that the Host does not have refuses the run before it starts. The run fails with run error kind `RequirementsUnmet` (see [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run)), and its requirements notice opens with `the environment cannot satisfy this prompt:`, includes a line that names the Pack, and ends with the prompt file and its `uses:` line (see [Where an error points](16-limits-and-errors.md#where-an-error-points)):
 
 ````text
 the environment cannot satisfy this prompt:
-- missing required Pack: web
+- missing required Pack: web (at {file}:{line})
 ````
 
 A bare entry whose Pack id the Host has only from other vendors gets a line that names the entry to write instead, so `uses: [poop]` on a Host that has `acme/poop` but no `runvil/poop` gives `- poop is unavailable: poop means runvil/poop, which is not installed; write acme/poop to use that Pack`. A `vendor/name` entry the Host does not have gets a line such as `- poop is unavailable: acme/poop is not installed`.
@@ -155,7 +155,7 @@ A fully qualified name is a valid entry, so `uses: [runvil/web]` declares the sa
 invalid frontmatter: invalid uses entry `acme/web/fetch`: a uses entry is a Pack id, such as `web`, or vendor/name, such as `acme/web`
 ````
 
-Name each Pack id once. Two entries with the same Pack id, next to each other or not, fail with this message, which names the repeated Pack id and reports no line or column:
+Name each Pack id once. Two entries with the same Pack id, next to each other or not, fail with this message, which names the repeated Pack id and reports the line of the `uses:` key, at column 1:
 
 ````text
 invalid frontmatter: Pack id {id} is declared more than once under uses
@@ -163,7 +163,7 @@ invalid frontmatter: Pack id {id} is declared more than once under uses
 
 The vendors do not matter, because a run holds one Pack per Pack id, so `uses: [web, acme/web]` fails naming `web`, and so does `uses: [web, runvil/web]`. When the list repeats several Pack ids, the message names the Pack id whose second appearance comes first in the list, so `[web, user-input, user-input, web]` names `user-input`.
 
-The Engine reserves the Pack ids `adhoc`, which holds a section entry's own tools, and `dynamic`, which holds its discovery tools (see [Pack ids](#pack-ids)), so neither is ever declared. A `uses:` entry with either Pack id, from any vendor, such as `adhoc`, `runvil/adhoc`, or `acme/dynamic`, fails to parse with this message, which names the reserved Pack id and, like the repeated-entry message, reports no line or column:
+The Engine reserves the Pack ids `adhoc`, which holds a section entry's own tools, and `dynamic`, which holds its discovery tools (see [Pack ids](#pack-ids)), so neither is ever declared. A `uses:` entry with either Pack id, from any vendor, such as `adhoc`, `runvil/adhoc`, or `acme/dynamic`, fails to parse with this message, which names the reserved Pack id and, like the repeated-entry message, reports the line of the `uses:` key, at column 1:
 
 ````text
 invalid frontmatter: Pack id {id} is reserved by the Engine and is never declared under uses
@@ -886,10 +886,10 @@ A refusal is Engine text, so the model reads it as is, outside the envelope, and
 
 The discovery tools are for the model alone. They are not in the run's tool catalog, so a script's `tools.call('dynamic/call', { toolName = 'grab' })` fails with `unbound_tool`, as any id the run does not hold does (see [The `unbound_tool` error](#the-unbound_tool-error)). `tools.adhoc` refuses the names `GetDynamicTools` and `CallDynamicTool` (see [Errors from `tools.adhoc`](#errors-from-toolsadhoc)), though a name that differs only in case, such as `getdynamictools`, is free.
 
-A Pack tool whose wire name is `GetDynamicTools` or `CallDynamicTool` fails the first loop round of any section that offers it and keeps a tool in its Dynamic Set, because a wire name names one tool across both sets, and it fails the way any wire-name clash does (see [What the model sees for each offered tool](#what-the-model-sees-for-each-offered-tool)). With a `kit` Pack whose tool `kit/discover` takes the wire name `GetDynamicTools`, a section that runs `tools.offer('kit/discover')` and keeps any other tool in its Dynamic Set fails its first loop round with this message:
+A Pack tool whose wire name is `GetDynamicTools` or `CallDynamicTool` fails the first loop round of any section that offers it and keeps a tool in its Dynamic Set, because a wire name names one tool across both sets, and it fails the way any wire-name clash does (see [What the model sees for each offered tool](#what-the-model-sees-for-each-offered-tool)). With a `kit` Pack whose tool `kit/discover` takes the wire name `GetDynamicTools`, a section that runs `tools.offer('kit/discover')` and keeps any other tool in its Dynamic Set fails its first loop round with a broken tool-set rule, and a run that leaves it uncaught ends with this message, which points at the `models.loop` line (see [What the model sees for each offered tool](#what-the-model-sees-for-each-offered-tool) for what a caught one reads):
 
 ````text
-the tools kit/discover of the kit Pack in the Static Set and dynamic/search of the dynamic Pack in the Static Set share the wire name "GetDynamicTools", and a wire name names one tool across a section's Static Set and Dynamic Set; offer only one of them
+the tools kit/discover of the kit Pack in the Static Set and dynamic/search of the dynamic Pack in the Static Set share the wire name "GetDynamicTools", and a wire name names one tool across a section's Static Set and Dynamic Set; offer only one of them (at {file}:{line})
 ````
 
 A section that keeps no tool in its Dynamic Set advertises no discovery tool, so the same Pack tool goes out under its own name there.
@@ -1033,7 +1033,7 @@ tools.offer: the web Pack is unavailable in this run: web needs runvil/search-pr
 
 So `tools.offer('mcp')` on a Host whose `mcp` Pack cannot serve raises with that Pack's own reason.
 
-Because the check runs when `tools.offer` is called, an unknown entry raises on that line while the section's Lua runs, before the first loop round freezes the section entry's tool list, and the tool never reaches any model round. A failed `tools.offer` in a section's prologue, the Lua before its prose, stops the run before the section's prose reaches a model. The error reads the same wherever in the prompt's Lua the offer runs, and left uncaught it fails the run with run error kind `Lua` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)).
+Because the check runs when `tools.offer` is called, an unknown entry raises on that line while the section's Lua runs, before the first loop round freezes the section entry's tool list, and the tool never reaches any model round. A failed `tools.offer` in a section's prologue, the Lua before its prose, stops the run before the section's prose reaches a model. The refusal reads the same wherever in the prompt's Lua the offer runs, apart from the line the error points at, and left uncaught it fails the run with run error kind `Lua` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)).
 
 You can catch the error with `pcall`. This block offers a misspelled tool id next to a real one. Put it in the `## Ask` section of `offer-search` in place of the first one:
 
@@ -1043,10 +1043,10 @@ return err.kind .. '|' .. tostring(err)
 ````
 
 ````text
-lua|tools.offer: "web/serch" is not a tool in this run
+lua|{file}:{line}: tools.offer: "web/serch" is not a tool in this run. The Lua code failed at runtime. Fix the code at this location.
 ````
 
-A failing `tools.offer` caught by `pcall` yields an error value of kind `lua`, not a plain string, and `tostring` of it gives the error message (see [Error values](05-lua-environment.md#error-values)). Errors from `tools.offer`, `tools.offer_dynamic`, `tools.adhoc`, `tools.packs`, and `tools.stats` are all raised as Lua runtime errors inside the call, so they surface like any other Lua error and `pcall` catches them (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)).
+A failing `tools.offer` caught by `pcall` yields an error value of kind `lua`, not a plain string, and `tostring` of it gives the error message: the line of the `tools.offer` call, the refusal, and the Lua runtime prose (see [Error values](05-lua-environment.md#error-values) and [Where an error points](16-limits-and-errors.md#where-an-error-points)). Errors from `tools.offer`, `tools.offer_dynamic`, `tools.adhoc`, `tools.packs`, and `tools.stats` are all raised as Lua runtime errors inside the call, so they surface like any other Lua error and `pcall` catches them (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)).
 
 Every entry of one `tools.offer` call is checked before any is recorded, so a call that refuses any entry offers nothing, the valid entries in the same call included, and leaves the section entry's scope unchanged. In the block above, `web/search` is not offered either, because an array offer is all or nothing. A refused call leaves the offers the entry already made in place, and a section that catches the failure with `pcall` is free to keep offering before the first loop round, so a later valid offer still records.
 
@@ -1143,7 +1143,7 @@ Each mistake in the arguments raises a Lua error at the `tools.call` line:
 - An `args` value that is not a table, such as a string, number, or boolean, raises `args must be a table, got {type}`, such as `args must be a table, got string`.
 - An `args` table that holds a value with no JSON form, such as a function, raises `args must be a JSON-representable table: {error}`, where `{error}` explains why the table could not become JSON.
 
-Every one of these errors comes back as the call's own answer, so it raises at the `tools.call` line and a `pcall` around the call catches it there. All four have the same shape, a bare message, so you see one error form whichever argument is wrong. The type at the end of the message is the Lua type of the bad value, so passing `42` as the tool or as `args` ends the message with `got integer`, not `got number`.
+Every one of these errors comes back as the call's own answer, so it raises at the `tools.call` line and a `pcall` around the call catches it there. All four have the same shape, a `lua`-kind error value whose message is `{file}:{line}: {refusal}. The Lua code failed at runtime. Fix the code at this location.`, so you see one error form whichever argument is wrong. The type at the end of the refusal is the Lua type of the bad value, so passing `42` as the tool or as `args` ends the refusal with `got integer`, not `got number`.
 
 ### Script calls and model tool calls
 
@@ -1192,13 +1192,13 @@ The run result is:
 true|false|model_only_tool|kit/edit
 ````
 
-The refusal is a Lua error that `pcall` catches. Its value has `kind` set to `model_only_tool` and a `name` field that holds the id the call named, and `tostring(err)` gives this message:
+The refusal is a Lua error that `pcall` catches. Its value has `kind` set to `model_only_tool` and a `name` field that holds the id the call named, and `tostring(err)` gives this message, which points at the `tools.call` line:
 
 ````text
-tool "kit/edit" (kit/edit) is model-only: a render shapes its arguments for the model that receives them, so a script cannot call it; offer it with tools.offer and let the model call it
+edit-check.md:14: tool "kit/edit" (kit/edit) is model-only: a render shapes its arguments for the model that receives them, so a script cannot call it; offer it with tools.offer and let the model call it
 ````
 
-The message quotes the id the call named and then repeats the tool's id in parentheses, so the two read the same. A call refused this way sends nothing to the Harness and counts in no `tools.stats` counter, so as a section entry's first tool call it creates neither `tools.stats` nor `sys.model`. Uncaught, the refusal ends the run with run error kind `Tool` and the same message.
+The message quotes the id the call named and then repeats the tool's id in parentheses, so the two read the same. A call refused this way sends nothing to the Harness and counts in no `tools.stats` counter, so as a section entry's first tool call it creates neither `tools.stats` nor `sys.model`. Uncaught, the refusal ends the run with run error kind `Tool` and the same refusal text, followed by ` (at {file}:{line})` for the `tools.call` line.
 
 To put the tool to work, offer it before the section's first `models.loop` with `tools.offer('kit/edit')`, or offer the whole Pack with `tools.offer('kit')`, and let the model call it. A script can read `tools.get('kit/edit').model_only_call` first, to decide whether to call a tool itself or leave it to the model.
 
@@ -1298,15 +1298,15 @@ return tostring(err)
 ````
 
 ````text
-tools.stats.tools: "web/search" has no seeded count; seeded names: ["web/fetch"] (a catalog tool that was neither offered in this section nor called with tools.call)
+count-check.md:14: tools.stats.tools: "web/search" has no seeded count; seeded names: ["web/fetch"] (a catalog tool that was neither offered in this section nor called with tools.call). The Lua code failed at runtime. Fix the code at this location.
 ````
 
-The error is a Lua error that `pcall` catches, and `tostring` of the caught value gives its message. The message names the table and the bad key and lists the keys the table holds in sorted name order, printed like `["web/fetch"]`, in the form `{table}: "{key}" has no seeded count; seeded names: [...]`, where `{table}` is `tools.stats.tools` or `tools.stats.packs`, and its ending depends on the key:
+The error is a Lua error that `pcall` catches, and `tostring` of the caught value gives its message: the line of the failing read inside the protected function, the refusal, and the Lua runtime prose. The refusal names the table and the bad key and lists the keys the table holds in sorted name order, printed like `["web/fetch"]`, in the form `{table}: "{key}" has no seeded count; seeded names: [...]`, where `{table}` is `tools.stats.tools` or `tools.stats.packs`, and its ending depends on the key:
 
-- When a read from `tools` names the id of a catalog tool the run can offer but the section neither offered nor called with `tools.call`, the message adds ` (a catalog tool that was neither offered in this section nor called with tools.call)`, as above.
-- When a read from `tools` names the id of an adhoc tool the section defined but neither offered nor called with `tools.call`, the message adds ` (an adhoc tool that was neither offered in this section nor called with tools.call)`.
-- When the key is neither, such as a misspelled id, a wire name such as `web_fetch`, an adhoc tool's bare name such as `grab`, a discovery tool's id such as `dynamic/search`, or any Pack id `packs` does not hold, and the table holds some keys, the message ends with ` - check for typos or offer it with tools.offer`.
-- When the table holds no keys and the key is neither kind of id, the message ends after the empty list `seeded names: []`, with no hint.
+- When a read from `tools` names the id of a catalog tool the run can offer but the section neither offered nor called with `tools.call`, the refusal adds ` (a catalog tool that was neither offered in this section nor called with tools.call)`, as above.
+- When a read from `tools` names the id of an adhoc tool the section defined but neither offered nor called with `tools.call`, the refusal adds ` (an adhoc tool that was neither offered in this section nor called with tools.call)`.
+- When the key is neither, such as a misspelled id, a wire name such as `web_fetch`, an adhoc tool's bare name such as `grab`, a discovery tool's id such as `dynamic/search`, or any Pack id `packs` does not hold, and the table holds some keys, the refusal ends with ` - check for typos or offer it with tools.offer`.
+- When the table holds no keys and the key is neither kind of id, the refusal ends after the empty list `seeded names: []`, with no hint.
 
 `tools.stats` itself holds only `total`, `packs`, and `tools`, so reading any other key from it raises an error that names the key and lists those three: `tools.stats.calls` raises `tools.stats: unknown key "calls"; accepted keys are total, packs, tools`.
 
@@ -1367,13 +1367,13 @@ A structured tool's text is parsed as JSON before your Lua sees it, so `tools.ca
 
 Whether `tools.call` returns a string or a table is decided by the tool's declared output kind, which comes from the Host's tool catalog and not from anything the prompt writes. A script call to a catalog tool returns a result shaped by that kind: a plain tool's text comes back as a string, and a structured tool's JSON output comes back as a table. JSON text from a plain tool still arrives as a string, which [`json.decode`](05-lua-environment.md#encoding-and-decoding-json-with-json) turns into a table. When the plain tool is untrusted, cut the text out of its envelope before decoding it, as [Decoding a fetched JSON body](13-web-fetch-and-search.md#decoding-a-fetched-json-body) shows.
 
-A structured tool whose output is not valid JSON makes `tools.call` raise an error value of kind `tool`. Its message names the tool in quotes, says it returned invalid JSON, and gives the JSON parser's detail, which appears only once in the error chain:
+A structured tool whose output is not valid JSON makes `tools.call` raise an error value of kind `tool`. Its message, after the `tools.call` line, names the tool in quotes, says it returned invalid JSON, and gives the JSON parser's detail, which appears only once in the error chain:
 
 ````text
-structured tool "{alias}" returned invalid JSON: {error}
+{file}:{line}: structured tool "{alias}" returned invalid JSON: {error}
 ````
 
-Reported as a tool call failure, it reads `tool call failure: structured tool "{alias}" returned invalid JSON`.
+Left uncaught, it ends the run as a tool call failure that reads `tool call failure: structured tool "{alias}" returned invalid JSON: {error} (at {file}:{line})`.
 
 ### Trust levels
 
@@ -1755,10 +1755,16 @@ end))
 tools.offer_dynamic('web/search')
 ````
 
-The section's first `models.loop` fails before it sends a round, raising an error value of kind `internal` with this message:
+The section's first `models.loop` fails before it sends a round, raising an error value of kind `internal` whose message is the `models.loop` line and the prose for a broken tool-set rule:
 
 ````text
-the tools adhoc/web_search of the adhoc Pack in the Static Set and web/search of the web Pack in the Dynamic Set share the wire name "web_search", and a wire name names one tool across a section's Static Set and Dynamic Set; offer only one of them
+{file}:{line}: The section's tool sets break a rule of the merge that builds them. Fix the offers, or the render that answered them.
+````
+
+Left uncaught, the failure ends the run with a message that names the clash:
+
+````text
+the tools adhoc/web_search of the adhoc Pack in the Static Set and web/search of the web Pack in the Dynamic Set share the wire name "web_search", and a wire name names one tool across a section's Static Set and Dynamic Set; offer only one of them (at {file}:{line})
 ````
 
 ### Errors from `tools.adhoc`
@@ -2034,7 +2040,7 @@ A call to this `grab` fails with an error whose message contains:
 cannot return a table as a result
 ````
 
-The error raises at the call. A script `tools.call` raises it at that line, and when the model made the call, `models.loop` raises it unchanged, so the run fails with `cannot return a table as a result` unless the caller catches it. A handler that returns `{ 1, 2 }` fails the same way. An adhoc tool call therefore ends in one of two ways when the handler returns: with the handler's text when the return is accepted, or with this error when it is rejected.
+The error raises at the call. A script `tools.call` raises it at that line, and when the model made the call, `models.loop` raises it unchanged, so unless the caller catches it, the run fails with a message that contains `cannot return a table as a result`. A handler that returns `{ 1, 2 }` fails the same way. An adhoc tool call therefore ends in one of two ways when the handler returns: with the handler's text when the return is accepted, or with this error when it is rejected.
 
 ### When a handler raises
 
@@ -2113,7 +2119,7 @@ Uncaught, a handler's error fails the call and the run. During `models.loop` it 
 handler exploded
 ````
 
-The model never sees the failure and receives no further request: the round that asked for the tool is the only request the model gets, and the call reports no tool result. When a handler raises, the loop first reports the call as failed and then raises the handler's own error value again, unchanged, even when that report itself fails, so the `models.loop` call ends either way. A rejected return works the same way during the loop: the loop raises the rejection unchanged at the `models.loop` call, so a model-called handler that does `return { args.value }` fails the run with `cannot return a table as a result`.
+The model never sees the failure and receives no further request: the round that asked for the tool is the only request the model gets, and the call reports no tool result. When a handler raises, the loop first reports the call as failed and then raises the handler's own error value again, unchanged, even when that report itself fails, so the `models.loop` call ends either way. A rejected return works the same way during the loop: the loop raises the rejection unchanged at the `models.loop` call, so a model-called handler that does `return { args.value }` fails the run with a message that contains `cannot return a table as a result`.
 
 ### Handlers and cancellation
 
@@ -2228,16 +2234,22 @@ The description of `web/search` is the tool's own, `Search the web and return a 
 {"type":"object","properties":{"value":{"type":"string"}},"required":["value"]}
 ````
 
-Every tool the model is offered has a wire name that matches `[A-Za-z][A-Za-z0-9_-]{0,63}`, a letter followed by up to 63 letters, digits, `_`, or `-`, and a parameter schema that is a JSON object. Anything else is refused before it reaches the model, whether the tool comes from the Pack's tool list or from its render. A section that offers a catalog tool whose parameter schema is not a JSON object, such as the bare string `"scalar"`, or whose wire name breaks the rule, such as `9lives_fetch` for the tool id `9lives/fetch`, fails its first loop round, which sends nothing. `models.loop` raises an error value of kind `internal` whose message names the tool by its wire name and ends with the reason it was refused:
+Every tool the model is offered has a wire name that matches `[A-Za-z][A-Za-z0-9_-]{0,63}`, a letter followed by up to 63 letters, digits, `_`, or `-`, and a parameter schema that is a JSON object. Anything else is refused before it reaches the model, whether the tool comes from the Pack's tool list or from its render. A section that offers a catalog tool whose parameter schema is not a JSON object, such as the bare string `"scalar"`, or whose wire name breaks the rule, such as `9lives_fetch` for the tool id `9lives/fetch`, fails its first loop round, which sends nothing. `models.loop` raises an error value of kind `internal` whose message is the `models.loop` line and the prose for a schema that did not build:
 
 ````text
-model-facing schema build failure for tool alias "9lives_fetch": invalid tool wire name "9lives_fetch": expected [A-Za-z][A-Za-z0-9_-]{0,63}
+{file}:{line}: A tool's model-facing schema did not build. Fix the tool's name or its parameter schema.
 ````
 
-Two offered tools that share a wire name, such as two ids that differ only where one has a `.` and the other a `/`, fail the first loop round the same way, unless one is an adhoc tool that shadows the other in the same set (see [An adhoc tool that shadows a catalog tool](#an-adhoc-tool-that-shadows-a-catalog-tool)). With a `dup` Pack that holds `dup/a.b` and `dup/a/b`, which both take the wire name `dup_a_b`, a section that runs `tools.offer('dup')` and then `models.loop` gets an error that names both tools, each with its Pack and its set:
+Left uncaught, it ends the run with a message that names the tool by its wire name and the reason it was refused, then the location:
 
 ````text
-the tools dup/a/b of the dup Pack in the Static Set and dup/a.b of the dup Pack in the Static Set share the wire name "dup_a_b", and a wire name names one tool across a section's Static Set and Dynamic Set; offer only one of them
+model-facing schema build failure for tool alias "9lives_fetch": invalid tool wire name "9lives_fetch": expected [A-Za-z][A-Za-z0-9_-]{0,63} (at {file}:{line})
+````
+
+Two offered tools that share a wire name, such as two ids that differ only where one has a `.` and the other a `/`, fail the first loop round the same way, unless one is an adhoc tool that shadows the other in the same set (see [An adhoc tool that shadows a catalog tool](#an-adhoc-tool-that-shadows-a-catalog-tool)). With a `dup` Pack that holds `dup/a.b` and `dup/a/b`, which both take the wire name `dup_a_b`, a section that runs `tools.offer('dup')` and then `models.loop` gets an error value whose message is `{file}:{line}: The section's tool sets break a rule of the merge that builds them. Fix the offers, or the render that answered them.`, and left uncaught, a run message that names both tools, each with its Pack and its set:
+
+````text
+the tools dup/a/b of the dup Pack in the Static Set and dup/a.b of the dup Pack in the Static Set share the wire name "dup_a_b", and a wire name names one tool across a section's Static Set and Dynamic Set; offer only one of them (at {file}:{line})
 ````
 
 Left uncaught, either error fails the run with run error kind `Binding`. Only a section that offers the tool, or both tools of a clash, fails this way, so a section that offers only `dup/a.b` advertises it as `dup_a_b`. The tool stays in the run's tool catalog, so `tools.get` finds it, and a block can still call it by its id (see [Naming the tool to call](#naming-the-tool-to-call)).
@@ -2268,10 +2280,10 @@ local bare_ok, bare_err = pcall(tools.call, 'search', {})
 return tostring(wire_err) .. '|' .. tostring(bare_err)
 ````
 
-This returns:
+This returns the two messages, each with the line of its own `pcall`:
 
 ````text
-tools.call: "web_search" is not a tool id|tools.call: "search" is not a tool id
+{file}:{line}: tools.call: "web_search" is not a tool id. The Lua code failed at runtime. Fix the code at this location.|{file}:{line}: tools.call: "search" is not a tool id. The Lua code failed at runtime. Fix the code at this location.
 ````
 
 As [How tool calls are recorded](#how-tool-calls-are-recorded) explains, a model call is recorded under the wire name it called, a script call to a catalog tool under the tool's id, never its wire name, and a script call to an adhoc tool under the tool's `name`.
@@ -2315,10 +2327,10 @@ Each tool call the model makes inside `models.loop` is dispatched by tool name w
 
 The loop resolves each name through the section entry's Static Set. An advertised name that maps to an `adhoc/` id runs that adhoc tool's handler, the Engine answers `GetDynamicTools` and `CallDynamicTool` itself (see [Finding and calling dynamic tools](#finding-and-calling-dynamic-tools)), and any other advertised name runs the catalog tool it maps to.
 
-Before any call runs, each tool name the model requests in the round is checked against the names that round advertised and the names in the section entry's Dynamic Set, though a direct call to a Dynamic Set tool only gets refusal text (see [Mistakes the model gets back as text](#mistakes-the-model-gets-back-as-text)). A name in neither is out of scope, and when any name in the round is out of scope, the whole round fails before any of its calls runs, at the first such name. `models.loop` raises an error value of kind `out_of_scope_tool` whose `name` field holds the requested name. In the `search-loop` prompt, a model call to `rogue`, caught with `pcall(models.loop)`, gives the kind `out_of_scope_tool`, the name `rogue`, and the message:
+Before any call runs, each tool name the model requests in the round is checked against the names that round advertised and the names in the section entry's Dynamic Set, though a direct call to a Dynamic Set tool only gets refusal text (see [Mistakes the model gets back as text](#mistakes-the-model-gets-back-as-text)). A name in neither is out of scope, and when any name in the round is out of scope, the whole round fails before any of its calls runs, at the first such name. `models.loop` raises an error value of kind `out_of_scope_tool` whose `name` field holds the requested name. In the `search-loop` prompt, a model call to `rogue`, caught with `pcall(models.loop)`, gives the kind `out_of_scope_tool`, the name `rogue`, and a message that points at the `models.loop` line:
 
 ````text
-tool "rogue" is not in this section's scope; aliases this section offers: ["web_search"]
+{file}:{line}: tool "rogue" is not in this section's scope; aliases this section offers: ["web_search"]
 ````
 
 An out-of-scope call ends the loop in the round where it happens, and the model gets no further round to recover, so the failed round is the only request the model receives. The run reports the refused call as a failed tool call event: exactly one, under the section that ran the loop, after the batch's tool-calls event has already been reported. [The `out_of_scope_tool` error](#the-out_of_scope_tool-error) gives the rest of this error's rules.
@@ -2423,10 +2435,10 @@ return 'ok'
 The call passes no `url`, so the fetch tool fails with its own message, `web_fetch: missing url argument`, and the run result is:
 
 ````text
-could not run the tool: tool call failure: web_fetch: missing url argument
+could not run the tool: catch-tool.md:14: web_fetch: missing url argument
 ````
 
-A block catches a failing bound tool with `pcall(tools.call, tool, args)`, which returns `false` and an error value whose `kind` is `tool` and whose `tostring` reads `tool call failure: {message}`.
+A block catches a failing bound tool with `pcall(tools.call, tool, args)`, which returns `false` and an error value whose `kind` is `tool` and whose `tostring` reads `{file}:{line}: {message}`, the `tools.call` line and then the tool's own message.
 
 How a failing tool call reaches you depends on who made the call. When the model called the tool inside `models.loop`, the failure comes back to the model as wrapped failure text. When your block called it with `tools.call`, the failure raises at that call. This table lists every tool error by what each side sees:
 
@@ -2479,7 +2491,7 @@ Nothing in the run retries a failed tool call, so a prompt that wants another at
 
 #### Model-safe error messages
 
-A model-safe error message is a tool's own short failure text, written so it can be shown to a model, with any deeper cause left out. It is what both sides read: inside the untrusted wrapper the model reads that same message, and `tostring(err)` in Lua holds it too. A failed operator ask through [`input.ask`](05-lua-environment.md#asking-the-operator) gives a `tostring(err)` holding `the operator's window closed`, and never its hidden cause, `socket reset`.
+A model-safe error message is a tool's own short failure text, written so it can be shown to a model, with any deeper cause left out. It is what both sides read: inside the untrusted wrapper the model reads that same message alone, with no location in front, and `tostring(err)` in Lua holds it after the call's `{file}:{line}: `. A failed operator ask through [`input.ask`](05-lua-environment.md#asking-the-operator) gives a `tostring(err)` holding `the operator's window closed`, and never its hidden cause, `socket reset`.
 
 #### Failures that end `models.loop`
 
@@ -2487,7 +2499,7 @@ Only a bound tool's own failure goes back to the model as a result. An error an 
 
 ### A bound tool fails in a script call
 
-A failing bound tool called with `tools.call` raises an error value in the block that made the call. A dispatched tool's own failure reaches Lua with `kind` set to `tool`, and the value has no extra fields such as `name`. Its `message` field, and so `tostring(err)`, reads `tool call failure: {message}` with the tool's own model-safe failure text in place of `{message}`. For the failing fetch from the `catch-tool` prompt:
+A failing bound tool called with `tools.call` raises an error value in the block that made the call. A dispatched tool's own failure reaches Lua with `kind` set to `tool`, and the value has no extra fields such as `name`. Its `code` names the class of tool failure, one of `tool_invalid_arguments`, `tool_backend`, `tool_transport`, or `tool_other`. Its `message` field, and so `tostring(err)`, reads `{file}:{line}: {message}`, with the line of the `tools.call` and the tool's own model-safe failure text in place of `{message}`. For the failing fetch from the `catch-tool` prompt:
 
 ````lua
 local ok, err = pcall(tools.call, 'web/fetch', {})
@@ -2497,13 +2509,13 @@ return tostring(ok) .. '|' .. err.kind .. '|' .. tostring(err)
 This returns:
 
 ````text
-false|tool|tool call failure: web_fetch: missing url argument
+false|tool|{file}:{line}: web_fetch: missing url argument
 ````
 
-The kind is `tool` whatever went wrong inside the tool. The error value from a failed operator ask has `err.kind` equal to `tool`, whatever went wrong on the operator side. Uncaught, a tool failure ends the run with that error: `return tools.call('web/fetch', {})` with no `pcall` fails the run, and an uncaught failed ask, as from `return (input.ask())`, ends the run as a failure with [run error kind](16-limits-and-errors.md#run-error-kinds) `Tool` whose message carries the operator-side failure message, such as `the operator's window closed`. The run's message for an uncaught tool failure is:
+The kind is `tool` whatever went wrong inside the tool. The error value from a failed operator ask has `err.kind` equal to `tool`, whatever went wrong on the operator side. Uncaught, a tool failure ends the run with that error: `return tools.call('web/fetch', {})` with no `pcall` fails the run, and an uncaught failed ask, as from `return (input.ask())`, ends the run as a failure with [run error kind](16-limits-and-errors.md#run-error-kinds) `Tool` whose message carries the operator-side failure message, such as `the operator's window closed`. The run's message for an uncaught tool failure names the call, the tool's own message, and the line of the `tools.call`:
 
 ````text
-tool call failure: {message}
+tool call failure: {message} (at {file}:{line})
 ````
 
 ### Reading a caught tool error
@@ -2512,12 +2524,12 @@ You read a caught tool error through three things:
 
 - `err.kind` names the error: `tool`, `unbound_tool`, `model_only_tool`, `out_of_scope_tool`, or another kind.
 - `err.name` holds the requested tool name, on `unbound_tool`, `model_only_tool`, and `out_of_scope_tool` errors only. A `tool` error has no `name` field.
-- `tostring(err)` gives the message.
+- `tostring(err)` gives the message, which starts with the prompt file and the line of the call that raised it, as `{file}:{line}: ` (see [Where an error points](16-limits-and-errors.md#where-an-error-points)).
 
 For an out-of-scope call, `err.kind .. '|' .. err.name .. '|' .. tostring(err)` renders:
 
 ````text
-out_of_scope_tool|rogue|tool "rogue" is not in this section's scope; aliases this section offers: ["echo"]
+out_of_scope_tool|rogue|{file}:{line}: tool "rogue" is not in this section's scope; aliases this section offers: ["echo"]
 ````
 
 `pcall` around a script `tools.call` catches every failure at the call alike: a string that is not a tool id, an unbound id (caught as `unbound_tool`), a model-only tool (caught as `model_only_tool`), an adhoc tool handler's error (caught as the very value the handler raised), or the tool's own failure. An uncaught error from `tools.call` ends the run with that error.
@@ -2531,14 +2543,14 @@ local ok, err = pcall(tools.call, 'web/missing', {})
 return tostring(ok) .. '|' .. err.kind .. ':' .. err.name
 ````
 
-This returns `false|unbound_tool:web/missing`. The error value's `name` field holds the exact id the block passed, and its message reads `tool "{name}" is not a tool in this run; catalog tools: [...]`, listing every tool id in the run's tool catalog.
+This returns `false|unbound_tool:web/missing`. The error value's `name` field holds the exact id the block passed, and its message reads `{file}:{line}: tool "{name}" is not a tool in this run; catalog tools: [...]`, with the `tools.call` line in front and every tool id in the run's tool catalog in the list.
 
 A script call resolves a tool id such as `web/fetch` against the section entry's adhoc tools and then the run's tool catalog, so `tools.call('adhoc/grab')` before `grab` is defined gives `unbound_tool` too. A string without a slash, a wire name or a bare tool name included, never reaches that lookup: it raises `tools.call: "web_fetch" is not a tool id` at the call, as [Wire names for the model, tool ids for Lua](#wire-names-for-the-model-tool-ids-for-lua) shows. A failed call of either kind sends out no tool call at all.
 
 The id list covers every tool in the run's tool catalog, not just the tools offered into the current section, so on a Host that serves `user-input` and `web`, a section that offers nothing still lists all three of their tools. The list is in alphabetical order rather than catalog order, so it reads `["user-input/ask", "web/fetch", "web/search"]` whatever order the catalog adds them in. Uncaught, the `tools.call('web/missing', {})` from the block above ends the run with run error kind `Tool` and this message:
 
 ````text
-tool "web/missing" is not a tool in this run; catalog tools: ["user-input/ask", "web/fetch", "web/search"]
+tool "web/missing" is not a tool in this run; catalog tools: ["user-input/ask", "web/fetch", "web/search"] (at {file}:{line})
 ````
 
 ### The `out_of_scope_tool` error
@@ -2572,7 +2584,7 @@ return messages[#messages].content
 The round advertises one tool, `echo`. When the model calls `rogue` instead, the run result is:
 
 ````text
-the model asked for rogue: tool "rogue" is not in this section's scope; aliases this section offers: ["echo"] (1)
+the model asked for rogue: scope-check.md:16: tool "rogue" is not in this section's scope; aliases this section offers: ["echo"] (1)
 ````
 
 The error is a hard error. It records the requested name, whether that name is the wire name of a tool in the run's tool catalog, and the aliases the section offers:
@@ -2603,12 +2615,12 @@ Run error kind `Tool` covers five uncaught failures: a dispatched tool's failure
 
 | Uncaught failure | Run message |
 |---|---|
-| A dispatched tool fails | `tool call failure: {message}` |
-| The model calls a tool outside the round's scope | `tool {name:?} is not in this section's scope; aliases this section offers: {static_aliases:?}`, followed by the not-offered hint when it applies, then `; a Dynamic Set tool is reached through GetDynamicTools and CallDynamicTool` when the section's Dynamic Set holds a tool |
-| A script call names an id not bound in the run | `tool {name:?} is not a tool in this run; catalog tools: {ids:?}`, listing every tool id in the run's tool catalog |
-| A script call names a model-only tool | `tool {name:?} ({id}) is model-only: a render shapes its arguments for the model that receives them, so a script cannot call it; offer it with tools.offer and let the model call it`, where `{id}` is the catalog tool's id (see [Model-only tools](#model-only-tools)) |
+| A dispatched tool fails | `tool call failure: {message} (at {file}:{line})` |
+| The model calls a tool outside the round's scope | `tool {name:?} is not in this section's scope; aliases this section offers: {static_aliases:?}`, followed by the not-offered hint when it applies, then `; a Dynamic Set tool is reached through GetDynamicTools and CallDynamicTool` when the section's Dynamic Set holds a tool, then ` (at {file}:{line})` |
+| A script call names an id not bound in the run | `tool {name:?} is not a tool in this run; catalog tools: {ids:?} (at {file}:{line})`, listing every tool id in the run's tool catalog |
+| A script call names a model-only tool | `tool {name:?} ({id}) is model-only: a render shapes its arguments for the model that receives them, so a script cannot call it; offer it with tools.offer and let the model call it (at {file}:{line})`, where `{id}` is the catalog tool's id (see [Model-only tools](#model-only-tools)) |
 
-In these messages, each `:?` placeholder, such as `{name:?}`, shows the value in double quotes with escapes, so a name renders as `"rogue"` and the offered list as `["echo"]`.
+Each run message ends with the prompt file and the line of the call that failed, the `tools.call` for a script call and the `models.loop` for the model's call (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). In these messages, each `:?` placeholder, such as `{name:?}`, shows the value in double quotes with escapes, so a name renders as `"rogue"` and the offered list as `["echo"]`.
 
 ## Pack preludes
 

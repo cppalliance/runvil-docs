@@ -89,10 +89,10 @@ return models.infer(prose)
 ```
 ````
 
-On a Host that gave the run no model, the run fails with this message, which names the section whose round had no model:
+On a Host that gave the run no model, the run fails with this message, which names the section whose round had no model and ends with the line of the `models.infer` call (see [Where an error points](16-limits-and-errors.md#where-an-error-points)):
 
 ````text
-model binding required for section Only
+model binding required for section Only (at unselected.md:14)
 ````
 
 This is the missing-model error, covered in [Infer errors and the missing-model error](#infer-errors-and-the-missing-model-error). On a Host that gives the run a model, the same prompt runs as `hello` does.
@@ -344,6 +344,8 @@ the environment cannot satisfy this prompt:
 - role 'default': requires a model; the caller's role map has no 'default' entry
 ````
 
+The gap is the caller's, not the prompt's, so the message ends without a location.
+
 Every role gets a binding of its own, named for the role, even when the `default` entry fills it. A handle from `models.get('strong')` reads `strong` for `name` whether `strong` has an entry of its own or falls back to `default`, and its `model_id` is the name part of whichever model fills it.
 
 The Harness passes a map with only a `default` entry, the one model the Host selected, and passes an empty map when the Host selected none. Every role is then filled by that one model, so the roles differ only in their requirements and thinking switch. Where an example in this chapter prints a `model_id`, a one-model map prints the same id for every role, and a map that gives `strong` its own model prints two ids.
@@ -378,12 +380,12 @@ return 'done'
 ```
 ````
 
-On a Host whose model for `strong` has a 32000-token context window and never thinks, the run fails with run error kind `RequirementsUnmet` at its first step, before any of the prompt's blocks run, and its message is the requirements notice:
+On a Host whose model for `strong` has a 32000-token context window and never thinks, the run fails with run error kind `RequirementsUnmet` at its first step, before any of the prompt's blocks run, and its message is the requirements notice, followed by the location of the prompt's `models:` line:
 
 ````text
 the environment cannot satisfy this prompt:
 - role 'strong': requires a context of at least 200000 tokens; the model filling it provides 32000
-- role 'strong': requires 'thinking: true'; the thinking capability of the model filling it is Never
+- role 'strong': requires 'thinking: true'; the thinking capability of the model filling it is Never (at analysis.md:5)
 ````
 
 The notice opens with the line `the environment cannot satisfy this prompt:`, followed by one `- ` line per unmet check (see [The requirements notice](04-how-a-prompt-runs.md#the-requirements-notice)). Each unmet line names the role by its role name, shown as `role '{role}'` in every line form. The model lines come after any lines about Packs, in role order, `default`, `strong`, `small`, `fast`, `creative`, and for one role the context line comes before the thinking line.
@@ -398,7 +400,7 @@ When a role's `min_context` is above the filling model's context window, the run
 - role '{role}': requires a context of at least {required} tokens; the model filling it provides {actual}
 ````
 
-So `strong` with `min_context: 200000` on a 32000-token model is refused with required 200000 and actual 32000. A role `fast` that needs 200000 tokens on that model makes the whole message read `the environment cannot satisfy this prompt:` followed by `- role 'fast': requires a context of at least 200000 tokens; the model filling it provides 32000`.
+So `strong` with `min_context: 200000` on a 32000-token model is refused with required 200000 and actual 32000. A role `fast` that needs 200000 tokens on that model makes the whole message read `the environment cannot satisfy this prompt:` followed by `- role 'fast': requires a context of at least 200000 tokens; the model filling it provides 32000` and the location of the prompt's `models:` line, ` (at {file}:{line})`.
 
 ### The thinking check
 
@@ -695,7 +697,7 @@ The chain's effective model is the selected role's or handle's binding with the 
 
 ### Rejected calls
 
-Every rejection from `models.use` and `models.get` is raised at the call site as an error value of kind `lua` whose message is the rejection text, so [`pcall`](05-lua-environment.md#raising-and-catching-errors) can catch it and `tostring(err)` gives that text:
+Every rejection from `models.use` and `models.get` is raised at the call site as an error value of kind `lua` whose message is the file and line of the call, then the rejection text, then the fixed prose for a Lua runtime failure, so [`pcall`](05-lua-environment.md#raising-and-catching-errors) can catch it and `tostring(err)` gives that message:
 
 ````markdown
 ---
@@ -715,7 +717,7 @@ return err.kind .. '|' .. tostring(err)
 ````
 
 ````text
-lua|models.use label "reviewer" is not a model role: expected default, strong, small, fast or creative
+lua|ghost.md:12: models.use label "reviewer" is not a model role: expected default, strong, small, fast or creative. The Lua code failed at runtime. Fix the code at this location.
 ````
 
 `models.use` rejects a call in these ways, each with an error value of kind `lua`:
@@ -845,10 +847,10 @@ return models.infer('Write a slogan for a bakery.')
 ```
 ````
 
-When `var.options` holds a valid options table or `nil`, the block makes its round. When it holds a string, `pcall` catches an error value whose `kind` is `lua` and whose `tostring` is the message, and the block returns:
+When `var.options` holds a valid options table or `nil`, the block makes its round. When it holds a string, `pcall` catches an error value whose `kind` is `lua` and whose `tostring` is the message, and the block returns this, with the line of the `pcall(models.use, ...)` call:
 
 ````text
-lua: models.use options must be a table, got string
+lua: {file}:{line}: models.use options must be a table, got string. The Lua code failed at runtime. Fix the code at this location.
 ````
 
 Every sampling option error is an error value of kind `lua` raised by `models.use`, which `pcall` catches the same way (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)):
@@ -1038,10 +1040,10 @@ return models.infer(h, prose)
 The role name arrives as the run's argument string in `args` (see [The argument string in `args`](06-arguments.md#the-argument-string-in-args)). With the argument string `strong`, the block runs one round on the `strong` role. In a run without a Host-state snapshot, the argument string `reviewer` names none of the five roles, `pcall` catches the failure, and the block falls back instead of failing:
 
 ````text
-unknown role: models.get label "reviewer" is not a model role: expected default, strong, small, fast or creative
+unknown role: ask-role.md:14: models.get label "reviewer" is not a model role: expected default, strong, small, fast or creative. The Lua code failed at runtime. Fix the code at this location.
 ````
 
-A failing `models.get` call caught by `pcall` or `xpcall` yields an error value whose `kind` is `lua`, whose `message` is the error message, and whose `tostring` is that message. An `xpcall` handler sees the same error value.
+A failing `models.get` call caught by `pcall` or `xpcall` yields an error value whose `kind` is `lua`, whose `message` is the file and line of the call, then the rejection text, then the fixed prose for a Lua runtime failure, and whose `tostring` is that message. An `xpcall` handler sees the same error value.
 
 ### Raw model ids and the Host-state snapshot
 
@@ -1094,7 +1096,7 @@ Raw model ids follow these rules:
 
 ### `models.get` errors and check order
 
-Without a Host-state snapshot, a name outside the five roles fails `models.get` with an error value of kind `lua` and the message `models.get label "{label}" is not a model role: expected default, strong, small, fast or creative`, where `{label}` is the name passed. The message reads the same wherever the call runs: on the main walk, inside a fanout arm, or in a run with no model. With a snapshot, such a name is tried as a raw model id instead, and fails only when the id is invalid, with the `is invalid` message above. A role the Host gave no model fails with `the caller supplied no model for the {role} role`.
+Without a Host-state snapshot, a name outside the five roles fails `models.get` with an error value of kind `lua` whose message holds the rejection `models.get label "{label}" is not a model role: expected default, strong, small, fast or creative`, where `{label}` is the name passed. The rejection reads the same wherever the call runs: on the main walk, inside a fanout arm, or in a run with no model. With a snapshot, such a name is tried as a raw model id instead, and fails only when the id is invalid, with the `is invalid` message above. A role the Host gave no model fails with `the caller supplied no model for the {role} role`.
 
 The two functions check a name in different orders:
 
@@ -1239,7 +1241,7 @@ So an extra argument after the prompt, such as an options table, gets the first 
 
 ### Errors from the model backend
 
-An infer call offers the model no tools, so it never dispatches tools. A model that replies to an infer round with tool calls fails the call with an error value of kind `model_failure` and this message:
+An infer call offers the model no tools, so it never dispatches tools. A model that replies to an infer round with tool calls fails the call with an error value of kind `model_failure` whose message is the file and line of the `models.infer` call, then this text:
 
 ````text
 the model backend sent a reply that could not be understood: the round sent tool calls, but no tools were advertised
@@ -1251,9 +1253,9 @@ An infer round that fails at the model, such as a transport or backend failure, 
 
 ### When a section has no model
 
-The missing-model error is the error a model round raises when the chain it runs in has no model. A chain starts on the `default` role's model, so this happens only when the Host gave the run no model (see [When the Host gives no model](#when-the-host-gives-no-model)), which is why the `unselected` prompt in [When a prompt needs a role](#when-a-prompt-needs-a-role) fails with `model binding required for section Only` on such a Host. Only `models.infer` and `models.loop` raise it, and only when they name no model handle. The message is `model binding required for section {section}`, where `{section}` is the section name, such as `Only` or `Worker`, or the prompt's H1 title for a round in the H1 pass. Left uncaught, it fails the run with run error kind `RequirementsUnmet`. Raised in a fanout arm, it fails both the fanout and the run.
+The missing-model error is the error a model round raises when the chain it runs in has no model. A chain starts on the `default` role's model, so this happens only when the Host gave the run no model (see [When the Host gives no model](#when-the-host-gives-no-model)), which is why the `unselected` prompt in [When a prompt needs a role](#when-a-prompt-needs-a-role) fails with `model binding required for section Only` on such a Host. Only `models.infer` and `models.loop` raise it, and only when they name no model handle. Its own text is `model binding required for section {section}`, where `{section}` is the section name, such as `Only` or `Worker`, or the prompt's H1 title for a round in the H1 pass. Left uncaught, it fails the run with run error kind `RequirementsUnmet` and that text as the message, ending with the line of the `models.infer` or `models.loop` call. Raised in a fanout arm, it fails both the fanout and the run.
 
-The missing-model error reaches the call as its answer, so `pcall` catches it as an error value of kind `model_required` and a block can fall back instead of failing. On a Host that gave the run no model, `careful` returns:
+The missing-model error reaches the call as its answer, so `pcall` catches it as an error value of kind `model_required` and a block can fall back instead of failing. The caught value's message is the call's file and line, then the fixed prose ``The round has no model. Select a model before `models.infer` or `models.loop`, or bind a default model.``, so it does not name the section. On a Host that gave the run no model, `careful` returns:
 
 ````text
 skipped (model_required)

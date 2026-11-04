@@ -48,10 +48,11 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `debug` | not loaded | Never loaded; no stack frame, local, or hook inspection | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `dofile` | removed | Reads nil; no running a Lua file from disk | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `err.anchor` | field | Anchor text passed to a failed `store.str_replace` | [Editing, deleting, and checking files](09-the-store.md#editing-deleting-and-checking-files) |
+| `err.code` | field | Stable snake_case tag of the exact failure, such as `lua_quota`, `not_found`, or `overloaded`; on every error value | [Error values](05-lua-environment.md#error-values) |
 | `err.count` | field | Times the anchor matched: `0` absent, `2` or more ambiguous | [Editing, deleting, and checking files](09-the-store.md#editing-deleting-and-checking-files) |
 | `err.finish_reason` | field | Empty round's finish reason, such as `stop` or `length`; `nil` if unreported | [Empty replies and finish reasons](11-conversations.md#empty-replies-and-finish-reasons) |
 | `err.kind` | field | Lowercase error kind string, one of sixteen, to branch on | [Error values](05-lua-environment.md#error-values) |
-| `err.message` | field | Message text; `tostring(err)` and `..` give the same text | [Error values](05-lua-environment.md#error-values) |
+| `err.message` | field | `{file}:{line}: {prose}` when the failure is located, else the prose alone; `tostring(err)` and `..` give the same text | [Error values](05-lua-environment.md#error-values) |
 | `err.name` | field | Tool name the call used, on `unbound_tool`, `model_only_tool`, and `out_of_scope_tool` only | [Tool errors](12-tools.md#tool-errors) |
 | `err.path` | field | Path or pattern as passed; `not_a_directory` may name the blocking file | [When a store call fails](09-the-store.md#when-a-store-call-fails) |
 | `err.reason` | field | Store tag such as `not_found`, or a `context_exhausted` reason such as `precheck` or `provider` | [When a store call fails](09-the-store.md#when-a-store-call-fails) |
@@ -287,23 +288,25 @@ Each parse failure has one parse error kind, the four fence rules say what a `Fe
 | Name | Type | Meaning | Taught in |
 | --- | --- | --- | --- |
 | `Closer` | fence rule | a closing line after an exact `lua` opener that is not exactly three backticks | [Exact fence rules and fence errors](03-blocks-and-prose.md#exact-fence-rules-and-fence-errors) |
-| `column` | location field | the 1-based column of the mistake, read with the line | [Where an error points](16-limits-and-errors.md#where-an-error-points) |
+| `column` | location field | the 1-based column where the mistake starts, read with the line | [Where an error points](16-limits-and-errors.md#where-an-error-points) |
+| `end column` | location field | the 1-based column just past where the mistake ends, read with the end line | [Where an error points](16-limits-and-errors.md#where-an-error-points) |
+| `end line` | location field | the 1-based line where the mistake ends, the next line for a mistake that covers a whole line | [Where an error points](16-limits-and-errors.md#where-an-error-points) |
 | `Fence` | parse error kind | a `lua` fence left open, or a break of the Label, Opener, Closer, or Lookalike rule | [Parse errors and their kinds](16-limits-and-errors.md#parse-errors-and-their-kinds) |
+| `file` | location field | the prompt's file, as the Host names it | [Where an error points](16-limits-and-errors.md#where-an-error-points) |
 | `Frontmatter` | parse error kind | frontmatter missing, unclosed, or not valid YAML, or a key or value the contract rejects | [Parse errors and their kinds](16-limits-and-errors.md#parse-errors-and-their-kinds) |
 | `Internal` | parse error kind | the parser fails through no fault of the prompt, such as a Lua compiler that cannot start | [Parse errors and their kinds](16-limits-and-errors.md#parse-errors-and-their-kinds) |
 | `Label` | fence rule | a fence label that starts with `lua` in any letter case but is not exactly `lua` | [Exact fence rules and fence errors](03-blocks-and-prose.md#exact-fence-rules-and-fence-errors) |
-| `line` | location field | the 1-based line in the prompt file as written | [Where an error points](16-limits-and-errors.md#where-an-error-points) |
+| `line` | location field | the 1-based line in the prompt file as written, where the mistake starts | [Where an error points](16-limits-and-errors.md#where-an-error-points) |
 | `List` | parse error kind | a list section item that is a marker with no text after it | [Parse errors and their kinds](16-limits-and-errors.md#parse-errors-and-their-kinds) |
 | `Lookalike` | fence rule | a line outside every fence that looks like a `lua` opening line | [Exact fence rules and fence errors](03-blocks-and-prose.md#exact-fence-rules-and-fence-errors) |
 | `Lua` | parse error kind | a Lua block that does not compile because of a syntax error | [Parse errors and their kinds](16-limits-and-errors.md#parse-errors-and-their-kinds) |
-| `name` | location field | the prompt's frontmatter `name`, on a `Structure`, `Fence`, or `List` failure after the frontmatter | [Where an error points](16-limits-and-errors.md#where-an-error-points) |
+| `name` | location field | the prompt's frontmatter `name`, on a `Structure`, `Fence`, `List`, or `Lua` failure after the frontmatter | [Where an error points](16-limits-and-errors.md#where-an-error-points) |
 | `Opener` | fence rule | a `lua` fence whose opening line is not exactly three backticks then `lua` | [Exact fence rules and fence errors](03-blocks-and-prose.md#exact-fence-rules-and-fence-errors) |
-| `span` | location field | the byte range of the offending region in the body after the frontmatter, when the failure can locate it | [Where an error points](16-limits-and-errors.md#where-an-error-points) |
 | `Structure` | parse error kind | an invalid H1 title or heading tree, such as two sibling sections with one name | [Parse errors and their kinds](16-limits-and-errors.md#parse-errors-and-their-kinds) |
 
 ## Run error kinds
 
-A failed run reports exactly one run error kind, and a failed `{{ }}` placeholder names its substitution kind in its message.
+A failed run reports exactly one run error kind, and a failed `{{ }}` placeholder names its substitution kind in its message. A located failure's message ends with where it happened, such as ` (at {file}:{line})` (see [Where an error points](16-limits-and-errors.md#where-an-error-points)).
 
 | Name | Type | Meaning | Taught in |
 | --- | --- | --- | --- |

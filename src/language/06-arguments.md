@@ -1064,7 +1064,7 @@ Run it with the argument string `{"query":"papers"}`:
 Results for papers
 ````
 
-Run it with the argument string `{}`, and the check in the H1 body fails the run with an error carrying the message `query is required`, so `## Search` never runs.
+Run it with the argument string `{}`, and the check in the H1 body fails the run with an error that carries the message `query is required` and ends with ` (at search.md:13)`, the line of the `assert` (see [Where an error points](16-limits-and-errors.md#where-an-error-points)), so `## Search` never runs.
 
 ### Nothing checks values against the declaration
 
@@ -1175,10 +1175,10 @@ In the H1 body, you clear the arguments with `argv = nil`, after which `argv == 
 
 ### Keeping `argv` as JSON data
 
-In the H1 body, keep `argv` as [JSON data](05-lua-environment.md#keeping-state-in-var) or nil, meaning strings, numbers, booleans, and tables of them. The assignment itself accepts any value, so `argv = function() end` raises no error at that line, but a value that is not JSON data, such as a function, userdata other than `json.null`, or thread, fails the run once the H1 body finishes, with this message naming its Lua type in place of `{type}`:
+In the H1 body, keep `argv` as [JSON data](05-lua-environment.md#keeping-state-in-var) or nil, meaning strings, numbers, booleans, and tables of them. The assignment itself accepts any value, so `argv = function() end` raises no error at that line, but a value that is not JSON data, such as a function, userdata other than `json.null`, or thread, fails the run once the H1 body finishes, with this message naming its Lua type in place of `{type}` and pointing at the H1 body's last Lua block:
 
 ````text
-argv must be JSON data, got {type}
+argv must be JSON data, got {type} (at {file}:{line})
 ````
 
 The one userdata the freeze accepts is `json.null`, which freezes as JSON null, and later sections read it as `json.null` again, like any other JSON `null` in the arguments. So after an H1 body runs `argv = { a = json.null }`, a later section reads `argv.a` as `json.null`, and `argv.a == json.null` is true.
@@ -1264,10 +1264,10 @@ Writable `argv` is the H1 body's one privilege. Every other section gets `argv` 
 
 Leave `argv` as JSON data, meaning strings, numbers, booleans, and tables of them, or as nil, when the H1 body finishes, because a function, userdata other than `json.null`, or thread is refused at the freeze. The run fails with a `Lua` error when the H1 pass leaves `argv` holding data that is not JSON.
 
-Leaving `argv` as a function, userdata other than `json.null`, or thread when the H1 pass ends, as after `argv = function() end`, fails the freeze read-back with a run error of [run error kind](16-limits-and-errors.md#run-error-kinds) `Lua`, whose message names the Lua type `function`, `userdata`, or `thread` in place of `{type}`:
+Leaving `argv` as a function, userdata other than `json.null`, or thread when the H1 pass ends, as after `argv = function() end`, fails the freeze read-back with a run error of [run error kind](16-limits-and-errors.md#run-error-kinds) `Lua`, whose message names the Lua type `function`, `userdata`, or `thread` in place of `{type}` and ends with the location of the first line of the last `lua` block the H1 pass ran:
 
 ````text
-argv must be JSON data, got {type}
+argv must be JSON data, got {type} (at {file}:{line})
 ````
 
 The kind is `Lua` even though the failure happens at the end of the H1 pass. Leaving `argv` as data that cannot be represented as JSON, such as a table holding a value that cannot be JSON, also fails the read-back with a `Lua` error.
@@ -1299,7 +1299,7 @@ return prose
 ```
 ````
 
-Run with the argument string `not json`, it fails the run with an error naming `argv`. [Substitution error kinds](07-substitution.md#substitution-error-kinds) lists the other substitution kinds.
+Run with the argument string `not json`, it fails the run with the message `{{ argv }} is nil (argv holds no value) [NilArgv at byte 7] (at search.md:14)`, which names `argv` and the placeholder's line. [Substitution error kinds](07-substitution.md#substitution-error-kinds) lists the other substitution kinds.
 
 ### Placeholders in the H1 body
 
@@ -1424,7 +1424,7 @@ Writing a string-keyed field of `argv` outside the H1 pass raises a Lua error wi
 
 Writing an integer key of `argv` outside the H1 pass, such as an array index, raises the same field write error with the integer shown without quotes, so `argv[1] = 1` gives `argv is frozen outside H1: cannot set field 1`.
 
-A write with a key that is neither a string nor an integer, such as a fractional number or a boolean, raises a refusal whose first line names the key's Lua type instead of its value, so `argv[2.5] = 1` gives `argv is frozen outside H1: cannot set field number`.
+A write with a key that is neither a string nor an integer, such as a fractional number or a boolean, raises a refusal that names the key's Lua type instead of its value, so `argv[2.5] = 1` gives `argv is frozen outside H1: cannot set field number`.
 
 Adding a new field to an `argv` table raises the same field write error as changing an existing field. On an `argv` holding only `query`, the new keys `argv[1]` and `argv[2.5]` get the same `argv is frozen outside H1: cannot set field ...` refusal as `argv.query`.
 
@@ -1444,11 +1444,17 @@ An uncaught freeze error ends the run with the [run error kind](16-limits-and-er
 
 ### Catching freeze errors with `pcall`
 
-The frozen-`argv` refusal is an ordinary Lua error, so you catch it with [`pcall`](05-lua-environment.md#raising-and-catching-errors). `tostring(err)` on the caught value gives text that starts with `runtime error: ` and has the refusal on its first line, so this block returns the refusal text:
+The frozen-`argv` refusal is an ordinary Lua error, so you catch it with [`pcall`](05-lua-environment.md#raising-and-catching-errors). `tostring(err)` on the caught value gives the file and line of the write, then the refusal, then the fixed prose for a Lua runtime failure:
 
 ````lua
 local ok, err = pcall(function() argv.query = 1 end)
 return tostring(err)
+````
+
+This block returns:
+
+````text
+{file}:{line}: argv is frozen outside H1: cannot set field 'query'. The Lua code failed at runtime. Fix the code at this location.
 ````
 
 The prompt at the top of this section uses the same pattern with a flag instead: `local wrote = pcall(function() argv.mode = 'x' end)` followed by `if wrote then return 'written' end return 'refused'` returns `refused`.
