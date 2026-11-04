@@ -359,7 +359,7 @@ One `assistant` record can carry visible reply text in `content` together with s
 
 `tool_calls` is optional, and leaving it out means the record carries no tool calls. A record the loop writes holds calls only when the model asked for tools in that reply. After such a reply, `messages[2].tool_calls[1]` is the first call the model made, so `messages[2].tool_calls[1].id` reads its id, such as `'call_1'`, and `messages[2].tool_calls[1].name` reads the tool it called, such as `'web_search'`. Reading one entry with `local call = messages[2].tool_calls[1]` gives you `call.id`, `call.name`, and `call.arguments`, the call id, the name the model called, and the parsed arguments table. A model that sends `{"query":"one"}` gives `messages[2].tool_calls[1].arguments.query == 'one'`.
 
-Put `tool_calls` only on `assistant` records. Adding a record of another message role with `tool_calls` succeeds, because adding does not check the message role against `tool_calls`, but the next model call over the list fails with `messages[{index}] sets tool_calls but is not an assistant message`, such as `messages[1] sets tool_calls but is not an assistant message` for a user record at position 1 (see [Cross-record errors](#cross-record-errors)).
+Put `tool_calls` only on `assistant` records. A record of another message role with `tool_calls` is refused at the `append` or `replace` call that adds it, with `messages[{index}] sets tool_calls but is not an assistant message`, such as `messages[1] sets tool_calls but is not an assistant message` for a user record at position 1, and the list stays as it was (see [Record error messages](#record-error-messages)).
 
 ### Tool results
 
@@ -625,7 +625,7 @@ A record's rules run in a fixed order, so you see the first rule the record brea
 4. Content, including each content part.
 5. The type of `tool_call_id`. This check is reported ahead of the check that only tool records carry a `tool_call_id`, so a record with a non-string `tool_call_id` reports the type message, even on a `user` record, and a tool record with a non-string `tool_call_id` reports the type message too.
 6. Whether the message role and `tool_call_id` go together.
-7. `tool_calls`, and within each call, `id` before `name`, so a call missing both reports the `id` message.
+7. `tool_calls`, within each call `id` before `name`, so a call missing both reports the `id` message, and then whether the record's message role is `assistant`.
 8. The size of `meta`.
 
 A record that passes these rules then joins the list only if it keeps the system records leading.
@@ -676,6 +676,7 @@ Tool calls:
 - `messages[{index}] tool_calls[{call_index}] must set a string id` comes from a call without a string `id`, such as `messages[2] tool_calls[1] must set a string id`.
 - `messages[{index}] tool_calls[{call_index}] must set a string name` comes from a call without a string `name`, such as `messages[1] tool_calls[1] must set a string name`.
 - `messages[{index}] tool_calls[{call_index}] arguments must be a table` comes from `arguments` that is anything other than a keyed table, a string or a non-empty sequence included.
+- `messages[{index}] sets tool_calls but is not an assistant message` comes from a `system`, `user`, or `tool` record that sets `tool_calls`, such as `messages[1] sets tool_calls but is not an assistant message` for a user record added to an empty list.
 
 Metadata:
 
@@ -684,8 +685,6 @@ Metadata:
 System placement:
 
 - `messages[{index}] is a system message after a non-system message; system messages lead the list, and only a compactor can change the leading block` comes from a system record added after any non-system record, where `{index}` is the new record's position.
-
-One rule spans records, so the edit that adds a record does not check it: only `assistant` records carry `tool_calls`, and a `tool_calls` array on a record of another message role fails at the `models.loop` call instead, with the message [Cross-record errors](#cross-record-errors) lists.
 
 ## Reading records
 
@@ -1647,14 +1646,13 @@ The two leading system records compose into one system message, and the two user
 
 Right before each request leaves, the loop takes whatever records the list holds at that moment and does two things with them. First it checks the cross-record rules, the rules about how records relate to one another rather than about one record's own fields:
 
-- `tool_calls` appears only on `assistant` records.
 - Every tool call id is unique across the whole list.
 - Every tool call is paired with exactly one tool record that answers it.
 - When two or more `system` records lead the list, each of them is plain text.
 
 Then it composes what the model receives from those records, merging runs of records so the message roles alternate as a provider requires.
 
-Builder methods do not check the cross-record rules when they add a record, and `models.loop` does not check a record's own fields again (see [When records are checked](#when-records-are-checked)). The cross-record rules run on every round, right before that round is sent, so records you append between calls and records the loop appends between its own rounds meet the same rules, and a list you edit between calls is checked and composed again on the next call.
+Builder methods do not check the cross-record rules when they add a record, and `models.loop` does not check a record's own fields again (see [When records are checked](#when-records-are-checked)). That only `assistant` records hold `tool_calls` is one of a record's own rules, so the `append` or `replace` call that adds a record of another message role with `tool_calls` refuses it, and `models.loop` does not check it (see [Record error messages](#record-error-messages)). The cross-record rules run on every round, right before that round is sent, so records you append between calls and records the loop appends between its own rounds meet the same rules, and a list you edit between calls is checked and composed again on the next call.
 
 When the list breaks a cross-record rule, the round fails. The run reports a `model_turn_failed` event (see [Run events and records](04-how-a-prompt-runs.md#run-events-and-records)), and the `models.loop` call raises a Lua error and sends nothing to the model. [Cross-record errors](#cross-record-errors) lists every message.
 
@@ -1763,12 +1761,11 @@ return tostring(err)
 {file}:{line}: messages[2] tool call "call_1" has no tool result. The Lua code failed at runtime. Fix the code at this location.
 ````
 
-The list ends while the assistant record at position 2 still has an unanswered call, so the call fails before anything is sent, and the message points at the `models.loop` line and names that record and the call's id. Ids always print in double quotes. These are the five messages:
+The list ends while the assistant record at position 2 still has an unanswered call, so the call fails before anything is sent, and the message points at the `models.loop` line and names that record and the call's id. Ids always print in double quotes. These are the four messages:
 
 | Message | Names |
 |---|---|
 | `messages[{index}] is a system message with content parts; only plain text system messages can be composed` | The first record with content parts in a leading block of two or more system records |
-| `messages[{index}] sets tool_calls but is not an assistant message` | The `system`, `user`, or `tool` record that sets `tool_calls` |
 | `messages[{index}] tool call id "{id}" duplicates an earlier tool call` | The assistant record that repeats the id, and the id |
 | `messages[{index}] tool call "{id}" has no tool result` | The assistant record with an unanswered call, and its first unanswered call in call order |
 | `messages[{index}] is an orphan tool record: no pending assistant tool call with id "{id}"` | The tool record, and the `tool_call_id` it gives |
@@ -1776,7 +1773,6 @@ The list ends while the assistant record at position 2 still has an unanswered c
 Each rule has its own triggers:
 
 - Content parts in the leading block: any record of a leading block of two or more system records uses content parts, and the message names the first such record.
-- `tool_calls` placement: only assistant records hold `tool_calls`. Adding a `system`, `user`, or `tool` record that sets `tool_calls` with `append` succeeds, because a record's own fields allow it, but the next `models.loop` call fails naming that record. A compaction checks these same rules when its compactor returns, so a `replace` that breaks one fails the compaction instead (see [The rules a compaction must pass](#the-rules-a-compaction-must-pass)).
 - Duplicate ids: reusing a tool call id from any earlier record, or using one id twice in one assistant record, fails naming the assistant record that repeats it. This holds even after the first call was answered, and it includes a model that repeats an id from an earlier round, which fails at the next request. Two calls with id `call_1` in the first record give `messages[1] tool call id "call_1" duplicates an earlier tool call`, and a later assistant record at position 3 that reuses `call_1` gives `messages[3] tool call id "call_1" duplicates an earlier tool call`.
 - Missing results: a call gets no tool record before a record of another message role arrives, before a new assistant record with `tool_calls` starts, or before the list ends. The message names the assistant record holding the unanswered call. When that record at position 1 has calls `call_1` and `call_2`, and only `call_1` is answered before a user record, the message is `messages[1] tool call "call_2" has no tool result`.
 - Orphan tool records: a tool record does not answer a still-pending call from the open assistant record exactly once. That covers a tool record with no assistant tool call before it, a `tool_call_id` that is not among the open calls, a second answer to a call that already has its result, and an answer to a call whose assistant record is already fully answered. A tool record at position 2 answering `call_9` right after a user record gives `messages[2] is an orphan tool record: no pending assistant tool call with id "call_9"`.
@@ -1784,7 +1780,7 @@ Each rule has its own triggers:
 The rules run in a fixed order, and only the first broken rule is reported:
 
 1. The plain-text check on a leading block of two or more system records. It runs before every other cross-record rule, so it is the error reported even when later records also break another rule.
-2. Each record in list order, with the `tool_calls` placement rule checked before the rules for that record's own message role.
+2. Each record in list order, checked against the rules for its own message role.
 3. The check for an assistant record whose calls are still open at the end of the list.
 
 ## Empty replies and finish reasons

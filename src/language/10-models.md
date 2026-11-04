@@ -729,7 +729,7 @@ lua|ghost.md:12: models.use label "reviewer" is not a model role: expected defau
 | a role the Host gave no model | `the caller supplied no model for the {role} role` | the role |
 | more than two arguments | `models.use takes at most 2 arguments, got {n}` | the argument count |
 
-In the first row, `{type}` is the Lua type name of the value given, where integers and floats both read `number`, so `models.use(5)` gives `models.use takes a model role name or a model handle, got number`, and a userdata that is not a model handle reads `userdata`. A call with a third argument after the options table gives `models.use takes at most 2 arguments, got 3`.
+In the first row, `{type}` is the Lua type name of the value given, where integers and floats both read `number`, so `models.use(5)` gives `models.use takes a model role name or a model handle, got number`, a userdata that is not a model handle reads `userdata`, and `json.null` reads `lightuserdata`. A call with a third argument after the options table gives `models.use takes at most 2 arguments, got 3`.
 
 `models.use` checks its target first and its options second, and it records the selection only after every check passes. So an unknown role name is reported even when the options are also bad, and a rejected call leaves the chain's current model unchanged. [Sampling option errors](#sampling-option-errors) lists the option messages.
 
