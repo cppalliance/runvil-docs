@@ -337,7 +337,7 @@ The Host fills the roles by passing one map from role to model when it starts th
 - An empty map means the Host has no model. No role is filled and nothing is checked (see [When the Host gives no model](#when-the-host-gives-no-model)).
 - A non-empty map with no `default` entry is refused, because the roles without an entry have nothing to fall back to.
 
-The refusal ends the run on its first step with run error kind `RequirementsUnmet`. The run checks no declared requirement in that case, so the notice has exactly one model line, in which the caller is the Host:
+The refusal ends the run on its first step with error code `requirements_unmet`. The run checks no declared requirement in that case, so the notice has exactly one model line, in which the caller is the Host:
 
 ````text
 the environment cannot satisfy this prompt:
@@ -358,7 +358,7 @@ The run fills its roles once, when it is built, and keeps that fill for its whol
 
 A role's `min_context` and `thinking` are requirements, and at the run's first step, before any section runs, the run checks every declared requirement against the model that fills the role. A role's own entry in the map fills it, and the `default` entry fills a role with none, so a requirement on a role with no entry of its own is checked against the `default` model. These two checks are the only role requirements that can refuse the run, and the run makes them only when the Host's map has a `default` entry. A role the prompt does not declare, or declares as `{}`, has no requirement, so nothing is reported for it and it never blocks the run.
 
-An unmet requirement is one shortfall in the refusal that ends the run on its first step with run error kind `RequirementsUnmet` and no run events (see [The requirements notice](04-how-a-prompt-runs.md#the-requirements-notice)). The run checks a role's `min_context` and its `thinking` as two separate checks, so a role can fail only one of them, and a role that fails both gets one notice line for its context and another for its thinking:
+An unmet requirement is one shortfall in the refusal that ends the run on its first step with error code `requirements_unmet` and no run events (see [The requirements notice](04-how-a-prompt-runs.md#the-requirements-notice)). The run checks a role's `min_context` and its `thinking` as two separate checks, so a role can fail only one of them, and a role that fails both gets one notice line for its context and another for its thinking:
 
 ````markdown
 ---
@@ -380,7 +380,7 @@ return 'done'
 ```
 ````
 
-On a Host whose model for `strong` has a 32000-token context window and never thinks, the run fails with run error kind `RequirementsUnmet` at its first step, before any of the prompt's blocks run, and its message is the requirements notice, followed by the location of the prompt's `models:` line:
+On a Host whose model for `strong` has a 32000-token context window and never thinks, the run fails with error code `requirements_unmet` at its first step, before any of the prompt's blocks run, and its message is the requirements notice, followed by the location of the prompt's `models:` line:
 
 ````text
 the environment cannot satisfy this prompt:
@@ -733,7 +733,7 @@ In the first row, `{type}` is the Lua type name of the value given, where intege
 
 `models.use` checks its target first and its options second, and it records the selection only after every check passes. So an unknown role name is reported even when the options are also bad, and a rejected call leaves the chain's current model unchanged. [Sampling option errors](#sampling-option-errors) lists the option messages.
 
-An uncaught `models.use` rejection ends the run with run error kind `Lua`, like any other Lua failure, except in a `lua` fence of the H1 body, where an uncaught Lua failure becomes a `RequirementsUnmet` refusal that keeps the rejection as its cause (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)).
+An uncaught `models.use` rejection ends the run with error code `lua_runtime`, like any other Lua runtime failure, except in a `lua` fence of the H1 body, where an uncaught `lua_runtime` failure fails the hard gate, ending the run with `requirements_unmet` and keeping the rejection as its cause (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)).
 
 ## Sampling options on `models.use`
 
@@ -1247,13 +1247,13 @@ An infer call offers the model no tools, so it never dispatches tools. A model t
 the model backend sent a reply that could not be understood: the round sent tool calls, but no tools were advertised
 ````
 
-The text is the same with or without a model handle, and it never names `models.infer`. Left uncaught, the refusal fails the run with run error kind `Completion` (see [The run result and outcomes](04-how-a-prompt-runs.md#the-run-result-and-outcomes)), and the failure counts as retryable, since a reply that broke protocol may come back well formed (see [Retryable failures](16-limits-and-errors.md#retryable-failures)).
+The text is the same with or without a model handle, and it never names `models.infer`. Left uncaught, the refusal fails the run with error code `malformed_response` (see [The run result](04-how-a-prompt-runs.md#the-run-result)), and the failure counts as retryable, since a reply that broke protocol may come back well formed (see [Retryable failures](16-limits-and-errors.md#retryable-failures)).
 
-An infer round that fails at the model, such as a transport or backend failure, raises the round's own error at the call site. `pcall` sees it with kind `model_failure`, or with kind `empty_model_reply` for an empty reply. Left uncaught, it fails the run with run error kind `Completion`.
+An infer round that fails at the model, such as a transport or backend failure, raises the round's own error at the call site. `pcall` sees it with kind `model_failure`, or with kind `empty_model_reply` for an empty reply. Left uncaught, it fails the run with that error's own code, one of the model codes, such as `transport` for a transport failure or `empty_reply` for an empty reply.
 
 ### When a section has no model
 
-The missing-model error is the error a model round raises when the chain it runs in has no model. A chain starts on the `default` role's model, so this happens only when the Host gave the run no model (see [When the Host gives no model](#when-the-host-gives-no-model)), which is why the `unselected` prompt in [When a prompt needs a role](#when-a-prompt-needs-a-role) fails with `model binding required for section Only` on such a Host. Only `models.infer` and `models.loop` raise it, and only when they name no model handle. Its own text is `model binding required for section {section}`, where `{section}` is the section name, such as `Only` or `Worker`, or the prompt's H1 title for a round in the H1 pass. Left uncaught, it fails the run with run error kind `RequirementsUnmet` and that text as the message, ending with the line of the `models.infer` or `models.loop` call. Raised in a fanout arm, it fails both the fanout and the run.
+The missing-model error is the error a model round raises when the chain it runs in has no model. A chain starts on the `default` role's model, so this happens only when the Host gave the run no model (see [When the Host gives no model](#when-the-host-gives-no-model)), which is why the `unselected` prompt in [When a prompt needs a role](#when-a-prompt-needs-a-role) fails with `model binding required for section Only` on such a Host. Only `models.infer` and `models.loop` raise it, and only when they name no model handle. Its own text is `model binding required for section {section}`, where `{section}` is the section name, such as `Only` or `Worker`, or the prompt's H1 title for a round in the H1 pass. Left uncaught, it fails the run with error code `model_required` and that text as the message, ending with the line of the `models.infer` or `models.loop` call. Raised in a fanout arm, it fails both the fanout and the run.
 
 The missing-model error reaches the call as its answer, so `pcall` catches it as an error value of kind `model_required` and a block can fall back instead of failing. The caught value's message is the call's file and line, then the fixed prose ``The round has no model. Select a model before `models.infer` or `models.loop`, or bind a default model.``, so it does not name the section. On a Host that gave the run no model, `careful` returns:
 
@@ -1334,4 +1334,4 @@ An infer round's `thinking` event, `assistant_reply` event, and answer record na
 
 When the model request for an infer round fails, the run reports a `model_turn_failed` event for the calling section, and the infer call fails with that error (see [Errors from the model backend](#errors-from-the-model-backend)).
 
-When the run is cancelled while an infer round is still waiting for its answer, the run ends cancelled and the round's answer is dropped. No `model_turn_failed` event is reported, because cancellation never reports a model failure.
+When the run is canceled while an infer round is still waiting for its answer, the run ends with code `canceled` and the round's answer is dropped. No `model_turn_failed` event is reported, because cancellation never reports a model failure.

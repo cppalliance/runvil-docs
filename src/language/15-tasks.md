@@ -88,7 +88,7 @@ Each task function returns these values:
 | `tasks.note` | Nothing |
 | `tasks.cancel` | Nothing |
 
-This section covers `tasks.spawn`. The waits are in [Waiting with `tasks.join_any` and `tasks.join`](#waiting-with-tasksjoin_any-and-tasksjoin), cancelling and listing are in [Cancelling and listing tasks](#cancelling-and-listing-tasks), the checks and the note are in [Checking on a task with `tasks.status`, `tasks.ready`, and `tasks.note`](#checking-on-a-task-with-tasksstatus-tasksready-and-tasksnote), wait timeouts are in [Time limits on waits](#time-limits-on-waits), and the limit is in [Concurrency, nesting, and scheduling](#concurrency-nesting-and-scheduling).
+This section covers `tasks.spawn`. The waits are in [Waiting with `tasks.join_any` and `tasks.join`](#waiting-with-tasksjoin_any-and-tasksjoin), canceling and listing are in [Canceling and listing tasks](#canceling-and-listing-tasks), the checks and the note are in [Checking on a task with `tasks.status`, `tasks.ready`, and `tasks.note`](#checking-on-a-task-with-tasksstatus-tasksready-and-tasksnote), wait timeouts are in [Time limits on waits](#time-limits-on-waits), and the limit is in [Concurrency, nesting, and scheduling](#concurrency-nesting-and-scheduling).
 
 The helpers behind the `tasks` functions are never globals, so your code cannot call them directly, and the `coroutine` global reads `nil`. `tasks` holds task functions only and has no entry per section, so indexing it with a heading reference reads `nil`; you name a section by passing its heading reference to a function such as `tasks.spawn`.
 
@@ -649,7 +649,7 @@ The first wait takes `once`, and the second one raises. The `task_consumed` erro
 wait-once.md:14: task `0.0` was already delivered: a task's result is taken by one wait. The task's result was already delivered. Wait on each task only once.
 ````
 
-The refusal in the middle always reads `` task `{task}` was already delivered: a task's result is taken by one wait ``. A `task_consumed` left uncaught ends the run with [run error kind](04-how-a-prompt-runs.md#the-run-result-and-outcomes) `Lua`, the same as any Lua fault, and a message that is that refusal followed by ` (at {file}:{line})`.
+The refusal in the middle always reads `` task `{task}` was already delivered: a task's result is taken by one wait ``. A `task_consumed` left uncaught ends the run with that error, under its own [error code](16-limits-and-errors.md#run-error-codes) `task_consumed`, and a message that is that refusal followed by ` (at {file}:{line})`.
 
 ### Waiting in finish order
 
@@ -693,7 +693,7 @@ You can also call `tasks.join` purely to wait, as a bare statement such as `task
 
 Delivery joins the task, so everything the task did, its store writes included, is visible to the owner from the very next operation. `tasks.join_any` joins the task it returns, so you can read that task's store writes right away, and after `tasks.join` returns, every delivered member's store writes are visible to you.
 
-Read a task's files only after a wait delivers it. Reading the store files of a task that no wait has delivered yet, such as a member `tasks.join_any` did not return or a member a timed-out wait left running, is a claims conflict: it ends the run on the spot with run error kind `Vfs`, and no `pcall` catches it, even when the task has already written the file (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)).
+Read a task's files only after a wait delivers it. Reading the store files of a task that no wait has delivered yet, such as a member `tasks.join_any` did not return or a member a timed-out wait left running, is a claims conflict: it ends the run on the spot with error code `determinism`, and no `pcall` catches it, even when the task has already written the file (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)).
 
 A task cannot join its sibling, so you build a pipeline by having the owner spawn a stage, join it, and then spawn the next stage, which reads the earlier stage's store writes:
 
@@ -736,9 +736,9 @@ summary of: gathered content
 
 The join on `### Gather` makes its write to `gathered.md` part of `## Main`'s view of the store before `### Summarize` is spawned, so `### Summarize` reads it, and the run gives the same result in every interleaving.
 
-## Cancelling and listing tasks
+## Canceling and listing tasks
 
-After this section you can stop a task with `tasks.cancel`, list the tasks you still have running with `tasks.pending`, and read what a wait gives back for a cancelled task.
+After this section you can stop a task with `tasks.cancel`, list the tasks you still have running with `tasks.pending`, and read what a wait gives back for a canceled task.
 
 ````markdown
 ---
@@ -766,23 +766,23 @@ return 'never'
 ````
 
 ````text
-false cancelled 0
+false canceled 0
 ````
 
-`## Main` has not suspended yet when it cancels, so the task is still queued, and `tasks.cancel(t)` ends it before it ever runs; `## Child` never reaches its `return 'never'`. The wait that follows does not raise: it delivers the task with `ok` set to `false` and an error value of kind `cancelled`. After that, `tasks.pending()` returns an empty list, because the one task `## Main` spawned is cancelled and delivered.
+`## Main` has not suspended yet when it cancels, so the task is still queued, and `tasks.cancel(t)` ends it before it ever runs; `## Child` never reaches its `return 'never'`. The wait that follows does not raise: it delivers the task with `ok` set to `false` and an error value of kind `canceled`. After that, `tasks.pending()` returns an empty list, because the one task `## Main` spawned is canceled and delivered.
 
 ### What `tasks.cancel` does
 
-`tasks.cancel(task)` ends a task the caller owns, works only on tasks the caller owns, and returns nothing, so its result reads as `nil`. You pass it a single task handle or the task's bare id string. A cancel moves a live task to state `cancelled` with `ok` false and stops its chain, together with every task that chain owns, and those owned tasks end as [abandoned](#abandoned-tasks).
+`tasks.cancel(task)` ends a task the caller owns, works only on tasks the caller owns, and returns nothing, so its result reads as `nil`. You pass it a single task handle or the task's bare id string. A cancel moves a live task to state `canceled` with `ok` false and stops its chain, together with every task that chain owns, and those owned tasks end as [abandoned](#abandoned-tasks).
 
 After a cancel, the task's status and listing change at once:
 
-- `tasks.status(t)` reads `state = 'cancelled'` and `ok = false`.
+- `tasks.status(t)` reads `state = 'canceled'` and `ok = false`.
 - `tasks.ready(t)` is `true`.
 - `tasks.pending()` no longer lists the task.
 - The task's section never reaches its `return`.
 
-`tasks.cancel` is idempotent. Cancelling a task that has already ended succeeds, leaves the task as it is, reports nothing, and raises nothing, so calling it more than once is safe. It is answered at once, without a round trip to the Host, so the section continues straight to its next statement, the same as `tasks.spawn`, `tasks.ready`, `tasks.status`, `tasks.pending`, and `tasks.note`. You can cancel several tasks one after another in any order, such as `tasks.cancel(b)` before `tasks.cancel(a)`.
+`tasks.cancel` is idempotent. Canceling a task that has already ended succeeds, leaves the task as it is, reports nothing, and raises nothing, so calling it more than once is safe. It is answered at once, without a round trip to the Host, so the section continues straight to its next statement, the same as `tasks.spawn`, `tasks.ready`, `tasks.status`, `tasks.pending`, and `tasks.note`. You can cancel several tasks one after another in any order, such as `tasks.cancel(b)` before `tasks.cancel(a)`.
 
 A cancel stops a task wherever it is:
 
@@ -790,9 +790,9 @@ A cancel stops a task wherever it is:
 - A task parked waiting on an effect, such as a `store.write`, never resumes past that call.
 - A task waiting on a model reply ends, and so does a task parked on a batch of in-flight tool calls inside `models.loop`.
 
-Cancelling a task withdraws every tool call it still has unanswered, even a call to a tool marked to survive a Host stop, so the cancelled task never receives those results, and their late answers start no new round. Cancelling a task while it waits on Harness work, such as a store call, a model round, or a timeout, does not fail the run, and the late answer is discarded when it arrives. A store write the task had already issued when it was cancelled is not withdrawn, though, so that write can still take effect even though the cancelled task never sees its answer.
+Canceling a task withdraws every tool call it still has unanswered, even a call to a tool marked to survive a Host stop, so the canceled task never receives those results, and their late answers start no new round. Canceling a task while it waits on Harness work, such as a store call, a model round, or a timeout, does not fail the run, and the late answer is discarded when it arrives. A store write the task had already issued when it was canceled is not withdrawn, though, so that write can still take effect even though the canceled task never sees its answer.
 
-A cancelled task does not fail its owner, so the owner's return value becomes the run result. A cancelled task is not a leaked task either, so cancelling your own spawned task with `tasks.cancel(t)` before returning lets the section complete cleanly without [`tasks_live`](#when-a-chain-ends-with-live-tasks).
+A canceled task does not fail its owner, so the owner's return value becomes the run result. A canceled task is not a leaked task either, so canceling your own spawned task with `tasks.cancel(t)` before returning lets the section complete cleanly without [`tasks_live`](#when-a-chain-ends-with-live-tasks).
 
 `tasks.cancel` raises in two cases, both at the call site, where `pcall` catches them:
 
@@ -801,36 +801,36 @@ A cancelled task does not fail its owner, so the owner's return value becomes th
 | Not a task handle or a string, such as `nil` or a number | `lua` | `tasks.cancel expects a Task handle or task id, got {type}` |
 | A string that is not a valid task id | `lua` | `` `{text}` is not a task id such as `0.1`: {error} `` |
 
-The first message is the error value's whole message, while the second is a refusal the Engine makes, which the error value's message holds between the call's location and the Lua runtime prose. A task handle here is any table with a string `task` field. Cancelling a task the chain does not own, or an id that names no task, makes the Engine refuse, and `tasks.cancel` raises a [`task_not_owned`](#only-the-owner-may-touch-a-task) error value with the refusal `` task `{task}` is not a task this chain owns `` in its message.
+The first message is the error value's whole message, while the second is a refusal the Engine makes, which the error value's message holds between the call's location and the Lua runtime prose. A task handle here is any table with a string `task` field. Canceling a task the chain does not own, or an id that names no task, makes the Engine refuse, and `tasks.cancel` raises a [`task_not_owned`](#only-the-owner-may-touch-a-task) error value with the refusal `` task `{task}` is not a task this chain owns `` in its message.
 
-### What a wait gives back for a cancelled task
+### What a wait gives back for a canceled task
 
-A wait on a cancelled task does not raise. It delivers the task with `ok = false` and an error value of kind `cancelled` whose `task` field names the task, with this message, which points at the wait's line:
+A wait on a canceled task does not raise. It delivers the task with `ok = false` and an error value of kind `canceled` whose `task` field names the task, with this message, which points at the wait's line:
 
 ````text
-{file}:{line}: The task was cancelled before it finished, so it has no result. Handle the cancellation where the task is waited on.
+{file}:{line}: The task was canceled before it finished, so it has no result. Handle the cancellation where the task is waited on.
 ````
 
-The message does not name the task, which `err.task` holds. The run's message does when a re-raised one goes uncaught: `` task `{task}` was cancelled (at {file}:{line}) ``.
+The message does not name the task, which `err.task` holds. The run's message does when a re-raised one goes uncaught: `` task `{task}` was canceled (at {file}:{line}) ``.
 
-In the opening prompt, `err.kind` is `cancelled` and `err.task` equals `t.task`. The value holds the task id as a string in `err.task` and leaves `err.reason` `nil`. Being cancelled is the only ending other than a finished result that a wait delivers; an abandoned task is never delivered, because its owner has ended.
+In the opening prompt, `err.kind` is `canceled` and `err.task` equals `t.task`. The value holds the task id as a string in `err.task` and leaves `err.reason` `nil`. Being canceled is the only ending other than a finished result that a wait delivers; an abandoned task is never delivered, because its owner has ended.
 
-A wait never raises a cancelled task's error value. It hands the error value back unraised, and only re-raising it, for example with `error(err)`, makes it a failure. Re-raising it and leaving it uncaught ends the section with that `cancelled` error, its `task` field kept, as a failure rather than the cancelled ending a run cancel gives.
+A wait never raises a canceled task's error value. It hands the error value back unraised, and only re-raising it, for example with `error(err)`, makes it a failure. Re-raising it and leaving it uncaught ends the section with that `canceled` error, its `task` field and its code `task_canceled` kept, as a failure rather than the `canceled` code a run cancel gives.
 
-A cancelled task holds no result to consume and is never consumed, so waiting on it again returns the same `cancelled` error value instead of raising `task_consumed`. A cancelled task's completed store writes are kept, and a wait that delivers it makes them readable to the owner from its next operation, however far the task got. Cancelling a task that has already finished, but whose result no wait has taken yet, leaves that result in place for a later wait.
+A canceled task holds no result to consume and is never consumed, so waiting on it again returns the same `canceled` error value instead of raising `task_consumed`. A canceled task's completed store writes are kept, and a wait that delivers it makes them readable to the owner from its next operation, however far the task got. Canceling a task that has already finished, but whose result no wait has taken yet, leaves that result in place for a later wait.
 
-A cancelled task's error value shares kind `cancelled` with an interrupted run or call, and only the cancelled task's value carries a `task` field and the `code` `task_cancelled` rather than `interrupted`, which tells them apart. The other `cancelled` values come from a run or a call being stopped:
+A canceled task's error value shares kind `canceled` with a canceled run or a stopped call, and only the canceled task's value carries a `task` field and the `code` `task_canceled` rather than `canceled`, which tells them apart. The other `canceled` values come from a run being canceled or a call being stopped:
 
-- A cancelled run, such as a Host cancel that reaches running Lua or a waiting call, ends that Lua with an error value of kind `cancelled`.
-- A model round, tool call, or other call stopped by cancellation raises an error value of kind `cancelled` with the message `{file}:{line}: The operation was cancelled.`, pointing at the stopped call.
-- When the Host drops a model round, a [render](01-what-a-prompt-is.md#the-five-kinds-of-harness-work), a tool call, or a timer instead of answering it, the Lua waiting on it resumes with the same `cancelled` error a run cancel raises. `pcall` catches it and the run continues, and an uncaught one ends the run as cancelled rather than as a failure.
-- When the Host drops a tool call the model issued, `models.loop` raises an error of kind `cancelled` at the loop call site, and the section can catch it with `pcall` and finish with its own return value.
+- A canceled run, such as a Host cancel that reaches running Lua or a waiting call, ends that Lua with an error value of kind `canceled`.
+- A model round, tool call, or other call stopped by cancellation raises an error value of kind `canceled` with the message `{file}:{line}: The operation was canceled.`, pointing at the stopped call.
+- When the Host drops a model round, a [render](01-what-a-prompt-is.md#the-five-kinds-of-harness-work), a tool call, or a timer instead of answering it, the Lua waiting on it resumes with the same `canceled` error a run cancel raises. `pcall` catches it and the run continues, and an uncaught one ends the run with code `canceled`.
+- When the Host drops a tool call the model issued, `models.loop` raises an error of kind `canceled` at the loop call site, and the section can catch it with `pcall` and finish with its own return value.
 
 ### Listing live tasks with `tasks.pending`
 
 `tasks.pending()` returns the caller's own live tasks in spawn order, as a 1-based sequence of task handles, each shaped `{ task = id }`. When nothing is live, it returns an empty sequence, never `nil`, so `#` and `ipairs` need no `nil` check.
 
-Only tasks that are still running are listed, so ended tasks drop out whether or not a wait took their results. After you spawn `a`, `b`, and `c` and wait on `b`, `tasks.pending()` holds two handles, for `a` and then for `c`. A task that a [timed-out wait](#time-limits-on-waits) left running is still listed, and a task drops out once a wait delivers it, so `tasks.pending()` returns an empty list once every task the caller spawned is cancelled or delivered. The list holds only tasks the calling chain spawned directly, not tasks those tasks spawned.
+Only tasks that are still running are listed, so ended tasks drop out whether or not a wait took their results. After you spawn `a`, `b`, and `c` and wait on `b`, `tasks.pending()` holds two handles, for `a` and then for `c`. A task that a [timed-out wait](#time-limits-on-waits) left running is still listed, and a task drops out once a wait delivers it, so `tasks.pending()` returns an empty list once every task the caller spawned is canceled or delivered. The list holds only tasks the calling chain spawned directly, not tasks those tasks spawned.
 
 Each handle `tasks.pending` returns carries the task id in its `task` field and works with every `tasks` function, so it passes straight to `tasks.cancel`.
 
@@ -842,7 +842,7 @@ tasks.pending takes no arguments, got {type}
 
 ### Racing two approaches
 
-You can race two approaches by spawning both, taking the first to finish with `tasks.join_any`, and cancelling every task left in `tasks.pending()`:
+You can race two approaches by spawning both, taking the first to finish with `tasks.join_any`, and canceling every task left in `tasks.pending()`:
 
 ````markdown
 ---
@@ -879,11 +879,11 @@ return 'careful answer'
 ```
 ````
 
-The run result is the text of whichever task ended first, `quick answer` or `careful answer`, since which one wins is not fixed. Either way the section ends with nothing left running: a task still running is cancelled, and a task that already ended has dropped out of `tasks.pending()`.
+The run result is the text of whichever task ended first, `quick answer` or `careful answer`, since which one wins is not fixed. Either way the section ends with nothing left running: a task still running is canceled, and a task that already ended has dropped out of `tasks.pending()`.
 
 ## Ownership, leaked tasks, and abandonment
 
-After this section you can end every chain cleanly, read the `task_not_owned` and `tasks_live` errors, and tell an abandoned task from a cancelled one.
+After this section you can end every chain cleanly, read the `task_not_owned` and `tasks_live` errors, and tell an abandoned task from a canceled one.
 
 ````markdown
 ---
@@ -916,7 +916,7 @@ return 'child result'
 done
 ````
 
-A chain ends cleanly when every task it spawned has been waited on or cancelled. `## Main` cancels every handle left in `tasks.pending()` before it returns, so the run ends with text `done` and leaks nothing. Leave the loop out, and the same block ends with two live tasks:
+A chain ends cleanly when every task it spawned has been waited on or canceled. `## Main` cancels every handle left in `tasks.pending()` before it returns, so the run ends with text `done` and leaks nothing. Leave the loop out, and the same block ends with two live tasks:
 
 ````lua
 tasks.spawn('## Child')
@@ -1018,11 +1018,11 @@ not-owned.md:21: task `0.0` is not a task this chain owns. The task is not one t
 
 The refusal in the middle always reads `` task `{task}` is not a task this chain owns ``.
 
-`task_not_owned` is a task error whose value has a `task` string field holding the offending task's id (see [Error values](05-lua-environment.md#error-values) for the groups of error kinds). A wait checks every member it names, so a wait fails outright with this error, rather than delivering a finished member, when the caller does not own any one of them, and `tasks.join` raises the same way because it runs the same wait. An uncaught `task_not_owned` keeps its kind and its `task` field rather than being flattened to a plain Lua error, and a run it ends reports run error kind `Lua`.
+`task_not_owned` is a task error whose value has a `task` string field holding the offending task's id (see [Error values](05-lua-environment.md#error-values) for the groups of error kinds). A wait checks every member it names, so a wait fails outright with this error, rather than delivering a finished member, when the caller does not own any one of them, and `tasks.join` raises the same way because it runs the same wait. An uncaught `task_not_owned` keeps its kind, its code, and its `task` field rather than being flattened to a plain Lua error, so a run it ends fails with error code `task_not_owned`.
 
 ### When a chain ends with live tasks
 
-A chain must wait on or cancel every task it spawned before it ends. When a section or other chain ends normally, by a scalar return or by running out of sections, while a task it spawned is still live, its outcome becomes an error value of kind `tasks_live` in place of the returned value, and the owner chain fails. A leaked task is treated as a bug in your prompt, and only a normal ending with at least one leaked task produces `tasks_live`. Cancelled tasks leave nothing live at chain end, so a run that cancels its tasks ends normally, with text such as `done`, and without `tasks_live`.
+A chain must wait on or cancel every task it spawned before it ends. When a section or other chain ends normally, by a scalar return or by running out of sections, while a task it spawned is still live, its outcome becomes an error value of kind `tasks_live` in place of the returned value, and the owner chain fails. A leaked task is treated as a bug in your prompt, and only a normal ending with at least one leaked task produces `tasks_live`. Canceled tasks leave nothing live at chain end, so a run that cancels its tasks ends normally, with text such as `done`, and without `tasks_live`.
 
 The rule applies to every owner, whether the root walk, a `call` chain, or another task. Because tasks belong to the chain and not to the section, a task spawned in a section that falls through is still owned by the walk, and the next section's return leaks it:
 
@@ -1058,7 +1058,7 @@ return 'child result'
 chain ended with tasks still live: 0.0; wait on or cancel every task a chain spawns before it ends (at leaky-walk.md:12)
 ````
 
-`## Launch` spawns `## Child` and falls through to `## Sibling`, whose `return 'done'` ends the walk with the task still live, so the run fails with `tasks_live` naming `0.0`. The failure points at the `tasks.spawn` of the first task left running, line 12 in `## Launch`, not at the `return` that ended the walk. A `jump` settles nothing about owned tasks either, so ending `## Launch` with `jump('## Sibling')` gives the same failure. Waiting on the task in `## Sibling`, or cancelling it there, settles it. In the same way, when the walk returns while a task spawned in the H1 pass is still live, the run fails with `tasks_live` naming that task, such as `0.0`, and the task is abandoned.
+`## Launch` spawns `## Child` and falls through to `## Sibling`, whose `return 'done'` ends the walk with the task still live, so the run fails with `tasks_live` naming `0.0`. The failure points at the `tasks.spawn` of the first task left running, line 12 in `## Launch`, not at the `return` that ended the walk. A `jump` settles nothing about owned tasks either, so ending `## Launch` with `jump('## Sibling')` gives the same failure. Waiting on the task in `## Sibling`, or canceling it there, settles it. In the same way, when the walk returns while a task spawned in the H1 pass is still live, the run fails with `tasks_live` naming that task, such as `0.0`, and the task is abandoned.
 
 At the main walk, `tasks_live` is the run's failure. Inside a called chain, `tasks_live` is the `call`'s error instead, so the caller can catch it with `pcall`, keep running, and return normally:
 
@@ -1104,7 +1104,7 @@ A `tasks_live` error value caught in Lua has `kind` equal to `'tasks_live'`. The
 {file}:{line}: chain ended with tasks still live: {ids}; wait on or cancel every task a chain spawns before it ends. The chain ended with tasks still running. Wait on or cancel every task the chain spawns before it ends.
 ````
 
-A `tasks_live` left uncaught ends the run with run error kind `Lua`, the same as any other fault in your program, and a message that ends with ` (at {file}:{line})` for that spawn line, as `leaky-walk` shows.
+A `tasks_live` left uncaught ends the run with that error, under its own error code `tasks_live`, and a message that ends with ` (at {file}:{line})` for that spawn line, as `leaky-walk` shows.
 
 A chain that fails with its own error while it still owns live tasks keeps that error rather than becoming `tasks_live`, because the leak is the lesser fault. A section that runs `tasks.spawn('## Child')` and then `error('spawner boom')` fails with that error, and its live tasks are still abandoned along with their failed owner, with reason `owner_failed`. An owner that is itself being aborted produces no `tasks_live` for tasks it leaks, because no one receives its outcome, and a run that is ending reports no `tasks_live` for the tasks left live, for the same reason.
 
@@ -1112,9 +1112,9 @@ Only a task still running at its owner's end is abandoned or counted toward `tas
 
 ### Abandoned tasks
 
-A task ends with its owner chain. When a task's owner ends while the task is still running, the Engine ends the task, which then ends in state `abandoned` with `ok` false, so a task never keeps running after its owner ends. Every task the ending owner still has running is abandoned and its chain stopped from outside, along with every task that chain owns in turn, so an owner's end reaches every live chain nested below it. In the clean-end prompt without its cancel loop, both leaked tasks, `0.0` and `0.1`, end `abandoned` when `## Main` returns, not `done` or `cancelled`.
+A task ends with its owner chain. When a task's owner ends while the task is still running, the Engine ends the task, which then ends in state `abandoned` with `ok` false, so a task never keeps running after its owner ends. Every task the ending owner still has running is abandoned and its chain stopped from outside, along with every task that chain owns in turn, so an owner's end reaches every live chain nested below it. In the clean-end prompt without its cancel loop, both leaked tasks, `0.0` and `0.1`, end `abandoned` when `## Main` returns, not `done` or `canceled`.
 
-`abandoned` is a terminal state of its own, distinct from `cancelled`, because losing an owner and being stopped on purpose are different facts for a log and a UI. Cancelled means the owner stopped the task on purpose, and abandoned means the owner ended while the task was live. The status `state` and the task's trace event both keep them apart.
+`abandoned` is a terminal state of its own, distinct from `canceled`, because losing an owner and being stopped on purpose are different facts for a log and a UI. Canceled means the owner stopped the task on purpose, and abandoned means the owner ended while the task was live. The status `state` and the task's trace event both keep them apart.
 
 An abandoned task never reaches a wait, because only its owner may wait on it and its owner has already ended. It ends with `state` `abandoned` and `ok` false, and it is never also recorded as succeeded or failed. A task that had started reports exactly one abandoned terminal event, with its reason (see [Task events and task errors](#task-events-and-task-errors)), and a task abandoned while it is still queued for admission never runs its section's code and reports no start and no terminal event, though it still ends `abandoned`. One owner's live tasks are abandoned, and report their abandonment, in the order they were spawned.
 
@@ -1123,10 +1123,10 @@ Abandonment reaches nested work:
 - Abandoning a task aborts the work behind it together with everything that work owns, so tasks nested under an abandoned task end too.
 - Tasks spawned inside another task, including inside a fanout arm, are abandoned when that task or arm ends.
 - Aborting a chain abandons every task that chain owns, so a fanout arm's spawned task `0.0.0` ends `abandoned` when the arm is aborted.
-- When a fanout arm is cancelled because a sibling arm failed (see [When an arm fails](14-fanout.md#when-an-arm-fails)), a task that arm spawned is abandoned, and a task that had not started yet never runs its section's code.
-- A task owned by a cancelled chain ends `abandoned`, not `cancelled`, while the owner itself is the one reported as cancelled: a cancelled arm `0.0` is reported cancelled once, and its spawned task `0.0.0` ends `abandoned` with no cancel report.
+- When a fanout arm is canceled because a sibling arm failed (see [When an arm fails](14-fanout.md#when-an-arm-fails)), a task that arm spawned is abandoned, and a task that had not started yet never runs its section's code.
+- A task owned by a canceled chain ends `abandoned`, not `canceled`, while the owner itself is the one reported as canceled: a canceled arm `0.0` is reported canceled once, and its spawned task `0.0.0` ends `abandoned` with no cancel report.
 
-When the run is cancelled, every spawned task that is still running is abandoned. When the run itself ends with tasks live, each one is abandoned exactly once, with `run_terminated` for a task the run's end stranded directly and `owner_aborted` for a task nested under one, so no task is recorded twice. Fanout arms stranded by the run's end report no cancel or failure of their own, and the run's end settles each one with exactly one `abandoned` terminal event that names the run's end.
+When the run is canceled, every spawned task that is still running is abandoned. When the run itself ends with tasks live, each one is abandoned exactly once, with `run_terminated` for a task the run's end stranded directly and `owner_aborted` for a task nested under one, so no task is recorded twice. Fanout arms stranded by the run's end report no cancel or failure of their own, and the run's end settles each one with exactly one `abandoned` terminal event that names the run's end.
 
 ### Abandon reasons
 
@@ -1134,13 +1134,13 @@ An abandoned task carries the reason it was abandoned, which says how its owner 
 
 | Reason | Phrase | When it applies |
 |---|---|---|
-| `owner_returned` | `the section ended` | The owner ended normally, by a scalar return or by running out of sections, without waiting on or cancelling the task |
+| `owner_returned` | `the section ended` | The owner ended normally, by a scalar return or by running out of sections, without waiting on or canceling the task |
 | `owner_failed` | `the owner failed` | The owner failed with its own error while the task was live |
 | `tool_loop_exhausted` | `the tool loop was exhausted` | The owner's `models.loop` ran past its round cap while the task was live |
 | `owner_aborted` | `the owner was aborted` | The owner was stopped from outside, by fail-fast after a sibling arm failed fatally or because the owner's own owner ended first |
-| `run_terminated` | `the run ended` | The run itself ended while the task was live, for example because the Host cancelled the run or an answer was fatal |
+| `run_terminated` | `the run ended` | The run itself ended while the task was live, for example because the Host canceled the run or an answer was fatal |
 
-A tool loop that runs past its [round cap](11-conversations.md#tool-rounds-and-the-round-cap), set by `max_tool_iterations`, counts as a failure of the owner. `tool_loop_exhausted` is kept apart from `owner_failed` so a report can name the round cap as the cause, and a tool-loop overrun is checked before any other owner failure. Tasks abandoned because their owner failed with any other error carry `owner_failed`, decided from the owner's own outcome before any `tasks_live` is substituted. Tasks owned by a task that is itself being abandoned end with `owner_aborted`, and so does the work a cancelled fanout arm had started.
+A tool loop that runs past its [round cap](11-conversations.md#tool-rounds-and-the-round-cap), set by `max_tool_iterations`, counts as a failure of the owner. `tool_loop_exhausted` is kept apart from `owner_failed` so a report can name the round cap as the cause, and a tool-loop overrun is checked before any other owner failure. Tasks abandoned because their owner failed with any other error carry `owner_failed`, decided from the owner's own outcome before any `tasks_live` is substituted. Tasks owned by a task that is itself being abandoned end with `owner_aborted`, and so does the work a canceled fanout arm had started.
 
 ## Checking on a task with `tasks.status`, `tasks.ready`, and `tasks.note`
 
@@ -1230,7 +1230,7 @@ You read the fields of the table `tasks.status(handle)` returns like those of an
 | Field | What it holds | Present |
 |---|---|---|
 | `target` | The section the task's chain started at | Always |
-| `state` | `running`, `done`, `cancelled`, or `abandoned` | Always |
+| `state` | `running`, `done`, `canceled`, or `abandoned` | Always |
 | `ok` | Whether the task ended well | Once the task ends |
 | `section` | The section the live task is in now | While the task is live and inside a section |
 | `blocked` | What the live task is waiting on | While the task's chain waits |
@@ -1300,10 +1300,10 @@ While the task is in its first model round, its status holds `target` `Child`, `
 |---|---|
 | `running` | Is still in flight, with its chain or request still running |
 | `done` | Has ended with a result, whether or not a wait has delivered it |
-| `cancelled` | Was cancelled by its owner |
+| `canceled` | Was canceled by its owner |
 | `abandoned` | Was still live when its owner ended |
 
-`state` reads `running` while the task is in flight, and once the task ends it reads `done`, `cancelled`, or `abandoned`. A queued task reads `state == 'running'` as well, so being queued is not a separate task state, and the `blocked` field is what shows a task is queued. A task whose result a wait has already taken still reads `state = "done"`, because delivery is the owner's bookkeeping rather than a change in the task's lifecycle. [Cancelling and listing tasks](#cancelling-and-listing-tasks) covers `cancelled`, and [Ownership, leaked tasks, and abandonment](#ownership-leaked-tasks-and-abandonment) covers `abandoned`.
+`state` reads `running` while the task is in flight, and once the task ends it reads `done`, `canceled`, or `abandoned`. A queued task reads `state == 'running'` as well, so being queued is not a separate task state, and the `blocked` field is what shows a task is queued. A task whose result a wait has already taken still reads `state = "done"`, because delivery is the owner's bookkeeping rather than a change in the task's lifecycle. [Canceling and listing tasks](#canceling-and-listing-tasks) covers `canceled`, and [Ownership, leaked tasks, and abandonment](#ownership-leaked-tasks-and-abandonment) covers `abandoned`.
 
 ### The `ok` field
 
@@ -1311,7 +1311,7 @@ While the task is in its first model round, its status holds `target` `Child`, `
 
 - While the task runs, `ok` is nil, because a running task has no `ok` value until it ends.
 - A task that finishes moves to state `done`, with `ok` `true` when its section returned and `false` when it failed, for example by raising an error such as `error('beta boom')`.
-- A cancelled or abandoned task has `ok` `false`, so a cancelled task reads `state` `cancelled` with `ok` `false`.
+- A canceled or abandoned task has `ok` `false`, so a canceled task reads `state` `canceled` with `ok` `false`.
 
 A task whose result a wait has taken keeps its flag. Because `ok` can be `false`, compare it with `nil` to tell a running task from a failed one, since a running task has no `ok` at all while a finished one has a boolean:
 
@@ -1379,7 +1379,7 @@ running queued false | done true working true | 0.0.0 0.0.1 then 0
 
 Entries in the list print with `tostring` as dotted task ids, one segment deeper per generation of spawning, so the first task spawned by task `0.0` reads `0.0.0`, while the main walk's next spawn after `0.0` would be `0.1`. Once both `## Leaf` tasks have ended, the list is empty again. The list never includes the timer behind a timed wait, which reports no task events, so a task timed-waiting with `{ timeout = 30 }` on its one task reads `blocked` `tasks` and lists only that task, such as `0.0.0` (see [The timer behind a time limit](#the-timer-behind-a-time-limit)).
 
-A status table's `tasks` holds id strings, while [`tasks.pending()`](#cancelling-and-listing-tasks) returns handles, and both work as arguments to every `tasks` function. So you can pass handles from `tasks.pending()` straight to `tasks.cancel(t)`, just as you can pass an id string.
+A status table's `tasks` holds id strings, while [`tasks.pending()`](#canceling-and-listing-tasks) returns handles, and both work as arguments to every `tasks` function. So you can pass handles from `tasks.pending()` straight to `tasks.cancel(t)`, just as you can pass an id string.
 
 ### Publishing progress with `tasks.note`
 
@@ -1645,11 +1645,11 @@ slow task
 
 Whichever wait delivers `## Slow`, the timed `tasks.join` or the follow-up `tasks.join_any`, the task's store write is readable by the time `store.read` runs, and the run result never changes.
 
-### Waits interrupted by a stop
+### Waits a stop cuts short
 
-When a stop from the Host drops the timer of a timed `tasks.join` or `tasks.join_any` while the wait is waiting, the wait raises an error value of kind `cancelled`, which `pcall` can catch. The tasks the wait was waiting on are not cancelled, and a later wait joins each one the interrupted wait had not yet delivered. Left uncaught, the error ends the run as cancelled.
+When a stop from the Host drops the timer of a timed `tasks.join` or `tasks.join_any` while the wait is waiting, the wait raises an error value of kind `canceled`, which `pcall` can catch. The tasks the wait was waiting on are not canceled, and a later wait joins each one the wait the stop cut short had not yet delivered. Left uncaught, the error ends the run with code `canceled`.
 
-A timed `tasks.join` interrupted this way loses the results of the members it delivered before the stop, so a later wait naming one of those members raises `task_consumed`.
+A timed `tasks.join` cut short this way loses the results of the members it delivered before the stop, so a later wait naming one of those members raises `task_consumed`.
 
 ### Timed waits inside tasks
 
@@ -1971,7 +1971,7 @@ A task spawned while every slot it needs is taken is queued, and it does not sta
 - Tasks waiting to resume retake their slots in the order their waits answered.
 - Abandoning tasks frees the concurrency slots they held, so queued tasks that now fit are admitted.
 
-A queued task whose owner is aborted before the task is admitted, for example because the owner was cancelled, is abandoned without ever running its block, and it reports no start or end event (see [Task events and task errors](#task-events-and-task-errors)).
+A queued task whose owner is aborted before the task is admitted, for example because the owner was canceled, is abandoned without ever running its block, and it reports no start or end event (see [Task events and task errors](#task-events-and-task-errors)).
 
 ### Waiting gives a slot back
 
@@ -2023,7 +2023,7 @@ deep-spawn.md:20: recursion exceeded cap of 8. Calls nest deeper than the cap al
 
 Each `## Beta` task spawns the next one level deeper. The task at depth 8 tries to spawn depth 9, and that `tasks.spawn` is refused with `recursion exceeded cap of 8`, the same words a `call` or a `tasks.fanout` past the cap gives. The refusal raises at the call site, on the line of the `tasks.spawn` that went too deep, and `pcall` catches it, as in `local ok, err = pcall(tasks.spawn, '## Beta')`. Its message adds the depth cap's prose after the refusal (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). Each task returns the result it joined, so the message travels back up to `## Main` and becomes the run result.
 
-Inside Lua the depth-cap refusal is an error value of kind `lua`, but left uncaught it ends the run with the [run error kind](04-how-a-prompt-runs.md#the-run-result-and-outcomes) `Quota` and the message `recursion exceeded cap of 8 (at {file}:{line})`.
+Inside Lua the depth-cap refusal is an error value of kind `lua` whose `code` is `call_depth_exceeded`, and left uncaught it ends the run with that [error code](16-limits-and-errors.md#run-error-codes) and the message `recursion exceeded cap of 8 (at {file}:{line})`.
 
 ### Calls, tools, and model rounds inside tasks
 
@@ -2035,11 +2035,11 @@ A task runs the same Lua as any chain, and these rules cover what happens when i
 - A `models.infer` reply made inside a `call` chain of a task flows back through `call` to the task's result and then to the spawner's `tasks.join`. For example, `## Main` joins `### Caller`, which runs `return call('#### Leaf')`, and `#### Leaf` runs `return models.infer(var.who)`, so the reply reaches `## Main` as the result of `### Caller`.
 - An adhoc tool handler runs inside the calling chain, so it can start and wait on tasks just as block code can (see [How adhoc tool handlers run](12-tools.md#how-adhoc-tool-handlers-run)).
 - Each task keeps its own round count starting at zero, so its rounds are numbered on its own counter and never add to its spawner's count, and its `tasks.status` reads `turns` as 0 while its first `models.infer` round is in flight and 1 after it returns.
-- A task spawned after its spawner writes a store path reads the spawner's content, while a task spawned before that write always meets a claims conflict when it reads the path. That conflict ends the run on the spot with run error kind `Vfs` and a message naming the path, and no `pcall` catches it (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)).
+- A task spawned after its spawner writes a store path reads the spawner's content, while a task spawned before that write always meets a claims conflict when it reads the path. That conflict ends the run on the spot with error code `determinism` and a message naming the path, and no `pcall` catches it (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)).
 
 ## Task events and task errors
 
-After this section you can read the events a task reports in the run log and recognize every error a `tasks` call raises, with the run error kind each one becomes when nothing catches it.
+After this section you can read the events a task reports in the run log and recognize every error a `tasks` call raises, with the error code each one ends the run with when nothing catches it.
 
 ````markdown
 ---
@@ -2071,7 +2071,7 @@ The run result is:
 child result
 ````
 
-Task events are the run events that record a task's life (see [Run events and records](04-how-a-prompt-runs.md#run-events-and-records)). Every task that starts reports a `TaskStarted` event followed by exactly one terminal task event, which is `TaskSucceeded`, `TaskFailed`, `TaskCancelled`, or `TaskAbandoned`. This run reports a `TaskStarted` event under `Spawner` for task `0.0`, with the target `Child`, and then a `TaskSucceeded` event under `Child` for the same task. A task cancelled or abandoned while still queued for a concurrency slot never starts, so it reports neither.
+Task events are the run events that record a task's life (see [Run events and records](04-how-a-prompt-runs.md#run-events-and-records)). Every task that starts reports a `TaskStarted` event followed by exactly one terminal task event, which is `TaskSucceeded`, `TaskFailed`, `TaskCanceled`, or `TaskAbandoned`. This run reports a `TaskStarted` event under `Spawner` for task `0.0`, with the target `Child`, and then a `TaskSucceeded` event under `Child` for the same task. A task canceled or abandoned while still queued for a concurrency slot never starts, so it reports neither.
 
 ### The events of one task
 
@@ -2091,8 +2091,8 @@ A task's start event fires when the task gets a concurrency slot and first runs,
 
 - A task still waiting for a slot reports no start event, so under a concurrency limit of 1 the second task's start event comes after the first task's `TaskSucceeded` event (see [Concurrency, nesting, and scheduling](#concurrency-nesting-and-scheduling)).
 - Each spawned task emits exactly one start event, even when it waits in the queue before starting, and a task that resumes after a wait does not emit a second one.
-- Fanout arms still queued for a slot when they are cancelled never report a start, while each arm that gets a slot within the concurrency window reports a start event when it begins (see [Arms as tasks, ids, and events](14-fanout.md#arms-as-tasks-ids-and-events)).
-- A task cancelled before it ever starts reports neither a start event nor a terminal event, though its state still becomes cancelled.
+- Fanout arms still queued for a slot when they are canceled never report a start, while each arm that gets a slot within the concurrency window reports a start event when it begins (see [Arms as tasks, ids, and events](14-fanout.md#arms-as-tasks-ids-and-events)).
+- A task canceled before it ever starts reports neither a start event nor a terminal event, though its state still becomes canceled.
 
 The start event, reported when the task first runs, names the spawn's `input` and the section that called `tasks.spawn`, captured at spawn time. A task spawned in `## Main` still reports `Main` even when the spawner calls `jump('## Next')` before the task first runs (see [Jumping to a section](08-jump-and-call.md#jumping-to-a-section)). The event appears in the spawner's own event sequence and names the section the task was spawned from, even when the spawner has moved on to another section by the time the task starts.
 
@@ -2104,14 +2104,14 @@ A finished task fires a `TaskSucceeded` or `TaskFailed` event under its target s
 - A task whose section raises an error reports `TaskFailed` under its section and never reports `TaskSucceeded`.
 - `TaskSucceeded` events appear in the order the tasks actually finish, which can differ from the order you collect them.
 
-In a fanout, every started arm produces exactly one terminal task event: `TaskSucceeded` for an arm that returns, `TaskFailed` for an arm that raises, and `TaskCancelled` for a sibling cancelled by fail-fast (see [When an arm fails](14-fanout.md#when-an-arm-fails)). A failing arm reports a `TaskFailed` event, and when the fanout fails no arm reports `TaskSucceeded`.
+In a fanout, every started arm produces exactly one terminal task event: `TaskSucceeded` for an arm that returns, `TaskFailed` for an arm that raises, and `TaskCanceled` for a sibling canceled by fail-fast (see [When an arm fails](14-fanout.md#when-an-arm-fails)). A failing arm reports a `TaskFailed` event, and when the fanout fails no arm reports `TaskSucceeded`.
 
-Cancelling a started task reports a `TaskCancelled` event exactly once, attributed to the cancelled task's section (see [Cancelling and listing tasks](#cancelling-and-listing-tasks)):
+Canceling a started task reports a `TaskCanceled` event exactly once, attributed to the canceled task's section (see [Canceling and listing tasks](#canceling-and-listing-tasks)):
 
-- Cancelling a started task that is still running emits one `TaskCancelled` event naming the task, after the events of everything the task owned.
-- The event carries the cancelled task's own provenance, not the canceller's.
-- A cancelled task reports no other terminal event, so no `TaskSucceeded`, `TaskFailed`, or `TaskAbandoned` appears for it.
-- Cancelling a task that was still queued for a concurrency slot emits no `TaskCancelled` event, since it never started.
+- Canceling a started task that is still running emits one `TaskCanceled` event naming the task, after the events of everything the task owned.
+- The event carries the canceled task's own provenance, not that of the chain that canceled it.
+- A canceled task reports no other terminal event, so no `TaskSucceeded`, `TaskFailed`, or `TaskAbandoned` appears for it.
+- Canceling a task that was still queued for a concurrency slot emits no `TaskCanceled` event, since it never started.
 
 An abandoned task fires a `TaskAbandoned` event under its target section, stamped with the task's own provenance and carrying one of the five [abandon reasons](#abandon-reasons). The reason names how the owner ended, and for an owner that returned normally it is `owner_returned`, whose phrase is `the section ended`. When the owner's walk ends with a task still live, the task is abandoned with reason `owner_returned`, and its `TaskAbandoned` event reports under the task's own section. Once an owner is gone, no wait can reach its abandoned tasks, so each task's `TaskAbandoned` event is the only record of how it ended.
 
@@ -2119,7 +2119,7 @@ An abandoned task fires a `TaskAbandoned` event under its target section, stampe
 - Tasks nested under an abandoned task report their own endings before the abandoned task's terminal event, which is always the last word on that task. During a run-wide shutdown no task reports its terminal event twice, because nested tasks have already ended by the time their owner is reached.
 - When the whole run ends through a cancel or a fatal answer, every started task still live receives exactly one terminal event before the run's end boundary.
 
-The run log tells a cancelled task, stopped on purpose, apart from an abandoned one, which lost its owner. Either way, the section a stopped task was running does not finish, records no completion, and reports no `SectionFinished` event, and the task is recorded as cancelled when a cancel stopped it and as abandoned when its owner's end stopped it.
+The run log tells a canceled task, stopped on purpose, apart from an abandoned one, which lost its owner. Either way, the section a stopped task was running does not finish, records no completion, and reports no `SectionFinished` event, and the task is recorded as canceled when a cancel stopped it and as abandoned when its owner's end stopped it.
 
 ### Argument errors from the `tasks` functions
 
@@ -2155,7 +2155,7 @@ false|lua|{file}:{line}: section heading `## Missing` not found
 Every spawn failure, including the depth cap, an unresolved target, a list-section target, and a setup failure, is raised as an error of that `tasks.spawn` call in the spawning code, so `pcall(tasks.spawn, ...)` catches it and the run continues. Bad arguments to `tasks.spawn` raise at the call site the same way. When the Engine rejects a spawn, `tasks.spawn` raises the Engine's error value and returns no handle.
 
 - When the target heading cannot be resolved, `tasks.spawn` raises an error value whose `kind` is `lua`, and `pcall(tasks.spawn, '## Missing')` returns `false`. The refusal is exactly the one `call` gives for the same heading, `` section heading `{heading}` not found; available sections: {list} ``, naming the heading with its markers and then listing the sections visible from the spawning section, and the message puts the `tasks.spawn` line in front of it and the Lua runtime prose after it, so `tostring(err)` matches what `pcall(call, '## Missing')` gives on the same line (see [Resolving heading references](08-jump-and-call.md#resolving-heading-references)).
-- The depth cap lets depths 1 through 8 start and refuses depth 9 with the refusal `recursion exceeded cap of 8`, on the line of that `tasks.spawn` (see [The recursion depth cap](08-jump-and-call.md#the-recursion-depth-cap)). A depth-cap refusal left uncaught ends the run with run error kind `Quota`.
+- The depth cap lets depths 1 through 8 start and refuses depth 9 with the refusal `recursion exceeded cap of 8`, on the line of that `tasks.spawn` (see [The recursion depth cap](08-jump-and-call.md#the-recursion-depth-cap)). A depth-cap refusal left uncaught ends the run with error code `call_depth_exceeded`.
 - Spawning a list section, one made only of list items with neither a prologue nor an epilog, fails with a `lua` error whose message names the section without its markers, `` section `{name}` is a list section, not a worker template ``, such as `` section `Items` is a list section, not a worker template `` (see [List sections](03-blocks-and-prose.md#list-sections)).
 - Spawn failures are error values of kind `lua`, except a store refusal during task setup, which is kind `store`: its message is the `tasks.spawn` line and then the fixed prose for its store reason, as for any caught store failure, and left uncaught, the run's message starts `store operation failed: ` followed by the store's own failure text (see [When a store call fails](09-the-store.md#when-a-store-call-fails)). When a Host-supplied store refuses to open store access for a new task, `tasks.spawn` fails with that error value, `pcall` can catch it, and no task is left started. The run's own in-memory store never refuses (see [Host stores, policies, and modes](09-the-store.md#host-stores-policies-and-modes)).
 
@@ -2170,7 +2170,7 @@ When the Engine refuses a `tasks` operation, the call raises the Engine's error 
 | `task_consumed` | a wait asks for a task result that was already delivered | `task` |
 | `store` | a Host-supplied store refuses during task setup | `message` |
 
-Ownership and delivery refusals keep their own kinds, `task_not_owned` and `task_consumed`, rather than `lua` (see [Ownership, leaked tasks, and abandonment](#ownership-leaked-tasks-and-abandonment) and [Waiting with `tasks.join_any` and `tasks.join`](#waiting-with-tasksjoin_any-and-tasksjoin)). You read `err.task` on a `task_not_owned` error, a `task_consumed` error, or a cancelled task's error value to get the task id. Put this block in the `## Spawner` section of `task-events` in place of the first one:
+Ownership and delivery refusals keep their own kinds, `task_not_owned` and `task_consumed`, rather than `lua` (see [Ownership, leaked tasks, and abandonment](#ownership-leaked-tasks-and-abandonment) and [Waiting with `tasks.join_any` and `tasks.join`](#waiting-with-tasksjoin_any-and-tasksjoin)). You read `err.task` on a `task_not_owned` error, a `task_consumed` error, or a canceled task's error value to get the task id. Put this block in the `## Spawner` section of `task-events` in place of the first one:
 
 ````lua
 local ok, err = pcall(tasks.cancel, '9.9')
@@ -2183,20 +2183,20 @@ No task `9.9` belongs to `## Spawner`, so the block returns:
 task_not_owned|9.9
 ````
 
-### Task errors as run error kinds
+### Task error codes
 
-Task lifetime and ownership faults count as your program failing, the same as any Lua fault, so when no `pcall` catches them they end the run with run error kind `Lua` (see [The run result and outcomes](04-how-a-prompt-runs.md#the-run-result-and-outcomes)):
+Task lifetime and ownership faults count as your program failing, so when no `pcall` catches them they end the run with their own error (see [The run result](04-how-a-prompt-runs.md#the-run-result)). Each keeps its own code, one of the task codes, and a depth-cap refusal keeps `call_depth_exceeded`, one of the Lua codes (see [Run error codes](16-limits-and-errors.md#run-error-codes)):
 
-| Left uncaught | Run error kind |
+| Left uncaught | Error code |
 | --- | --- |
-| A leaked task, one you leave live | `Lua` |
-| Reaching for a task from code that does not own it | `Lua` |
-| Waiting on the same task result twice | `Lua` |
-| A cancelled task's error value, raised again after its wait | `Lua` |
-| A depth-cap refusal from `tasks.spawn` | `Quota` |
+| A leaked task, one you leave live | `tasks_live` |
+| Reaching for a task from code that does not own it | `task_not_owned` |
+| Waiting on the same task result twice | `task_consumed` |
+| A canceled task's error value, raised again after its wait | `task_canceled` |
+| A depth-cap refusal from `tasks.spawn` | `call_depth_exceeded` |
 
-A wait hands a cancelled task's error value back without raising it, so a task cancellation goes uncaught only when your code raises that value again, for example with `error(err)` right after the wait. Left uncaught, it ends the run with run error kind `Lua`, not the cancelled outcome, while an uncaught Host cancel ends the run with the cancelled outcome.
+A wait hands a canceled task's error value back without raising it, so a task cancellation goes uncaught only when your code raises that value again, for example with `error(err)` right after the wait. Left uncaught, it ends the run with code `task_canceled`, while an uncaught Host cancel ends the run with code `canceled`.
 
 ### What can differ between runs
 
-Given the same model and tool answers, only two outcomes can differ between interleavings of a run's tasks: which task `tasks.join_any` returns, and how far a cancelled task got before it stopped. A task's record does not depend on how fast or in what order model answers arrive. Answering requests one at a time, all at once in issue order, or all at once in reverse gives the same result text and Harness work for each task, with only the interleaving across tasks differing. Concurrent tasks finish correctly whatever order their model replies arrive in, and the run result is the same whether replies come one at a time, all at once, or in reverse.
+Given the same model and tool answers, only two outcomes can differ between interleavings of a run's tasks: which task `tasks.join_any` returns, and how far a canceled task got before it stopped. A task's record does not depend on how fast or in what order model answers arrive. Answering requests one at a time, all at once in issue order, or all at once in reverse gives the same result text and Harness work for each task, with only the interleaving across tasks differing. Concurrent tasks finish correctly whatever order their model replies arrive in, and the run result is the same whether replies come one at a time, all at once, or in reverse.

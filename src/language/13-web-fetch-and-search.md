@@ -97,7 +97,7 @@ A tool call reaches the web tool that its tool name names, the last segment of t
 
 ### When the web Pack is missing or unavailable
 
-When a prompt declares `web` and the Host has no Pack with the Pack id `web`, the run is refused before any section runs. The run fails with run error kind `RequirementsUnmet` (see [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run)), and its requirements notice reads as follows, ending with the prompt file and its `uses:` line (see [Where an error points](16-limits-and-errors.md#where-an-error-points)):
+When a prompt declares `web` and the Host has no Pack with the Pack id `web`, the run is refused before any section runs. The run fails with code `requirements_unmet` (see [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run)), and its requirements notice reads as follows, ending with the prompt file and its `uses:` line (see [Where an error points](16-limits-and-errors.md#where-an-error-points)):
 
 ````text
 the environment cannot satisfy this prompt:
@@ -106,7 +106,7 @@ the environment cannot satisfy this prompt:
 
 The web Pack can also fail to build when the Host sets up, which leaves it unavailable (see [Packs at prepare](04-how-a-prompt-runs.md#packs-at-prepare)). It fails when the configuration the Host passes the web Plugin holds anything but `null` or `{}` under its `web` key, when the Host provides no search provider, or when it provides no Tokio runtime service, and then no run receives `web/fetch` or `web/search`.
 
-When a prompt declares `web` and the web Pack is unavailable, the run is refused with run error kind `RequirementsUnmet`, and the notice line reads `- web is unavailable: {reason}`, where the reason is the text of the Pack's build failure (see [The requirements notice](04-how-a-prompt-runs.md#the-requirements-notice)). On a Host that provides no search provider, a prompt that declares `web` gets this notice:
+When a prompt declares `web` and the web Pack is unavailable, the run is refused with code `requirements_unmet`, and the notice line reads `- web is unavailable: {reason}`, where the reason is the text of the Pack's build failure (see [The requirements notice](04-how-a-prompt-runs.md#the-requirements-notice)). On a Host that provides no search provider, a prompt that declares `web` gets this notice:
 
 ````text
 the environment cannot satisfy this prompt:
@@ -581,13 +581,13 @@ Your Lua cannot read which web tool failure happened from a field on the error v
 
 Catch a search failure the same way: wrap the call in `pcall` and check `err.kind == 'tool'`, just as for a hard fetch failure. Both a search provider failure and a result with an empty `url` fail the call like this.
 
-An uncaught hard fetch failure ends the run with run error kind `Tool` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)). Without the `pcall`, the fetch above ends the run with this text, which ends with the line of the `tools.call`:
+An uncaught hard fetch failure ends the run with the tool code its tool error kind names, such as `tool_invalid_arguments` (see [Run error codes](16-limits-and-errors.md#run-error-codes)). Without the `pcall`, the fetch above ends the run with this text, which ends with the line of the `tools.call`:
 
 ````text
 tool call failure: url must not contain userinfo (at {file}:{line})
 ````
 
-An uncaught search failure ends the run the same way, with run error kind `Tool` and the text `tool call failure: {message} (at {file}:{line})`. Under Workshop, when the search gateway is missing, unusable, or cannot be reached, that text is `tool call failure: web_search: request failed (at {file}:{line})`.
+An uncaught search failure ends the run the same way, with the tool code its tool error kind names, such as `tool_transport` or `tool_backend`, and the text `tool call failure: {message} (at {file}:{line})`. Under Workshop, when the search gateway is missing, unusable, or cannot be reached, that text is `tool call failure: web_search: request failed (at {file}:{line})`.
 
 ### Messages reach you unchanged
 

@@ -610,7 +610,7 @@ Run it with the argument string `bob`. `var.greeting` holds `hi bob`, `var.answe
 
 ### Ending a run with `args`
 
-A block that does `return args` gets back the argument string exactly as it was passed, so the run ends with that text unchanged as its [run result](04-how-a-prompt-runs.md#the-run-result-and-outcomes). The echo prompt above, run with `hello`, returns `hello`, and the shipped `echo` prompt likewise ends with whatever text it is given. A [prologue](03-blocks-and-prose.md#prologue-prose-and-epilog) can return it before the section's prose:
+A block that does `return args` gets back the argument string exactly as it was passed, so the run ends with that text unchanged as its [run result](04-how-a-prompt-runs.md#the-run-result). The echo prompt above, run with `hello`, returns `hello`, and the shipped `echo` prompt likewise ends with whatever text it is given. A [prologue](03-blocks-and-prose.md#prologue-prose-and-epilog) can return it before the section's prose:
 
 ````markdown
 ---
@@ -1262,15 +1262,15 @@ Writable `argv` is the H1 body's one privilege. Every other section gets `argv` 
 
 ### Non-JSON values at the freeze
 
-Leave `argv` as JSON data, meaning strings, numbers, booleans, and tables of them, or as nil, when the H1 body finishes, because a function, userdata other than `json.null`, or thread is refused at the freeze. The run fails with a `Lua` error when the H1 pass leaves `argv` holding data that is not JSON.
+Leave `argv` as JSON data, meaning strings, numbers, booleans, and tables of them, or as nil, when the H1 body finishes, because a function, userdata other than `json.null`, or thread is refused at the freeze. The run fails with a `lua_runtime` error when the H1 pass leaves `argv` holding data that is not JSON.
 
-Leaving `argv` as a function, userdata other than `json.null`, or thread when the H1 pass ends, as after `argv = function() end`, fails the freeze read-back with a run error of [run error kind](16-limits-and-errors.md#run-error-kinds) `Lua`, whose message names the Lua type `function`, `userdata`, or `thread` in place of `{type}` and ends with the location of the first line of the last `lua` block the H1 pass ran:
+Leaving `argv` as a function, userdata other than `json.null`, or thread when the H1 pass ends, as after `argv = function() end`, fails the freeze read-back with [error code](16-limits-and-errors.md#run-error-codes) `lua_runtime` and a message that names the Lua type `function`, `userdata`, or `thread` in place of `{type}` and ends with the location of the first line of the last `lua` block the H1 pass ran:
 
 ````text
 argv must be JSON data, got {type} (at {file}:{line})
 ````
 
-The kind is `Lua` even though the failure happens at the end of the H1 pass. Leaving `argv` as data that cannot be represented as JSON, such as a table holding a value that cannot be JSON, also fails the read-back with a `Lua` error.
+The code is `lua_runtime` even though the failure happens at the end of the H1 pass. Leaving `argv` as data that cannot be represented as JSON, such as a table holding a value that cannot be JSON, also fails the read-back with a `lua_runtime` error.
 
 ### When the H1 pass leaves `argv` nil
 
@@ -1440,7 +1440,7 @@ argv is frozen outside H1: cannot set field {field}
 
 ### Uncaught freeze errors
 
-An uncaught freeze error ends the run with the [run error kind](16-limits-and-errors.md#run-error-kinds) `Lua`, the same kind as any other runtime error in a section's Lua.
+An uncaught freeze error ends the run with the [error code](16-limits-and-errors.md#run-error-codes) `lua_runtime`, the same code as any other runtime error in a section's Lua.
 
 ### Catching freeze errors with `pcall`
 

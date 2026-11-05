@@ -675,7 +675,7 @@ Inside an arm, and in a chain the arm starts with `call`, `sys.section_count` is
 
 A library loaded with [`require`](03-blocks-and-prose.md#sharing-code-with-require) inside a fanout arm runs in the arm's environment, so its top-level code reads the arm's `item`. [`call` and `require` inside an arm](#call-and-require-inside-an-arm) shows an example.
 
-A fanout arm sees every [Pack prelude](12-tools.md#pack-preludes) global, so where `greeter` is a prelude global, an arm block `return greeter.greet(item)` yields `hello arm`. Each arm runs every prelude afresh in its own Lua environment, so a prelude's install-time side effects happen once per arm. With `tasks.fanout('### Worker', { 'alpha', 'beta' })`, a prelude whose install-time code writes a store file writes it in both arms, so the second arm's write is a [store conflict](#store-conflicts) that ends the run with `Vfs`, even when the prelude wraps the write in `pcall`.
+A fanout arm sees every [Pack prelude](12-tools.md#pack-preludes) global, so where `greeter` is a prelude global, an arm block `return greeter.greet(item)` yields `hello arm`. Each arm runs every prelude afresh in its own Lua environment, so a prelude's install-time side effects happen once per arm. With `tasks.fanout('### Worker', { 'alpha', 'beta' })`, a prelude whose install-time code writes a store file writes it in both arms, so the second arm's write is a [store conflict](#store-conflicts) that ends the run with error code `determinism`, even when the prelude wraps the write in `pcall`.
 
 ## Running arms on a model
 
@@ -923,7 +923,7 @@ The child walk runs `#### Child`, which takes the id `0.0.1` and has no `item`, 
 
 When the walk from an arm's `jump` target ends without a result, the arm reports `.text == ''`. If `### Target` only appends to `order.txt` and no section follows it, the arm's text is empty.
 
-A `jump` from an arm to a heading outside the worker section's visible set fails the arm, and the fanout with it. The error's message contains `not found` and lists the worker section's visible sections, such as `### Items`, and left uncaught it ends the run with run error kind `Lua`. In `arm-reach`, a worker section running `jump('## Parent')` fails this way. A `pcall` inside the arm cannot catch this failure, because the target resolves after the block ends.
+A `jump` from an arm to a heading outside the worker section's visible set fails the arm, and the fanout with it. The error's message contains `not found` and lists the worker section's visible sections, such as `### Items`, and left uncaught it ends the run with error code `lua_runtime`. In `arm-reach`, a worker section running `jump('## Parent')` fails this way. A `pcall` inside the arm cannot catch this failure, because the target resolves after the block ends.
 
 ### `call` and `require` inside an arm
 
@@ -1061,7 +1061,7 @@ The outer results come back in the order `a`, `b`, `c`, and each outer arm's inn
 
 A fanout arm runs one level deeper than the section that fanned out, so arms count toward the [recursion depth cap](08-jump-and-call.md#the-recursion-depth-cap) of 8. A `call` inside an arm that is already at depth 8 fails with `recursion exceeded cap of 8`, and so does a `tasks.fanout` requested from a chain already at depth 8. Either failure points at the line of the `call` or `tasks.fanout` that went too deep: caught, its message is ``{file}:{line}: recursion exceeded cap of 8. Calls nest deeper than the cap allows. Nest `call`, `tasks.spawn`, and `tasks.fanout` less deeply.``, and left uncaught it fails the run with exactly `recursion exceeded cap of 8 (at {file}:{line})`, with no traceback.
 
-A `tasks.fanout` arm that would nest past the cap ends the run with run error kind `Quota` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)). The cap applies to each arm, the same as it does to a `call` or to a `tasks.spawn` task.
+A `tasks.fanout` arm that would nest past the cap ends the run with error code `call_depth_exceeded` (see [Run error codes](16-limits-and-errors.md#run-error-codes)). The cap applies to each arm, the same as it does to a `call` or to a `tasks.spawn` task.
 
 ## Reading the results
 
@@ -1111,7 +1111,7 @@ Each fanout result has four fields, and `#r` counts the results, one per collect
 | `.ok` | `true` when the arm completed normally |
 | `.exhausted` | `true` only when the arm's `models.loop` hit the round cap |
 
-`.text` holds the value the arm's worker section returned, or, when the worker section ends with `return models.infer(...)`, the model's reply, which the caller reads as `r[1].text`. A result's `.text` is always a string: the text the arm returned, or the empty string `''` when the arm ended without returning anything. An arm whose worker section ends without returning anything still reports `.ok == true` with `.text == ''`, and not the run-level `done` fallback (see [The run result and outcomes](04-how-a-prompt-runs.md#the-run-result-and-outcomes)).
+`.text` holds the value the arm's worker section returned, or, when the worker section ends with `return models.infer(...)`, the model's reply, which the caller reads as `r[1].text`. A result's `.text` is always a string: the text the arm returned, or the empty string `''` when the arm ended without returning anything. An arm whose worker section ends without returning anything still reports `.ok == true` with `.text == ''`, and not the run-level `done` fallback (see [The run result](04-how-a-prompt-runs.md#the-run-result)).
 
 `.ok` is `true` when the arm completed normally and `false` when the arm's [`models.loop`](11-conversations.md#starting-a-conversation) hit the [round cap](11-conversations.md#tool-rounds-and-the-round-cap). `.exhausted` is the reverse of `.ok`: it is `true` only when the arm's `models.loop` hit the round cap, and `false` when the arm completed normally. [Exhausted arms and the exhausted stub](#exhausted-arms-and-the-exhausted-stub) shows what such a result holds.
 
@@ -1481,11 +1481,11 @@ This table gathers the `sys.id` values above for a fanout from a top-level secti
 
 Each fanout arm runs as a task, so the run's event stream shows a `Task started` event for each arm when it begins running, reported under the calling section, and the arm's final event, such as `Task succeeded`, reported under the worker section (see [Task events and task errors](15-tasks.md#task-events-and-task-errors)). When a `## Research` section fans out two arms to `### Worker`, the stream holds two `Task started` events under `Research` and two `Task succeeded` events under `Worker`.
 
-- A successful arm emits exactly one `Task started` event and one `Task succeeded` event, and no failed, cancelled, or abandoned event.
+- A successful arm emits exactly one `Task started` event and one `Task succeeded` event, and no failed, canceled, or abandoned event.
 - An arm's `Task started` event reports under the caller section, the section whose Lua called `tasks.fanout`, so two arms fanned out from `Research` both start under `Research`.
 - Every arm of one fanout runs the same worker section, and each arm's final task event reports under that worker section's name rather than the caller's, so two arms both succeed under `Worker`.
 - An arm's `Task started` event carries the arm's task id, the worker section as its target, the arm's `item`, and its `sys.index` as `index`, so the stream shows which arm each start belongs to. The arm's final event carries the same task id.
-- An arm waiting for a slot under the concurrency limit reports `Task started` only when it is admitted, so an arm cancelled while still queued reports no start and no final event. A fanout with a concurrency limit of 2 over `{'boom', 'slow', 'queued'}`, where the `boom` arm fails, ends with only `0.0` failed and `0.1` cancelled, and the queued arm never starts.
+- An arm waiting for a slot under the concurrency limit reports `Task started` only when it is admitted, so an arm canceled while still queued reports no start and no final event. A fanout with a concurrency limit of 2 over `{'boom', 'slow', 'queued'}`, where the `boom` arm fails, ends with only `0.0` failed and `0.1` canceled, and the queued arm never starts.
 - An exhausted arm still reports a failed task event while its successful sibling reports a `Task succeeded` event, because the exhausted stub is the fanout's recovery, not the arm's (see [Exhausted arms and the exhausted stub](#exhausted-arms-and-the-exhausted-stub)).
 
 In a fanout arm, each model round produces debug captures for the run, tagged with the worker section's name, so an arm's captures under `Worker` include a `Request` and a `Response`.
@@ -1518,7 +1518,7 @@ return item
 ```
 ````
 
-Both arms write `shared.txt`, so the run never returns `alpha,beta`. It ends with run error kind `Vfs`, as a [claims conflict](09-the-store.md#races-claims-and-determinism), and the error message begins `store determinism violation:`, then names the contested path `shared.txt`, the words `conflicts with`, and both arms.
+Both arms write `shared.txt`, so the run never returns `alpha,beta`. It ends with error code `determinism`, as a [claims conflict](09-the-store.md#races-claims-and-determinism), and the error message begins `store determinism violation:`, then names the contested path `shared.txt`, the words `conflicts with`, and both arms.
 
 ### One store for every arm
 
@@ -1530,13 +1530,13 @@ An arm can read the files the caller wrote before it called `tasks.fanout`, beca
 
 ### Store conflicts
 
-Two accesses make a store conflict when they touch the same store path, at least one of them writes, they come from different arms, and nothing orders one arm before the other. So two unordered arms that touch one path with a write never silently race, while any number of arms may read the same path. Two arms writing the same store path, as in `shared-path`, end the whole run with run error kind `Vfs`.
+Two accesses make a store conflict when they touch the same store path, at least one of them writes, they come from different arms, and nothing orders one arm before the other. So two unordered arms that touch one path with a write never silently race, while any number of arms may read the same path. Two arms writing the same store path, as in `shared-path`, end the whole run with error code `determinism`.
 
 A cross-arm conflict is unconditional and never depends on timing. Sibling arms never join each other, and a claim on a path stands for the rest of the run, even after the arm that made it ends (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)). So whichever of two conflicting accesses runs second always meets the first one's claim, in every interleaving.
 
 Of two conflicting arm accesses, the second never reaches the store, so exactly one arm's change lands and can be read from the store after the failed run. Which arm wins is not fixed: when two arms each add their member and a newline to `notes.md`, the file ends as `alpha` or as `beta`, followed by a newline, never both.
 
-A store conflict ends the run at once. The losing arm never resumes, no arm counts as failed, an arm still waiting when the conflict lands reports cancelled, and at most the winning arm reports success. So two conflicting arms both report `Task started`, neither reports a failed task event, and at most one reports `Task succeeded`.
+A store conflict ends the run at once. The losing arm never resumes, no arm counts as failed, an arm still waiting when the conflict lands reports canceled, and at most the winning arm reports success. So two conflicting arms both report `Task started`, neither reports a failed task event, and at most one reports `Task succeeded`.
 
 A cross-arm store conflict cannot be caught with `pcall`, not even a `pcall` wrapped around the store call inside the arm, because the conflict never resumes into the arm. When the arms run `pcall(store.append, 'notes.md', item .. '\n')`, the run still ends with the store conflict instead of returning `alpha,beta`.
 
@@ -1640,11 +1640,11 @@ The arm for `boom` raises `fatal arm error`. The fanout fails with that arm's ow
 
 ### Fail-fast
 
-`tasks.fanout` is fail-fast: when any arm fails with an error other than hitting the round cap, the whole fanout fails. Every sibling arm still running is cancelled without waiting on its pending model rounds, members whose arms have not started never run, and the failure is raised from the `tasks.fanout` call.
+`tasks.fanout` is fail-fast: when any arm fails with an error other than hitting the round cap, the whole fanout fails. Every sibling arm still running is canceled without waiting on its pending model rounds, members whose arms have not started never run, and the failure is raised from the `tasks.fanout` call.
 
 The error `tasks.fanout` raises is the failing arm's own error value, with its original kind and message, and its message keeps the line where the arm failed (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). It is not wrapped and it is not a cancellation error, so an arm that called `error('message')` produces an error of kind `lua`. Any other arm error fails the fanout the same way, for example a failed model round, or a `models.use` call inside the arm that names something that is not one of the five model roles, such as `models.use('ghost')`.
 
-A fanout failure is raised as an ordinary Lua error at the `tasks.fanout` call, inside the section that made the call. If nothing catches it, that section's Lua block fails, and the whole run ends with the arm's error. An arm that called `error('arm deliberately failed')` ends the run with run error kind `Lua` and a run error message that keeps the arm's original message text and ends with ` (at {file}:{line})` for the arm's line, and any other uncaught arm error ends the run with that error's message.
+A fanout failure is raised as an ordinary Lua error at the `tasks.fanout` call, inside the section that made the call. If nothing catches it, that section's Lua block fails, and the whole run ends with the arm's error. An arm that called `error('arm deliberately failed')` ends the run with error code `lua_runtime` and a run error message that keeps the arm's original message text and ends with ` (at {file}:{line})` for the arm's line, and any other uncaught arm error ends the run with that error's code and message.
 
 When a fanout raises, you get no partial results, not even from arms that had already finished. When several arms have already ended by the time the fanout checks on them, the arm earliest in collection order is handled first, so when failures happen at the same time, the earliest arm's failure is the one raised.
 
@@ -1652,7 +1652,7 @@ When a fanout raises, you get no partial results, not even from arms that had al
 
 You catch a fanout failure with `pcall(tasks.fanout, heading, collection)`, which returns `false` and the error value, as `caught-arm` does. The block then keeps going, further `models.infer` calls included, and the run can complete normally. The caught error converts with `tostring` to text that carries the failing arm's error message.
 
-A late model reply meant for a cancelled sibling arm is thrown away instead of failing the run, so a block that caught the fanout failure carries on. Here the `boom` arm fails while its `slow` sibling may be waiting on a model round:
+A late model reply meant for a canceled sibling arm is thrown away instead of failing the run, so a block that caught the fanout failure carries on. Here the `boom` arm fails while its `slow` sibling may be waiting on a model round:
 
 ````markdown
 ---
@@ -1680,15 +1680,15 @@ return models.infer('slow:1')
 ```
 ````
 
-The `slow` arm is cancelled, any reply to its round is discarded, and `## Parent` runs its own model round and returns `caught:` followed by the reply to `after`. A fanout failure never leaves arms running behind it, so it does not trip a `tasks_live` error when the calling section's chain ends (see [Ownership, leaked tasks, and abandonment](15-tasks.md#ownership-leaked-tasks-and-abandonment)).
+The `slow` arm is canceled, any reply to its round is discarded, and `## Parent` runs its own model round and returns `caught:` followed by the reply to `after`. A fanout failure never leaves arms running behind it, so it does not trip a `tasks_live` error when the calling section's chain ends (see [Ownership, leaked tasks, and abandonment](15-tasks.md#ownership-leaked-tasks-and-abandonment)).
 
 ### What happens to the other arms
 
-When an arm raises an error, its queued siblings that the concurrency limit has not yet let in are cancelled before they are admitted: they never start, never run their block, and never send a model request. When an arm fails while a sibling is still waiting on a model round, the fanout cancels that sibling before it resumes and before the error reaches the caller, and the run never waits for the cancelled sibling's model reply.
+When an arm raises an error, its queued siblings that the concurrency limit has not yet let in are canceled before they are admitted: they never start, never run their block, and never send a model request. When an arm fails while a sibling is still waiting on a model round, the fanout cancels that sibling before it resumes and before the error reaches the caller, and the run never waits for the canceled sibling's model reply.
 
-When an arm is cancelled because a sibling failed, everything under it stops too, all the way down: a chain it started with `call`, the tasks it spawned, and the arms of a nested fanout. Everything it started is abandoned with the reason `owner_aborted` (see [Ownership, leaked tasks, and abandonment](15-tasks.md#ownership-leaked-tasks-and-abandonment)), and anything that had not yet run its block never runs it.
+When an arm is canceled because a sibling failed, everything under it stops too, all the way down: a chain it started with `call`, the tasks it spawned, and the arms of a nested fanout. Everything it started is abandoned with the reason `owner_aborted` (see [Ownership, leaked tasks, and abandonment](15-tasks.md#ownership-leaked-tasks-and-abandonment)), and anything that had not yet run its block never runs it.
 
-The events follow the same pattern (see [Task events and task errors](15-tasks.md#task-events-and-task-errors)). The failing arm reports one `Task failed` event, each running sibling the fanout cancels reports exactly one `Task cancelled` event under its arm id, and a queued arm that never started reports no task event. The cancelled sibling's `Task cancelled` event fires before the calling section's Lua block fails with the fanout error.
+The events follow the same pattern (see [Task events and task errors](15-tasks.md#task-events-and-task-errors)). The failing arm reports one `Task failed` event, each running sibling the fanout cancels reports exactly one `Task canceled` event under its arm id, and a queued arm that never started reports no task event. The canceled sibling's `Task canceled` event fires before the calling section's Lua block fails with the fanout error.
 
 Store writes an arm made before it failed stay in the store and are not rolled back. An arm that appends `boom` and a newline to `log.txt` and then raises leaves `log.txt` holding that line after the run fails.
 
@@ -1719,11 +1719,11 @@ The stub renders a string member such as `alpha` as `alpha`, and a pair-table me
 
 An arm whose `models.loop` hits the round cap still reports a `Task failed` event while its sibling reports `Task succeeded`, because the stub is the fanout's recovery, not the arm's.
 
-### When the run is cancelled
+### When the run is canceled
 
-When the run is already cancelled as a fanout starts, the fanout runs none of its arms, and the run ends with a cancelled outcome (see [Cancellation and stops](16-limits-and-errors.md#cancellation-and-stops)).
+When the run is already canceled as a fanout starts, the fanout runs none of its arms, and the run ends with the error whose code is `canceled` (see [Cancellation and stops](16-limits-and-errors.md#cancellation-and-stops)).
 
-If the Host cancels the run while arms are waiting on model replies, the run ends at once with the cancelled outcome, not a failure. The waiting arms' pending model requests are dropped without waiting for their replies, and no arm outlives the run. Each started arm reports one `Task abandoned` event naming the run's end, and no `Task cancelled` or `Task failed` event.
+If the Host cancels the run while arms are waiting on model replies, the run ends at once with code `canceled`. The waiting arms' pending model requests are dropped without waiting for their replies, and no arm outlives the run. Each started arm reports one `Task abandoned` event naming the run's end, and no `Task canceled` or `Task failed` event.
 
 ## Collection and argument errors
 
@@ -1799,4 +1799,4 @@ The call-time member check looks only at each member's own type and not inside i
 
 Wrapping `tasks.fanout` in `pcall` catches a collection error, as `empty-collection` does. `local ok, err = pcall(tasks.fanout, '### Worker', {})` gives `ok` as `false`, `err.kind` as `lua`, and `tostring(err)` as the rule's message, and the section keeps running after the caught error, for example on to `return 'ok'`.
 
-Left uncaught, a collection error fails the run with run error kind [`Lua`](16-limits-and-errors.md#run-error-kinds) and the same message. When the call runs in the H1 pass, the run fails with run error kind `RequirementsUnmet` instead, with the H1 gate notice and the collection error as its cause (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)).
+Left uncaught, a collection error fails the run with error code [`lua_runtime`](16-limits-and-errors.md#run-error-codes) and the same message. When the call runs in the H1 pass, the run fails with error code `requirements_unmet` instead, with the H1 gate notice and the collection error as its cause (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)).

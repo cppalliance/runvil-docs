@@ -1205,7 +1205,7 @@ Each round that returns an answer ends in exactly one of four outcomes the loop 
 
 Any other answer raises an `empty_model_reply` error. Two more rules shape every call: `models.loop` stops at the round cap (see [Setting the round cap](#setting-the-round-cap)), and it uses `compactors.fail` when no compactor is passed (see [Choosing a compactor for a call](#choosing-a-compactor-for-a-call)).
 
-While the run is being cancelled, an error that an adhoc tool handler or a compactor raises is raised again at once, unchanged, so the cancellation ends the conversation. A handler that returns normally during the cancellation still has its result reported.
+While the run is being canceled, an error that an adhoc tool handler or a compactor raises is raised again at once, unchanged, so the cancellation ends the conversation. A handler that returns normally during the cancellation still has its result reported.
 
 ### Running the loop again on the same list
 
@@ -1423,7 +1423,7 @@ A failure that the loop's rules decide to raise, such as `tool_loop_exhausted` o
 
 A round refused for context overflow adds no records to the list, and records from rounds that have already completed stay in the list. A failed compaction puts back the records it started from (see [When a compaction fails](#when-a-compaction-fails)).
 
-`models.loop` raises kind `lua` when an argument or the message list breaks a rule, or when a loop or a compactor is already running. Left uncaught, a `lua`-kind loop error ends the run with run error kind `Lua` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)), and the run's message holds the error text and ends with ` (at {file}:{line})`, the prompt file and the line of the `models.loop` call. An argument error's message also holds Lua's own ``section `{section}` prologue:{line}:`` tags and a stack traceback before that ending (see [Error line numbers and locations](05-lua-environment.md#error-line-numbers-and-locations) and [Where an error points](16-limits-and-errors.md#where-an-error-points)).
+`models.loop` raises kind `lua` when an argument or the message list breaks a rule, or when a loop or a compactor is already running. Left uncaught, a `lua`-kind loop error ends the run with the error code `lua_runtime` (see [Run error codes](16-limits-and-errors.md#run-error-codes)), and the run's message holds the error text and ends with ` (at {file}:{line})`, the prompt file and the line of the `models.loop` call. An argument error's message also holds Lua's own ``section `{section}` prologue:{line}:`` tags and a stack traceback before that ending (see [Error line numbers and locations](05-lua-environment.md#error-line-numbers-and-locations) and [Where an error points](16-limits-and-errors.md#where-an-error-points)).
 
 ## Tool rounds and the round cap
 
@@ -1517,7 +1517,7 @@ When a bound tool fails during the loop, the loop does not stop. The tool's fail
 Some failures end the loop partway through a round, and then none of that round's records land on the list:
 
 - An adhoc tool handler that raises ends `models.loop` with no further round. Neither the assistant tool-call record nor the results of calls that have already returned land on the list.
-- When a tool call the model issues is dropped instead of answered, `models.loop` raises `cancelled` at the call and leaves the list as it was before the round, with no assistant or `tool` record appended.
+- When a tool call the model issues is dropped instead of answered, `models.loop` raises `canceled` at the call and leaves the list as it was before the round, with no assistant or `tool` record appended.
 - When the model calls a tool outside the section entry's tool scope (see [Tool scope](12-tools.md#tool-scope)), `models.loop` fails and appends nothing to the list.
 
 You catch such a failure with `pcall` and read `err.kind` and `err.name`, for example to tell which tool was out of scope. An out-of-scope call to `web_fetch` gives `err.kind` as `out_of_scope_tool` and `err.name` as `web_fetch`, and a list that held one user record before the call still holds just that record.
@@ -1589,7 +1589,7 @@ When `tool_loop_exhausted` is raised, the last allowed round's assistant tool-ca
 
 The error value has its `kind` field set to `tool_loop_exhausted`, and it has only its kind, its `code`, also `tool_loop_exhausted`, and its message, with no extra fields. `tostring(err)` gives that message, which in `search-chat` reads `search-chat.md:17: The tool-call limit was reached before a final reply. Stop calling tools and reply with what you have.` You catch it at the call site with `pcall(models.loop)`, which returns `false` and that error value.
 
-Left uncaught, the `tool_loop_exhausted` error ends the block, so the section's later code never runs, and it fails the run with run error kind `Tool` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)) and the message `tool-call loop did not converge (at {file}:{line})`, pointing at the `models.loop` call. When the section has spawned a task that is still live, that task is abandoned, and abandoning it does not replace the `tool_loop_exhausted` error.
+Left uncaught, the `tool_loop_exhausted` error ends the block, so the section's later code never runs, and it fails the run with the error code `tool_loop_exhausted` (see [Run error codes](16-limits-and-errors.md#run-error-codes)) and the message `tool-call loop did not converge (at {file}:{line})`, pointing at the `models.loop` call. When the section has spawned a task that is still live, that task is abandoned, and abandoning it does not replace the `tool_loop_exhausted` error.
 
 ### Valid `max_tool_iterations` values
 
@@ -1915,7 +1915,7 @@ a reply of `partial answer` with finish reason `length` gives:
 
 A text reply that finishes with reason `length` emits a truncation observation alongside its `assistant_reply` report: the run reports a `model_turn_truncated` event right after the `model_turn_completed` event.
 
-A tool round is different. A tool-call round that the provider cuts short with finish reason `length` or `content_filter` fails as a model failure whose message names the truncation, so its partial arguments never run. `pcall` catches that failure as an error value of kind `model_failure`, and left uncaught it ends the run with run error kind `Completion` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)).
+A tool round is different. A tool-call round that the provider cuts short with finish reason `length` or `content_filter` fails as a model failure whose message names the truncation, so its partial arguments never run. `pcall` catches that failure as an error value of kind `model_failure`, and left uncaught it ends the run with the error code `malformed_response` (see [Run error codes](16-limits-and-errors.md#run-error-codes)).
 
 ### Events for an empty round
 
@@ -1923,7 +1923,7 @@ An empty model reply still completes its round. It advances the round count and 
 
 ### When `empty_model_reply` goes uncaught
 
-An `empty_model_reply` that the prompt does not catch ends the block as that same typed `empty_model_reply` error, and it fails the run with run error kind `Completion`. The run's `Completion` failure message is the empty-reply phrase followed by ` (at {file}:{line})` for the `models.loop` line, and the failure keeps the `finish_reason` field, which is there only when the provider gave one. The clean exit, by contrast, returns normally and fails nothing.
+An `empty_model_reply` that the prompt does not catch ends the block as that same typed `empty_model_reply` error, and it fails the run with the error code `empty_reply`. The run's `empty_reply` failure message is the empty-reply phrase followed by ` (at {file}:{line})` for the `models.loop` line, and the failure keeps the `finish_reason` field, which is there only when the provider gave one. The clean exit, by contrast, returns normally and fails nothing.
 
 ## The context precheck
 
@@ -2269,7 +2269,7 @@ An explicit compactor argument must be a function or `nil`. Any other value make
 
 `compactors.fail(reason)` never compacts: it always raises a `context_exhausted` error value whose `reason` is the string it was given, and it never returns normally. As the loop's compactor it receives `precheck` or `provider`, so under it an overflowing round raises `context_exhausted` with that reason. It accepts any reason string, so you can also call it from your own Lua, as in `compactors.fail('precheck')`, or pass it to `models.compact` with a reason of your own.
 
-Whether a `models.loop` round overflows under it or your Lua calls `compactors.fail(reason)`, a `pcall` around that call catches the same kind of value: a `context_exhausted` error value with the field `reason` set to the reason and the message `{file}:{line}: The conversation no longer fits the model's context window and could not be shortened. Finish with what you have.`, the same for every reason. The caught value keeps its kind and reason, never flattened to plain text, so you tell reasons apart by `err.reason`. Under the loop the error surfaces at the `models.loop` call site, and from a direct call it surfaces at that call, and `{line}` is that call's line. Left uncaught, the two end the run alike, with run error kind `ContextExhausted` and the message `context exhausted: {detail} (at {file}:{line})`, where the detail is the reason in words for `precheck` and `provider` and the reason itself for any other string, so an uncaught `compactors.fail('the notes are too long')` names `context exhausted: the notes are too long`, as [When context exhaustion goes uncaught](#when-context-exhaustion-goes-uncaught) shows.
+Whether a `models.loop` round overflows under it or your Lua calls `compactors.fail(reason)`, a `pcall` around that call catches the same kind of value: a `context_exhausted` error value with the field `reason` set to the reason and the message `{file}:{line}: The conversation no longer fits the model's context window and could not be shortened. Finish with what you have.`, the same for every reason. The caught value keeps its kind and reason, never flattened to plain text, so you tell reasons apart by `err.reason`. Under the loop the error surfaces at the `models.loop` call site, and from a direct call it surfaces at that call, and `{line}` is that call's line. Left uncaught, the two end the run alike, with the error code `context_exhausted` and the message `context exhausted: {detail} (at {file}:{line})`, where the detail is the reason in words for `precheck` and `provider` and the reason itself for any other string, so an uncaught `compactors.fail('the notes are too long')` names `context exhausted: the notes are too long`, as [When context exhaustion goes uncaught](#when-context-exhaustion-goes-uncaught) shows.
 
 When the provider rejects a sent request for exceeding its context, for example with status 400 and `This model's maximum context length is 4096 tokens.`, `compactors.fail` raises `context_exhausted` with the reason `provider`, instead of the request failing as an ordinary model failure.
 
@@ -2392,7 +2392,7 @@ When the compactor raises, `models.loop` raises that failure after normalizing i
 - An Engine failure, such as the `context_exhausted` error `compactors.fail` raises, arrives as the same error value `pcall` would give, with its `kind` and fields, such as `kind = "context_exhausted"` with `reason = "precheck"`.
 - A string or a table the compactor raises reaches the caller unchanged, as [Errors while a round runs](#errors-while-a-round-runs) describes. You can embed the reason tag in your own message, so `error('custom failure: ' .. reason, 0)` arrives as the bare string `custom failure: provider`. With `own = { reason = 'mine' }` and `error(own)` in the compactor, `err == own` is true and `getmetatable(err)` is `nil`.
 
-When the run is being cancelled while the compactor runs, and the compactor raises, `models.loop` raises the compactor's failure raw, unchanged, without normalizing it.
+When the run is being canceled while the compactor runs, and the compactor raises, `models.loop` raises the compactor's failure raw, unchanged, without normalizing it.
 
 ### Replacing the default compactor
 
@@ -2421,6 +2421,6 @@ attempt to call a number value
 
 ### When context exhaustion goes uncaught
 
-Context exhaustion raises at the `models.loop` call site. Left uncaught, it fails the section, so code after the call never runs, and it ends the run with run error kind `ContextExhausted` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)) and a message of the form `context exhausted: {detail} (at {file}:{line})`, with the reason in that message and the line of the call that raised it. An uncaught `context_exhausted` error ends the block as that same `context_exhausted` error, with its fields, including `reason`, kept. A `context_exhausted` error value that escapes a block ends the run as a `ContextExhausted` failure with the same `reason`, whether `models.loop` raised it, a direct `compactors.fail(reason)` call outside any loop raised it and went uncaught, or your Lua caught it with `pcall` and raised it again with `error(err)`. That holds for a reason of your own as well: a compactor that calls `compactors.fail('manual')` inside a loop, left uncaught, ends the run as `ContextExhausted` with `manual` in its message.
+Context exhaustion raises at the `models.loop` call site. Left uncaught, it fails the section, so code after the call never runs, and it ends the run with the error code `context_exhausted` (see [Run error codes](16-limits-and-errors.md#run-error-codes)) and a message of the form `context exhausted: {detail} (at {file}:{line})`, with the reason in that message and the line of the call that raised it. An uncaught `context_exhausted` error ends the block as that same `context_exhausted` error, with its fields, including `reason`, kept. A `context_exhausted` error value that escapes a block ends the run as a `context_exhausted` failure with the same `reason`, whether `models.loop` raised it, a direct `compactors.fail(reason)` call outside any loop raised it and went uncaught, or your Lua caught it with `pcall` and raised it again with `error(err)`. That holds for a reason of your own as well: a compactor that calls `compactors.fail('manual')` inside a loop, left uncaught, ends the run with `context_exhausted` and `manual` in its message.
 
-A compactor's own error takes a different path. An uncaught string raised by a compactor fails the section as an ordinary Lua runtime error holding the compactor's message, and the code after the call never runs. Left uncaught in a walked section, that error ends the run with run error kind `Lua`, with the compactor's error text in the message.
+A compactor's own error takes a different path. An uncaught string raised by a compactor fails the section as an ordinary Lua runtime error holding the compactor's message, and the code after the call never runs. Left uncaught in a walked section, that error ends the run with the error code `lua_runtime`, with the compactor's error text in the message.

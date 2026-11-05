@@ -210,7 +210,7 @@ return store.read('todo.md')
 ship it
 ````
 
-This block asks for two store operations, a write and then a read. `store.write(path, contents)` takes a store path and a text string, both required strings. It writes the text as UTF-8 to the file at the path, creating the file when it does not exist yet or replacing its whole text when it does, and it returns nil. `store.read(path)` with no line bounds reads an existing file whole and returns its text as a string. The block returns what the read gave it, so the file's text becomes the run result (see [The run result and outcomes](04-how-a-prompt-runs.md#the-run-result-and-outcomes)), just as `notebook` ends with `remember this`.
+This block asks for two store operations, a write and then a read. `store.write(path, contents)` takes a store path and a text string, both required strings. It writes the text as UTF-8 to the file at the path, creating the file when it does not exist yet or replacing its whole text when it does, and it returns nil. `store.read(path)` with no line bounds reads an existing file whole and returns its text as a string. The block returns what the read gave it, so the file's text becomes the run result (see [The run result](04-how-a-prompt-runs.md#the-run-result)), just as `notebook` ends with `remember this`.
 
 Each call also reports how it went. A write reports `VFS_WRITE_SUCCEEDED`, or `VFS_WRITE_FAILED` when the write fails, and a read reports `VFS_READ_SUCCEEDED`, or `VFS_READ_FAILED` when the read fails. [How store calls run and what they report](#how-store-calls-run-and-what-they-report) covers these reports.
 
@@ -1403,11 +1403,11 @@ return store.read('missing.txt')
 ```
 ````
 
-This run never returns a result. The failed read stops the block at that call, and the run fails with run error kind `Vfs`, the run error kind for a store failure that ends a run. The run's failure message is the store's message followed by the location of the failing call, here `file not found in store: missing.txt (at uncaught.md:12)`. Run error kinds as a whole are covered in [Run error kinds](16-limits-and-errors.md#run-error-kinds).
+This run never returns text. The failed read stops the block at that call, and the run fails with the error code `not_found`, the store code for a path that does not exist. The run's failure message is the store's message followed by the location of the failing call, here `file not found in store: missing.txt (at uncaught.md:12)`. Error codes as a whole are covered in [Run error codes](16-limits-and-errors.md#run-error-codes).
 
-An uncaught failure stops the block at the failing call, and the store operations that already ran keep their success events (see [How store calls run and what they report](#how-store-calls-run-and-what-they-report)). A block that writes, reads, then makes a failing `store.str_replace` records the write and the read as succeeded and the replace as failed, in statement order, and the block ends with an error. An uncaught store failure in the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) ends the run with `Vfs` too, the same as in a section (see [The store in the H1 body](#the-store-in-the-h1-body)).
+An uncaught failure stops the block at the failing call, and the store operations that already ran keep their success events (see [How store calls run and what they report](#how-store-calls-run-and-what-they-report)). A block that writes, reads, then makes a failing `store.str_replace` records the write and the read as succeeded and the replace as failed, in statement order, and the block ends with an error. An uncaught store failure in the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) ends the run with its store code too, the same as in a section (see [The store in the H1 body](#the-store-in-the-h1-body)).
 
-Catching a store failure and raising it again keeps its classification:
+Catching a store failure and raising it again keeps its code:
 
 ````markdown
 ---
@@ -1433,11 +1433,11 @@ return 'tidied'
 ```
 ````
 
-The caught store error, raised again with `error(err)`, ends the run with `Vfs` and the original store message, still placed on the `store.read` line: `file not found in store: missing.txt (at reraise.md:12)`. That holds even though another suspending call, `call('### Cleanup', '')` (see [Calling a section](08-jump-and-call.md#calling-a-section)), ran in between.
+The caught store error, raised again with `error(err)`, ends the run with its code, `not_found`, and the original store message, still placed on the `store.read` line: `file not found in store: missing.txt (at reraise.md:12)`. That holds even though another suspending call, `call('### Cleanup', '')` (see [Calling a section](08-jump-and-call.md#calling-a-section)), ran in between.
 
-Two failures happen before any block runs, and both end the run with `Vfs`: a run whose Host handle declares no store fails before its first block, rather than on its first store call, with `this run declares no store, so no store operation can run`, and a store backend that fails as the run starts, for example by refusing its session, fails the run at its first step with a message that starts `store operation failed: ` followed by the store's own error text. [When the store cannot start](#when-the-store-cannot-start) covers both.
+Two failures happen before any block runs, and both end the run with a store code: a run whose Host handle declares no store fails before its first block, rather than on its first store call, with the code `no_store` and the message `this run declares no store, so no store operation can run`, and a store backend that fails as the run starts, for example by refusing its session, fails the run at its first step with the code of the store's own error, such as `backend`, and a message that starts `store operation failed: ` followed by the store's own error text. [When the store cannot start](#when-the-store-cannot-start) covers both.
 
-A store problem that ends a run has run error kind `Vfs`, whether it is an ordinary store failure or a claims conflict, such as a library write that races across two [arms](14-fanout.md#what-an-arm-sees). A claims conflict is never raised at the call. It ends the run on the spot as `Vfs`, even when a `pcall` surrounds the call, so a library that runs `local ok = pcall(function() store.write('seeded.txt', 'seed') end)` in two racing arms still ends the run with `Vfs`. [Races, claims, and determinism](#races-claims-and-determinism) explains when a conflict happens.
+A store problem that ends a run has a store code, whether it is an ordinary store failure, which keeps its own code such as `not_found`, or a claims conflict, such as a library write that races across two [arms](14-fanout.md#what-an-arm-sees), which is `determinism`. A claims conflict is never raised at the call. It ends the run on the spot with `determinism`, even when a `pcall` surrounds the call, so a library that runs `local ok = pcall(function() store.write('seeded.txt', 'seed') end)` in two racing arms still ends the run with `determinism`. [Races, claims, and determinism](#races-claims-and-determinism) explains when a conflict happens.
 
 ## Sharing files across sections, calls, and tasks
 
@@ -1584,7 +1584,7 @@ The delivery has to come first. Reading a task's file after a timed `tasks.join`
 
 Joins carry writes along transitively. A section that joins a task which itself joined tasks it spawned can read those tasks' files too: when a task spawns two more tasks that write `sub-one.md` and `sub-two.md` and joins them, the section that delivers the outer task with `tasks.join_any` reads both files. A chain's end also joins every task it owns, so everything its tasks did counts as happening before the chain's own end, even for tasks no wait ever delivered, and nested work is ordered transitively.
 
-A cancelled task's store writes, however far the task got before [`tasks.cancel`](15-tasks.md#cancelling-and-listing-tasks), are readable by its owner once a wait such as `tasks.join_any` delivers the task. So `tasks.cancel(a)`, then `tasks.join_any({ a })`, then `store.read('partial.txt')` returns whatever `a` wrote before it stopped. After an owner joins a finished task, a task it spawns next can write, glob, or delete the same paths without a conflict.
+A canceled task's store writes, however far the task got before [`tasks.cancel`](15-tasks.md#canceling-and-listing-tasks), are readable by its owner once a wait such as `tasks.join_any` delivers the task. So `tasks.cancel(a)`, then `tasks.join_any({ a })`, then `store.read('partial.txt')` returns whatever `a` wrote before it stopped. After an owner joins a finished task, a task it spawns next can write, glob, or delete the same paths without a conflict.
 
 ### Tasks started in the H1 pass
 
@@ -1633,7 +1633,7 @@ Two tool calls in flight at once each run under their own identity, forked from 
 
 An adhoc tool handler, the Lua function given to `tools.adhoc` for Lua or a model to call (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)), can use `store`, and a store call made there is an ordinary store operation. A handler whose body runs `store.write('grab.txt', 'kept ' .. args.value)` and then `return store.read('grab.txt')` returns `kept hi` when it is called with the value `hi`.
 
-A tool called from inside a task reads the task's own earlier writes, and the owner reads what that tool wrote once it joins the task. What a tool wrote stays readable by the calling section even when `tools.call` fails with error kind `cancelled` because the call's answer was dropped.
+A tool called from inside a task reads the task's own earlier writes, and the owner reads what that tool wrote once it joins the task. What a tool wrote stays readable by the calling section even when `tools.call` fails with error kind `canceled` because the call's answer was dropped.
 
 ## Races, claims, and determinism
 
@@ -1662,7 +1662,7 @@ store.append('log.txt', item .. ';')
 ```
 ````
 
-This run never reaches its `return`. Both arms append to `log.txt`, nothing orders one arm after the other, and the run fails with run error kind `Vfs` and a message of this form, where each identity names one of the two arms and the location is the losing arm's `store.append`:
+This run never reaches its `return`. Both arms append to `log.txt`, nothing orders one arm after the other, and the run fails with the error code `determinism` and a message of this form, where each identity names one of the two arms and the location is the losing arm's `store.append`:
 
 ````text
 store determinism violation: write on log.txt by {id} conflicts with a write claim by {other} (at race.md:19)
@@ -1672,7 +1672,7 @@ Every store call claims what it touches for the chain that made it, so the store
 
 Read claims never conflict with each other, whether they come from `store.read`, `store.read_numbered`, `store.exists`, or `store.glob`. A chain never conflicts with itself either, so a chain may write a path, overwrite it, append to it, and read it back freely.
 
-A store write leaves a standing write claim on its path for the rest of the run. So when two fanout arms write or append to one path, whichever reaches the store second always meets the first's claim and fails with a claims conflict, however the run interleaves. The whole run then ends with a fatal claims conflict whose message names the conflicting path, as `race` shows. A store operation that conflicts under the claims model is a determinism violation, and it ends the run with run error kind `Vfs`, the same kind as any other store failure, except that no Lua code can catch it.
+A store write leaves a standing write claim on its path for the rest of the run. So when two fanout arms write or append to one path, whichever reaches the store second always meets the first's claim and fails with a claims conflict, however the run interleaves. The whole run then ends with a fatal claims conflict whose message names the conflicting path, as `race` shows. A store operation that conflicts under the claims model is a determinism violation, and it ends the run with the error code `determinism`, a store code like any other store failure's, except that no Lua code can catch it.
 
 Store race detection is deterministic. Whether an access conflicts depends only on the order that spawns, joins, and chain ends set, never on how the arms or tasks happen to interleave in time, so a prompt gets the same store verdicts and the same file contents in every interleaving. A race in your prompt shows up on every run, not only on unlucky ones.
 
@@ -1743,7 +1743,7 @@ Of two conflicting accesses, the second detects the conflict and never reaches t
 
 ### A claims conflict ends the run
 
-A claims conflict means two store accesses that no spawn or join ordered touched one store region in conflicting ways. It ends the run with run error kind `Vfs`, and no `pcall` catches it, not even around the store call inside the arm that loses:
+A claims conflict means two store accesses that no spawn or join ordered touched one store region in conflicting ways. It ends the run with the error code `determinism`, and no `pcall` catches it, not even around the store call inside the arm that loses:
 
 ````markdown
 ### Worker
@@ -1753,7 +1753,7 @@ local ok, err = pcall(store.append, 'notes.md', item .. '\n')
 ```
 ````
 
-With this `### Worker` in place of the one in `race`, and the same two members `alpha` and `beta`, the run still ends with the claims conflict. A claims conflict between two chains is never raised at the store call. It ends the run before the losing call returns, so the losing arm never resumes into Lua, and no Lua code or `pcall` can catch it. A claims conflict in the H1 pass still ends the run as `Vfs`, not as `RequirementsUnmet` the way an H1 Lua failure does (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)).
+With this `### Worker` in place of the one in `race`, and the same two members `alpha` and `beta`, the run still ends with the claims conflict. A claims conflict between two chains is never raised at the store call. It ends the run before the losing call returns, so the losing arm never resumes into Lua, and no Lua code or `pcall` can catch it. A claims conflict in the H1 pass still ends the run with `determinism`, not with `requirements_unmet` the way an H1 `lua_runtime` failure does (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)).
 
 When a claims conflict ends the run, no task or arm counts as failed. Every other live task is abandoned with the run, and at most the arm whose access came first completes. Store writes still in flight when the run ends finish before the run completes, so the write that landed is in the store even though the run fails.
 
@@ -1769,7 +1769,7 @@ The message begins with the fixed prefix `store determinism violation: `, names 
 
 ### Conflicts in library code
 
-A claims conflict in library code while it loads (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)) ends the run with run error kind `Vfs`, exactly as in block code. That includes two fanout arms that each `require` a library whose top-level code writes the same path, such as a library that runs `store.write('seeded.txt', 'seed')`.
+A claims conflict in library code while it loads (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)) ends the run with the error code `determinism`, exactly as in block code. That includes two fanout arms that each `require` a library whose top-level code writes the same path, such as a library that runs `store.write('seeded.txt', 'seed')`.
 
 A load-time conflict cannot be caught with `pcall` either. A library that wraps its own write in `pcall`, as in `local ok = pcall(function() store.write('seeded.txt', 'seed') end)`, still ends the run with the claims conflict when two arms load it.
 
@@ -1919,7 +1919,7 @@ Once a run ends, its claims no longer count (see [Claims shared with tools and o
 
 Runs the Host prepares over the same mounts share one claims table, the shared set of claims [Claims shared with tools and other runs](#claims-shared-with-tools-and-other-runs) describes. While one run is live, another run cannot write a file the first has written, whether that file is in the store or in a real directory beside it. When run a writes `/shared.txt` in a real directory mounted at `/` beside the store, and run b writes the same file while run a's claim is live, run b's write fails with a conflict whose message names the path, `/shared.txt`.
 
-Through `store.*`, that conflict ends the run on the spot as a [claims conflict](#races-claims-and-determinism), with run error kind `Vfs`, and `pcall` cannot catch it. The conflict holds no matter how many other paths the first run touches in between, and whether the second run started before or after those accesses. After the conflicting write is refused, the file still holds the first run's bytes, so `/shared.txt` still reads `from a`.
+Through `store.*`, that conflict ends the run on the spot as a [claims conflict](#races-claims-and-determinism), with the error code `determinism`, and `pcall` cannot catch it. The conflict holds no matter how many other paths the first run touches in between, and whether the second run started before or after those accesses. After the conflicting write is refused, the file still holds the first run's bytes, so `/shared.txt` still reads `from a`.
 
 The Host is held to the same claims. While a run is live, a Host write to a store file the run has read is refused as a conflict, the file keeps its contents, and the run still finishes. While a run that has read `notes.md` waits on [`input.ask`](05-lua-environment.md#asking-the-operator), the Host's write of `Ship on Monday.` to `notes.md` is refused, `notes.md` still reads `Ship on Friday.`, and the run result is `Ship on Friday. Approved.`
 
@@ -1927,9 +1927,9 @@ The Host is held to the same claims. While a run is live, a Host write to a stor
 
 A prompt whose store cannot be set up fails to start: it runs none of its sections and reports nothing. Even a prompt whose only section is `return 'never runs'` fails at its first step.
 
-When the Host's store has no working backend as the run starts, such as a backend that answers `the store backend refuses every session` when asked to open a session, the run's first step fails at once with run error kind `Vfs`. This happens even when the prompt never calls `store`, so a run never quietly runs against a throwaway store instead.
+When the Host's store has no working backend as the run starts, such as a backend that answers `the store backend refuses every session` when asked to open a session, the run's first step fails at once with the store code of the backend's error, here `backend`. This happens even when the prompt never calls `store`, so a run never quietly runs against a throwaway store instead.
 
-A store that fails while the run or a section sets up store access, such as at the start of the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) or of the section walk, fails the run with run error kind `Vfs` and the message `store operation failed: {error}`, where `{error}` is the storage layer's own text. When the Host's setup declares no store at all, the message is `this run declares no store, so no store operation can run` instead.
+A store that fails while the run or a section sets up store access, such as at the start of the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) or of the section walk, fails the run with the store code of the storage layer's error, such as `backend`, and the message `store operation failed: {error}`, where `{error}` is the storage layer's own text. When the Host's setup declares no store at all, the code is `no_store` and the message is `this run declares no store, so no store operation can run` instead.
 
 A Host store whose root does not exist yet still passes the startup check. Any other error from looking at the root fails the run.
 
@@ -2396,7 +2396,7 @@ The library under `## loader` writes `lib.md` and reads it back while `require` 
 
 `store` is the reserved Engine global from [The `store` table](#the-store-table), which the Engine installs in the Lua VM of every section entry and of the H1, so it is always there for you to call. A section entry's `store` table is installed once, when the entry's Lua VM is set up, and stays in place for the entry's whole lifetime, so the same `store` table keeps working in every Lua block the entry runs.
 
-Store calls work in three places: in a section's blocks, in the blocks under the H1 during the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass), and in library code while `require` loads it. In all three, a call runs the same way and gives the same results, the same store errors, and the same [line-range](#reading-line-ranges-and-numbered-lines) rules, so an H1 block that runs `return store.read('missing.txt')` ends the run with run error kind `Vfs`, exactly as a section would (see [The store in the H1 body](#the-store-in-the-h1-body)).
+Store calls work in three places: in a section's blocks, in the blocks under the H1 during the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass), and in library code while `require` loads it. In all three, a call runs the same way and gives the same results, the same store errors, and the same [line-range](#reading-line-ranges-and-numbered-lines) rules, so an H1 block that runs `return store.read('missing.txt')` ends the run with the error code `not_found`, exactly as a section would (see [The store in the H1 body](#the-store-in-the-h1-body)).
 
 `require` is ready before the store functions take their run-time form, and that switch covers every reference to a store function, including any store function a [Pack prelude](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals) captured earlier.
 

@@ -457,7 +457,7 @@ return "ran"
 ```
 ````
 
-The run ends on its first step with run error kind `Parse`, as a `Structure` parse error with this message:
+The run ends on its first step with error code `structure_invalid`, as a `Structure` parse error with this message:
 
 ````text
 not a runvil prompt: no runvil version (prompt version-zero)
@@ -467,7 +467,7 @@ The message ends by naming the prompt by its frontmatter `name`, here `version-z
 
 ### An unsupported version
 
-A file that declares a major other than `0` still parses, but this build does not support that major, so the run ends on its first step with run error kind `Parse`. The version check never falls back to major 0. A prompt runs only when it declares `runvil: 0`, and any other declared major fails the run with an error that names that major:
+A file that declares a major other than `0` still parses, but this build does not support that major, so the run ends on its first step with error code `unsupported_version`. The version check never falls back to major 0. A prompt runs only when it declares `runvil: 0`, and any other declared major fails the run with an error that names that major:
 
 ````markdown
 ---
@@ -660,20 +660,20 @@ The output file is the one store file a prompt leaves behind when it finishes, d
 
 A prompt produces its declared output file by writing it with `store.write` at the declared path, because nothing else writes it. With `paper.md` holding `the paper body`, the call `store.write('report.md', 'report on: ' .. paper)` after `local paper = store.read('paper.md')` leaves `report.md` holding `report on: the paper body`. The Harness collects the file from the store after the run ends, and whatever the prompt wrote at the declared path is the file the caller reads as the run's output once the run completes.
 
-The Harness's run report carries the output file's text only for a completed run. The report for a failed or cancelled run skips the output file.
+The Harness's run report carries the output file's text only for a completed run. The report for a run that ends with an error, a canceled run included, skips the output file.
 
 ### When the files cannot be put in place
 
 The parser accepts a declared `path` as written. The store's path rules (see [Store paths](09-the-store.md#store-paths)) apply only when the Harness stages the input or reads the output, so a path the store refuses shows up when the run starts, not at parse time.
 
-Each input problem refuses the run before any section runs, and the run ends as failed. The run error kind and the message tell the problems apart:
+Each input problem refuses the run before any section runs, and the run fails. The error code and the message tell the problems apart:
 
-| Situation | Run error kind | What the message says |
+| Situation | Error code | What the message says |
 |---|---|---|
-| The launch supplies input text, but the prompt declares no `input:` file for it to go to | `RequirementsUnmet` | ``the launch supplied input text, but the prompt declares no `input:` file`` |
-| The prompt declares an `input:` file that is neither supplied at launch nor already in the store | `RequirementsUnmet` | the missing path, as in ``the prompt declares the input file `paper.md`, but the launch supplied no input text and the store has no such file`` |
-| The store refuses the write that stages the input, for example because the store requires approval for the write | `Vfs` | ``the input file `{path}` could not be staged``, then the store's own error (see [When a store call fails](09-the-store.md#when-a-store-call-fails)) |
-| The store refuses the declared `input:` path under its path rules | `Vfs` | ``the input file `{path}` could not be staged``, then the store's own error |
+| The launch supplies input text, but the prompt declares no `input:` file for it to go to | `requirements_unmet` | ``the launch supplied input text, but the prompt declares no `input:` file`` |
+| The prompt declares an `input:` file that is neither supplied at launch nor already in the store | `requirements_unmet` | the missing path, as in ``the prompt declares the input file `paper.md`, but the launch supplied no input text and the store has no such file`` |
+| The store refuses the write that stages the input, for example because the store requires approval for the write | the store code of the refusal, here `approval_required` | ``the input file `{path}` could not be staged``, then the store's own error (see [When a store call fails](09-the-store.md#when-a-store-call-fails)) |
+| The store refuses the declared `input:` path under its path rules | the store code of the refusal, such as `invalid_path` | ``the input file `{path}` could not be staged``, then the store's own error |
 
 A missing output file is not a run failure. A prompt that declares an `output:` file but never writes it still runs to success, and the run report then carries this error in place of the output text, naming the declared path:
 
@@ -794,7 +794,7 @@ Every arg name violation, whether an empty name, a name that is too long, a bad 
 
 ### Run-time name errors
 
-When the name passed to `models.use` is not one of the five role names, the call fails with a `Lua` error whose text names the rejected label and lists the five roles, in one form for every rejected name:
+When the name passed to `models.use` is not one of the five role names, the call fails with a `lua_runtime` error whose text names the rejected label and lists the five roles, in one form for every rejected name:
 
 ````text
 models.use label "{label}" is not a model role: expected default, strong, small, fast or creative
@@ -808,7 +808,7 @@ models.get label "{label}" is not a model role: expected default, strong, small,
 
 The rejected label appears in double quotes with escaping, so a quote, backslash, or control character in the name appears escaped. For example, `models.use('reviewer')` fails with `models.use label "reviewer" is not a model role: expected default, strong, small, fast or creative`. Caught with `pcall`, the error value's message puts the file and line of the call in front of that text and the default text for a Lua failure after it (see [Where a caught error's message points](16-limits-and-errors.md#where-a-caught-errors-message-points)), and the same holds for every error in this section.
 
-When the `name` passed to `tools.adhoc` breaks the grammar, the `tools.adhoc` call fails with a `Lua` error whose text names the rejected name and the grammar, again in one form for every rule:
+When the `name` passed to `tools.adhoc` breaks the grammar, the `tools.adhoc` call fails with a `lua_runtime` error whose text names the rejected name and the grammar, again in one form for every rule:
 
 ````text
 tools.adhoc: invalid name "{name}": expected [A-Za-z][A-Za-z0-9_-]{0,63}

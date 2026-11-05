@@ -24,7 +24,7 @@ return prose
 ```
 ````
 
-Running this prompt ends with this run result (see [The run result and outcomes](04-how-a-prompt-runs.md#the-run-result-and-outcomes)):
+Running this prompt ends with this run result (see [The run result](04-how-a-prompt-runs.md#the-run-result)):
 
 ````text
 Say hello.
@@ -443,7 +443,7 @@ When a Host starts a run of this prompt, the Harness hands the file's text to th
 - The Harness runs the prompt and does the run's outside work. It prepares each run and then drives it: it steps the Engine's run, does each piece of outside work the run asks for, and resumes the run with the answer.
 - The Host is the application that starts each run. Workshop is one Host.
 
-### Run policy and cancelling
+### Run policy and canceling
 
 The Host launches runs and sets run policy, the settings that govern a run, such as which models the run uses and whether anyone can answer `input.ask()` (see [Asking the operator](05-lua-environment.md#asking-the-operator)). The Host can also cancel a run.
 
@@ -493,7 +493,7 @@ nil
 
 ### Stopping a model round
 
-Besides cancelling a run, the Host can stop the model round in flight, which is called stopping a round. The dropped round raises an error value whose error kind is `cancelled` (see [Error values](05-lua-environment.md#error-values)), and `pcall` can catch it so the run goes on (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)):
+Besides canceling a run, the Host can stop the model round in flight, which is called stopping a round. The dropped round raises an error value whose error kind is `canceled` (see [Error values](05-lua-environment.md#error-values)), and `pcall` can catch it so the run goes on (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)):
 
 ````lua
 local ok, err = pcall(models.infer, 'Take your time.')
@@ -505,10 +505,10 @@ end
 Here `models.infer` runs the round on the run's current model (see [The current model](10-models.md#the-current-model)). When the Host stops the round while it is in flight, the block catches the error and the run completes with:
 
 ````text
-cancelled
+canceled
 ````
 
-An uncaught `cancelled` error ends the run as cancelled.
+An uncaught `canceled` error ends the run with that error, whose code is `canceled`.
 
 ## Effects and Harness work
 
@@ -591,7 +591,7 @@ Every store call a block makes, even a read, is a store operation that the Harne
 
 ### Every effect gets one answer
 
-The Harness answers every effect exactly once: with its result, with its failure, such as the reason a model round, a tool call, or a store operation failed, or as dropped when it gives the work up. A round the Host stops is answered as dropped, which the waiting call raises as the `cancelled` error, as [Stopping a model round](#stopping-a-model-round) shows.
+The Harness answers every effect exactly once: with its result, with its failure, such as the reason a model round, a tool call, or a store operation failed, or as dropped when it gives the work up. A round the Host stops is answered as dropped, which the waiting call raises as the `canceled` error, as [Stopping a model round](#stopping-a-model-round) shows.
 
 ### Work that needs no Harness
 

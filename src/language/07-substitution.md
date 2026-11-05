@@ -805,7 +805,7 @@ return prose
 ```
 ````
 
-The run fails with an error containing `{{ item }} is nil`. Reading `{{ item }}` where no item is seeded, such as in a walked section like this one, in a section entered through `call`, or in a later section the same chain enters, fails with substitution kind `NilItem` and the message `{{ item }} is nil (no item is seeded into this section)`. The read of `prose` raises it as an ordinary Lua error, so left uncaught in a walked section it ends the run with [run error kind](04-how-a-prompt-runs.md#the-run-result-and-outcomes) `Lua`.
+The run fails with an error containing `{{ item }} is nil`. Reading `{{ item }}` where no item is seeded, such as in a walked section like this one, in a section entered through `call`, or in a later section the same chain enters, fails with substitution kind `NilItem` and the message `{{ item }} is nil (no item is seeded into this section)`. The read of `prose` raises it as an ordinary Lua error, so left uncaught in a walked section it ends the run with [error code](16-limits-and-errors.md#run-error-codes) `substitution`.
 
 ## Inserting Lua globals by bare name
 
@@ -931,7 +931,7 @@ A caught error value names neither the Lua type nor the lookup's reason, so when
 
 The section entry's `messages` list, and each [message record](11-conversations.md#message-records) read from it, are userdata, so a bare name whose global holds one fails under the same rule. After `messages:user('u')`, with `list = messages` and `record = messages[1]`, both `{{ list }}` and `{{ record }}` fail with substitution kind `Serialize`. A global holding `json.null` fails with substitution kind `NullValue` instead, as [Which values a bare global can hold](#which-values-a-bare-global-can-hold) describes. Under a strict `_G` metatable whose `__index` raises an error for unknown names, a bare name with no global fails at the `prose` read with substitution kind `Serialize` and the `is not JSON data` message, not `UnknownNamespace`, because the raised error comes back as a failed lookup.
 
-Both bare-global failures, substitution kinds `UnknownNamespace` and `Serialize`, are raised at the `prose` read inside the section's Lua as ordinary Lua errors that [`pcall`](05-lua-environment.md#raising-and-catching-errors) can catch. Uncaught, they fail the run with run error kind `Lua`, as the prose `{{ ghost }} here.` does.
+Both bare-global failures, substitution kinds `UnknownNamespace` and `Serialize`, are raised at the `prose` read inside the section's Lua as ordinary Lua errors that [`pcall`](05-lua-environment.md#raising-and-catching-errors) can catch. Uncaught, they fail the run with error code `substitution`, as the prose `{{ ghost }} here.` does.
 
 ## How values render
 
@@ -1379,7 +1379,7 @@ The run succeeds, and the run result is:
 caught
 ````
 
-A placeholder that cannot render raises an ordinary Lua error at the moment the section's Lua reads `prose`, and the error's message says what went wrong, most often by quoting the placeholder. Because it is an ordinary Lua error raised at the read, not a separate kind of run failure, you can catch it with [`pcall`](05-lua-environment.md#raising-and-catching-errors). Wrap the read itself: `local ok, err = pcall(function() return prose end)` leaves `ok` false and the [error value](05-lua-environment.md#error-values) in `err`, and the Lua block goes on.
+A placeholder that cannot render raises an ordinary Lua error at the moment the section's Lua reads `prose`, and the error's message says what went wrong, most often by quoting the placeholder. Because it is an ordinary Lua error raised at the read, whose code `substitution` is one of the Lua codes, you can catch it with [`pcall`](05-lua-environment.md#raising-and-catching-errors). Wrap the read itself: `local ok, err = pcall(function() return prose end)` leaves `ok` false and the [error value](05-lua-environment.md#error-values) in `err`, and the Lua block goes on.
 
 ### What the error value holds
 
@@ -1442,7 +1442,7 @@ When a substitution error message quotes the placeholder, it prints the path tri
 
 ### When a failure goes uncaught
 
-An uncaught substitution failure raised by reading `prose` fails the run with run error kind `Lua`. The run's error message is the substitution's own text, which names the failing placeholder, followed by the placeholder's location, so with `return prose` in place of the block in the `caught` prompt, the run fails with `missing {{ var.missing }} [MissingKey at byte 9] (at caught.md:11)`. The H1 pass is no exception, because a failed substitution never counts as a failed [H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate):
+An uncaught substitution failure raised by reading `prose` fails the run with error code `substitution`. The run's error message is the substitution's own text, which names the failing placeholder, followed by the placeholder's location, so with `return prose` in place of the block in the `caught` prompt, the run fails with `missing {{ var.missing }} [MissingKey at byte 9] (at caught.md:11)`. The H1 pass is no exception, because a failed substitution never counts as a failed [H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate):
 
 ````markdown
 ---
@@ -1466,10 +1466,10 @@ return var.text
 ```
 ````
 
-The run fails with run error kind `Lua` and this message, which points at the placeholder's line in the H1 body:
+The run fails with error code `substitution` and this message, which points at the placeholder's line in the H1 body:
 
 ````text
 missing {{ var.missing }} [MissingKey at byte 9] (at gate.md:9)
 ````
 
-Unlike a failed H1 gate, the message has no [requirements notice](04-how-a-prompt-runs.md#the-requirements-notice) in front. An uncaught substitution failure ends the run as run error kind `Lua` wherever the `prose` read happens.
+Unlike a failed H1 gate, the message has no [requirements notice](04-how-a-prompt-runs.md#the-requirements-notice) in front. An uncaught substitution failure ends the run with `substitution` wherever the `prose` read happens.

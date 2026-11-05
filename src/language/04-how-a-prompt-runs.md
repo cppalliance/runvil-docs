@@ -1,6 +1,6 @@
 # How a prompt runs
 
-Every run moves through the same stages in the same order: the parse, prepare, the start checks, the H1 pass, and the section walk, and it ends in exactly one outcome. This chapter follows that order, one stage at a time. Knowing the order tells you which mistakes stop a run before any of your Lua runs, which sections run and when, and what text the run hands back when it finishes.
+Every run moves through the same stages in the same order: the parse, prepare, the start checks, the H1 pass, and the section walk, and it ends with its result: its final text, or the error that ended it. This chapter follows that order, one stage at a time. Knowing the order tells you which mistakes stop a run before any of your Lua runs, which sections run and when, and what text the run hands back when it finishes.
 
 ## How a run proceeds
 
@@ -37,9 +37,9 @@ Every run goes through these stages, in this order:
 3. The start checks. The run's first step checks the `runvil` version, the store, and the requirements, and refuses a run that fails one of them. See [Preparing the run](#preparing-the-run).
 4. The H1 pass. The H1 body's blocks run before the first section, but only when the H1 body holds a `lua` block or prose. See [The H1 pass](#the-h1-pass).
 5. The section walk. The top-level sections run in file order. See [The section walk](#the-section-walk).
-6. The outcome. The run ends in exactly one of three run outcomes. See [The run result and outcomes](#the-run-result-and-outcomes).
+6. The result. The run ends with its text or with the error that ended it. See [The run result](#the-run-result).
 
-Before it parses, the Harness draws the run's seed and start time, begins the run's record, and looks up the Host's current model. Parsing is the first check after that, so a file that does not parse never reaches the checks of Packs and model roles. A prompt whose H1 body holds no `lua` block and no prose skips the H1 pass and goes straight to its first section, as `hello` does. The three run outcomes are success, with the text the run returned; cancelled, when the run is interrupted; and failure, with the error that ended the run.
+Before it parses, the Harness draws the run's seed and start time, begins the run's record, and looks up the Host's current model. Parsing is the first check after that, so a file that does not parse never reaches the checks of Packs and model roles. A prompt whose H1 body holds no `lua` block and no prose skips the H1 pass and goes straight to its first section, as `hello` does. A run that completes ends with its final text, and any other run ends with the error that ended it. A cancel is one of those errors: a run the Host cancels ends with the error whose code is `canceled`.
 
 ### A run can be refused before it starts
 
@@ -64,7 +64,7 @@ return 'done'
 ```
 ````
 
-Run on a Host whose model for the `strong` role has a 32000-token context window, this prompt never returns `done`. The run fails with run error kind `RequirementsUnmet`, and its message is this requirements notice, which ends by pointing at the `models:` line:
+Run on a Host whose model for the `strong` role has a 32000-token context window, this prompt never returns `done`. The run fails with error code `requirements_unmet`, and its message is this requirements notice, which ends by pointing at the `models:` line:
 
 ````text
 the environment cannot satisfy this prompt:
@@ -214,11 +214,11 @@ A prompt's parse events are the first records of its run (see [Effects and Harne
 | the input is refused | `parse_started` | `parse_succeeded` |
 | a start check fails on the run's first step: an unsupported or missing version, no declared store, a store that fails its probe, or unmet requirements | `parse_started` | `parse_succeeded` |
 
-A prompt that does not parse ends its run as failed with the kind `Parse`, and the failure message is the parse error's full cause chain. The start checks run only after the prompt parses, so the record of a run they refuse ends with `parse_succeeded`. The prompt is also parsed before its input is checked, so an input refusal always follows a successful parse, and the refused run's last event is `parse_succeeded`. A refused or unparseable prompt runs no section code, and its record holds only parse events. A run that ends before its parse, because the model lookup failed or a cancel came first, has no events in its record at all.
+A prompt that does not parse ends its run with the parse error's code, a parse code such as `fence_invalid`, or `lua_compile` when a Lua block does not compile. The failure message is the parse error's full cause chain, followed by where the parse failed (see [Where a run error's message points](16-limits-and-errors.md#where-a-run-errors-message-points)). The start checks run only after the prompt parses, so the record of a run they refuse ends with `parse_succeeded`. The prompt is also parsed before its input is checked, so an input refusal always follows a successful parse, and the refused run's last event is `parse_succeeded`. A refused or unparseable prompt runs no section code, and its record holds only parse events. A run that ends before its parse, because the model lookup failed or a cancel came first, has no events in its record at all.
 
 ## Preparing the run
 
-After this section you can say what prepare sets up and what the start checks look at before any Lua runs, and why a run is refused with `RequirementsUnmet` when the environment falls short.
+After this section you can say what prepare sets up and what the start checks look at before any Lua runs, and why a run is refused with `requirements_unmet` when the environment falls short.
 
 ````markdown
 ---
@@ -246,7 +246,7 @@ Prepare is the stage before a run starts in which the Harness sets up everything
 
 The run's first step makes three start checks before any section runs, in this order: the `runvil` version, the store, which the run must declare and whose backend must pass its probe, and the requirements. The requirements check compares the Packs the prompt declares with the Packs the Harness took for the run and the services the run provides, and compares the requirements the prompt declares for its model roles with the models that fill those roles. A start check that fails ends the run on that first step, and the run reports no run events.
 
-A prompt the environment cannot satisfy is refused before any of its blocks run. `RequirementsUnmet` is the run error kind of that refusal: the run ends as failed, and its message is the requirements notice, which lists what is missing, one line per gap, and which ends by pointing at a frontmatter line when a gap is one the prompt caused. The requirements check refuses the run with `RequirementsUnmet` when any of these holds:
+A prompt the environment cannot satisfy is refused before any of its blocks run. `requirements_unmet` is the error code of that refusal: the run fails with that error, and its message is the requirements notice, which lists what is missing, one line per gap, and which ends by pointing at a frontmatter line when a gap is one the prompt caused. The requirements check refuses the run with `requirements_unmet` when any of these holds:
 
 - the Host has no Pack, from any vendor, for a bare entry the prompt declares
 - a declared Pack is unavailable, because the Host has it but it cannot serve, for example because it failed to build, or because the Host lacks a declared `vendor/name` entry, or has a bare entry's Pack id only from other vendors
@@ -285,21 +285,21 @@ Before any section runs, the Harness and the run work in a fixed order:
 8. It builds the run with a role map that holds the Host's current model under `default`, which fills the five model roles.
 9. The run's first step checks the `runvil` version, then the store, then the requirements, and refuses the run when one of them fails.
 
-The model lookup lists the Host's models and finds the one the Host selected, or takes the first model listed when the Host selected none. When the list cannot be fetched, the run ends as failed with run error kind `Completion`, and when the list does not hold the selected model, the run ends as failed with `RequirementsUnmet`. The message is the lookup error with its chain of causes, such as ``the selected model `{id}` is absent from the fetched catalog``. A cancel that comes before the run or during the lookup ends the run as cancelled. A run that ends here has not parsed, so its record holds no events.
+The model lookup lists the Host's models and finds the one the Host selected, or takes the first model listed when the Host selected none. When the list cannot be fetched, the run fails with the model code the listing failed with, such as `transport`, and when the list does not hold the selected model, the run fails with `requirements_unmet`. The message is the lookup error with its chain of causes, such as ``the selected model `{id}` is absent from the fetched catalog``. A cancel that comes before the run or during the lookup ends the run with the canceled error. A run that ends here has not parsed, so its record holds no events.
 
-The version check is the first start check (see [The `runvil` version key](02-file-structure.md#the-runvil-version-key)). Version `0` proceeds, and any other version is refused as unsupported, with a message that ends with ` (at {file}:{line})`, the line of the `runvil:` key. A missing version fails with the message `not a runvil prompt: no runvil version (prompt {name})`, where `{name}` is the prompt's frontmatter `name`. Either way, a prompt with an unsupported or missing version produces no section result. The run then checks its store, and a run that declares no store, or whose store backend fails its probe, fails with run error kind `Vfs`. The requirements check comes last. A run that a start check refuses reports no run events, so its record ends with `parse_succeeded`, the last parse event. When the run's cancel flag is set as a start check fails, the run ends as cancelled instead of failed.
+The version check is the first start check (see [The `runvil` version key](02-file-structure.md#the-runvil-version-key)). Version `0` proceeds, and any other version is refused as unsupported, with a message that ends with ` (at {file}:{line})`, the line of the `runvil:` key. A missing version fails with the message `not a runvil prompt: no runvil version (prompt {name})`, where `{name}` is the prompt's frontmatter `name`. Either way, a prompt with an unsupported or missing version produces no section result. The run then checks its store: a run that declares no store fails with the store code `no_store`, and a run whose store backend fails its probe fails with the store code of that failure. The requirements check comes last. A run that a start check refuses reports no run events, so its record ends with `parse_succeeded`, the last parse event. When the run's cancel flag is set as a start check fails, the run ends with the canceled error instead of the check's own error.
 
 ### Staging the input file
 
 Input staging happens during prepare, before the run starts. The launch's input text is placed at the path the frontmatter's `input:` key names (see [Input and output file declarations](02-file-structure.md#input-and-output-file-declarations)), so the first section's Lua can already read the input file. Prepare fails the run before it starts in three cases:
 
-- The launch supplies input text, but the prompt declares no `input:` file. The run error kind is `RequirementsUnmet`, and the message is ``the launch supplied input text, but the prompt declares no `input:` file``.
-- The prompt declares an `input:` file that the launch did not supply and the store does not already hold. The run error kind is `RequirementsUnmet`, and the message is ``the prompt declares the input file `{path}`, but the launch supplied no input text and the store has no such file``, with the declared path in place of `{path}`.
-- The store refuses the write that stages the input, or the check that the file is there. The run error kind is `Vfs`, and the message is ``the input file `{path}` could not be staged``, followed by `: ` and the store's own error.
+- The launch supplies input text, but the prompt declares no `input:` file. The error code is `requirements_unmet`, and the message is ``the launch supplied input text, but the prompt declares no `input:` file``.
+- The prompt declares an `input:` file that the launch did not supply and the store does not already hold. The error code is `requirements_unmet`, and the message is ``the prompt declares the input file `{path}`, but the launch supplied no input text and the store has no such file``, with the declared path in place of `{path}`.
+- The store refuses the write that stages the input, or the check that the file is there. The error code is the store code of the refusal, such as `approval_required`, and the message is ``the input file `{path}` could not be staged``, followed by `: ` and the store's own error.
 
 ### Waiting for Packs and taking the snapshot
 
-Before a run starts, the Harness picks the run's Packs: each Pack the prompt declares under `uses:`, plus every `runvil` Pack whose Pack id no declared Pack takes. It then waits until each of those Packs is ready or the run is cancelled, so a Pack outside the run, such as an undeclared third-party Pack, never delays it. A Pack whose readiness check fails is unavailable to the run, with its error as the reason, so a prompt that declares it is refused on the run's first step. Cancelling a run while Packs are still starting ends the wait, and each Pack is taken as it stands at that moment. A refusal that follows the cancel, such as one for a declared Pack that was still starting, ends the run as cancelled rather than failed.
+Before a run starts, the Harness picks the run's Packs: each Pack the prompt declares under `uses:`, plus every `runvil` Pack whose Pack id no declared Pack takes. It then waits until each of those Packs is ready or the run is canceled, so a Pack outside the run, such as an undeclared third-party Pack, never delays it. A Pack whose readiness check fails is unavailable to the run, with its error as the reason, so a prompt that declares it is refused on the run's first step. Canceling a run while Packs are still starting ends the wait, and each Pack is taken as it stands at that moment. A refusal that follows the cancel, such as one for a declared Pack that was still starting, gives way to it: the run ends with the canceled error rather than with `requirements_unmet`.
 
 After the wait, each run takes one snapshot of its Packs. That snapshot supplies the tool catalog the run offers, the object for each Pack in the run's Lua (see [Tool objects, Pack objects, and `tools.packs`](12-tools.md#tool-objects-pack-objects-and-toolspacks)), and the preludes that go to every section entry's Lua (see [Pack preludes](12-tools.md#pack-preludes)).
 
@@ -309,7 +309,7 @@ Every prompt has five model roles: `default`, `strong`, `small`, `fast`, and `cr
 
 ### An H1 gate failure reads like a refusal
 
-One failure that is not a refusal reports the same run error kind. An uncaught Lua error in the prompt's H1 blocks, such as a failed `assert` or an error raised by a library that an H1 block loads with `require` (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)), is the prompt's failed hard gate. It ends the run before any later H1 block or any section runs, with run error kind `RequirementsUnmet` and a message made of the line `the environment cannot satisfy this prompt:`, the line `- the H1 gate failed`, then `: ` and the Lua error's own text, and last ` (at {file}:{line})`, the line of the failure that tripped the gate. [The H1 hard gate](#the-h1-hard-gate) shows an example and every gate case.
+One failure that is not a refusal reports the same error code. An uncaught Lua runtime error, code `lua_runtime`, in the prompt's H1 blocks, such as a failed `assert` or an error raised by a library that an H1 block loads with `require` (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)), is the prompt's failed hard gate. It ends the run before any later H1 block or any section runs, with error code `requirements_unmet` and a message made of the line `the environment cannot satisfy this prompt:`, the line `- the H1 gate failed`, then `: ` and the Lua error's own text, and last ` (at {file}:{line})`, the line of the failure that tripped the gate. [The H1 hard gate](#the-h1-hard-gate) shows an example and every gate case.
 
 ## Packs at prepare
 
@@ -332,7 +332,7 @@ return 'done'
 ```
 ````
 
-On a Host that has `runvil/web` and where it can serve, the start checks pass and the run returns `done`. On a Host with no Packs, the run is refused on its first step, before any section runs, with run error kind `RequirementsUnmet` and this notice, which ends by pointing at the `uses:` line:
+On a Host that has `runvil/web` and where it can serve, the start checks pass and the run returns `done`. On a Host with no Packs, the run is refused on its first step, before any section runs, with error code `requirements_unmet` and this notice, which ends by pointing at the `uses:` line:
 
 ````text
 the environment cannot satisfy this prompt:
@@ -372,7 +372,7 @@ A section can offer only the tools in the run's catalog and the adhoc tools it d
 
 A host service is a named service the Host supplies for each run, such as an input broker. A Pack can need host services, and prepare checks the needs of each of the run's Packs against the run's services. A Pack is usable only when the run provides every service it needs, and a Pack missing any of its services has no tools in the run.
 
-A declared Pack that lacks a service it needs refuses the run on its first step with run error kind `RequirementsUnmet`. The notice gets one line for the Pack, in the form `- {pack} is unavailable: the run lacks the services it needs: {services}`, where `{services}` lists every service the Pack lacks, joined by `, `. The line names both the Pack and the services instead of calling the Pack missing. A run refused this way never calls the Pack, so no tool effect happens, and the refused run records zero effects.
+A declared Pack that lacks a service it needs refuses the run on its first step with error code `requirements_unmet`. The notice gets one line for the Pack, in the form `- {pack} is unavailable: the run lacks the services it needs: {services}`, where `{services}` lists every service the Pack lacks, joined by `, `. The line names both the Pack and the services instead of calling the Pack missing. A run refused this way never calls the Pack, so no tool effect happens, and the refused run records zero effects.
 
 The `user-input` Pack is the common case. Its fully qualified name is `runvil/user-input`, so its Pack id is `user-input`. It needs the run's input broker, the service `runvil/input-broker`, so a run without a broker cannot use it. A prompt that declares it is refused before the run starts on a Host with no operator to ask, and the notice names both the Pack and the service:
 
@@ -387,7 +387,7 @@ Whether a declared Pack's service needs are met depends only on the Host running
 
 ### Unavailable Packs
 
-A declared Pack that the Host has but that cannot serve refuses the run with run error kind `RequirementsUnmet` and the notice line `- {pack} is unavailable: {reason}`. A Pack cannot serve in two cases:
+A declared Pack that the Host has but that cannot serve refuses the run with error code `requirements_unmet` and the notice line `- {pack} is unavailable: {reason}`. A Pack cannot serve in two cases:
 
 - Building it failed when the Host set up. That is not a setup error: the Host stores the Pack as unavailable with the failure as its reason, and every run that needs it is refused naming that reason.
 - Its readiness check fails before the run.
@@ -464,7 +464,7 @@ return 'done'
 ```
 ````
 
-When the model that fills `strong` has a 32000-token window and never thinks, the role falls short on both checks, and the run is refused on its first step, before any section runs. The run fails with run error kind `RequirementsUnmet`, and the notice opens with `the environment cannot satisfy this prompt:`, followed by one line per shortfall, and ends by pointing at the `models:` line:
+When the model that fills `strong` has a 32000-token window and never thinks, the role falls short on both checks, and the run is refused on its first step, before any section runs. The run fails with error code `requirements_unmet`, and the notice opens with `the environment cannot satisfy this prompt:`, followed by one line per shortfall, and ends by pointing at the `models:` line:
 
 ````text
 the environment cannot satisfy this prompt:
@@ -543,7 +543,7 @@ return 'done'
 ```
 ````
 
-Run this prompt on a Host that has no `web` Pack from any vendor, that has `runvil/user-input` but has no operator to ask, and whose model for `strong` has a 32000-token window and never thinks. The run fails with run error kind `RequirementsUnmet`, and its message is this requirements notice, which ends by pointing at the `uses:` line:
+Run this prompt on a Host that has no `web` Pack from any vendor, that has `runvil/user-input` but has no operator to ask, and whose model for `strong` has a 32000-token window and never thinks. The run fails with error code `requirements_unmet`, and its message is this requirements notice, which ends by pointing at the `uses:` line:
 
 ````text
 the environment cannot satisfy this prompt:
@@ -553,7 +553,7 @@ the environment cannot satisfy this prompt:
 - role 'strong': requires 'thinking: true'; the thinking capability of the model filling it is Never (at deep-analysis.md:5)
 ````
 
-The requirements notice is the text the run's first step reports when the requirements check refuses the run. When a prompt's requirements are unmet, the run is refused before any section or Lua runs, so nothing in the prompt can catch the refusal. Any unmet requirement, including an unmet model role requirement, makes the refusal a run error of kind `RequirementsUnmet` whose message is the notice, word for word, followed by ` (at {file}:{line})` when a gap is one the prompt caused. When nothing blocks the run, there is no refusal.
+The requirements notice is the text the run's first step reports when the requirements check refuses the run. When a prompt's requirements are unmet, the run is refused before any section or Lua runs, so nothing in the prompt can catch the refusal. Any unmet requirement, including an unmet model role requirement, makes the refusal a run error with code `requirements_unmet` whose message is the notice, word for word, followed by ` (at {file}:{line})` when a gap is one the prompt caused. When nothing blocks the run, there is no refusal.
 
 The location names the frontmatter key of the first gap the prompt caused: the `uses:` line when a declared Pack is missing or unavailable, as here, and otherwise the `models:` line when a declared role requirement falls short. A reserved Pack id and a role map with no `default` entry are the caller's gaps, so a refusal made only of those points at no line (see [Where a run error's message points](16-limits-and-errors.md#where-a-run-errors-message-points)).
 
@@ -571,7 +571,7 @@ The notice is written for a model to read: concise, factual, and self-contained.
 | `- role '{role}': requires a context of at least {required} tokens; the model filling it provides {actual}` | a role whose `min_context` is above the window of the model filling it |
 | `- role '{role}': requires '{required}'; the thinking capability of the model filling it is {actual}` | a role whose `thinking` requirement the model filling it fails |
 | `- role 'default': requires a model; the caller's role map has no 'default' entry` | a role map that has entries but none for `default` |
-| `- the H1 gate failed` | an uncaught Lua error in the H1 pass |
+| `- the H1 gate failed` | an uncaught `lua_runtime` error in the H1 pass |
 
 ### Pack lines in the notice
 
@@ -599,7 +599,7 @@ Only `min_context` and `thinking` can add these role lines, and the one other mo
 
 ### The H1 gate line
 
-The `- the H1 gate failed` line does not come from a refusal. An uncaught Lua error in the H1 pass fails the prompt's hard gate, which also ends the run with run error kind `RequirementsUnmet` before any later block runs. Its notice is the same opening line followed by `- the H1 gate failed`, and its message adds `: ` and the Lua error's text, then ` (at {file}:{line})`, the line of the failure that tripped the gate, as [The H1 hard gate](#the-h1-hard-gate) shows.
+The `- the H1 gate failed` line does not come from a refusal. An uncaught `lua_runtime` error in the H1 pass fails the prompt's hard gate, which also ends the run with error code `requirements_unmet` before any later block runs. Its notice is the same opening line followed by `- the H1 gate failed`, and its message adds `: ` and the Lua error's text, then ` (at {file}:{line})`, the line of the failure that tripped the gate, as [The H1 hard gate](#the-h1-hard-gate) shows.
 
 ### The order of the lines
 
@@ -613,7 +613,7 @@ The requirements are gathered once, when the run is built, and the run's first s
 
 ### When a cancel comes first
 
-When the run's cancel flag is set by the time a start check fails, for example because a cancel cut short the wait while a declared Pack was still starting, no notice is reported: the run ends as cancelled rather than failing with `RequirementsUnmet`, as [Waiting for Packs and taking the snapshot](#waiting-for-packs-and-taking-the-snapshot) explains. A failed version or store check that meets a cancel ends the run as cancelled in the same way.
+When the run's cancel flag is set by the time a start check fails, for example because a cancel cut short the wait while a declared Pack was still starting, no notice is reported: the cancel decides the run's result, which is the canceled error rather than `requirements_unmet`, as [Waiting for Packs and taking the snapshot](#waiting-for-packs-and-taking-the-snapshot) explains. A failed version or store check that meets a cancel ends the run with the canceled error in the same way.
 
 ## The section walk
 
@@ -889,7 +889,7 @@ local x = 1
 done
 ````
 
-[The run result and outcomes](#the-run-result-and-outcomes) explains this `done` fallback.
+[The run result](#the-run-result) explains this `done` fallback.
 
 ## Returning values
 
@@ -1144,9 +1144,9 @@ return table.concat(kinds, ',')
 
 This block returns `alpha,beta`. For a result that should be JSON text, build the string with [`json.encode`](05-lua-environment.md#encoding-and-decoding-json-with-json) instead, so `return json.encode(kinds)` returns `["alpha","beta"]`.
 
-Returning any other first value fails the block with `cannot return a {type} as a result`, where `{type}` is the Lua type name: `table` for a table, `function` for a function, and `userdata` for an Engine object. So a table return fails with a message that contains `cannot return a table as a result`. This is an ordinary Lua error, so in a walked section it fails the run with run error kind `Lua`. In the H1 pass the same error fails the [hard gate](#the-h1-hard-gate) instead.
+Returning any other first value fails the block with `cannot return a {type} as a result`, where `{type}` is the Lua type name: `table` for a table, `function` for a function, and `userdata` for an Engine object. So a table return fails with a message that contains `cannot return a table as a result`. This is an ordinary Lua error, so in a walked section it fails the run with error code `lua_runtime`. In the H1 pass the same error fails the [hard gate](#the-h1-hard-gate) instead.
 
-The easiest way to hit this error is with a library section that ends by returning a table for `require`. When the walk reaches that section on its own, the walk applies the scalar return rule to it, and the run fails with run error kind `Lua` and `cannot return a table as a result`. Placing library sections after the section that returns keeps the walk from reaching them.
+The easiest way to hit this error is with a library section that ends by returning a table for `require`. When the walk reaches that section on its own, the walk applies the scalar return rule to it, and the run fails with error code `lua_runtime` and `cannot return a table as a result`. Placing library sections after the section that returns keeps the walk from reaching them.
 
 ## The H1 pass
 
@@ -1314,7 +1314,7 @@ The H1 pass follows the walk's rules with exactly three differences:
 
 - It runs first, ahead of the main walk's sections.
 - A scalar return from it ends the whole run.
-- An uncaught Lua error in it, such as a failed `assert`, is the prompt's failed [hard gate](#the-h1-hard-gate), which fails the run with run error kind [`RequirementsUnmet`](#preparing-the-run) and stops later H1 blocks from running.
+- An uncaught Lua runtime error in it, code `lua_runtime`, such as a failed `assert`, is the prompt's failed [hard gate](#the-h1-hard-gate), which fails the run with error code [`requirements_unmet`](#preparing-the-run) and stops later H1 blocks from running.
 
 So the H1 region, from the `#` title to the first `##` heading, runs as its own live pass that can return early, fall through to the walk, or read its prose through an explicit model round such as `models.infer(prose)`.
 
@@ -1408,9 +1408,9 @@ the environment cannot satisfy this prompt:
 - the H1 gate failed: H1 `Gated` lua:10: runtime error: H1 `Gated` lua:10: the gate cannot hold
 ````
 
-The run fails with run error kind `RequirementsUnmet`, and its message opens with these two lines. After `- the H1 gate failed: ` comes the Lua error's own text. Its first line names the failing block and its line in the prompt file and then gives the `assert` message `the gate cannot hold`, and a Lua stack traceback follows on the next lines. After the traceback, the message ends with ` (at gated.md:10)`, the line of the failed `assert`. `## Work` never runs.
+The run fails with error code `requirements_unmet`, and its message opens with these two lines. After `- the H1 gate failed: ` comes the Lua error's own text. Its first line names the failing block and its line in the prompt file and then gives the `assert` message `the gate cannot hold`, and a Lua stack traceback follows on the next lines. After the traceback, the message ends with ` (at gated.md:10)`, the line of the failed `assert`. `## Work` never runs.
 
-The Lua blocks under a prompt's H1 title are its hard gates. An `assert` there checks the prompt's arguments or prompt-wide settings, and when it fails, the run ends before any section is walked, with run error kind `RequirementsUnmet`. Move the same `assert` into the block under `## Work` and the run fails with run error kind `Lua` instead, because the same uncaught Lua error in a block under a walked section is an ordinary `Lua` failure.
+The Lua blocks under a prompt's H1 title are its hard gates. An `assert` there checks the prompt's arguments or prompt-wide settings, and when it fails, the run ends before any section is walked, with error code `requirements_unmet`. Move the same `assert` into the block under `## Work` and the run fails with error code `lua_runtime` instead, because the same uncaught Lua error in a block under a walked section is an ordinary `lua_runtime` failure.
 
 Once the hard gate fails, the later blocks in the H1 body and every section never run, so a later H1 block's effects, such as a `store.write`, never happen. The failure still counts as the failing block's own: a `lua_chunk_failed` event is reported under the H1 title before the run ends.
 
@@ -1423,9 +1423,9 @@ Any ordinary Lua error left uncaught in an H1 block fails the hard gate, and the
 - Running out of Lua memory.
 - An `error(...)` inside a library that the H1 body loads with `require`. The library's raised message is kept as the cause, so a library section `## broken` that runs `error('library boom')` gives a cause containing `library boom`.
 - A `call` that names no visible section.
-- A `tasks.fanout` error that would otherwise end the run as `Lua`, such as a bad collection or an arm that failed with a `lua`-kind error (see [When an arm fails](14-fanout.md#when-an-arm-fails)).
+- A `tasks.fanout` error that would otherwise end the run with `lua_runtime`, such as a bad collection or an arm that failed with a `lua_runtime` error (see [When an arm fails](14-fanout.md#when-an-arm-fails)).
 
-A `{{ }}` substitution that fails in the H1 body does not fail the gate: it keeps its own kind and ends the run as `Lua`, at its placeholder's line (see [Placeholders in prose](07-substitution.md#placeholders-in-prose)).
+A `{{ }}` substitution that fails in the H1 body does not fail the gate: it keeps its own code and ends the run with `substitution`, at its placeholder's line (see [Placeholders in prose](07-substitution.md#placeholders-in-prose)).
 
 Each case fails the gate only when it is left uncaught. A `call` that names no visible section raises its error at the call site, so you can catch it with `pcall`:
 
@@ -1436,43 +1436,44 @@ return tostring(ok) .. ':' .. tostring(err)
 
 As the only block in an H1 body, this block returns text that starts with `false:`, followed by an error naming `## Nope`, and that text is the run result.
 
-Because `tasks.fanout` raises the failing arm's own error, an arm's tool or store failure keeps its own run error kind instead of becoming `RequirementsUnmet`.
+Because `tasks.fanout` raises the failing arm's own error, an arm's tool or store failure keeps its own code instead of becoming `requirements_unmet`.
 
 ### The failed gate's message
 
-Run error kind `RequirementsUnmet` covers three cases inside the run: the [requirements check](#preparing-the-run) refusing the run, the H1 pass failing its hard gate, and a model round that has no model, which fails with `model binding required for section {section}`. The message tells them apart. A refusal's message is the [requirements notice](#the-requirements-notice), with the line of a gap the prompt caused when there is one, while a failed gate's message holds the Lua error text after the notice. The Harness also ends a run with `RequirementsUnmet` before it starts, when the launch input does not match the prompt's `input:` declaration or the Host's selected model is missing from its list of models (see [Runs that end before the walk](#runs-that-end-before-the-walk)).
+Error code `requirements_unmet` covers two cases inside the run: the [requirements check](#preparing-the-run) refusing the run, and the H1 pass failing its hard gate. The message tells them apart. A refusal's message is the [requirements notice](#the-requirements-notice), with the line of a gap the prompt caused when there is one, while a failed gate's message holds the Lua error text after the notice. A model round that has no model fails with a model code of its own instead, `model_required`, and the message `model binding required for section {section}`. The Harness also ends a run with `requirements_unmet` before it starts, when the launch input does not match the prompt's `input:` declaration or the Host's selected model is missing from its list of models (see [Runs that end before the walk](#runs-that-end-before-the-walk)).
 
 A failed gate's error has a fixed notice, the line `the environment cannot satisfy this prompt:` followed by the line `- the H1 gate failed`, and it keeps the Lua failure as its cause. The message is the notice, then a colon and a space, then the cause's text, with the cause text appearing exactly once. So the assertion's message appears in the cause and not in the notice. The run's message then ends with ` (at {file}:{line})`, the line where the cause failed, as `gated` shows.
 
-### Failures that keep their own kind
+### Failures that keep their own code
 
-In the H1 pass only ordinary Lua errors turn into `RequirementsUnmet`, and every other uncaught failure keeps its own run error kind:
+In the H1 pass only ordinary Lua errors, the ones with code `lua_runtime`, turn into `requirements_unmet`, and every other uncaught failure keeps its own code:
 
 | Failure in the H1 pass | How the run ends |
 | --- | --- |
-| A tool failure | `Tool` |
-| A `Quota`, `Completion`, `Binding`, or `ContextExhausted` failure | That same kind |
-| A failed store call or a claims conflict | `Vfs` |
-| A task error | `Lua` |
-| A failed `{{ }}` substitution | `Lua` |
-| A Host cancel | The cancelled outcome |
+| A `log` quota that runs out, or a `call`, task, or fanout arm past the call depth cap | `lua_quota` or `call_depth_exceeded` |
+| A failed `{{ }}` substitution | `substitution` |
+| A task error | Its task code, such as `tasks_live` or `task_canceled` |
+| A failed model call, a model round with no model, or a context the compactor cannot make fit | Its model code, such as `transport`, `model_required`, or `context_exhausted` |
+| A tool failure or a failed tool freeze | Its tool code, such as `tool_backend` or `tool_sets_invalid` |
+| A failed store call or a claims conflict | Its store code, such as `not_found`, or `determinism` for a claims conflict |
+| A Host cancel | `canceled` |
 
-Task errors stay `Lua` rather than becoming `RequirementsUnmet`. That covers an uncaught `tasks_live`, `task_not_owned`, or `task_consumed` error (see [Ownership, leaked tasks, and abandonment](15-tasks.md#ownership-leaked-tasks-and-abandonment)), a delivered cancelled task's error, and a `task_not_owned` or `task_consumed` error raised again later. A Host cancel during the H1 pass is not a failure at all, and the run ends with its cancelled outcome.
+Task errors keep their task codes rather than becoming `requirements_unmet`. That covers an uncaught `tasks_live`, `task_not_owned`, or `task_consumed` error (see [Ownership, leaked tasks, and abandonment](15-tasks.md#ownership-leaked-tasks-and-abandonment)), a delivered canceled task's `task_canceled` error, and a `task_not_owned` or `task_consumed` error raised again later. A Host cancel during the H1 pass ends the run with the canceled error, as a cancel does anywhere in the run.
 
 ### Errors raised again after a catch
 
-An error you catch with `pcall` in the H1 pass and raise again keeps the failure it came from when you raise it before the block makes another call that waits on the Harness, such as a model round, so its own run error kind holds. Raised again after such a call, an error whose `kind` is `lua` is rebuilt as an ordinary Lua error and fails the gate as `RequirementsUnmet`, while an error of any other kind still keeps the failure it came from and its own run error kind.
+An error you catch with `pcall` in the H1 pass and raise again keeps the failure it came from when you raise it before the block makes another call that waits on the Harness, such as a model round, so its own code holds. Raised again after such a call, an error whose `kind` is `lua` is rebuilt as an ordinary Lua error with code `lua_runtime` and fails the gate as `requirements_unmet`, while an error of any other kind still keeps the failure it came from and its own code.
 
 ### Failures outside the gate
 
-Two checks run around the H1 blocks rather than inside them. They are not part of the gate, so each fails the run with run error kind `Lua`:
+Two checks run around the H1 blocks rather than inside them. They are not part of the gate, so each fails the run with error code `lua_runtime`:
 
 - When the H1 pass's `var` is read back and `var` turns out to have been replaced with another value, the run fails with an error naming `global was reassigned`, at the first Lua line of the last Lua block that ran. This happens even when the block returned a scalar that would otherwise end the run.
 - A `jump` from the H1 pass whose heading matches no top-level section, or more than one, fails the run, because the jump's heading is checked after the H1 block has finished. The failure points at the line of the `jump`.
 
-## The run result and outcomes
+## The run result
 
-After this section you can say where a run's result text comes from and how a run ends when it does not complete.
+After this section you can say where a run's result text comes from and which error a run ends with when it does not complete.
 
 ````markdown
 ---
@@ -1494,7 +1495,7 @@ return 'plain'
 plain
 ````
 
-The run result is the text a run produces, and a completed run gives back its result as a single text string. Here the section on the main walk returns the scalar `'plain'` from its Lua block, so the run completes with the final text `plain`.
+The run result is what a run ends with: its final text when it completes, or the error that ended it when it does not. A completed run gives back its result as a single text string. Here the section on the main walk returns the scalar `'plain'` from its Lua block, so the run completes with the final text `plain`.
 
 When nothing returns, the run still has a result:
 
@@ -1522,7 +1523,7 @@ No block returns a scalar, the walk runs past the end of the last top-level sect
 
 ### Where the run result comes from
 
-The run's result comes only from a `return` in the H1 pass, a `return` on the main walk, or the `done` fallback. Any scalar that a section on the main walk returns becomes the run's result text, including these:
+A completed run's result text comes only from a `return` in the H1 pass, a `return` on the main walk, or the `done` fallback. Any scalar that a section on the main walk returns becomes the run's result text, including these:
 
 - `return 'done'` gives `done`.
 - `return store.read('note.md')` gives the note's text.
@@ -1560,32 +1561,31 @@ done
 
 This prompt has one prose-only section, no Lua anywhere, and an empty H1 body, so it declares nothing the Harness has to provide. A prose-only section with no Lua fence runs without calling a model and falls through to the next section, and here there is no next section, so the run ends with `done`.
 
-### The three run outcomes
+### How a run ends
 
-Every run ends in exactly one of three run outcomes:
+Every run ends with exactly one result, which is one of two things:
 
-- Completed, with its result text. A run that finishes ends with a completed outcome carrying its final text, and that completed outcome is recorded as the run's outcome.
-- Cancelled, when the Host cancels the run. A cancelled run carries no result text and no error.
-- Failed, with the error it failed with: a run error kind that names the cause, such as an uncaught Lua error, together with a self-contained message for people to read.
+- Its final text, when the run completes. A run that finishes gives back its final text, and that text is recorded as the run's result.
+- The error that ended it, when the run does not complete. The error has a code that names the cause, such as `lua_runtime` for an uncaught Lua error, together with a self-contained message for people to read. A cancel is one of these errors: the one whose code is `canceled`.
 
-The first outcome that ends a run is the one reported, and a later error or cancel never replaces it. A cancel that lands after the run's first step has refused the run leaves the run failed with run error kind `RequirementsUnmet`.
+Whatever ends a run first decides its result, and a later error or cancel never replaces it. A cancel that lands after the run's first step has refused the run leaves the run with error code `requirements_unmet`.
 
-### Cancelling a run
+### Canceling a run
 
-When the Host cancels a run, the run ends as cancelled. A cancel is reported as its own outcome and never as a failure, even when the cancel lands while a block waits on `return models.infer(prose)`. A cancel stops the run even while its Lua is busy in a loop such as `while true do n = n + 1 end`.
+When the Host cancels a run, the run ends with the canceled error, whose code is `canceled` and whose message is `canceled: the run was canceled or this call was stopped`. The run ends with that error rather than the failure of whatever call the cancel cut short, even when the cancel lands while a block waits on `return models.infer(prose)`. A cancel stops the run even while its Lua is busy in a loop such as `while true do n = n + 1 end`.
 
-A cancel that lands while every chain is waiting takes effect at the run's next step, which tears down every chain, while Lua code that is already running sees the cancel as it runs. A run cancelled while a `tools.call` to a script tool is suspended ends with the cancelled outcome rather than a text result or an error. A model request cut short by a cancel is not reported as a failed model call.
+A cancel that lands while every chain is waiting takes effect at the run's next step, which tears down every chain, while Lua code that is already running sees the cancel as it runs. A run canceled while a `tools.call` to a script tool is suspended ends with the canceled error rather than a text result or the tool's own error. A model request cut short by a cancel is not reported as a failed model call.
 
-A start check that fails after the run's cancel fired, whether on the version, the store, or the requirements, ends the run as cancelled instead of failed, as when a cancel cuts the wait short while a needed Pack is still starting (see [Waiting for Packs and taking the snapshot](#waiting-for-packs-and-taking-the-snapshot)). A cancel that comes before the run, or while the Harness looks up the model, ends the run as cancelled before the prompt is parsed.
+A start check that fails after the run's cancel fired, whether on the version, the store, or the requirements, ends the run with the canceled error instead of the check's own error, as when a cancel cuts the wait short while a needed Pack is still starting (see [Waiting for Packs and taking the snapshot](#waiting-for-packs-and-taking-the-snapshot)). A cancel that comes before the run, or while the Harness looks up the model, ends the run with the canceled error before the prompt is parsed.
 
-### Failed runs and run error kinds
+### Failed runs and error codes
 
-A run error kind is the name a failed run reports for its cause, and a failed run reports it together with a message. Running a prompt fails with one of these two kinds most often:
+A failed run ends with an error, the same error that a caught [error value](05-lua-environment.md#error-values) stands for in Lua. It has a code, a message for people to read, the prose a model reads, an optional location, and the values it names, such as a path. The code names the cause by its tag, in snake_case, such as `lua_runtime`, which a caught error value holds as `err.code`. Each code also has a number whose hundreds give its family, such as 2xx for the Lua codes (see [Run error codes](16-limits-and-errors.md#run-error-codes)). The failed run's message is the error's located message: its text with its causes, then where the failure happened. Running a prompt fails with one of these two codes most often:
 
-- `Lua`, for an uncaught Lua error in a section.
-- `RequirementsUnmet`, when the Harness cannot satisfy the prompt, such as when a required Pack is missing, or when an H1 block fails the prompt's hard gate.
+- `lua_runtime`, for an uncaught Lua error in a section.
+- `requirements_unmet`, when the Harness cannot satisfy the prompt, such as when a required Pack is missing, or when an H1 block fails the prompt's hard gate.
 
-Any uncaught Lua error in a walked section fails the run with run error kind `Lua`. That includes `assert(false, 'message')`, a call to a function that does not exist, and a walked library section that returns a table, which fails with `cannot return a table as a result`. Calling `error('message')` in a section's Lua block stops the run on purpose, and the rest of the prompt never runs:
+Any uncaught Lua error in a walked section fails the run with error code `lua_runtime`. That includes `assert(false, 'message')`, a call to a function that does not exist, and a walked library section that returns a table, which fails with `cannot return a table as a result`. Calling `error('message')` in a section's Lua block stops the run on purpose, and the rest of the prompt never runs:
 
 ````markdown
 ---
@@ -1609,19 +1609,19 @@ error('expected failure')
 ```
 ````
 
-The run fails with run error kind `Lua` and a message containing `expected failure` that ends with ` (at second_fails.md:18)`, the line of the `error` call. Other failures report their own run error kinds, such as `Tool` for a tool failure and `Vfs` for a failed store call, and [Failures that keep their own kind](#failures-that-keep-their-own-kind) lists the ones the H1 pass leaves unchanged.
+The run fails with error code `lua_runtime` and a message containing `expected failure` that ends with ` (at second_fails.md:18)`, the line of the `error` call. Other failures report their own codes, such as a tool code like `tool_backend` for a tool failure and a store code like `not_found` for a failed store call, and [Failures that keep their own code](#failures-that-keep-their-own-code) lists the ones the H1 pass leaves unchanged.
 
 ### Runs that end before the walk
 
-A run that ends before the walk still has a record, because the Harness begins the record before anything else. The run's record ends as failed with the cause as its message, and the recorded kind tells you why a run that never reached its sections failed:
+A run that ends before the walk still has a record, because the Harness begins the record before anything else. The run's record ends with the error that ended it, its code and its located message, and the recorded code tells you why a run that never reached its sections failed:
 
-- `Completion` when the Harness cannot fetch the Host's list of models, and `RequirementsUnmet` when that list does not hold the selected model.
-- `Parse` when the prompt does not parse, or when its `runvil:` version is missing or unsupported.
-- `RequirementsUnmet` when the launch input does not match the prompt's [input file](02-file-structure.md#input-and-output-file-declarations) declaration, and `Vfs` when the store refuses to stage the input.
-- `Vfs` when the run declares no store or its store fails the probe.
-- `RequirementsUnmet` when the environment falls short of the prompt's requirements.
+- The model code the listing failed with, such as `transport`, when the Harness cannot fetch the Host's list of models, and `requirements_unmet` when that list does not hold the selected model.
+- The parse error's code when the prompt does not parse, such as `fence_invalid` or `lua_compile`, `structure_invalid` when its `runvil:` version is missing, and `unsupported_version` when the version is unsupported.
+- `requirements_unmet` when the launch input does not match the prompt's [input file](02-file-structure.md#input-and-output-file-declarations) declaration, and the store code of the refusal, such as `approval_required`, when the store refuses to stage the input.
+- `no_store` when the run declares no store, and the store code of the failure when its store fails the probe.
+- `requirements_unmet` when the environment falls short of the prompt's requirements.
 
-A run whose cancel fires first ends as cancelled instead, even when the cancel comes before the run starts.
+A run whose cancel fires first ends with the canceled error instead, even when the cancel comes before the run starts.
 
 ## Run events and records
 
@@ -1673,7 +1673,7 @@ A run reports its progress as ordered [run events](01-what-a-prompt-is.md#a-mark
 
 A prompt with no H1 blocks, such as `loop`, goes straight from `run_started` to the first section's `section_started`. A block that is waiting reports neither succeeded nor failed until it finally returns or fails.
 
-A run that started and does not succeed ends its events with `run_failed` under the H1 title in place of `run_succeeded`. The only run-level events are `run_started`, `run_succeeded`, and `run_failed`, and there is no run-level cancel event, so a cancelled run also ends with `run_failed`, even though its outcome is cancelled.
+A run that started and does not succeed ends its events with `run_failed` under the H1 title in place of `run_succeeded`. The only run-level events are `run_started`, `run_succeeded`, and `run_failed`, and there is no run-level cancel event, so a canceled run also ends with `run_failed`, even though a canceled run is not a failed run.
 
 ### Which name an event carries
 
@@ -1701,7 +1701,7 @@ A `log` checkpoint is recorded under the name of the section whose Lua wrote it,
 
 ### Events from a run that ends early
 
-When a run ends before it starts, the events recorded before it ended stay in its record and can still be read. A prompt that parsed and was then refused still has its parse events, ending with the parse-succeeded event. A run that ended before its parse, on a failed model lookup or an early cancel, has no events in its record, only the values below and its outcome.
+When a run ends before it starts, the events recorded before it ended stay in its record and can still be read. A prompt that parsed and was then refused still has its parse events, ending with the parse-succeeded event. A run that ended before its parse, on a failed model lookup or an early cancel, has no events in its record, only the values below and the error that ended it.
 
 ### What a run's record holds
 

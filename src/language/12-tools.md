@@ -80,7 +80,7 @@ Listing a Pack under `uses:` declares that the prompt needs it and makes the Pac
 
 Declaring a Pack does not install it. A Host calls Plugins, each Plugin adds its Packs, zero or more, to the Host's Pack registry, and every registered Pack is built when the Host sets up, so a prompt can only declare Packs the Host already has. The Host never installs a Pack itself, never picks which Packs to build, and never picks a Pack id. A Pack id is always the second segment of the Pack's fully qualified name, so `runvil/web` has the Pack id `web`, and that Pack id prefixes its tools, as in `web/fetch`. A Pack id has no version part, so the entry `web` names exactly the Pack `runvil/web`.
 
-A declared Pack that the Host does not have refuses the run before it starts. The run fails with run error kind `RequirementsUnmet` (see [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run)), and its requirements notice opens with `the environment cannot satisfy this prompt:`, includes a line that names the Pack, and ends with the prompt file and its `uses:` line (see [Where an error points](16-limits-and-errors.md#where-an-error-points)):
+A declared Pack that the Host does not have refuses the run before it starts. The run fails with the error code `requirements_unmet` (see [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run)), and its requirements notice opens with `the environment cannot satisfy this prompt:`, includes a line that names the Pack, and ends with the prompt file and its `uses:` line (see [Where an error points](16-limits-and-errors.md#where-an-error-points)):
 
 ````text
 the environment cannot satisfy this prompt:
@@ -375,13 +375,13 @@ Each frozen tool reaches the model under its wire name, with the description and
 
 At a section entry's first loop round, each Pack the entry offered catalog tools from renders them, once for each set the entry offered it into, for that entry and the model of that round. Each render returns the tools the model sees for its set, and the entry's freeze builds both sets from what the Packs return, together with the entry's adhoc tools. The run's record keeps each render's request and the tools each Pack returned (see [The five kinds of Harness work](01-what-a-prompt-is.md#the-five-kinds-of-harness-work)).
 
-A render may rename the tools the section offered from its Pack, reshape their descriptions and parameter schemas, drop some of them, and add tools only the model sees, under the Pack's own id. Every catalog tool a render returns is one the section offered from that Pack in that set, so the offer stays the upper bound on the catalog tools the model sees. A catalog tool also keeps its catalog flags whatever the render sets, such as whether a stop spares its calls or whether only a model may call it (see [Model-only tools](#model-only-tools)), while a tool only the model sees takes the flags its render gives it. A render that breaks these rules, such as one that returns a catalog tool the section did not offer in that set, or a tool under another Pack's id, fails the round as a wire-name clash does, and left uncaught the run ends with run error kind `Binding` (see [`Binding`, `Completion`, and `Tool`](16-limits-and-errors.md#binding-completion-and-tool) for each message).
+A render may rename the tools the section offered from its Pack, reshape their descriptions and parameter schemas, drop some of them, and add tools only the model sees, under the Pack's own id. Every catalog tool a render returns is one the section offered from that Pack in that set, so the offer stays the upper bound on the catalog tools the model sees. A catalog tool also keeps its catalog flags whatever the render sets, such as whether a stop spares its calls or whether only a model may call it (see [Model-only tools](#model-only-tools)), while a tool only the model sees takes the flags its render gives it. A render that breaks these rules, such as one that returns a catalog tool the section did not offer in that set, or a tool under another Pack's id, fails the round as a wire-name clash does, and left uncaught the run ends with the error code `tool_sets_invalid` (see [Tool codes](16-limits-and-errors.md#tool-codes) for each message).
 
 A tool only the model sees has no Lua side. `tools.get` reads `nil` for its id, and `tools.call` refuses the id with the `unbound_tool` error, whose message lists the run's catalog tools, which never include it (see [The `unbound_tool` error](#the-unbound_tool-error)). The model calls it by its wire name, through `CallDynamicTool` when the render put it in the Dynamic Set, and the call goes to the Pack its id names, as a catalog tool's call does. `tools.stats.packs` counts the call under that Pack, and `tools.stats.tools` never holds the tool's id (see [Counting calls with `tools.stats`](#counting-calls-with-toolsstats)).
 
 Each section entry gets its own render, so two entries, such as a section entered again with `jump`, two fanout arms, or two tasks whose first rounds run on different models, can show the model the same tool under different names. Later rounds of one entry keep that entry's render, even on another model. That is why prompt prose names tools by their tool ids (see [What the model sees for each offered tool](#what-the-model-sees-for-each-offered-tool)).
 
-A Pack that does not render passes its tools through as offered, so most sections show the model each catalog tool under the name its Pack's tool list gives, or else its default wire name, with the tool's own description and parameter schema. A render that does not finish, because the Pack fails while rendering or a stop or a cancel drops it, fails the loop round with kind `cancelled` before any request goes out.
+A Pack that does not render passes its tools through as offered, so most sections show the model each catalog tool under the name its Pack's tool list gives, or else its default wire name, with the tool's own description and parameter schema. A render that does not finish, because the Pack fails while rendering or a stop or a cancel drops it, fails the loop round with kind `canceled` before any request goes out.
 
 ## Tool objects, Pack objects, and `tools.packs`
 
@@ -1033,7 +1033,7 @@ tools.offer: the web Pack is unavailable in this run: web needs runvil/search-pr
 
 So `tools.offer('mcp')` on a Host whose `mcp` Pack cannot serve raises with that Pack's own reason.
 
-Because the check runs when `tools.offer` is called, an unknown entry raises on that line while the section's Lua runs, before the first loop round freezes the section entry's tool list, and the tool never reaches any model round. A failed `tools.offer` in a section's prologue, the Lua before its prose, stops the run before the section's prose reaches a model. The refusal reads the same wherever in the prompt's Lua the offer runs, apart from the line the error points at, and left uncaught it fails the run with run error kind `Lua` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)).
+Because the check runs when `tools.offer` is called, an unknown entry raises on that line while the section's Lua runs, before the first loop round freezes the section entry's tool list, and the tool never reaches any model round. A failed `tools.offer` in a section's prologue, the Lua before its prose, stops the run before the section's prose reaches a model. The refusal reads the same wherever in the prompt's Lua the offer runs, apart from the line the error points at, and left uncaught it fails the run with the error code `lua_runtime` (see [Run error codes](16-limits-and-errors.md#run-error-codes)).
 
 You can catch the error with `pcall`. This block offers a misspelled tool id next to a real one. Put it in the `## Ask` section of `offer-search` in place of the first one:
 
@@ -1096,7 +1096,7 @@ The `tools` global is a table and `tools.call` is a function on it, so `type(too
 
 ### `tools.call` is a suspending call
 
-A `tools.call` to a catalog tool asks the Harness to run the tool and waits for its answer, so the tool's implementation never runs inside your prompt's Lua. That makes `tools.call` a suspending call, one that waits on the Harness while other chains run (see [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals)). Each call pauses the running block while the tool runs. Only the calling chain waits: the rest of the run goes on, and when the tool answers, the block resumes with the tool's result. Cancelling the run while a `tools.call` is waiting on its tool interrupts the call and ends the run as cancelled (see [Cancellation and stops](16-limits-and-errors.md#cancellation-and-stops)).
+A `tools.call` to a catalog tool asks the Harness to run the tool and waits for its answer, so the tool's implementation never runs inside your prompt's Lua. That makes `tools.call` a suspending call, one that waits on the Harness while other chains run (see [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals)). Each call pauses the running block while the tool runs. Only the calling chain waits: the rest of the run goes on, and when the tool answers, the block resumes with the tool's result. Canceling the run while a `tools.call` is waiting on its tool drops the call and ends the run with the error code `canceled` (see [Cancellation and stops](16-limits-and-errors.md#cancellation-and-stops)).
 
 A block can call `tools.call` as a plain statement and discard its result, as in `tools.call('web/fetch', { url = 'https://www.lua.org/' })` with no `return`, and the run continues. A task section calls a tool directly the same way (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn)).
 
@@ -1155,7 +1155,7 @@ A call made from Lua is a script call wherever the code sits. A Pack prelude hel
 
 ### Model-only tools
 
-A model-only tool is a catalog tool that only a model may call: a script's `tools.call` refuses it. A Pack marks a tool model-only when a render gives the tool arguments that a script cannot know but the model that receives the render can. A Pack sets the flag; none of the Packs that ship with Runvil sets it yet, so you meet a model-only tool only on a Host whose own Pack sets it.
+A model-only tool is a catalog tool that only a model may call: a script's `tools.call` refuses it. A Pack marks a tool model-only when a render gives the tool arguments that a script cannot know but the model that receives the render can. A Pack sets the flag; none of the Packs that ship with Runvil sets it, so you meet a model-only tool only on a Host whose own Pack sets it.
 
 The flag takes the tool out of script calls and nothing else:
 
@@ -1198,7 +1198,7 @@ The refusal is a Lua error that `pcall` catches. Its value has `kind` set to `mo
 edit-check.md:14: tool "kit/edit" (kit/edit) is model-only: a render shapes its arguments for the model that receives them, so a script cannot call it; offer it with tools.offer and let the model call it
 ````
 
-The message quotes the id the call named and then repeats the tool's id in parentheses, so the two read the same. A call refused this way sends nothing to the Harness and counts in no `tools.stats` counter, so as a section entry's first tool call it creates neither `tools.stats` nor `sys.model`. Uncaught, the refusal ends the run with run error kind `Tool` and the same refusal text, followed by ` (at {file}:{line})` for the `tools.call` line.
+The message quotes the id the call named and then repeats the tool's id in parentheses, so the two read the same. A call refused this way sends nothing to the Harness and counts in no `tools.stats` counter, so as a section entry's first tool call it creates neither `tools.stats` nor `sys.model`. Uncaught, the refusal ends the run with the error code `model_only_tool` and the same refusal text, followed by ` (at {file}:{line})` for the `tools.call` line.
 
 To put the tool to work, offer it before the section's first `models.loop` with `tools.offer('kit/edit')`, or offer the whole Pack with `tools.offer('kit')`, and let the model call it. A script can read `tools.get('kit/edit').model_only_call` first, to decide whether to call a tool itself or leave it to the model.
 
@@ -1224,7 +1224,7 @@ A tool's call count is the number of calls made to it so far in the current sect
 
 Script calls and model tool calls count in the same table. One model call and one script call to `web/fetch` make `tools.stats.tools['web/fetch']` read `2`. The model calls an offered tool by its wire name, and `tools.stats` counts that call under the tool's id, in the same counter as script calls made by id, because every call to a catalog tool or an adhoc tool counts under its tool's id and never under the name it was called by. The wire name the model sees is not a key.
 
-The counts go up each time the run attempts to dispatch a tool, before the tool runs, so a call counts even when the tool then fails, and a cancelled call still counts. An adhoc tool call counts under its id when it is dispatched, before its handler runs, so a handler that then fails still counts. A script call to a catalog tool outside the section entry's scope counts as an attempt for that tool too, which is why `fetch-count` reads `1` with no `tools.offer` at all. A call refused before its count is taken stays out of every counter: a `tools.call` to an id no tool has, which fails with `unbound_tool` (see [The `unbound_tool` error](#the-unbound_tool-error)), a `tools.call` of a model-only tool, which fails with `model_only_tool` (see [Model-only tools](#model-only-tools)), a section entry's first tool call that fails while setting up the entry's counts, and a model call to a name neither of the section entry's sets holds, which fails with `out_of_scope_tool` (see [The `out_of_scope_tool` error](#the-out_of_scope_tool-error)).
+The counts go up each time the run attempts to dispatch a tool, before the tool runs, so a call counts even when the tool then fails, and a canceled call still counts. An adhoc tool call counts under its id when it is dispatched, before its handler runs, so a handler that then fails still counts. A script call to a catalog tool outside the section entry's scope counts as an attempt for that tool too, which is why `fetch-count` reads `1` with no `tools.offer` at all. A call refused before its count is taken stays out of every counter: a `tools.call` to an id no tool has, which fails with `unbound_tool` (see [The `unbound_tool` error](#the-unbound_tool-error)), a `tools.call` of a model-only tool, which fails with `model_only_tool` (see [Model-only tools](#model-only-tools)), a section entry's first tool call that fails while setting up the entry's counts, and a model call to a name neither of the section entry's sets holds, which fails with `out_of_scope_tool` (see [The `out_of_scope_tool` error](#the-out_of_scope_tool-error)).
 
 The Engine's discovery tools count under the Pack id `dynamic` (see [Finding and calling dynamic tools](#finding-and-calling-dynamic-tools)). A `CallDynamicTool` call that reaches a Dynamic Set tool counts once, under the tool it calls, so after the model runs an adhoc `grab` through `CallDynamicTool` and makes no other call, `tools.stats.tools['adhoc/grab']` and `tools.stats.packs.adhoc` each read `1` and `tools.stats.packs.dynamic` reads `0`. A `GetDynamicTools` call, whatever it answers, and every refusal the discovery tools give, a direct call to a Dynamic Set tool by its wire name included (see [Mistakes the model gets back as text](#mistakes-the-model-gets-back-as-text)), count under `packs.dynamic` instead. All of them count toward `total`. `tools` never holds the discovery tools' ids, `dynamic/search` and `dynamic/call`, so a `GetDynamicTools` call or a discovery refusal shows in `total` and `packs.dynamic` but in no entry of `tools`.
 
@@ -2123,11 +2123,11 @@ The model never sees the failure and receives no further request: the round that
 
 ### Handlers and cancellation
 
-When the run is cancelled (see [Cancellation and stops](16-limits-and-errors.md#cancellation-and-stops)) while a handler runs, the handler's outcome is handled like this:
+When the run is canceled (see [Cancellation and stops](16-limits-and-errors.md#cancellation-and-stops)) while a handler runs, the handler's outcome is handled like this:
 
-- When the run is being cancelled and a handler returns normally, its value is still reported as the tool result, because a return still wins.
-- When the run is being cancelled and a handler raises, its error propagates at once. The loop raises the handler's failure directly without reporting the call, and no `tool_call_failed` event is reported, so the run's events show only the model round that completed.
-- A handler that never returns, such as one running `while true do end`, still stops when the run is cancelled, and the run ends as cancelled.
+- When the run is being canceled and a handler returns normally, its value is still reported as the tool result, because a return still wins.
+- When the run is being canceled and a handler raises, its error propagates at once. The loop raises the handler's failure directly without reporting the call, and no `tool_call_failed` event is reported, so the run's events show only the model round that completed.
+- A handler that never returns, such as one running `while true do end`, still stops when the run is canceled, and the run ends with the error code `canceled`.
 
 ### `jump` inside a handler
 
@@ -2252,7 +2252,7 @@ Two offered tools that share a wire name, such as two ids that differ only where
 the tools dup/a/b of the dup Pack in the Static Set and dup/a.b of the dup Pack in the Static Set share the wire name "dup_a_b", and a wire name names one tool across a section's Static Set and Dynamic Set; offer only one of them (at {file}:{line})
 ````
 
-Left uncaught, either error fails the run with run error kind `Binding`. Only a section that offers the tool, or both tools of a clash, fails this way, so a section that offers only `dup/a.b` advertises it as `dup_a_b`. The tool stays in the run's tool catalog, so `tools.get` finds it, and a block can still call it by its id (see [Naming the tool to call](#naming-the-tool-to-call)).
+Left uncaught, a schema that did not build fails the run with the error code `tool_schema_invalid`, and a shared wire name fails it with `tool_sets_invalid`. Only a section that offers the tool, or both tools of a clash, fails this way, so a section that offers only `dup/a.b` advertises it as `dup_a_b`. The tool stays in the run's tool catalog, so `tools.get` finds it, and a block can still call it by its id (see [Naming the tool to call](#naming-the-tool-to-call)).
 
 From a Pack that does not render, offering one tool advertises exactly that one tool, with nothing else added to the model's tool list, so a section that offers only `web/search` sends the model a list of one tool, and the parameter schema the model receives is the one Lua reads as the Tool object's `parameters` field (see [Tool objects](#tool-objects)). A Pack that renders can add tools only the model sees and reshape a schema, so the model's list and schemas can then differ from what Lua reads.
 
@@ -2390,7 +2390,7 @@ An adhoc tool call that runs alone runs your Lua handler with the call's argumen
 - When the run raises an error instead of answering a tool call or a batch, such as a call that failed to route, the loop raises that error unchanged, and the `models.loop` call ends.
 - When an adhoc tool handler's return value cannot be reported as tool text, `models.loop` raises the error from that report.
 - When an adhoc tool's handler raises, the run reports a failed tool call, the loop raises the handler's own value unchanged, and none of that round's records are added to the list. In the `grab-raise-loop` prompt from [When a handler raises](#when-a-handler-raises), the second `grab` handler raises `own`, so `pcall(models.loop)` returns `false` with the raised value `own`, `#messages` stays 1 with only the user record, and a `tool_call_failed` event is recorded.
-- When the run is being cancelled and an adhoc tool's handler raises, `models.loop` raises the handler's error directly, without reporting the call.
+- When the run is being canceled and an adhoc tool's handler raises, `models.loop` raises the handler's error directly, without reporting the call.
 
 ### Events from the model's tool calls
 
@@ -2512,7 +2512,7 @@ This returns:
 false|tool|{file}:{line}: web_fetch: missing url argument
 ````
 
-The kind is `tool` whatever went wrong inside the tool. The error value from a failed operator ask has `err.kind` equal to `tool`, whatever went wrong on the operator side. Uncaught, a tool failure ends the run with that error: `return tools.call('web/fetch', {})` with no `pcall` fails the run, and an uncaught failed ask, as from `return (input.ask())`, ends the run as a failure with [run error kind](16-limits-and-errors.md#run-error-kinds) `Tool` whose message carries the operator-side failure message, such as `the operator's window closed`. The run's message for an uncaught tool failure names the call, the tool's own message, and the line of the `tools.call`:
+The kind is `tool` whatever went wrong inside the tool. The error value from a failed operator ask has `err.kind` equal to `tool`, whatever went wrong on the operator side. Uncaught, a tool failure ends the run with that error and its tool code: `return tools.call('web/fetch', {})` with no `pcall` fails the run with `tool_invalid_arguments`, and an uncaught failed ask, as from `return (input.ask())`, ends the run with the [error code](16-limits-and-errors.md#run-error-codes) of the operator-side failure, such as `tool_backend`, and a message that carries that failure's message, such as `the operator's window closed`. The run's message for an uncaught tool failure names the call, the tool's own message, and the line of the `tools.call`:
 
 ````text
 tool call failure: {message} (at {file}:{line})
@@ -2547,7 +2547,7 @@ This returns `false|unbound_tool:web/missing`. The error value's `name` field ho
 
 A script call resolves a tool id such as `web/fetch` against the section entry's adhoc tools and then the run's tool catalog, so `tools.call('adhoc/grab')` before `grab` is defined gives `unbound_tool` too. A string without a slash, a wire name or a bare tool name included, never reaches that lookup: it raises `tools.call: "web_fetch" is not a tool id` at the call, as [Wire names for the model, tool ids for Lua](#wire-names-for-the-model-tool-ids-for-lua) shows. A failed call of either kind sends out no tool call at all.
 
-The id list covers every tool in the run's tool catalog, not just the tools offered into the current section, so on a Host that serves `user-input` and `web`, a section that offers nothing still lists all three of their tools. The list is in alphabetical order rather than catalog order, so it reads `["user-input/ask", "web/fetch", "web/search"]` whatever order the catalog adds them in. Uncaught, the `tools.call('web/missing', {})` from the block above ends the run with run error kind `Tool` and this message:
+The id list covers every tool in the run's tool catalog, not just the tools offered into the current section, so on a Host that serves `user-input` and `web`, a section that offers nothing still lists all three of their tools. The list is in alphabetical order rather than catalog order, so it reads `["user-input/ask", "web/fetch", "web/search"]` whatever order the catalog adds them in. Uncaught, the `tools.call('web/missing', {})` from the block above ends the run with the error code `unbound_tool` and this message:
 
 ````text
 tool "web/missing" is not a tool in this run; catalog tools: ["user-input/ask", "web/fetch", "web/search"] (at {file}:{line})
@@ -2594,7 +2594,7 @@ The error is a hard error. It records the requested name, whether that name is t
 - None of the round's calls run, so the round appends nothing, and `#messages` is unchanged after `pcall(models.loop)` fails, which is why the result above ends with `(1)`.
 - The round that holds the out-of-scope call is the last model request of the loop, so the model gets no further round to retry with a valid name.
 
-Uncaught, it ends the section and fails the run with run error kind `Tool`, so a section with a bare `models.loop()` never reaches a later `return 'unreachable'` line.
+Uncaught, it ends the section and fails the run with the error code `out_of_scope_tool`, so a section with a bare `models.loop()` never reaches a later `return 'unreachable'` line.
 
 #### The not-offered hint
 
@@ -2611,7 +2611,7 @@ The hint appears only in that case. Two other mistakes get the same error withou
 
 ### Tool errors that end the run
 
-Run error kind `Tool` covers five uncaught failures: a dispatched tool's failure, a model call outside the round's offered set, a script call naming an id not bound in the run, a script call naming a model-only tool, and a `models.loop` call that reached its [round cap](11-conversations.md#tool-rounds-and-the-round-cap) without a final reply. An uncaught dispatched tool failure fails the run with run error kind `Tool` and the tool's failure text. Each one ends the run with its own message:
+Five uncaught failures end the run with a tool code. A dispatched tool's failure keeps the tool's own code, one of `tool_invalid_arguments`, `tool_backend`, `tool_transport`, or `tool_other`, and the tool's failure text. A model call outside the round's offered set ends the run with `out_of_scope_tool`, a script call naming an id not bound in the run with `unbound_tool`, a script call naming a model-only tool with `model_only_tool`, and a `models.loop` call that reached its [round cap](11-conversations.md#tool-rounds-and-the-round-cap) without a final reply with `tool_loop_exhausted`. Each one ends the run with its own message:
 
 | Uncaught failure | Run message |
 |---|---|
@@ -2778,7 +2778,7 @@ A prelude function called from a block can also use the [store operations](09-th
 
 A prelude can call `store` operations at its top level while it loads. During the install they run directly instead of suspending, and once the install ends, any store function the prelude captured suspends like your own store calls.
 
-Because a prelude's top-level code runs again in every section entry's VM, a top-level `store.write` repeats in every arm. With two arms, both installs run `store.write('seeded.txt', 'seed')`, the second arm's install-time write conflicts with the first, and the run ends with run error kind `Vfs` (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)). That happens even when the prelude wraps the write in `pcall`, as in `pcall(function() store.write('seeded.txt', 'seed') end)`.
+Because a prelude's top-level code runs again in every section entry's VM, a top-level `store.write` repeats in every arm. With two arms, both installs run `store.write('seeded.txt', 'seed')`, the second arm's install-time write conflicts with the first, and the run ends with the error code `determinism` (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)). That happens even when the prelude wraps the write in `pcall`, as in `pcall(function() store.write('seeded.txt', 'seed') end)`.
 
 ### `var` inside a prelude
 
@@ -2796,7 +2796,7 @@ Nested tables and list elements inside `var` are read-only at every depth, and a
 
 ### When a prelude fails to load
 
-A prelude failure ends the run before any section code runs. A prelude that does not compile, or that raises an error while loading, fails the run with run error kind `Lua` before the run issues any effect. The prompt's own work never starts, so a section that would only `return 'unreachable'` still ends in a `Lua` failure.
+A prelude failure ends the run before any section code runs. A prelude that does not compile, or that raises an error while loading, fails the run with the error code `lua_runtime` before the run issues any effect. The prompt's own work never starts, so a section that would only `return 'unreachable'` still ends in a `lua_runtime` failure.
 
 Either way, section setup fails with a message that names the Pack and the Lua message:
 
@@ -2808,13 +2808,13 @@ The Lua stack traceback follows on the next lines when there is one, and this is
 
 #### Calling a tool while loading
 
-A prelude defines functions, and its functions call tools later. A prelude that calls a tool at its top level while loading fails the install and the run with run error kind `Lua`, because the prelude does not run as a coroutine and the call suspends. The failure surfaces as the prelude load error, with a message that starts `` Pack `{pack}`: its prelude failed to load: `` and states the rule:
+A prelude defines functions, and its functions call tools later. A prelude that calls a tool at its top level while loading fails the install and the run with the error code `lua_runtime`, because the prelude does not run as a coroutine and the call suspends. The failure surfaces as the prelude load error, with a message that starts `` Pack `{pack}`: its prelude failed to load: `` and states the rule:
 
 ````text
 A prelude only defines functions; it must not call tools while loading.
 ````
 
-`require` does not exist while preludes install, so a prelude that calls it fails the run with kind `Lua` and a load-failure message that names the Pack and includes:
+`require` does not exist while preludes install, so a prelude that calls it fails the run with the code `lua_runtime` and a load-failure message that names the Pack and includes:
 
 ````text
 attempt to call a nil value (global 'require')
@@ -2822,7 +2822,7 @@ attempt to call a nil value (global 'require')
 
 ### Global names a prelude cannot take
 
-A prelude never replaces or shadows an Engine global for your code. Before any of a prelude's globals install, the Engine checks all of them in sorted name order, so an error names the first colliding global in byte order. Each refusal fails section setup, and the run, with run error kind `Lua`:
+A prelude never replaces or shadows an Engine global for your code. Before any of a prelude's globals install, the Engine checks all of them in sorted name order, so an error names the first colliding global in byte order. Each refusal fails section setup, and the run, with the error code `lua_runtime`:
 
 | The prelude defines | The message |
 |---|---|
@@ -2838,7 +2838,7 @@ In the reserved-name message, `{kind}` is `an Engine global`, `a Lua standard-li
 The reserved names hold in every section:
 
 - A prelude that defines `tools`, `store`, or `models` fails with `` Pack `{pack}`: its prelude defines the global `tools`, which is reserved as an Engine global ``, with the global it defined in place of `tools`, and the refused prelude leaves the Engine's global bound exactly as it was before the install.
-- A prelude that defines a global `require`, such as with `function require() return 'mine' end`, fails the run with kind `Lua` and a message that contains `` Pack `{pack}`: its prelude defines the global `require` `` and `which is reserved as an Engine global`.
+- A prelude that defines a global `require`, such as with `function require() return 'mine' end`, fails the run with the code `lua_runtime` and a message that contains `` Pack `{pack}`: its prelude defines the global `require` `` and `which is reserved as an Engine global`.
 - A prelude that defines `argv` or `prose` fails the install as reserved, even though neither is a raw global.
 - A prelude that defines `ui` or `item` fails the run as reserved, even in a section that binds neither, with a message that names the Pack and the name in backticks.
 
