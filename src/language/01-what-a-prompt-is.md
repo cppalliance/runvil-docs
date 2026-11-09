@@ -449,11 +449,11 @@ The Host launches runs and sets run policy, the settings that govern a run, such
 
 ### Packs and the tool catalog
 
-A Pack is a bundle of tools, such as the web tools, that can also bring a Lua prelude. A Plugin is an entry point that adds zero or more Packs. The Host calls its Plugins once, when it sets up, and every Pack they add is built then and shared across runs. The Harness takes each run's tool catalog, the set of tools that run can use, from a snapshot of the run's Packs: every `runvil` Pack, plus each third-party Pack the prompt declares. The prompt itself installs no Packs, and it names the ones it needs under `uses:`.
+A Pack is a bundle of tools, such as the web tools, that can also bring a Lua prelude. A Plugin is an entry point that adds zero or more Packs. The Host calls its Plugins once, when it sets up, and they add each Pack with its factory, the code that makes an instance of the Pack. Each run makes its own instance of each of its Packs through that Pack's factory. The Harness takes each run's tool catalog, the set of tools that run can use, from a snapshot of the run's Packs: every `runvil` Pack, plus each third-party Pack the prompt declares. The prompt itself installs no Packs, and it names the ones it needs under `uses:`.
 
 ### Seed, start time, and repeatable runs
 
-The Host names each run. The Harness draws the run's seed, a random value, from a secure random source, and takes the run's start time from the clock. A run given the same seed, the same start time, and the same outside answers repeats exactly.
+The Host names each run. The Harness draws the run's seed, a random value, from a secure random source, and takes the run's start time from the clock. A run given the same seed, the same start time, the same outside answers, and the same messages, each reaching the run at the same point, repeats exactly.
 
 ### Run inputs a prompt can read
 

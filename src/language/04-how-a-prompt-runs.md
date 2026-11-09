@@ -385,9 +385,10 @@ Whether a declared `user` is met depends only on the run. The same prompt text r
 
 ### Unavailable Packs
 
-A declared Pack that the Host has but that cannot serve refuses the run with error code `requirements_unmet` and the notice line `- {pack} is unavailable: {reason}`. A Pack cannot serve in three cases:
+A declared Pack that the Host has but that cannot serve refuses the run with error code `requirements_unmet` and the notice line `- {pack} is unavailable: {reason}`. A Pack cannot serve in four cases:
 
 - Building it failed when the Host set up. That is not a setup error: the Host stores the Pack as unavailable with the failure as its reason, and every run that needs it is refused naming that reason.
+- Its factory refuses or panics when a run makes its own instance of the Pack. Only that run holds the Pack as unavailable, with the factory's refusal as its reason, or `the Pack's factory panicked` after a panic, and the next run calls the factory again.
 - Its readiness check fails before the run.
 - It is the built-in `user` Pack, and the run has no user (see [Runs with no user](#runs-with-no-user)).
 
@@ -399,7 +400,7 @@ The `web` Pack cannot be built on a Host that supplies no search provider, so a 
 
 Two declared entries the Host has no Pack for are reported as unavailable too, because their reason tells you what to write. A bare Pack id the Host has only from other vendors gets a line such as `- poop is unavailable: poop means runvil/poop, which is not installed; write acme/poop to use that Pack`, which joins every such vendor's fully qualified name with `or`. A `vendor/name` the Host does not have gets a line such as `- poop is unavailable: acme/poop is not installed`.
 
-When one of the Host's Packs fails to build or fails its readiness check, the Harness writes a warning naming the Pack to the Harness's own log, which is separate from the run's events. A build failure logs `Pack construct failed; it is built as unavailable`, and a readiness failure logs `Pack will not be ready; this run treats it as unavailable`.
+When one of the Host's Packs cannot serve because building it failed when the Host set up, its factory refused or panicked, or its readiness check failed, the Harness writes a line naming the Pack to the Harness's own log, which is separate from the run's events. A Pack the Host set up as unavailable logs the warning `Pack was inserted unavailable` once, when the Host sets up. A factory that refuses a run logs `Pack factory refused this run; the Pack is unavailable to it` at debug level, a factory that panics logs the error `Pack factory panicked; the Pack is unavailable to this run`, and a readiness failure logs the warning `Pack will not be ready; this run treats it as unavailable`.
 
 ### Only declared Packs can refuse a run
 
@@ -1726,4 +1727,4 @@ Two runs of the same prompt running at the same time stay separate. Each returns
 
 ### Repeating a run exactly
 
-Two runs with the same seed, the same start instant, and the same Harness answers produce byte-identical text, including the same `sys.when`, the same seeded values, and the same untrusted envelope nonce. A replay runs the same prompt under the same seed, start instant, and answers, so it also issues the same [Harness work](01-what-a-prompt-is.md#effects-and-harness-work) as the original run and reports the same events, in the same order.
+Two runs with the same seed, the same start instant, the same Harness answers, and the same messages, each reaching the run at the same point, produce byte-identical text, including the same `sys.when`, the same seeded values, and the same untrusted envelope nonce. A replay runs the same prompt under the same seed, start instant, answers, and messages, so it also issues the same [Harness work](01-what-a-prompt-is.md#effects-and-harness-work) as the original run and reports the same events, in the same order.

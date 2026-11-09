@@ -205,7 +205,7 @@ Apart from what a Pack prelude adds, every global a section entry's `_G` holds i
 
 ### Suspending calls
 
-A suspending call is an Engine call that waits on the Harness: the section pauses at the call and resumes with the result. You write each one as an ordinary Lua call in straight-line code:
+A suspending call is an Engine call that pauses the section until its answer comes, whether from the Harness, from an inbox, or from other chains, and then resumes the section with the result. You write each one as an ordinary Lua call in straight-line code:
 
 ````markdown
 ---
@@ -2470,6 +2470,8 @@ return first .. '|' .. second
 
 Every part of the main chain reads that one inbox: the H1 pass, the walk after it, and every section the main chain runs with [`call`](08-jump-and-call.md#calling-a-section), so a `tasks.receive()` in a section run with `call` takes the operator's next message. A message the H1 pass leaves unread is still queued when the walk begins.
 
+A `models.loop` on the main chain reads that inbox too. It takes every queued message before each model request, and once more before it returns unless its round cap is spent, so a message that arrives while the loop runs goes to the model rather than to the next `tasks.receive()` (see [Messages that arrive while the loop runs](11-conversations.md#messages-that-arrive-while-the-loop-runs)).
+
 The operator's messages reach only the main chain. A task, whether [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) or [`tasks.fanout`](14-fanout.md#fanout-in-one-call) started it, has an inbox of its own, so a `tasks.receive()` in a task waits on that inbox and never takes the operator's messages. Only the task's owner fills it (see [Messages between tasks](15-tasks.md#messages-between-tasks)).
 
 ### While the section waits
@@ -2490,7 +2492,7 @@ A stop of the run is different. A stop drops the model round and the tool calls 
 
 ### The operator and the model
 
-No tool lets a model wait for the operator. A model's reply without tool calls already ends [`models.loop`](11-conversations.md#starting-a-conversation), so a prompt that holds a conversation with the operator reads each message itself and adds it to the conversation, as `messages:user(tasks.receive())` does before the next `models.loop()`.
+No tool lets a model wait for the operator. A model's reply without tool calls ends [`models.loop`](11-conversations.md#starting-a-conversation) once the loop finds the inbox empty, or at once when its round cap is spent, so a prompt that holds a conversation with the operator reads each message itself and adds it to the conversation, as `messages:user(tasks.receive())` does before the next `models.loop()`.
 
 ## Error values
 

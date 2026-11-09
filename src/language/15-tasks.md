@@ -796,7 +796,7 @@ A cancel stops a task wherever it is:
 - A task waiting on a model reply ends, and so does a task parked on a batch of in-flight tool calls inside `models.loop`.
 - A task waiting on its inbox ends, whether it waits in `tasks.receive()` or is [idle](#idle-tasks) after `tasks.reply`. An idle task has not finished, so a reply no wait has taken is dropped with it, and the messages left in a canceled task's inbox are dropped too.
 
-Canceling a task withdraws every tool call it still has unanswered, even a call to a tool marked to survive a Host stop, so the canceled task never receives those results, and their late answers start no new round. Canceling a task while it waits on Harness work, such as a store call, a model round, or a timeout, does not fail the run, and the late answer is discarded when it arrives. A store write the task had already issued when it was canceled is not withdrawn, though, so that write can still take effect even though the canceled task never sees its answer.
+A cancel withdraws every effect the task still has unanswered: a model round, a render, a store call, a timed wait's timer, and every tool call, even a call to a tool marked to survive a Host stop. The Harness stops the work already running and drops the rest unstarted, so the canceled task never sees an answer, and the cancel does not fail the run. A store call the task made in the cancel's own step is dropped unperformed, and a write the Harness already performed stays.
 
 A canceled task does not fail its owner, so the owner's return value becomes the run result. A canceled task is not a leaked task either, so canceling your own spawned task with `tasks.cancel(t)` before returning lets the section complete cleanly without [`tasks_live`](#when-a-chain-ends-with-live-tasks).
 
@@ -929,7 +929,7 @@ long draft|short draft after shorten it|returned after done
 
 ### Each task's inbox
 
-Every task has an inbox, a queue of text messages, oldest first, like the main chain's inbox that holds the operator's messages (see [Messages that arrive first](05-lua-environment.md#messages-that-arrive-first)). Only the task's owner fills it, with `tasks.send`, and only the task reads it, with `tasks.receive()` or `tasks.reply`. A section the task runs with `call` has no inbox of its own and reads the task's (see [How a called chain runs](08-jump-and-call.md#how-a-called-chain-runs)). No chain can send to the main chain, whose inbox only the Host fills.
+Every task has an inbox, a queue of text messages, oldest first, like the main chain's inbox that holds the operator's messages (see [Messages that arrive first](05-lua-environment.md#messages-that-arrive-first)). Only the task's owner fills it, with `tasks.send`, and only the task reads it, with `tasks.receive()` or `tasks.reply`, and a running `models.loop` also takes the task's queued messages. A section the task runs with `call` has no inbox of its own and reads the task's (see [How a called chain runs](08-jump-and-call.md#how-a-called-chain-runs)). No chain can send to the main chain, whose inbox only the Host fills.
 
 A message stays in the inbox until the task reads it, and a stop leaves it there (see [What a stop leaves running](16-limits-and-errors.md#what-a-stop-leaves-running)). A task that ends with messages still in its inbox drops them, and its owner sees how the task ended through a wait or `tasks.status`.
 
@@ -939,7 +939,7 @@ A message stays in the inbox until the task reads it, and a stop leaves it there
 
 - A task waiting in `tasks.receive()` or `tasks.reply` resumes, and that call returns the text.
 - A task inside `models.loop` whose model request has no answer yet has that request withdrawn, and the loop sends it again with the message appended (see [Messages that arrive while the loop runs](11-conversations.md#messages-that-arrive-while-the-loop-runs)).
-- Otherwise the message waits in the inbox. The task's next `tasks.receive()` or `tasks.reply` returns the oldest message at once, and `models.loop` appends every queued message before its next model request, so a task whose loop is running tool calls reads the message once they finish.
+- Otherwise the message waits in the inbox. The task's next `tasks.receive()` or `tasks.reply` returns the oldest message at once. A running `models.loop` appends every queued message before its next model request, so a task whose loop is running tool calls reads the message once they finish, and the loop takes the queue once more before it returns, unless its round cap is spent.
 
 `tasks.send` returns `false` once the task has ended, whether it returned, failed, was canceled, or was closed by the [idle cap](#the-idle-cap), and the text is dropped: it enters no inbox and reports no event. With this block as the Lua block of `## Main` in `one-task`, the run returns `false`:
 
@@ -979,6 +979,18 @@ While a task waits on its inbox, `tasks.status(t).blocked` reads `inbox`, and th
 ### Answering with `tasks.reply`
 
 `tasks.reply(value)` hands `value` to the task's owner as the task's latest result, then waits on the task's inbox and returns the owner's next message, as `tasks.receive()` does. The owner takes the reply the way it takes a finished task's result, with `tasks.join_any` or `tasks.join`, so `ok` is `true` and the result is the reply's text. The task keeps its section entry while it waits, its locals and its `messages` list included, so a task that holds a conversation keeps it across follow-ups.
+
+A task can loop on its conversation and answer each message with the model's reply. Spawned with its first question as its `input`, a task that runs this block holds one conversation across every follow-up:
+
+````lua
+messages:user(args)
+while true do
+  models.loop()
+  messages:user(tasks.reply(messages[#messages].content))
+end
+````
+
+Each `models.loop()` runs to the model's reply, and `tasks.reply` hands the reply's text to the owner and returns the owner's next message, which becomes the next `user` record. The task never returns: it ends when its owner cancels it, when its owner ends while it is idle, or when the [idle cap](#the-idle-cap) closes it (see [Idle tasks](#idle-tasks)).
 
 `tasks.reply` turns `value` into text the way a section's `return` does. A string stays as it is and a number or a boolean becomes its text, so `tasks.reply(42)` hands over `42`, and `tasks.reply()` or `tasks.reply(nil)` hands over the empty string, the result of a task whose walk returns nothing. A table raises a `lua` error whose message includes `cannot return a table as a result`, as a section's table return does, and so does any other value with no text form, such as a function.
 
@@ -1033,7 +1045,7 @@ Once the owner sends a message, the task runs again, and the next wait waits for
 
 ### The idle cap
 
-An idle task keeps its Lua VM, so a run holds at most a set number of idle tasks, the idle cap: 8 by default, which the Harness sets as `max_idle_tasks` (see [Run limits and their defaults](16-limits-and-errors.md#run-limits-and-their-defaults)). The cap counts idle tasks across the whole run, whoever owns them. When a reply would put the run past the cap, the task idle longest, other than the one replying, closes: its chain ends, and its latest reply stays its result, as if it had returned it.
+An idle task keeps its Lua VM, so a run holds at most a set number of idle tasks, the idle cap: 8 by default, which the Harness sets as `max_idle_tasks` (see [Run limits and their defaults](16-limits-and-errors.md#run-limits-and-their-defaults)). The cap counts idle tasks across the whole run, whoever owns them. When a reply would put the run past the cap, another idle task closes: of the idle tasks other than the one replying, the one idle longest that owns no live task, or the one idle longest when each of them owns one. Tasks spawned by a section the task is running with `call` count as its own. The closed task's chain ends, and its latest reply stays its result, as if it had returned it.
 
 A task the idle cap closed reads like a task that returned:
 
@@ -1041,13 +1053,13 @@ A task the idle cap closed reads like a task that returned:
 - `tasks.send` to it returns `false`.
 - A wait on it takes its latest reply when no wait has, and otherwise raises `task_consumed`.
 
-The cap never abandons a task, because its owner is still live and can still take the reply. Nothing in the run's record says that the cap closed the task.
+The cap never abandons the task it closes, because that task's owner is still live and can still take the reply. The closed task's own live tasks end as its return would end them: each is abandoned with reason `owner_returned` (see [Abandon reasons](#abandon-reasons)), and a running one among them is no `tasks_live` failure, because the closed task's result stays its reply. When the closed task owns the task that is replying, the replier is abandoned too, since the cap's bound comes first. Nothing in the run's record says that the cap closed the task.
 
 ### Inbox events
 
 Two run events report inboxes, each under the provenance of the chain whose inbox it is, so a task's inbox events report under its own task id (see [Run events and records](04-how-a-prompt-runs.md#run-events-and-records)):
 
-- `inbox_message` reports each message that enters an inbox, with the message in its `text` field. For a `tasks.send`, the step that applies the message reports it under the receiving task, in the section the task is in. A message the Host sends to the main chain is reported when the Host hands it over, ahead of the step that applies it.
+- `inbox_message` reports each message that enters an inbox, with the message in its `text` field. For a `tasks.send`, the step that applies the message reports it under the receiving task, in the section the task is in. A message sent to a task that has not started yet is reported right after the task's [`TaskStarted`](#the-taskstarted-event) event, in the section the task starts at, one event per message, oldest first, and not at all when the task is canceled or abandoned before it starts. A message the Host sends to the main chain is reported when the Host hands it over, ahead of the step that applies it, and the record holds the events of the answers that landed before the message ahead of its `inbox_message`, so a model reply that came first is recorded first.
 - `inbox_waiting` reports a chain parking in `tasks.receive()` or `tasks.reply` with its inbox empty, in the step where it parks. A read that finds a message waiting reports nothing.
 
 A `tasks.send` that returns `false` reports neither event. On the main chain, task `0`, a Host reads `inbox_waiting` as the run waiting for the operator, and `inbox_message` as the operator's message reaching it.
@@ -1229,7 +1241,7 @@ The refusal in the middle always reads `` task `{task}` is not a task this chain
 
 ### When a chain ends with live tasks
 
-A chain must wait on or cancel every task it spawned before it ends. When a section or other chain ends normally, by a scalar return or by running out of sections, while a task it spawned is still running, its outcome becomes an error value of kind `tasks_live` in place of the returned value, and the owner chain fails. A leaked task is treated as a bug in your prompt, and only a normal ending with at least one leaked task produces `tasks_live`. Canceled tasks leave nothing live at chain end, so a run that cancels its tasks ends normally, with text such as `done`, and without `tasks_live`.
+A chain must wait on or cancel every task it spawned before it ends. When a section or other chain ends normally, by a scalar return or by running out of sections, while a task it spawned is still running and not idle, its outcome becomes an error value of kind `tasks_live` in place of the returned value, and the owner chain fails. A leaked task is treated as a bug in your prompt, and only a normal ending with at least one leaked task produces `tasks_live`. Canceled tasks leave nothing live at chain end, so a run that cancels its tasks ends normally, with text such as `done`, and without `tasks_live`.
 
 An [idle](#idle-tasks) task is no leak. It already handed its owner a reply, so an owner may end while it has idle tasks: they are abandoned with it, and its outcome stays its own. An owner that ends with an idle task and a running one fails with `tasks_live` naming only the running one.
 
@@ -1339,11 +1351,11 @@ When the run is canceled, every spawned task that is still live, running or idle
 
 ### Abandon reasons
 
-An abandoned task carries the reason it was abandoned, which says how its owner chain ended while the task was still live, and its abandonment event records that reason. An idle task abandoned with its owner gets the same reason a running one would, and the [idle cap](#the-idle-cap) never abandons a task, so neither adds a reason. Each reason has a phrase, which is what the `TaskAbandoned` trace line renders for it. The five reasons are written in snake_case:
+An abandoned task carries the reason it was abandoned, which says how its owner chain ended while the task was still live, and its abandonment event records that reason. An idle task abandoned with its owner gets the same reason a running one would, and a task whose owner the [idle cap](#the-idle-cap) closed gets `owner_returned`, as if that owner had returned, so neither adds a reason. Each reason has a phrase, which is what the `TaskAbandoned` trace line renders for it. The five reasons are written in snake_case:
 
 | Reason | Phrase | When it applies |
 |---|---|---|
-| `owner_returned` | `the section ended` | The owner ended normally, by a scalar return or by running out of sections, while the task was still live, without canceling it |
+| `owner_returned` | `the section ended` | The owner ended normally, by a scalar return or by running out of sections, or the idle cap closed it, while the task was still live, without canceling it |
 | `owner_failed` | `the owner failed` | The owner failed with its own error while the task was live |
 | `tool_loop_exhausted` | `the tool loop was exhausted` | The owner's `models.loop` ran past its round cap while the task was live |
 | `owner_aborted` | `the owner was aborted` | The owner was stopped from outside, by fail-fast after a sibling arm failed fatally or because the owner's own owner ended first |
@@ -1815,7 +1827,7 @@ if timed_out then
 end
 ````
 
-Members that missed a time limit keep running, and a later wait gathers them. They still need a wait or a cancel before their owner ends, because tasks still live when their owner ends are reported in the owner's `tasks_live` outcome (see [Ownership, leaked tasks, and abandonment](#ownership-leaked-tasks-and-abandonment)).
+Members that missed a time limit keep running, and a later wait gathers them. They still need a wait or a cancel before their owner ends, because tasks still running and not idle when their owner ends are reported in the owner's `tasks_live` outcome (see [Ownership, leaked tasks, and abandonment](#ownership-leaked-tasks-and-abandonment)).
 
 ### Late members and the store
 
@@ -2314,9 +2326,9 @@ A finished task fires a `TaskSucceeded` or `TaskFailed` event under its target s
 - A task whose section returns normally reports a single `TaskSucceeded` terminal event under its section, after its `TaskStarted`.
 - A task whose section raises an error reports `TaskFailed` under its section and never reports `TaskSucceeded`.
 - `TaskSucceeded` events appear in the order the tasks actually finish, which can differ from the order you collect them.
-- A task the [idle cap](#the-idle-cap) closes reports `TaskSucceeded` under its target section, stamped with its own provenance, as if it had returned its latest reply, and the event does not say that the cap closed it.
+- A task the [idle cap](#the-idle-cap) closes reports `TaskSucceeded` under its target section, stamped with its own provenance, as if it had returned its latest reply, after the events of the live tasks it owned, and the event does not say that the cap closed it.
 
-In a fanout, every started arm produces exactly one terminal task event: `TaskSucceeded` for an arm that returns, `TaskFailed` for an arm that raises, and `TaskCanceled` for a sibling canceled by fail-fast (see [When an arm fails](14-fanout.md#when-an-arm-fails)). A failing arm reports a `TaskFailed` event, and when the fanout fails no arm reports `TaskSucceeded`.
+In a fanout, every started arm produces exactly one terminal task event: `TaskSucceeded` for an arm that returns, `TaskFailed` for an arm that raises, and `TaskCanceled` for a sibling canceled by fail-fast (see [When an arm fails](14-fanout.md#when-an-arm-fails)) and for an arm that replied with `tasks.reply`, which ends canceled once the call takes its reply. A failing arm reports a `TaskFailed` event, and when the fanout fails no arm reports `TaskSucceeded`.
 
 Canceling a started task reports a `TaskCanceled` event exactly once, attributed to the canceled task's section (see [Canceling and listing tasks](#canceling-and-listing-tasks)):
 
@@ -2404,7 +2416,7 @@ Task lifetime and ownership faults count as your program failing, so when no `pc
 
 | Left uncaught | Error code |
 | --- | --- |
-| A leaked task, one you leave live | `tasks_live` |
+| A leaked task, one you leave still running and not idle | `tasks_live` |
 | Reaching for a task from code that does not own it | `task_not_owned` |
 | Waiting on the same task result twice | `task_consumed` |
 | A canceled task's error value, raised again after its wait | `task_canceled` |
@@ -2414,4 +2426,4 @@ A wait hands a canceled task's error value back without raising it, so a task ca
 
 ### What can differ between runs
 
-Given the same model and tool answers, only two outcomes can differ between interleavings of a run's tasks: which task `tasks.join_any` returns, and how far a canceled task got before it stopped. A task's record does not depend on how fast or in what order model answers arrive. Answering requests one at a time, all at once in issue order, or all at once in reverse gives the same result text and Harness work for each task, with only the interleaving across tasks differing. Concurrent tasks finish correctly whatever order their model replies arrive in, and the run result is the same whether replies come one at a time, all at once, or in reverse.
+Given the same model and tool answers, only three outcomes can differ between interleavings of a run's tasks: which task `tasks.join_any` returns, how far a canceled task got before it stopped, and where a message sent with `tasks.send` lands in its task's work. A task's record does not depend on how fast or in what order model answers arrive unless its owner sends it a message, because a `tasks.send` acts on what the task is doing when the message arrives (see [Sending with `tasks.send`](#sending-with-taskssend)): answer order can decide whether the message withdraws a model request, joins the next one, or waits for the task's next read. Without a message, answering requests one at a time, all at once in issue order, or all at once in reverse gives the same result text and Harness work for each task, with only the interleaving across tasks differing, and the run result is the same too. Concurrent tasks finish correctly whatever order their model replies arrive in.

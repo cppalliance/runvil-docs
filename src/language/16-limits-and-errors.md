@@ -121,7 +121,7 @@ A run observes five limits, each with a default:
 | Memory ceiling | 64 MiB | the Lua heap of each section VM | the Harness |
 | Log event quota | 1024 `log` events | each section VM | the Harness |
 
-These built-in values are the default limits, the set every run starts from. The Engine accepts other limits from the code that starts a run, but the Harness passes none, so every run observes these defaults. One set of limits applies to the whole run, the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) and every section included.
+These built-in values are the default limits, the set every run starts from. The Engine accepts other limits from the code that starts a run, and the Harness passes it the limits set for the run, which are these defaults unless the Host sets others. Workshop sets none, so every Workshop run observes these defaults. One set of limits applies to the whole run, the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) and every section included.
 
 Every count and size limit of a run is at least 1, so the round cap, the concurrency limit, the idle cap, the memory ceiling, and the log event quota can never be zero.
 
@@ -146,7 +146,7 @@ Reaching the round cap fails the loop call with an error value whose `kind` is `
 
 The concurrency limit caps how many tasks run at once across the whole run, 8 by default. The Harness sets it, and no frontmatter key changes it. By default a run admits at most 8 tasks at once, fanout arms included; the Harness can set a different limit, and `tasks.concurrency` lowers it for a chain's own spawns.
 
-The idle cap bounds how many tasks the whole run holds idle after a `tasks.reply`, 8 by default. Each idle task keeps its Lua VM, so the cap bounds the memory idle tasks hold. The Harness sets it as `max_idle_tasks`, and no frontmatter key changes it. One more reply past the cap closes the task idle longest, which ends as if it had returned its latest reply (see [The idle cap](15-tasks.md#the-idle-cap)).
+The idle cap bounds how many tasks the whole run holds idle after a `tasks.reply`, 8 by default. Each idle task keeps its Lua VM, so the cap bounds the memory idle tasks hold. The Harness sets it as `max_idle_tasks`, and no frontmatter key changes it. One more reply past the cap closes another idle task, the one idle longest that owns no live task, or the one idle longest when each owns one. The closed task ends as if it had returned its latest reply, and its own live tasks are abandoned with reason `owner_returned` (see [The idle cap](15-tasks.md#the-idle-cap)).
 
 The response cap and the receive timeout are request limits, not run limits: the gateway client applies them to each model request. Each model reply may be at most 16 MiB by default, and each wait for the next piece of a model reply times out after 120 seconds by default. No frontmatter key changes either. [Model request limits and failures](#model-request-limits-and-failures) shows how both bound a model round.
 
@@ -628,7 +628,7 @@ An error value built from an Engine failure has a `message`, and `tostring` retu
 
 A failure handed back from a chain that `call` or a spawned task ran keeps the line where it happened in that chain.
 
-After the location comes the prose, the text a model reads when the failure reaches one. A failure that the prompt's own Lua caused has author prose, `{what}. {default prose}`: what failed, then the fixed text for that kind of failure. That covers Lua errors, an exhausted log quota, the call depth cap, a failed `{{ }}` substitution, a task used by a chain that does not own it or waited on twice, and a chain that ends with tasks still live. The prose itself never holds the file or the line.
+After the location comes the prose, the text a model reads when the failure reaches one. A failure that the prompt's own Lua caused has author prose, `{what}. {default prose}`: what failed, then the fixed text for that kind of failure. That covers Lua errors, an exhausted log quota, the call depth cap, a failed `{{ }}` substitution, a task used by a chain that does not own it or waited on twice, and a chain that ends with tasks still running and not idle. The prose itself never holds the file or the line.
 
 Every other failure, such as a tool, store, model, or context failure, keeps its own prose, and it gains the `{file}:{line}: ` prefix in Lua when it is located. A model never sees that prefix: when a tool fails during `models.loop`, the failure reaches the model as its prose alone.
 
@@ -710,7 +710,7 @@ The run's own first step finds a few failures of its own. A missing `runvil:` ke
 Each located failure points at one line:
 
 - A failure that reaches Lua, caught or not: the line that [Where a caught error's message points](#where-a-caught-errors-message-points) describes.
-- A chain that ends with tasks still live: the spawn line of the first task left running.
+- A chain that ends with tasks still running and not idle: the spawn line of the first task left running.
 - A `jump` to a missing heading: the line of the `jump`.
 - A failed [H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate): the line of the failure that tripped it. A failed `{{ }}` substitution in the H1 body does not fail the gate: it ends the run with `substitution`, at its placeholder's line.
 - A claims conflict, a store call that cannot open its store view, and a malformed request that a block yields to the Engine: the line of the call.
@@ -891,7 +891,7 @@ Every code also has a number, and the number's hundreds place the code in one of
 |---|---|---|
 | Parse codes (1xx) | `frontmatter_invalid`, `structure_invalid`, `fence_invalid`, `list_empty_item`, `unsupported_version`, `invalid_value` | the prompt fails to parse, the `runvil:` key is missing or declares a major version other than `0`, or a value is missing or not valid |
 | Lua codes (2xx) | `lua_runtime`, `lua_compile`, `lua_quota`, `call_depth_exceeded`, `substitution` | a section's Lua fails at run time or returns an unusable value, a Pack prelude cannot install, a Lua block does not compile, a log quota runs out, a call nests past the call depth cap, or a `{{ }}` substitution fails |
-| Task codes (3xx) | `tasks_live`, `task_not_owned`, `task_consumed`, `task_canceled` | a chain ends with tasks still live, reaches for a task it does not own, or waits on a result twice, or a canceled task's error value is raised again |
+| Task codes (3xx) | `tasks_live`, `task_not_owned`, `task_consumed`, `task_canceled` | a chain ends with tasks still running and not idle, reaches for a task it does not own, or waits on a result twice, or a canceled task's error value is raised again |
 | Model codes (4xx) | `context_overflow`, `rate_limited`, `quota_exhausted`, `overloaded`, `refused`, `timeout`, `transport`, `server_error`, `rejected`, `malformed_response`, `empty_reply`, `unavailable`, `invalid_parts`, `context_exhausted`, `model_required` | a model call fails or gets an empty reply, the Harness cannot fetch the Host's list of models, a request overflows the model's context window and compaction does not make it fit, or a model round runs when the Host gave no model |
 | Tool codes (5xx) | `tool_invalid_arguments`, `tool_backend`, `tool_transport`, `tool_other`, `out_of_scope_tool`, `unbound_tool`, `model_only_tool`, `tool_loop_exhausted`, `tool_schema_invalid`, `tool_sets_invalid` | a tool fails, is out of scope or unknown, a script calls a model-only tool, the tool-call loop reaches its round cap, or a section entry's first loop round cannot freeze its tool sets |
 | Store codes (6xx) | `not_found`, `already_exists`, `not_a_directory`, `is_a_directory`, `directory_not_empty`, `not_utf8`, `invalid_path`, `invalid_range`, `anchor`, `permission_denied`, `approval_required`, `scope_ended`, `read_only`, `outside_root`, `root_protected`, `no_store`, `cross_mount`, `io`, `unsupported`, `conflict`, `backend`, `determinism` | a `store` operation fails uncaught, the run declares no store, the store backend fails as the run starts, the store refuses to stage the input file, or a store call meets a claims conflict |
@@ -944,7 +944,7 @@ The call depth message reads the same whichever of `call`, `tasks.spawn`, or `ta
 
 A run fails with a task code when a task error goes uncaught in a walked section, a `call` chain, a task, or a `tasks.fanout` arm, and in the H1 pass too:
 
-- `tasks_live`, a chain that ends with tasks still live, a leaked task
+- `tasks_live`, a chain that ends with tasks still running and not idle, a leaked task
 - `task_not_owned`, a task reached by a chain that does not own it
 - `task_consumed`, a result waited on twice
 - `task_canceled`, a canceled task's error value raised again after a wait delivers it
@@ -995,7 +995,7 @@ A store call that meets a claims conflict fails the run with `determinism` (see 
 
 ### Run codes
 
-A run fails with `requirements_unmet` when the environment falls short of what the prompt needs: a required Pack is missing, unavailable, or needs a service the run lacks, the model that fills a role fails a [requirement the prompt declared](10-models.md#what-the-run-checks) for it, a `min_context` or a `thinking` setting, the Host gave a role map that holds models but has no `default` entry, a tool in the run's catalog or a Pack in its roster has a Pack id the Engine reserves, `adhoc` or `dynamic`, or an H1 block fails the prompt's [hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate). Before the run starts, the Harness also ends a run with `requirements_unmet` when the launch input does not match the prompt's `input:` declaration, or when the Host's selected model is missing from its list of models.
+A run fails with `requirements_unmet` when the environment falls short of what the prompt needs: a required Pack is missing or unavailable, the model that fills a role fails a [requirement the prompt declared](10-models.md#what-the-run-checks) for it, a `min_context` or a `thinking` setting, the Host gave a role map that holds models but has no `default` entry, a tool in the run's catalog or a Pack in its roster has a Pack id the Engine reserves, `adhoc` or `dynamic`, or an H1 block fails the prompt's [hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate). Before the run starts, the Harness also ends a run with `requirements_unmet` when the launch input does not match the prompt's `input:` declaration, or when the Host's selected model is missing from its list of models.
 
 The message of a refused run starts with `the environment cannot satisfy this prompt:` and adds one line for each gap. Pack lines come first, then the model lines in role order (`default`, `strong`, `small`, `fast`, `creative`), and for one role the context line comes before the thinking line. When a gap is one the prompt caused, the message ends with ` (at {file}:{line})` after its last line, naming the `uses:` line when a declared Pack is missing or unavailable, and otherwise the `models:` line of a declared role requirement that falls short. A model requirement that the filling model fails reads like one of these, and the thinking line names the required setting, `thinking: true` or `thinking: false`, and the model's thinking capability, `Never` or `Always`:
 
@@ -1025,7 +1025,7 @@ A run fails with `stalled` when no chain can move and the main chain does not wa
 the run stalled: no chain can move, and these tasks wait on their inboxes: {ids}
 ````
 
-When no task waits on its inbox, the message stops after `the run stalled: no chain can move`. A main chain that waits in `tasks.receive()` with nothing else to run never stalls: the run waits for the Host's next message or a cancel (see [While the section waits](05-lua-environment.md#while-the-section-waits)).
+A stall with no task waiting on its inbox ends the run with `internal` instead, because only an Engine fault can leave every chain stuck that way, and its message starts `internal invariant violated: the scheduler stalled with no ready chain, no in-flight request, and no queued chain that can be admitted`. A main chain that waits in `tasks.receive()` with nothing else to run never stalls: the run waits for the Host's next message or a cancel (see [While the section waits](05-lua-environment.md#while-the-section-waits)).
 
 ### Caller codes
 
@@ -1369,7 +1369,7 @@ Every failure other than a transient model call failure is never retryable, and 
 - schema binding failures
 - substitution failures
 - an exhausted tool loop
-- task failures: tasks still live, a task the prompt does not own, a task already consumed, or a canceled task
+- task failures: tasks still running and not idle when their owner ends, a task the prompt does not own, a task already consumed, or a canceled task
 - a tool call outside the prompt's scope, to an unbound tool, or from a script to a model-only tool
 - a required model that is missing
 - an unsupported version

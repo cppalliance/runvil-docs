@@ -74,11 +74,13 @@ The arm for `one` sends `one:1` and the arm for `two` sends `two:1` before eithe
 
 ### The call waits for every arm
 
-`tasks.fanout` is a [suspending call](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals), one that waits on the Harness while other chains run, so the calling section pauses inside the call while the arms run. The call returns only after every arm has finished, so the line after it sees every arm's result, including the result of the arm that finished last.
+`tasks.fanout` is a [suspending call](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals), so the calling section pauses inside the call while the arms run. The call returns only after every arm has finished or answered with `tasks.reply`, so the line after it sees every arm's result, including the result of the arm that finished last.
 
 Because the call waits for every arm first, your code after `tasks.fanout` also sees everything the arms did, including the store files they wrote. A `store.glob` right after the call finds every file the arms wrote, as [The store across arms](#the-store-across-arms) shows.
 
 No arm keeps running after `tasks.fanout` returns or raises. When an arm fails, the call cancels every arm still running, arms that have not started never start, and the failing arm's error is raised from the `tasks.fanout` call. [When an arm fails](#when-an-arm-fails) covers that case in full.
+
+An arm that answers with [`tasks.reply`](15-tasks.md#answering-with-tasksreply) hands the call its reply as its result, as if it had returned it, and the call then cancels the arm, so the arm ends `canceled` instead of waiting idle on its inbox.
 
 ### Where you can call `tasks.fanout`
 
@@ -1482,6 +1484,7 @@ This table gathers the `sys.id` values above for a fanout from a top-level secti
 Each fanout arm runs as a task, so the run's event stream shows a `Task started` event for each arm when it begins running, reported under the calling section, and the arm's final event, such as `Task succeeded`, reported under the worker section (see [Task events and task errors](15-tasks.md#task-events-and-task-errors)). When a `## Research` section fans out two arms to `### Worker`, the stream holds two `Task started` events under `Research` and two `Task succeeded` events under `Worker`.
 
 - A successful arm emits exactly one `Task started` event and one `Task succeeded` event, and no failed, canceled, or abandoned event.
+- An arm that answers with `tasks.reply` emits `Task canceled` in place of `Task succeeded`, because the call cancels it once it takes the reply, unless the [idle cap](15-tasks.md#the-idle-cap) closed it first.
 - An arm's `Task started` event reports under the caller section, the section whose Lua called `tasks.fanout`, so two arms fanned out from `Research` both start under `Research`.
 - Every arm of one fanout runs the same worker section, and each arm's final task event reports under that worker section's name rather than the caller's, so two arms both succeed under `Worker`.
 - An arm's `Task started` event carries the arm's task id, the worker section as its target, the arm's `item`, and its `sys.index` as `index`, so the stream shows which arm each start belongs to. The arm's final event carries the same task id.
