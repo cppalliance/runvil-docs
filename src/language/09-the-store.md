@@ -1921,7 +1921,7 @@ Runs the Host prepares over the same mounts share one claims table, the shared s
 
 Through `store.*`, that conflict ends the run on the spot as a [claims conflict](#races-claims-and-determinism), with the error code `determinism`, and `pcall` cannot catch it. The conflict holds no matter how many other paths the first run touches in between, and whether the second run started before or after those accesses. After the conflicting write is refused, the file still holds the first run's bytes, so `/shared.txt` still reads `from a`.
 
-The Host is held to the same claims. While a run is live, a Host write to a store file the run has read is refused as a conflict, the file keeps its contents, and the run still finishes. While a run that has read `notes.md` waits on [`input.ask`](05-lua-environment.md#asking-the-operator), the Host's write of `Ship on Monday.` to `notes.md` is refused, `notes.md` still reads `Ship on Friday.`, and the run result is `Ship on Friday. Approved.`
+The Host is held to the same claims. While a run is live, a Host write to a store file the run has read is refused as a conflict, the file keeps its contents, and the run still finishes. While a run that has read `notes.md` waits on [`tasks.receive()`](05-lua-environment.md#asking-the-operator), the Host's write of `Ship on Monday.` to `notes.md` is refused, `notes.md` still reads `Ship on Friday.`, and the run result is `Ship on Friday. Approved.`
 
 ### When the store cannot start
 
@@ -2132,7 +2132,7 @@ beta
 
 Nothing is wrapped around either read. So wrap store contents with `untrusted` before you put them in front of a model. Stored content bound for a model is one of the two kinds of data the envelope exists for, and tool results from untrusted sources are the other.
 
-Text the operator pastes as data, such as a document to be summarized that arrives through [`input.ask`](05-lua-environment.md#asking-the-operator), gets the same treatment: wrap it with `untrusted(text)` before it reaches a model. `untrusted` wraps whatever string it is given, wherever that string came from.
+Text the operator pastes as data, such as a document to be summarized that arrives through [`tasks.receive()`](05-lua-environment.md#asking-the-operator), gets the same treatment: wrap it with `untrusted(text)` before it reaches a model. `untrusted` wraps whatever string it is given, wherever that string came from.
 
 ### Working with a wrapped string
 

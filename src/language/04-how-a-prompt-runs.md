@@ -111,11 +111,13 @@ Some calls in your Lua need something outside the prompt, and the Harness perfor
 
 - a model round
 - a render of the tools a section entry offers, in which each offered Pack decides how its tools reach the model, which comes before the entry's first loop round when its offers name a catalog tool, and shows in the run's record as one more step ahead of that round (see [The five kinds of Harness work](01-what-a-prompt-is.md#the-five-kinds-of-harness-work))
-- a tool call, including a wait on `input.ask()` (see [Asking the operator](05-lua-environment.md#asking-the-operator))
+- a tool call
 - a store operation
 - the timer behind a timed wait on a task started with `tasks.spawn` (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn))
 
-`input.ask()` is an ordinary tool call to the `user-input` Pack's ask tool. While one chain waits for its answer, only that chain waits, and every other chain keeps running. A chain is a walk with its own entries, defined in [The section walk](#the-section-walk). So the three arms of one `tasks.fanout` call (see [Fanout in one call](14-fanout.md#fanout-in-one-call)) all send their model rounds together, without any arm waiting for another.
+While one chain waits for Harness work, only that chain waits, and every other chain keeps running. A chain is a walk with its own entries, defined in [The section walk](#the-section-walk). So the three arms of one `tasks.fanout` call (see [Fanout in one call](14-fanout.md#fanout-in-one-call)) all send their model rounds together, without any arm waiting for another.
+
+A wait for the operator is not Harness work. The main chain reads the operator's messages with `tasks.receive()`, which waits on the chain's inbox and asks the Harness for nothing, and while it waits, every other chain keeps running too (see [Asking the operator](05-lua-environment.md#asking-the-operator)).
 
 A call that needs Harness work looks synchronous to you: the block pauses at the call and continues with the call's answer, as if the call had returned it directly. Each Lua block runs as its own Lua coroutine, which is what lets it pause at the call and resume later. A block that asks for no Harness work, such as `return 'hello'`, never pauses.
 
@@ -244,18 +246,17 @@ Prepare is the stage before a run starts in which the Harness sets up everything
 
 ### What the start checks look at
 
-The run's first step makes three start checks before any section runs, in this order: the `runvil` version, the store, which the run must declare and whose backend must pass its probe, and the requirements. The requirements check compares the Packs the prompt declares with the Packs the Harness took for the run and the services the run provides, and compares the requirements the prompt declares for its model roles with the models that fill those roles. A start check that fails ends the run on that first step, and the run reports no run events.
+The run's first step makes three start checks before any section runs, in this order: the `runvil` version, the store, which the run must declare and whose backend must pass its probe, and the requirements. The requirements check compares the Packs the prompt declares with the Packs the Harness took for the run, and compares the requirements the prompt declares for its model roles with the models that fill those roles. A start check that fails ends the run on that first step, and the run reports no run events.
 
 A prompt the environment cannot satisfy is refused before any of its blocks run. `requirements_unmet` is the error code of that refusal: the run fails with that error, and its message is the requirements notice, which lists what is missing, one line per gap, and which ends by pointing at a frontmatter line when a gap is one the prompt caused. The requirements check refuses the run with `requirements_unmet` when any of these holds:
 
 - the Host has no Pack, from any vendor, for a bare entry the prompt declares
-- a declared Pack is unavailable, because the Host has it but it cannot serve, for example because it failed to build, or because the Host lacks a declared `vendor/name` entry, or has a bare entry's Pack id only from other vendors
-- a declared Pack needs a service the run lacks
+- a declared Pack is unavailable, because the Host has it but it cannot serve, for example because it failed to build or because it is the `user` Pack in a run with no user, or because the Host lacks a declared `vendor/name` entry, or has a bare entry's Pack id only from other vendors
 - a tool in the run's catalog or a Pack in its roster has a Pack id the Engine reserves, `adhoc` or `dynamic`
 - the model that fills a role falls short of that role's declared context minimum or `thinking` requirement
 - the run's role map has entries but none for the `default` role
 
-An unavailable Pack is one the Host has that cannot serve the run or lacks a service it needs, a declared `vendor/name` entry the Host lacks, or a bare entry whose reason tells you which vendor's Pack to write instead. The run proceeds only when every model role requirement is met, the Host has every required Pack, each one can serve and has the services it needs, and nothing in the run takes a reserved Pack id. [Packs at prepare](#packs-at-prepare) shows each Pack case.
+An unavailable Pack is one the Host has that cannot serve the run, a declared `vendor/name` entry the Host lacks, or a bare entry whose reason tells you which vendor's Pack to write instead. The run proceeds only when every model role requirement is met, the Host has every required Pack, each one can serve, and nothing in the run takes a reserved Pack id. [Packs at prepare](#packs-at-prepare) shows each Pack case.
 
 The refusal comes on the run's first step, after the version and store checks pass. So when the environment cannot provide what the prompt requires, such as a model with a large enough context window for one of its roles, no section runs, no Lua runs, and nothing in the prompt can catch the refusal. The refusal's message is the notice text, line for line, followed by ` (at {file}:{line})` when a gap is one the prompt caused (see [The requirements notice](#the-requirements-notice)). The notice opens with the line `the environment cannot satisfy this prompt:` and then gives one `- ` line per gap, in this order, with each `{...}` standing for the value the line names:
 
@@ -343,7 +344,7 @@ The refused run's record ends with the `parse_succeeded` event, because the prom
 
 ### Declared Packs are required Packs
 
-Every Pack a prompt lists under the `uses:` key (see [Tools, Packs, and the `uses:` key](12-tools.md#tools-packs-and-the-uses-key)) is a required Pack: the run does not start unless the Host can provide it. Each one is named by its Pack id and kept in declaration order. Before any Lua runs, the run's first step checks each declared Pack and refuses the run unless the Host has that Pack and it can serve and has every service it needs.
+Every Pack a prompt lists under the `uses:` key (see [Tools, Packs, and the `uses:` key](12-tools.md#tools-packs-and-the-uses-key)) is a required Pack: the run does not start unless the Host can provide it. Each one is named by its Pack id and kept in declaration order. Before any Lua runs, the run's first step checks each declared Pack and refuses the run unless the Host has that Pack and it can serve.
 
 A declared Pack counts as present when the Host has it and it can serve, even if it offers no tools, so declaring a Pack that has no tools never refuses the run. A Pack the frontmatter declares, and any Pack listed as able to serve, still has a Pack object in Lua when it offers no tool. The Harness's part is the run's roster, its list of Packs, which marks each Pack as usable or as unavailable with a reason. The Engine checks each declared Pack against that roster, not against the tool catalog, so it finds nothing missing in `uses: [web]` even when the catalog holds no `web` tool.
 
@@ -353,46 +354,48 @@ A prompt that declares no Packs has no Pack requirements, so it prepares and run
 
 ### The tool catalog
 
-The run's tool catalog holds the tools of each of the run's Packs that can serve it: every `runvil` Pack, whether the prompt declares it or not, and each third-party Pack the prompt declares. A third-party Pack the prompt does not declare adds no tools. A run holds one Pack per Pack id, so a declared third-party Pack replaces the `runvil` Pack of the same Pack id: with `acme/web` declared, the catalog holds the tools of `acme/web` and none of `runvil/web`. A Pack that cannot serve, or that lacks a service it needs, adds no tools. Each usable Pack's tool list is read once, after every Pack is ready, so the catalog and the tools a call can reach stay fixed for the whole run.
+The run's tool catalog holds the tools of each of the run's Packs that can serve it: every `runvil` Pack, whether the prompt declares it or not, and each third-party Pack the prompt declares. A third-party Pack the prompt does not declare adds no tools. A run holds one Pack per Pack id, so a declared third-party Pack replaces the `runvil` Pack of the same Pack id: with `acme/web` declared, the catalog holds the tools of `acme/web` and none of `runvil/web`. A Pack that cannot serve adds no tools. Each usable Pack's tool list is read once, after every Pack is ready, so the catalog and the tools a call can reach stay fixed for the whole run.
 
 A section can call an undeclared `runvil` Pack's tool by its full tool id. On a Host that has `runvil/web`, a prompt with no `uses:` key can run this block:
 
 ````lua
 local page = tools.call('web/fetch', { url = 'https://example.com' })
-local kind = type(input)
 ````
 
-The call reaches `web/fetch` even though the frontmatter declares no Pack (see [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls)). The prelude of an undeclared Pack never installs, even when the Pack is in the run. The `user-input` Pack's prelude is what defines `input.ask()`, so in this prompt, which leaves `user-input` undeclared, `type(input)` is `nil`.
+The call reaches `web/fetch` even though the frontmatter declares no Pack (see [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls)). The prelude of an undeclared Pack never installs, even when the Pack is in the run, so only a Pack the prompt declares can add globals to its Lua (see [Pack preludes](12-tools.md#pack-preludes)).
 
-In Lua, `tools.packs.get(id).required` is `true` for a Pack the frontmatter declares, and `tools.packs.extras()` lists the Pack objects of every other usable Pack in the run, each listing its Tool objects in `tools` (see [Tool objects, Pack objects, and `tools.packs`](12-tools.md#tool-objects-pack-objects-and-toolspacks)). With `uses: [web]` on a Host that has and can serve both `runvil/web` and `runvil/user-input`, `tools.packs.get('web').required` is `true` and that Pack's `tools` holds the Tool objects for `web/fetch` and `web/search`, while `tools.packs.extras()` holds the `subagents` and `user-input` Pack objects, in that order, and the `user-input` object's `tools` holds the one for `user-input/ask`.
+In Lua, `tools.packs.get(id).required` is `true` for a Pack the frontmatter declares, and `tools.packs.extras()` lists the Pack objects of every other usable Pack in the run, each listing its Tool objects in `tools` (see [Tool objects, Pack objects, and `tools.packs`](12-tools.md#tool-objects-pack-objects-and-toolspacks)). With `uses: [web]`, in a run with a user, on a Host whose only Pack besides the built-ins is `runvil/web`, `tools.packs.get('web').required` is `true` and that Pack's `tools` holds the Tool objects for `web/fetch` and `web/search`, while `tools.packs.extras()` holds the `subagents` and `user` Pack objects, in that order, and neither object's `tools` holds any Tool object. In a run with no user, `tools.packs.extras()` holds only the `subagents` object, because the `user` Pack is unavailable there and an unavailable Pack has no Pack object.
 
 A section can offer only the tools in the run's catalog and the adhoc tools it defines, and offering an id the run cannot offer is a hard error (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)). Calling `tools.offer` with a tool id the run lacks raises `tools.offer: "{name}" is not a tool in this run`, with the id in place of `{name}`.
 
-### Host services
+### Runs with no user
 
-A host service is a named service the Host supplies for each run, such as an input broker. A Pack can need host services, and prepare checks the needs of each of the run's Packs against the run's services. A Pack is usable only when the run provides every service it needs, and a Pack missing any of its services has no tools in the run.
+The built-in Pack `runvil/user`, whose Pack id is `user`, marks a prompt that needs a person to answer it (see [Asking the operator](05-lua-environment.md#asking-the-operator)). Every Host has it, and it offers no tools, but a run holds it only when the run has a user, someone the Host lets answer the run's main chain. The Host decides that for each run it launches.
 
-A declared Pack that lacks a service it needs refuses the run on its first step with error code `requirements_unmet`. The notice gets one line for the Pack, in the form `- {pack} is unavailable: the run lacks the services it needs: {services}`, where `{services}` lists every service the Pack lacks, joined by `, `. The line names both the Pack and the services instead of calling the Pack missing. A run refused this way never calls the Pack, so no tool effect happens, and the refused run records zero effects.
-
-The `user-input` Pack is the common case. Its fully qualified name is `runvil/user-input`, so its Pack id is `user-input`. It needs the run's input broker, the service `runvil/input-broker`, so a run without a broker cannot use it. A prompt that declares it is refused before the run starts on a Host with no operator to ask, and the notice names both the Pack and the service:
+In a run with no user, the `user` Pack is unavailable, with the reason `this run has no user`. A prompt that declares it is refused on the run's first step with error code `requirements_unmet`, and the notice names the Pack and the reason:
 
 ````text
 the environment cannot satisfy this prompt:
-- user-input is unavailable: the run lacks the services it needs: runvil/input-broker
+- user is unavailable: this run has no user
 ````
 
-That notice does not contain `missing required Pack: user-input`, because the Host has the Pack.
+That notice does not contain `missing required Pack: user`, because every Host has the Pack. A run refused this way runs none of the prompt's Lua and records zero effects.
 
-Whether a declared Pack's service needs are met depends only on the Host running the prompt. The same prompt text runs to completion on a Host that supplies the service and is refused on one that does not, and the two runs differ only in the services they provide. When the run supplies the service a declared Pack needs, the run prepares and that Pack's tool calls are served through the service the run supplies, so a declared `user-input` on a Host with an operator to ask runs and its ask tool reaches that operator. A Pack that needs no service prepares and runs normally on a Host that has no operator to ask, so a run without an input broker can still use it.
+Whether a declared `user` is met depends only on the run. The same prompt text runs to completion when the Host launches it with a user and is refused in a run without one. A prompt that leaves `user` undeclared is never refused for it, and it can check `tools.packs.get('user')`, which reads `nil` in a run with no user, before it waits for the operator.
 
 ### Unavailable Packs
 
-A declared Pack that the Host has but that cannot serve refuses the run with error code `requirements_unmet` and the notice line `- {pack} is unavailable: {reason}`. A Pack cannot serve in two cases:
+A declared Pack that the Host has but that cannot serve refuses the run with error code `requirements_unmet` and the notice line `- {pack} is unavailable: {reason}`. A Pack cannot serve in three cases:
 
 - Building it failed when the Host set up. That is not a setup error: the Host stores the Pack as unavailable with the failure as its reason, and every run that needs it is refused naming that reason.
 - Its readiness check fails before the run.
+- It is the built-in `user` Pack, and the run has no user (see [Runs with no user](#runs-with-no-user)).
 
-The `web` Pack cannot be built on a Host that supplies no search provider, so a prompt that declares `web` there is refused with the notice line `- web is unavailable: web needs runvil/search-provider, and this host provides none`.
+The `web` Pack cannot be built on a Host that supplies no search provider, so a prompt that declares `web` there is refused with the notice line `- web is unavailable: web needs runvil/search-provider, and this host provides none`. A prompt that declares `user` in a run with no user is refused with this notice line:
+
+````text
+- user is unavailable: this run has no user
+````
 
 Two declared entries the Host has no Pack for are reported as unavailable too, because their reason tells you what to write. A bare Pack id the Host has only from other vendors gets a line such as `- poop is unavailable: poop means runvil/poop, which is not installed; write acme/poop to use that Pack`, which joins every such vendor's fully qualified name with `or`. A `vendor/name` the Host does not have gets a line such as `- poop is unavailable: acme/poop is not installed`.
 
@@ -400,7 +403,7 @@ When one of the Host's Packs fails to build or fails its readiness check, the Ha
 
 ### Only declared Packs can refuse a run
 
-The requirements check looks only at the Packs the prompt declares, so only declared Packs can refuse a run. A `runvil` Pack the prompt does not declare that fails to start or lacks a service just has no tools in the run, and the run goes on. The check looks up each Pack the prompt declares, while the run's roster, its list of Packs, holds every Pack in the run, declared or not. A third-party Pack the prompt does not declare is in no run, so it can neither refuse nor delay one. An undeclared Pack with unmet needs joins the roster as unavailable, with the reason `the run lacks the services it needs: {services}`.
+The requirements check looks only at the Packs the prompt declares, so only declared Packs can refuse a run. A `runvil` Pack the prompt does not declare that fails to start just has no tools in the run, and the run goes on. The check looks up each Pack the prompt declares, while the run's roster, its list of Packs, holds every Pack in the run, declared or not. A third-party Pack the prompt does not declare is in no run, so it can neither refuse nor delay one. An undeclared `user` Pack in a run with no user joins the roster as unavailable, with the reason `this run has no user`, and the run goes on.
 
 Offering an unavailable Pack with `tools.offer` raises `tools.offer: the {pack} Pack is unavailable in this run: {reason}`. So an undeclared Pack whose readiness check fails offers no tools, and a section that offers it with `tools.offer` fails the run with that text in its message.
 
@@ -527,7 +530,7 @@ After this section you can read any requirements notice line by line and tell wh
 name: deep-analysis
 description: Needs two Packs and a large thinking model.
 runvil: 0
-uses: [web, user-input]
+uses: [web, user]
 models:
   strong:
     min_context: 200000
@@ -543,12 +546,12 @@ return 'done'
 ```
 ````
 
-Run this prompt on a Host that has no `web` Pack from any vendor, that has `runvil/user-input` but has no operator to ask, and whose model for `strong` has a 32000-token window and never thinks. The run fails with error code `requirements_unmet`, and its message is this requirements notice, which ends by pointing at the `uses:` line:
+Run this prompt in a run with no user, on a Host that has no `web` Pack from any vendor and whose model for `strong` has a 32000-token window and never thinks. The run fails with error code `requirements_unmet`, and its message is this requirements notice, which ends by pointing at the `uses:` line:
 
 ````text
 the environment cannot satisfy this prompt:
 - missing required Pack: web
-- user-input is unavailable: the run lacks the services it needs: runvil/input-broker
+- user is unavailable: this run has no user
 - role 'strong': requires a context of at least 200000 tokens; the model filling it provides 32000
 - role 'strong': requires 'thinking: true'; the thinking capability of the model filling it is Never (at deep-analysis.md:5)
 ````
@@ -559,14 +562,14 @@ The location names the frontmatter key of the first gap the prompt caused: the `
 
 ### The notice's fixed layout
 
-The notice has a fixed layout: the opening line `the environment cannot satisfy this prompt:`, then one line starting with `- ` for each unmet requirement. The check does not stop at the first gap, so when several requirements are unmet you see all of them together in one notice, not only the first. Each line names what is missing or falls short, such as each unavailable Pack and the services it lacks, and states the required value against the actual value where that applies.
+The notice has a fixed layout: the opening line `the environment cannot satisfy this prompt:`, then one line starting with `- ` for each unmet requirement. The check does not stop at the first gap, so when several requirements are unmet you see all of them together in one notice, not only the first. Each line names what is missing or falls short, such as each unavailable Pack and the reason it cannot serve, and states the required value against the actual value where that applies.
 
 The notice is written for a model to read: concise, factual, and self-contained. It names only the gaps that block the run, because the check records only what needs a person's attention. Each kind of line comes from one kind of gap:
 
 | Notice line | What produces it |
 |---|---|
 | `- missing required Pack: {id}` | a bare entry whose Pack id no Pack of the Host has, from any vendor |
-| `- {pack} is unavailable: {reason}` | a declared Pack that the Host has but that cannot serve or lacks a service it needs, a declared `vendor/name` entry the Host lacks, or a bare entry whose Pack id only other vendors' Packs have |
+| `- {pack} is unavailable: {reason}` | a declared Pack that the Host has but that cannot serve, a declared `vendor/name` entry the Host lacks, or a bare entry whose Pack id only other vendors' Packs have |
 | `- the run's tool catalog or Pack roster names the Pack id {id}, which the Engine reserves` | a catalog tool or a roster Pack under a reserved Pack id, `adhoc` or `dynamic` |
 | `- role '{role}': requires a context of at least {required} tokens; the model filling it provides {actual}` | a role whose `min_context` is above the window of the model filling it |
 | `- role '{role}': requires '{required}'; the thinking capability of the model filling it is {actual}` | a role whose `thinking` requirement the model filling it fails |
@@ -577,15 +580,13 @@ The notice is written for a model to read: concise, factual, and self-contained.
 
 A bare entry under `uses:` whose Pack id no Pack of the Host has, from any vendor, refuses the run with the line `- missing required Pack: {id}`, such as `- missing required Pack: web`. A `vendor/name` entry never gives this line.
 
-A declared Pack that the Host has but that needs a host service the run lacks appears as `- {pack} is unavailable: the run lacks the services it needs: {services}`, naming the Pack and every missing service id, joined by `, `. A Pack missing several services still gets only that one line. The service name in the line is shown exactly as the Host names it, so service names can differ from one Host to another.
-
-A declared Pack that the Host has but that cannot serve, for example because it failed to build, appears as `- {pack} is unavailable: {reason}`, with the Pack id and the reason the environment gave, word for word. The reason is written for the model that reads the refusal, as in `- web is unavailable: web needs runvil/search-provider, and this host provides none`.
+A declared Pack that the Host has but that cannot serve, for example because it failed to build, appears as `- {pack} is unavailable: {reason}`, with the Pack id and the reason the environment gave, word for word. The reason is written for the model that reads the refusal, as in `- web is unavailable: web needs runvil/search-provider, and this host provides none`, or `- user is unavailable: this run has no user` for the `user` Pack declared in a run with no user.
 
 A declared entry the Host has no Pack for appears the same way, unless it is a bare entry that no vendor has. A bare Pack id that only other vendors' Packs have gives `- poop is unavailable: poop means runvil/poop, which is not installed; write acme/poop to use that Pack`, and a `vendor/name` the Host lacks gives `- poop is unavailable: acme/poop is not installed`, whether or not any vendor has that Pack id.
 
 The Engine reserves two Pack ids, `adhoc` for a section entry's own tools (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)) and `dynamic` for its discovery tools (see [Finding and calling dynamic tools](12-tools.md#finding-and-calling-dynamic-tools)), so a run whose tool catalog holds a tool under a reserved Pack id, or whose roster holds a Pack with one, usable or not, is refused with the line `- the run's tool catalog or Pack roster names the Pack id {id}, which the Engine reserves`, such as `- the run's tool catalog or Pack roster names the Pack id adhoc, which the Engine reserves`. Each reserved Pack id the run names gets one line, however many such tools or Packs the run has, and a run that names both gets the `adhoc` line first.
 
-Each Pack appears under its real cause only. A Pack that lacks a host service is reported only as unavailable, with the services it lacks as its reason, never also as a missing required Pack. A Pack that the Host has but that fails to build or activate is reported only as unavailable, with its reason, never as a missing required Pack. So when a declared Pack lacks a service or is unavailable, the notice leaves out its `missing required Pack` line and names only the real cause.
+Each Pack appears under its real cause only. A Pack that the Host has but that fails to build or activate, and the `user` Pack in a run with no user, are reported only as unavailable, with their reasons, never as missing required Packs. So when a declared Pack is unavailable, the notice leaves out its `missing required Pack` line and names only the real cause.
 
 ### Role lines in the notice
 
@@ -603,7 +604,7 @@ The `- the H1 gate failed` line does not come from a refusal. An uncaught `lua_r
 
 ### The order of the lines
 
-Notice lines appear in a fixed order: missing Packs first, then unavailable Packs, including those that lack a host service, then the lines for reserved Pack ids, in sorted order, then unmet model role requirements. Missing required Packs come before unavailable Packs, no matter which gap was found first. Missing and unavailable Packs each keep the order in which the prompt declares them. Role lines are listed in role order, `default`, `strong`, `small`, `fast`, `creative`, and within a role the context line comes first, then the `thinking` line.
+Notice lines appear in a fixed order: missing Packs first, then unavailable Packs, then the lines for reserved Pack ids, in sorted order, then unmet model role requirements. Missing required Packs come before unavailable Packs, no matter which gap was found first. Missing and unavailable Packs each keep the order in which the prompt declares them. Role lines are listed in role order, `default`, `strong`, `small`, `fast`, `creative`, and within a role the context line comes first, then the `thinking` line.
 
 Each gap appears once. The check looks up each declared Pack once in the run's roster, so each declared Pack gets at most one line, and an unavailable Pack is listed with its own reason.
 

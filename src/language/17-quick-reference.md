@@ -72,7 +72,6 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `handle.provider` | field | Provider id the model catalog records, or `nil` | [Model handles](10-models.md#model-handles) |
 | `handle.temperature` | field | `temperature` option from `models.use`, or `nil` | [Model handles](10-models.md#model-handles) |
 | `handle.thinking` | field | `true` for `thinking: true`, `false` for `thinking: false`, `nil` when the role declares no `thinking` | [Model handles](10-models.md#model-handles) |
-| `input.ask` | function | Returns the operator's next message as typed; needs `user-input` declared | [Asking the operator](05-lua-environment.md#asking-the-operator) |
 | `io` | not loaded | Never loaded; no file or stream I/O | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `ipairs` | function | Walks an array table in order | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `item` | global | The member a fanout arm runs for, or a task's `item` seed | [What an arm sees](14-fanout.md#what-an-arm-sees) |
@@ -197,6 +196,7 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `tasks.note` | function | Publishes the caller's own task's latest progress note | [Checking on a task with `tasks.status`, `tasks.ready`, and `tasks.note`](15-tasks.md#checking-on-a-task-with-tasksstatus-tasksready-and-tasksnote) |
 | `tasks.pending` | function | Lists the caller's live task handles in spawn order; takes no arguments | [Canceling and listing tasks](15-tasks.md#canceling-and-listing-tasks) |
 | `tasks.ready` | function | Checks without waiting whether a task has ended | [Checking on a task with `tasks.status`, `tasks.ready`, and `tasks.note`](15-tasks.md#checking-on-a-task-with-tasksstatus-tasksready-and-tasksnote) |
+| `tasks.receive` | function | Waits for the chain's next inbox message and returns its text as sent, oldest first; on the main chain, the operator's next message; takes no arguments | [Asking the operator](05-lua-environment.md#asking-the-operator) |
 | `tasks.spawn` | function | Starts a section as a task, returns handle `{ task = id }` at once | [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) |
 | `tasks.spawn (index)` | option | Integer of 0 or more that becomes the task's `sys.index` | [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) |
 | `tasks.spawn (input)` | option | String that replaces the task's `args`, re-deriving `argv` | [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) |
@@ -251,11 +251,10 @@ Each form goes in a section's prose and takes effect when a Lua block reads `pro
 
 ## Pack tools
 
-Each Pack tool comes from a Pack you declare under `uses:` by its Pack id, `web` or `user-input`, while Provided by gives the fully qualified name of the Pack, which a Host's Plugin adds.
+Each Pack tool comes from a Pack you declare under `uses:` by its Pack id, here `web`, while Provided by gives the fully qualified name of the Pack, which a Host's Plugin adds. The built-in Packs `subagents` and `user` offer no tools, so neither has a row; the `user` Pack marks a prompt that needs an operator (see [Asking the operator](05-lua-environment.md#asking-the-operator)).
 
 | Tool | Provided by | Arguments | Returns | Taught in |
 |---|---|---|---|---|
-| `user-input/ask` | `runvil/user-input` | none | The operator's next message as trusted plain text | [Asking the operator](05-lua-environment.md#asking-the-operator) |
 | `web/fetch` | `runvil/web` | `url` (required); `max_chars` (default 40,000; 1 to 40,000); `raw` (default `false`) | Untrusted text: a `url:`, `truncated:`, and `extraction:` header, a blank line, then the page | [Fetching a page](13-web-fetch-and-search.md#fetching-a-page) |
 | `web/search` | `runvil/web` | `query` (required; 1 to 400 characters, not only whitespace); `count` (search provider default; 1 to 20); `freshness` (`pd`, `pw`, `pm`, or `py`); `country` (not blank, at most 128 characters); `search_lang` (not blank, at most 128 characters); `safesearch` (`off`, `moderate`, or `strict`); `include_domains` (default empty; at most 20 bare hostnames); `exclude_domains` (default empty; at most 20 bare hostnames) | Untrusted compact JSON of `query` and `results`, each with `title`, `url`, and `description` | [Searching the web](13-web-fetch-and-search.md#searching-the-web) |
 

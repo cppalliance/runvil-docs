@@ -561,7 +561,7 @@ models: { strong: { min_context: 40000 } }
 # Greeter
 ````
 
-A frontmatter with `uses: [web, user-input]`, an `args:` map holding `use_mcp`, and a `models:` map holding `strong` and `fast` parses and reads back the same way.
+A frontmatter with `uses: [web, user]`, an `args:` map holding `use_mcp`, and a `models:` map holding `strong` and `fast` parses and reads back the same way.
 
 ### Unknown keys
 

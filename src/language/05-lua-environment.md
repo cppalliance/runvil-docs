@@ -238,8 +238,7 @@ These are the suspending calls:
 - `models.loop` (see [Starting a conversation](11-conversations.md#starting-a-conversation))
 - `tools.call` (see [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls))
 - `call`
-- `input.ask`, which is itself a `tools.call` to the `user-input` Pack's `ask` tool (see [Asking the operator](#asking-the-operator))
-- the `tasks` functions, [`tasks.fanout`](14-fanout.md#fanout-in-one-call) and [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) included
+- the `tasks` functions, [`tasks.fanout`](14-fanout.md#fanout-in-one-call), [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn), and [`tasks.receive`](#asking-the-operator) included
 - the `store` calls (see [Writing and reading files](09-the-store.md#writing-and-reading-files))
 
 Each one resumes with its result, and `tasks.spawn` resumes with the task table. `jump`, `prompt.section`, and `prompt.list` return without suspending.
@@ -268,37 +267,37 @@ A block has no direct route to I/O or a clock, because it never has the `io`, `o
 
 ### Pack preludes
 
-A Pack prelude is Lua source that a Pack the prompt declares contributes, and every section VM installs it after the Engine globals and before any block runs. A prelude is how a declared Pack defines Lua globals of its own:
+A Pack prelude is Lua source that a Pack the prompt declares contributes, and every section VM installs it after the Engine globals and before any block runs. A prelude is how a declared Pack defines Lua globals of its own. The Packs that ship with Runvil have no prelude, so this section uses a made-up third-party Pack, `acme/issue-tracker`, whose tool `issue-tracker/open` opens a ticket and whose prelude defines a `tickets` table (see [Pack preludes](12-tools.md#pack-preludes)):
 
 ````markdown
 ---
-name: ask-check
+name: ticket-check
 description: Reads the globals a Pack prelude adds.
 runvil: 0
 uses:
-  - user-input
+  - acme/issue-tracker
 ---
 
-# Ask check
+# Ticket check
 
 ```lua
-return type(input.ask) .. ',' .. type(store.read) .. ',' .. type(tools.call)
+return type(tickets.open) .. ',' .. type(store.read) .. ',' .. type(tools.call)
 ```
 ````
 
-Run on a Host that has the `user-input` Pack and an operator to ask (see [Packs at prepare](04-how-a-prompt-runs.md#packs-at-prepare)), the run result is:
+Run on a Host that has the `acme/issue-tracker` Pack (see [Packs at prepare](04-how-a-prompt-runs.md#packs-at-prepare)), the run result is:
 
 ````text
 function,function,function
 ````
 
-The `user-input` prelude defines the global `input`, so `type(input.ask)` reads `function`. A prelude global sits beside the Engine's globals without replacing them, so `type(store.read)` and `type(tools.call)` still give `function` when `user-input` is declared. Your code still sees the `ui`, `argv`, `sys`, and `models` globals when Pack preludes are installed.
+The `issue-tracker` prelude defines the global `tickets`, so `type(tickets.open)` reads `function`. A prelude global sits beside the Engine's globals without replacing them, so `type(store.read)` and `type(tools.call)` still give `function` when `acme/issue-tracker` is declared. Your code still sees the `ui`, `argv`, `sys`, and `models` globals when Pack preludes are installed.
 
 A prelude can add any globals to a section entry's `_G` beyond the ones the Engine installs. A prelude that runs `answer = 42`, `label = 'kit'`, and `function shout(text) ... end` makes `answer`, `label`, and `shout` readable from your blocks.
 
-A prelude can also define a table global holding fields and functions. `input` is one: the `user-input` prelude creates the `input` table and defines `input.ask` as a function on it, so a block calls `input.ask()` like any other global function.
+A prelude can also define a table global holding fields and functions. `tickets` is one: the `issue-tracker` prelude creates the `tickets` table and defines `tickets.open` as a function on it, so a block calls `tickets.open('Fix login')` like any other global function.
 
-Preludes install when each section VM is set up, before that VM runs its first block, the H1 block included. Every Lua global a prelude defines is therefore available to every block of every section entry in the run, fanout arms and spawned task chains included, and to every library a block loads with `require`. In a prompt that declares `user-input`, a required library, a fanout arm, and a spawned task can each call `input.ask()`.
+Preludes install when each section VM is set up, before that VM runs its first block, the H1 block included. Every Lua global a prelude defines is therefore available to every block of every section entry in the run, fanout arms and spawned task chains included, and to every library a block loads with `require`. In a prompt that declares `acme/issue-tracker`, a required library, a fanout arm, and a spawned task can each call `tickets.open`.
 
 Preludes install in the order the prompt's `uses:` list declares their Packs.
 
@@ -306,20 +305,20 @@ A prelude function called from a block can use `store.write` and `store.read`, a
 
 #### Prelude tables are read-only
 
-A table global that a Pack's prelude defines is read-only at its top level. You read and call its fields as usual, so `input.ask()` works, but assigning a field, as in `input.extra = 1`, raises this error:
+A table global that a Pack's prelude defines is read-only at its top level. You read and call its fields as usual, so `tickets.open('Fix login')` works, but assigning a field, as in `tickets.extra = 1`, raises this error:
 
 ````text
-input is read-only: Pack `user-input` defines it; cannot set 'extra'
+tickets is read-only: Pack `issue-tracker` defines it; cannot set 'extra'
 ````
 
-The message has the form `` {name} is read-only: Pack `{pack}` defines it; cannot set '{field}' ``, naming the table, the Pack that defines it, and the field. The table is sealed: `getmetatable(input)` returns `input is sealed`, and `pairs(input)` visits nothing.
+The message has the form `` {name} is read-only: Pack `{pack}` defines it; cannot set '{field}' ``, naming the table, the Pack id of the Pack that defines it, and the field. The table is sealed: `getmetatable(tickets)` returns `tickets is sealed`, and `pairs(tickets)` visits nothing.
 
 #### Which Packs add globals
 
-A prompt that does not declare a Pack gets none of that Pack's globals. Without `user-input` declared, there is no `input` global, and `input.ask()` raises this error:
+A prompt that does not declare a Pack gets none of that Pack's globals. Without `acme/issue-tracker` declared, there is no `tickets` global, and `tickets.open('Fix login')` raises this error:
 
 ````text
-attempt to index a nil value (global 'input')
+attempt to index a nil value (global 'tickets')
 ````
 
 A prelude global never takes a reserved name, so no Pack global replaces an Engine global, a kept Lua standard-library global, or a Lua keyword.
@@ -1897,7 +1896,7 @@ name: model-name
 description: Reads the current model's name before and after the first tool call.
 runvil: 0
 uses:
-  - user-input
+  - web
 ---
 
 # Model name
@@ -1911,7 +1910,7 @@ models.use('strong')
 ```lua
 local ok, model = pcall(function() return sys.model end)
 var.before = ok and model or 'no tool call yet'
-tools.call('user-input/ask')
+tools.call('web/fetch', { url = 'https://example.com/' })
 ```
 
 Model name is {{ sys.model }}.
@@ -1921,13 +1920,13 @@ return var.before .. ' / ' .. prose
 ```
 ````
 
-The H1 block selects the `strong` role, and the walk starts on that model (see [The current model](10-models.md#the-current-model)), so `## Main` runs on `strong`. On a Host whose role map fills `strong` with the model `gateway/claude-sonnet-4-6` (a one-model map fills every role with that model), once the operator answers the ask, the run result is:
+The H1 block selects the `strong` role, and the walk starts on that model (see [The current model](10-models.md#the-current-model)), so `## Main` runs on `strong`. On a Host whose role map fills `strong` with the model `gateway/claude-sonnet-4-6` (a one-model map fills every role with that model), once the fetch answers, the run result is:
 
 ````text
 no tool call yet / Model name is claude-sonnet-4-6.
 ````
 
-`sys.model` is a string holding the name part of the current model's model id, without the server namespace, so it reads `fast` for a model whose id is `gateway/fast`, and `claude-sonnet-4-6` for `strong` above, filled by `gateway/claude-sonnet-4-6`. It is the same name that role's model handle reads as `model_id` (see [Model handles](10-models.md#model-handles)), never the role name the prompt uses for that model. It becomes readable only after the section entry's first tool call, and only when the entry has a model. Here the first tool call is the [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls) to the ask tool from [Asking the operator](#asking-the-operator), so the `pcall` before it finds no field and the placeholder after it renders the name.
+`sys.model` is a string holding the name part of the current model's model id, without the server namespace, so it reads `fast` for a model whose id is `gateway/fast`, and `claude-sonnet-4-6` for `strong` above, filled by `gateway/claude-sonnet-4-6`. It is the same name that role's model handle reads as `model_id` (see [Model handles](10-models.md#model-handles)), never the role name the prompt uses for that model. It becomes readable only after the section entry's first tool call, and only when the entry has a model. Here the first tool call is the [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls) to the `web` Pack's fetch tool (see [Fetching a page](13-web-fetch-and-search.md#fetching-a-page)), so the `pcall` before it finds no field and the placeholder after it renders the name.
 
 At the section entry's first tool call, `sys.model` takes the chain's current model at that moment, the model the chain last selected with `models.use` or else the model it started on, and stays fixed for the rest of the section entry. A switch made in an earlier section of the same chain shows up: after `models.use('strong')` in one section, `sys.model` at the first tool call of the next section names the `strong` model. A section entered again with `jump`, a fanout arm, a task, and a section run with `call` each start without the field and fill it at their own first tool call. From that call on, later `{{ sys.model }}` prose placeholders and later Lua blocks alike read that same name, so a later `return sys.model` returns `claude-sonnet-4-6` too.
 
@@ -2390,7 +2389,7 @@ Two more kinds of lifecycle report come from compiling and loading:
 
 ## Asking the operator
 
-After this section you can pause a section until the operator answers, let a model ask the operator instead, and handle an ask that fails.
+After this section you can declare that a prompt needs a person to answer it, wait for the operator's next message, and write a prompt that runs with or without one.
 
 ````markdown
 ---
@@ -2398,7 +2397,7 @@ name: ask-once
 description: Waits for the operator's next message and returns it.
 runvil: 0
 uses:
-  - user-input
+  - user
 ---
 
 # Ask once
@@ -2406,7 +2405,7 @@ uses:
 ## Main
 
 ```lua
-local text = input.ask()
+local text = tasks.receive()
 return text
 ```
 ````
@@ -2417,126 +2416,81 @@ When the operator sends `kept`, the run result is:
 kept
 ````
 
-The operator is the person who answers during a run. The `runvil/user-input` Pack lets a prompt ask the operator: a prompt that declares it in its frontmatter runs the Pack's Lua prelude, which defines an `input` global table in every section entry, so any section can call `input.ask()` to wait for the operator's next message. The declaration also brings the ask tool, `user-input/ask`.
+The operator is the person who answers a run while it runs. The operator's messages go to the run's main chain, the H1 pass and the section walk after it (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)), and the main chain reads them with `tasks.receive()`. Declaring the `user` Pack, as `ask-once` does, says that the prompt needs an operator, so a run with nobody to answer refuses the prompt at its first step, before any of its Lua runs.
 
-`input.ask()` takes no arguments, as in `local text = input.ask()`. It pauses the section until the operator's next message and returns that message's text as a string, byte for byte as the operator sent it. Leading and trailing spaces, newlines, and tabs are kept, with no trimming or re-encoding, so a message with two leading spaces, a newline and a tab inside it, and two trailing spaces comes back exactly as typed. The operator's text is trusted, so it never arrives wrapped in the untrusted `<untrusted_input_...>` markers.
+`tasks.receive()` pauses the section until the operator's next message and returns that message's text as a string, exactly as it was sent. Leading and trailing spaces, newlines, and tabs are kept, with no trimming or re-encoding, and the text never arrives wrapped in the untrusted `<untrusted_input_...>` markers.
 
 ### Declaring the Pack
 
-You get operator input in a prompt by declaring the Pack under the frontmatter [`uses:`](12-tools.md#tools-packs-and-the-uses-key) key by its Pack id, `user-input`. Write it as the line `  - user-input` after `uses:`, as the `ask-once` prompt does, or in flow style as `uses: [user-input]`. A bare entry always means the `runvil` Pack of that id, so `uses: [runvil/user-input]` declares the same Pack.
+You declare that a prompt needs an operator by listing the Pack id `user` under the frontmatter [`uses:`](12-tools.md#tools-packs-and-the-uses-key) key. Write it as the line `  - user` after `uses:`, as the `ask-once` prompt does, or in flow style as `uses: [user]`. A bare entry always means the `runvil` Pack of that id, so `uses: [runvil/user]` declares the same Pack.
 
-The Pack's fully qualified name is `runvil/user-input`, so its Pack id is the second segment, `user-input`.
+The Pack's fully qualified name is `runvil/user`, and every Host has it built in, beside `runvil/subagents`, with no Plugin to add it. It offers no tools and has no prelude, so declaring it adds no global and no tool. The main chain reads the operator with `tasks.receive()` whether or not the prompt declares `user`, and what the declaration adds is the requirement.
 
-Declaring `user-input` gives your Lua the `input` table, one of the globals that [Pack preludes](#pack-preludes) define. Its `ask` field is a function, so `type(input.ask)` returns `function`. The `input` table is plain Lua built by the Pack's prelude, and `ask` is its only function.
+### A run with no user
 
-The `input` table is sealed like every prelude table (see [Pack preludes](#pack-preludes)). A section can read and call `input.ask`, but writing any field of `input` raises ``input is read-only: Pack `user-input` defines it; cannot set '{field}'``, with the field's name in place of `{field}`, and `pairs(input)` lists nothing.
-
-A prompt that does not declare `user-input` has no `input` global, even when the Host has the Pack, so calling `input.ask()` there fails with Lua's own error `attempt to index a nil value (global 'input')` (see [Pack preludes](#pack-preludes)).
-
-Your own Lua can call `input.ask()` in a section that never calls `tools.offer`, because offering controls only what the model sees, and your code is not the model.
-
-### The input broker
-
-An input broker is the per-run service that delivers a question to the operator, and the Pack names it as the service `runvil/input-broker`. A run can have an optional input broker, and the run lends it to every tool call, so an ask tool can reach the operator.
-
-Every Pack a prompt declares is required, so a prompt that declares `user-input` needs a Host that can ask an operator. The Pack needs the environment to provide an input broker, so on a Host with nobody to ask, the prompt is refused before it starts, with code `requirements_unmet`. The [requirements notice](04-how-a-prompt-runs.md#the-requirements-notice) names the missing service by its id and ends with where the prompt declares the Pack, here the `uses:` line of the `ask-once` prompt:
+A run has a user when the Host that launches it has someone to answer its main chain, and the Host decides that for each run it launches. A run holds the `user` Pack only when it has a user. In any other run the Pack is unavailable, with the reason `this run has no user`, so a prompt that declares it is refused at the run's first step with code `requirements_unmet`, before any of its Lua runs. The [requirements notice](04-how-a-prompt-runs.md#the-requirements-notice) names the Pack and the reason and ends with where the prompt declares the Pack, here the `uses:` line of the `ask-once` prompt:
 
 ````text
 the environment cannot satisfy this prompt:
-- user-input is unavailable: the run lacks the services it needs: runvil/input-broker (at ask-once.md:5)
+- user is unavailable: this run has no user (at ask-once.md:5)
 ````
 
-The ask tool is visible only in a run that has an operator input broker, because the Pack's declared needs keep a run without one from seeing the tool, and a Pack missing a service has its tools left out of the tool catalog. The refusal also gives you a guarantee: a section of a prompt that declares `user-input` always has an operator to ask, so it needs no connection check before calling `input.ask()`.
+The refusal is a guarantee: in a run of a prompt that declares `user`, the main chain always has an operator to answer its `tasks.receive()`, so it needs no check before it waits.
 
-`input.ask()` names no recipient, run, or section. The ask tool reads the input broker of the run that makes the call, and the Host ties that broker to whoever launched the run, so the Host decides where an `input.ask()` question goes. One Pack object is shared by every run, while the input broker arrives with each run, so each ask reads the next message from the operator of the run that makes the call, and reads the reply from the run it is called in.
+A prompt that does not declare `user` is never refused for the lack of one. Its main chain can still call `tasks.receive()` in a run with no user, and the call waits all the same, because a Host can send the run messages from its own code.
 
-### What `input.ask()` takes
+### Running with or without a user
 
-`input.ask()` takes no arguments. Passing any argument raises a plain Lua error with the message `input.ask takes no arguments`, which `pcall` catches, so a prompt that passes a question fails loudly instead of losing it. Passing an explicit `nil` still counts as an argument and raises the same error. The error is raised at level 2, so it is reported against your own line that called `input.ask` rather than against the prelude.
+A prompt that works either way leaves `user` undeclared and checks for the Pack before it waits. `tools.packs.get('user')` returns the Pack's object in a run with a user and `nil` in a run without one, because a Pack the run cannot serve has no Pack object (see [Finding a Pack with `tools.packs.get`](12-tools.md#finding-a-pack-with-toolspacksget)):
+
+````lua
+if tools.packs.get('user') then
+  return 'you said: ' .. tasks.receive()
+end
+return 'nobody to ask'
+````
+
+With this block as the Lua block of `## Main` in a copy of `ask-once` that leaves out `uses:`, a run with a user whose operator sends `hi` returns `you said: hi`, and a run with no user returns `nobody to ask`.
+
+### What `tasks.receive()` takes
+
+`tasks.receive()` takes no arguments. Passing any argument raises a Lua error of kind `lua` whose message names the argument's type, such as `tasks.receive takes no arguments, got string`, so a prompt that passes a question fails loudly instead of losing it. Passing an explicit `nil` still counts as an argument and raises `tasks.receive takes no arguments, got nil`. `pcall` catches the error, and a refused call takes no message from the inbox, so the next `tasks.receive()` still returns the operator's next message.
+
+`tasks.receive()` names no recipient, run, or section. The Host that launched the run decides whose messages reach its main chain.
+
+### Messages that arrive first
+
+The main chain has an inbox, a queue that holds the operator's messages, oldest first. A message that arrives while the main chain is not waiting in `tasks.receive()` stays in the inbox until the main chain reads it, and so does a message the operator sends before the run starts. A `tasks.receive()` with a message already queued returns the oldest queued message at once, without pausing. When the operator sends `one` and then `two` before the main chain reaches this block, the block returns `one|two`:
+
+````lua
+local first = tasks.receive()
+local second = tasks.receive()
+return first .. '|' .. second
+````
+
+Every part of the main chain reads that one inbox: the H1 pass, the walk after it, and every section the main chain runs with [`call`](08-jump-and-call.md#calling-a-section), so a `tasks.receive()` in a section run with `call` takes the operator's next message. A message the H1 pass leaves unread is still queued when the walk begins.
+
+The operator's messages reach only the main chain. A task, whether [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) or [`tasks.fanout`](14-fanout.md#fanout-in-one-call) started it, has an inbox of its own, so a `tasks.receive()` in a task waits on that inbox and never takes the operator's messages.
 
 ### While the section waits
 
-The section entry's Lua VM state survives an `input.ask()` wait, however long the operator takes. With this block as the Lua block of `## Main` in the `ask-once` prompt, an operator who sends `kept` gets the run result `41 kept`:
+The section entry's Lua VM state survives a `tasks.receive()` wait, however long the operator takes. With this block as the Lua block of `## Main` in the `ask-once` prompt, an operator who sends `kept` gets the run result `41 kept`:
 
 ````lua
 local before = 41
-local text = input.ask()
+local text = tasks.receive()
 return tostring(before) .. ' ' .. text
 ````
 
-An `input.ask()` wait pauses only the calling chain, and the rest of the run keeps going while it waits, because `input.ask()` is a [suspending call](#suspending-calls). Every tool call is Harness work, a wait for operator input included, because `input.ask()` asks the operator for text through a tool call and its chain waits for the answer.
+A `tasks.receive()` wait pauses only the main chain, and the rest of the run keeps going while it waits, because `tasks.receive()` is a [suspending call](#suspending-calls). The wait is not Harness work: it issues no effect and waits on the inbox alone. When the main chain waits there and no other chain has anything left to do, the run does not end. It waits for the operator's next message, or for a cancel.
 
-Canceling the run while a section waits in `input.ask()` drops the pending wait, closes any prompt it opened for the operator, and ends the run promptly with the canceled error, whose code is `canceled`, so the code after the call never runs.
+Canceling the run while the main chain waits in `tasks.receive()` ends the run promptly with the canceled error, whose code is `canceled`, so the code after the call never runs.
 
-A stop of the run is different. The ask tool is declared to survive a stop, so a pending `input.ask()`, and the ask tool a model calls, stay open through a stop and keep waiting for the operator's answer, and a person in the middle of typing never loses the question. A stop leaves the operator's open question in place instead of dropping it. Every other occasion that ends a pending tool call drops the open question, including a cancel, the end of the run, and the early end of the task that asked.
+A stop of the run is different. A stop drops the model round and the tool calls in flight (see [Stopping a model round](01-what-a-prompt-is.md#stopping-a-model-round)), and a `tasks.receive()` wait is neither, so a stop leaves the wait open, and the operator's next message still returns from it. A stop never touches the inbox either, so it never drops a queued message.
 
-### The ask tool
+### The operator and the model
 
-The Pack provides exactly one tool, the ask tool, whose tool name is `ask`. Its tool id is the Pack id, then a slash, then `ask`, so it is `user-input/ask`. `tools.get('user-input/ask').id` reads the id back as `user-input/ask`.
-
-Each `input.ask()` is an ordinary tool call to the ask tool, made through [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls) with the tool's full id, so calling the tool yourself asks the operator the same way. With this block as the Lua block of `## Main` in the `ask-once` prompt, the run result is again the operator's text:
-
-````lua
-return tools.call('user-input/ask')
-````
-
-The tool asks the operator when called and returns the text they type, so `tools.call(tools.get('user-input/ask'))` returns the operator's text as well. The prelude receives the Pack id and builds the tool id from it, so `input.ask()` reaches `user-input/ask` without the prelude spelling the Pack id out.
-
-Each `input.ask()` is one tool call from Lua, reported like any tool call a Lua block makes. The run records a `ToolCall` for the tool `user-input/ask` with the script as the caller and the tool's id, `user-input/ask`, as the alias, never `user-input_ask`, the name a model sees for it (see [How tool calls are recorded](12-tools.md#how-tool-calls-are-recorded)). The result reports as trusted with the operator's text as its content.
-
-The ask tool takes no arguments. Its parameters are described as an object with no properties, `{ "type": "object", "properties": {} }`, and any arguments passed to it are ignored. It returns plain text rather than structured output. Its description, shown to any model it is offered to and wherever Lua reads the tool, reads `Wait for the operator's next message and return its text.`
-
-### Letting the model ask
-
-Declaring `user-input` offers nothing to the model, because a [`models.loop`](11-conversations.md#starting-a-conversation) conversation offers the model only tools from the Packs and adhoc tools the section offers, so unless the prompt opts in, only Lua asks the operator. Neither the Host having the Pack nor the prompt declaring it offers the ask tool to the model, and the model can ask the operator only when the prompt's Lua opts in by offering it.
-
-To let the model ask, offer the ask tool in the section that runs the model, either by its id or as the whole Pack (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)):
-
-````lua
-tools.offer('user-input/ask')
-````
-
-````lua
-tools.offer('user-input')
-````
-
-The model sees the offered ask tool under the name `user-input_ask`, not under its id `user-input/ask`, because the `user-input` Pack neither names the tool nor renders it, so its model-facing name is its id with `/` and `.` replaced by `_`. It sees the description `Wait for the operator's next message and return its text.` The model calls the tool with an empty arguments object, `{}`, the call waits until the operator sends their next message, and the tool returns that message's text as its result, in plain text. The operator's answer comes back as trusted tool output, so the text is never wrapped or marked untrusted.
-
-### When an ask fails
-
-````markdown
----
-name: ask-safely
-description: Catches a failed ask and finishes the section.
-runvil: 0
-uses:
-  - user-input
----
-
-# Ask safely
-
-## Main
-
-```lua
-local ok, result = pcall(input.ask)
-if ok then
-  return result
-end
-return result.kind .. ': ' .. tostring(result)
-```
-````
-
-When the Host's input broker fails the wait with the message `the operator's window closed`, the run result is:
-
-````text
-tool: ask-safely.md:14: the operator's window closed
-````
-
-When the input broker fails a wait, `input.ask()` raises at its call site an [error value](#error-values) of error kind `tool` whose `tostring` reads `{file}:{line}: {message}`, with the line that called `input.ask` and the broker's failure text in place of `{message}`. So `local ok, result = pcall(input.ask)` returns `false` and the error value instead of the run ending, and the section keeps running to completion. The error value's `message` field holds the same text that `tostring` renders: the location, then the broker's message. Whatever kind of failure the broker reports, a failed ask reaches Lua as an error value of error kind `tool`.
-
-The broker's failure message reaches the prompt: a caught error value holds it, and when the model made the call, the model reads it as the tool's result, wrapped as untrusted text. The model reads the broker's message alone, never the `{file}:{line}: ` that a caught error value puts in front of it. A failed ask's text holds the broker's own failure message, such as `the operator's window closed`, while the broker's underlying cause stays behind it and is never added to the text, so `tostring` on the error value includes the operator-side failure message but never that hidden cause.
-
-Left uncaught, a failed `input.ask()` ends the run as failed with a tool code, `tool_other` unless the broker reports another tool code such as `tool_backend`, while caught with `pcall` the same failure is an error value of error kind `tool`.
+No tool lets a model wait for the operator. A model's reply without tool calls already ends [`models.loop`](11-conversations.md#starting-a-conversation), so a prompt that holds a conversation with the operator reads each message itself and adds it to the conversation, as `messages:user(tasks.receive())` does before the next `models.loop()`.
 
 ## Error values
 
@@ -2803,7 +2757,6 @@ A failed Engine call raises the Engine's error value right at the call site, so 
 - `pcall(store.append, 'notes.md', line)` takes a store function directly.
 - `pcall(tasks.concurrency, value)` passes its argument on to the Engine function, and returns `false` and the error value when the call fails.
 - `pcall(require, '## broken_style')` returns `false` when a library raises, and `pcall(require, 'os')` lets the block recover from a sandbox refusal and keep running.
-- [`input.ask`](#asking-the-operator) raises its failures at the call site the same way.
 
 Reading or assigning `prose` can fail with the read-only, recursive, and missing-key failures (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)), and `pcall(function() return prose end)` catches them as an error value whose `tostring` carries the message. The refusals of assignments to `argv` and `prose` are caught the same way, with the refusal on the first line of `tostring` of the caught error. A failed read through `prompt.section` or `prompt.list` (see [Reading sections with `prompt.section` and `prompt.list`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptlist)) is catchable with `pcall` too, and `tostring` on it gives text containing the message.
 

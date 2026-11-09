@@ -445,7 +445,7 @@ When a Host starts a run of this prompt, the Harness hands the file's text to th
 
 ### Run policy and canceling
 
-The Host launches runs and sets run policy, the settings that govern a run, such as which models the run uses and whether anyone can answer `input.ask()` (see [Asking the operator](05-lua-environment.md#asking-the-operator)). The Host can also cancel a run.
+The Host launches runs and sets run policy, the settings that govern a run, such as which models the run uses and whether the run has a user, a person who answers its main chain (see [Asking the operator](05-lua-environment.md#asking-the-operator)). The Host can also cancel a run.
 
 ### Packs and the tool catalog
 
@@ -585,7 +585,7 @@ A model round is one request to a model and its reply. The Harness answers it wi
 
 A render asks the Harness how each Pack the entry offered tools from shows those tools to the model, for that entry and the model of its first loop round, the first round a `models.loop` sends (see [Starting a conversation](11-conversations.md#starting-a-conversation)). It happens before that round's request goes out, once per freeze attempt, and the round then freezes the entry's Static Set and Dynamic Set from its answer (see [Tool scope](12-tools.md#tool-scope)); a freeze that fails attaches nothing, so the entry's next round freezes again, rendering first only when its offers name a catalog tool. The Harness asks each of those Packs, and a Pack's render may rename its tools, reshape their descriptions and schemas, drop some, or add tools only the model sees, while a Pack that does not render passes its tools through as offered (see [What a Pack's render can change](12-tools.md#what-a-packs-render-can-change)). The run's record shows each render ahead of the round that asked for it: the request names the entry's `sys.id`, the role the round runs under (for a [raw-id handle](10-models.md#raw-model-ids-and-the-host-state-snapshot), the raw id), and the ids of the tools offered from each Pack, and the answer holds the tools each Pack shows the model. An entry that offers only adhoc tools, or that runs no loop round, has no render.
 
-Asking the operator with `input.ask()` is a call to a Pack's tool. The operator is the person who answers `input.ask` during a run. The user-input Pack defines `input.ask` to end in `return tools.call(pack .. "/ask")`, so every ask reaches the Harness as an ordinary tool call, and the wait for the operator's answer is Harness work.
+Waiting for the operator is not Harness work. The operator is the person who answers a run while it runs, and the run's main chain reads the operator's messages with `tasks.receive()` (see [Asking the operator](05-lua-environment.md#asking-the-operator)). The Host hands the run each message the operator sends, a message that arrives first waits in the main chain's inbox, and the wait issues no effect.
 
 Every store call a block makes, even a read, is a store operation that the Harness performs. That covers all eight `store.*` calls a prompt can make (see [Writing and reading files](09-the-store.md#writing-and-reading-files)), and the block that made the call waits for its answer. A store call a prelude makes while it installs is the one that does not wait: the store functions take their suspending form only after the preludes install, so an install-time call runs inside the Engine, reports its own event, and issues no effect.
 

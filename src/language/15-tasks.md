@@ -198,7 +198,7 @@ You can spawn the same section more than once. Each spawn runs as its own task, 
 
 ### What a task section returns
 
-A task's target section runs ordinary Lua as the task body. It can call a tool with [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls), and the task stays live while that call is outstanding, so a wait on the task lasts until the call returns and the section finishes. It can [offer](12-tools.md#offering-tools-and-packs-with-toolsoffer) its own tools and run its own model loop, as a block does that runs `tools.offer('web/search')` in a prompt that declares the `web` Pack, adds `messages:user('go')` to its own `messages` list, and calls `models.loop()`. It also sees every [Pack prelude](12-tools.md#pack-preludes) global, so in a prompt that declares the `user-input` Pack, a `## Child` task can call `input.ask()` to wait for the operator.
+A task's target section runs ordinary Lua as the task body. It can call a tool with [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls), and the task stays live while that call is outstanding, so a wait on the task lasts until the call returns and the section finishes. It can [offer](12-tools.md#offering-tools-and-packs-with-toolsoffer) its own tools and run its own model loop, as a block does that runs `tools.offer('web/search')` in a prompt that declares the `web` Pack, adds `messages:user('go')` to its own `messages` list, and calls `models.loop()`. It also sees every [Pack prelude](12-tools.md#pack-preludes) global, so in a prompt that declares the made-up `acme/issue-tracker` Pack from that section, a `## Child` task can call `tickets.open('Follow up')`. A task cannot wait for the operator, whose messages reach only the main chain: a `tasks.receive()` in a task waits on the task's own inbox (see [Asking the operator](05-lua-environment.md#asking-the-operator)).
 
 The section hands back its result with an ordinary `return`, such as `return 'child result'`. A task can return the text of `models.infer`: a task section doing `return models.infer('slow please')`, answered with the reply `slow answer`, gives its owner's wait `ok` and the result `slow answer`. A task that runs off its last section without returning gives the empty string as its result, the same as a fanout arm.
 
@@ -1335,13 +1335,14 @@ end
 | `blocked` | The task is waiting on |
 |---|---|
 | `chat` | A model round, such as one from `models.infer` |
-| `tool_call` | A tool call, including a wait for the operator in `input.ask()` |
+| `tool_call` | A tool call |
 | `store` | A store operation |
 | `tasks` | Other tasks, in a wait with or without a time limit |
+| `inbox` | A message to its own inbox, in `tasks.receive()` |
 | `call` | A chain it started with `call` |
 | `queued` | A concurrency slot, before admission or to retake one after a wait |
 
-A task waiting on a model reply, such as a task running `return models.infer('slow please')`, reports `blocked = 'chat'`, and the field reads nil once the task finishes. `tool_call` covers [`input.ask()`](05-lua-environment.md#asking-the-operator) because asking the operator is itself a tool call. A task waiting in `tasks.join_any` reports `blocked = 'tasks'` whether the wait is timed or not, so a task inside `tasks.join_any({ g }, { timeout = 30 })` reads `tasks`.
+A task waiting on a model reply, such as a task running `return models.infer('slow please')`, reports `blocked = 'chat'`, and the field reads nil once the task finishes. A wait for a message is never a tool call: a task waiting in `tasks.receive()` reports `blocked = 'inbox'`, and gives back its concurrency slot while it waits. Only the main chain reads the operator's messages (see [Asking the operator](05-lua-environment.md#asking-the-operator)). A task waiting in `tasks.join_any` reports `blocked = 'tasks'` whether the wait is timed or not, so a task inside `tasks.join_any({ g }, { timeout = 30 })` reads `tasks`.
 
 `queued` means the task is waiting for a slot under the concurrency limit while its `state` is still `running` (see [Concurrency, nesting, and scheduling](#concurrency-nesting-and-scheduling)). A spawned task that cannot run yet waits for an admission slot, and while it waits, `tasks.status` reads `state` `running` and `blocked` `queued` until it is admitted and first runs. So a status read right after `tasks.spawn` shows `state = 'running'`, `section = nil`, and `blocked = 'queued'`, as `fresh` did in `task-status`. When the run's concurrency limit is 1, a second task reads `state` `running` and `blocked` `queued` while the first one runs. A task waiting to retake its slot after a wait answers also reads `queued`, the same as a fresh spawn waiting for its first slot. Once a task is admitted, or retakes its slot after a wait, its status no longer reads `queued`.
 

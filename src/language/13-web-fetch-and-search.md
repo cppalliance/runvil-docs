@@ -87,7 +87,7 @@ return tools.call('web/fetch', { url = 'https://example.com/' })
 ```
 ````
 
-The web Pack needs no per-run service, so a prompt that declares it is never refused for a service the run is missing.
+The web Pack does not depend on whether the run has a user, so a prompt that declares it runs the same in a run with no user.
 
 ### How a call reaches each tool
 

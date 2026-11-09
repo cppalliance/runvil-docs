@@ -1522,7 +1522,7 @@ A stop reaches only the calls waiting when it lands. A stop that lands while no 
 
 A stop drops a tool's calls unless the tool's Pack marks it as surviving a stop; by default a tool does not survive a stop. A tool call that survives a stop still ends when the run ends.
 
-A stop leaves a question to the operator open: [`input.ask()`](05-lua-environment.md#asking-the-operator) keeps waiting through the stop, and the operator's answer still reaches the prompt. A stop that cuts short a timed `tasks.join` or `tasks.join_any` does not cancel the tasks it waits on, so a later wait still joins them (see [Time limits on waits](15-tasks.md#time-limits-on-waits)).
+A stop leaves a wait for the operator open: a [`tasks.receive()`](05-lua-environment.md#asking-the-operator) on the main chain keeps waiting through the stop, and the operator's next message still reaches the prompt. A stop never touches the main chain's inbox either, so it never drops a message queued there. A stop that cuts short a timed `tasks.join` or `tasks.join_any` does not cancel the tasks it waits on, so a later wait still joins them (see [Time limits on waits](15-tasks.md#time-limits-on-waits)).
 
 ## Gateway environment variables
 
