@@ -1,6 +1,6 @@
 # Tasks
 
-A task is a section that `tasks.spawn` starts as its own [chain](04-how-a-prompt-runs.md#the-section-walk), running beside the chain that spawned it rather than in its place. The waits, `tasks.join_any` and `tasks.join`, collect a task's result when your code is ready for it, and `tasks.cancel` and `tasks.pending` stop and list the tasks you started.
+A task is a section that `tasks.spawn` starts as its own [chain](04-how-a-prompt-runs.md#the-section-walk), running beside the chain that spawned it rather than in its place. The waits, `tasks.join_any` and `tasks.join`, collect a task's result when your code is ready for it, and `tasks.cancel` and `tasks.pending` stop and list the tasks you started. `tasks.send` and `tasks.reply` pass messages between a task and its owner, so one task can answer, wait, and take a follow-up.
 
 ## Starting a task with `tasks.spawn`
 
@@ -72,7 +72,7 @@ table function
 
 The `tasks` global is a table in the Lua of every section, including the H1 body, the sections that tasks run, and fanout [arms](14-fanout.md#what-an-arm-sees). The Engine installs it alongside the other [suspending calls](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals), such as `call`, `models.infer`, `tools.call`, and `tasks.fanout`.
 
-The table holds nine task functions, `spawn`, `join_any`, `join`, `concurrency`, `ready`, `status`, `pending`, `note`, and `cancel`, plus `fanout`, which the Engine adds to the same table. A Lua block spawns tasks with `tasks.spawn`, waits on them with `tasks.join_any` and `tasks.join`, checks on them with `tasks.ready`, `tasks.status`, and `tasks.pending`, notes a task's progress with `tasks.note`, and cancels tasks with `tasks.cancel`. `tasks.concurrency` gives the effective [concurrency limit](14-fanout.md#concurrency-and-the-admission-window), and `tasks.fanout` is the fanout call itself. Their call forms include `tasks.spawn(target, opts?)`, `tasks.join_any(set, opts?)`, `tasks.join(set, opts?)`, `tasks.concurrency(n?)`, and `tasks.pending()`, where `?` marks an optional argument.
+The table holds twelve task functions, `spawn`, `join_any`, `join`, `concurrency`, `ready`, `status`, `pending`, `note`, `receive`, `send`, `reply`, and `cancel`, plus `fanout`, which the Engine adds to the same table. A Lua block spawns tasks with `tasks.spawn`, waits on them with `tasks.join_any` and `tasks.join`, checks on them with `tasks.ready`, `tasks.status`, and `tasks.pending`, notes a task's progress with `tasks.note`, passes messages with `tasks.send`, `tasks.receive`, and `tasks.reply`, and cancels tasks with `tasks.cancel`. `tasks.concurrency` gives the effective [concurrency limit](14-fanout.md#concurrency-and-the-admission-window), and `tasks.fanout` is the fanout call itself. Their call forms include `tasks.spawn(target, opts?)`, `tasks.join_any(set, opts?)`, `tasks.join(set, opts?)`, `tasks.concurrency(n?)`, `tasks.pending()`, `tasks.receive()`, `tasks.send(task, text)`, and `tasks.reply(value?)`, where `?` marks an optional argument.
 
 Each task function returns these values:
 
@@ -86,9 +86,12 @@ Each task function returns these values:
 | `tasks.status` | A status table |
 | `tasks.pending` | A sequence of task handles |
 | `tasks.note` | Nothing |
+| `tasks.receive` | The text of the chain's next inbox message |
+| `tasks.send` | A boolean |
+| `tasks.reply` | The text of the owner's next message |
 | `tasks.cancel` | Nothing |
 
-This section covers `tasks.spawn`. The waits are in [Waiting with `tasks.join_any` and `tasks.join`](#waiting-with-tasksjoin_any-and-tasksjoin), canceling and listing are in [Canceling and listing tasks](#canceling-and-listing-tasks), the checks and the note are in [Checking on a task with `tasks.status`, `tasks.ready`, and `tasks.note`](#checking-on-a-task-with-tasksstatus-tasksready-and-tasksnote), wait timeouts are in [Time limits on waits](#time-limits-on-waits), and the limit is in [Concurrency, nesting, and scheduling](#concurrency-nesting-and-scheduling).
+This section covers `tasks.spawn`. The waits are in [Waiting with `tasks.join_any` and `tasks.join`](#waiting-with-tasksjoin_any-and-tasksjoin), canceling and listing are in [Canceling and listing tasks](#canceling-and-listing-tasks), messages are in [Messages between tasks](#messages-between-tasks), the checks and the note are in [Checking on a task with `tasks.status`, `tasks.ready`, and `tasks.note`](#checking-on-a-task-with-tasksstatus-tasksready-and-tasksnote), wait timeouts are in [Time limits on waits](#time-limits-on-waits), and the limit is in [Concurrency, nesting, and scheduling](#concurrency-nesting-and-scheduling).
 
 The helpers behind the `tasks` functions are never globals, so your code cannot call them directly, and the `coroutine` global reads `nil`. `tasks` holds task functions only and has no entry per section, so indexing it with a heading reference reads `nil`; you name a section by passing its heading reference to a function such as `tasks.spawn`.
 
@@ -198,7 +201,7 @@ You can spawn the same section more than once. Each spawn runs as its own task, 
 
 ### What a task section returns
 
-A task's target section runs ordinary Lua as the task body. It can call a tool with [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls), and the task stays live while that call is outstanding, so a wait on the task lasts until the call returns and the section finishes. It can [offer](12-tools.md#offering-tools-and-packs-with-toolsoffer) its own tools and run its own model loop, as a block does that runs `tools.offer('web/search')` in a prompt that declares the `web` Pack, adds `messages:user('go')` to its own `messages` list, and calls `models.loop()`. It also sees every [Pack prelude](12-tools.md#pack-preludes) global, so in a prompt that declares the made-up `acme/issue-tracker` Pack from that section, a `## Child` task can call `tickets.open('Follow up')`. A task cannot wait for the operator, whose messages reach only the main chain: a `tasks.receive()` in a task waits on the task's own inbox (see [Asking the operator](05-lua-environment.md#asking-the-operator)).
+A task's target section runs ordinary Lua as the task body. It can call a tool with [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls), and the task stays live while that call is outstanding, so a wait on the task lasts until the call returns and the section finishes. It can [offer](12-tools.md#offering-tools-and-packs-with-toolsoffer) its own tools and run its own model loop, as a block does that runs `tools.offer('web/search')` in a prompt that declares the `web` Pack, adds `messages:user('go')` to its own `messages` list, and calls `models.loop()`. It also sees every [Pack prelude](12-tools.md#pack-preludes) global, so in a prompt that declares the made-up `acme/issue-tracker` Pack from that section, a `## Child` task can call `tickets.open('Follow up')`. A task cannot wait for the operator, whose messages reach only the main chain: a `tasks.receive()` in a task waits on the task's own inbox, which its owner fills with `tasks.send` (see [Messages between tasks](#messages-between-tasks)).
 
 The section hands back its result with an ordinary `return`, such as `return 'child result'`. A task can return the text of `models.infer`: a task section doing `return models.infer('slow please')`, answered with the reply `slow answer`, gives its owner's wait `ok` and the result `slow answer`. A task that runs off its last section without returning gives the empty string as its result, the same as a fanout arm.
 
@@ -536,7 +539,7 @@ The first `tasks.join_any` parks `## Main` until one of the two tasks ends and r
 
 ### Waits and task results
 
-A wait parks its owner until tasks end and hands the owner their results. A task's result is its final text when it returns, or its failure when it fails, and a finished task's result is held until its owner takes it with a wait. Waiting on a finished task delivers its result exactly once: the wait takes the result, and the task then counts as delivered.
+A wait parks its owner until tasks end and hands the owner their results. A task's result is its final text when it returns, or its failure when it fails, and a finished task's result is held until its owner takes it with a wait. Waiting on a finished task delivers its result exactly once: the wait takes the result, and the task then counts as delivered. A task can also hand back a result and stay open, with [`tasks.reply`](#answering-with-tasksreply), and a wait takes each reply the same way, exactly once.
 
 When the delivered task succeeded, `ok` is `true` and the result is the task's final text, the value its section's Lua returned. When it failed, `ok` is `false` and the result is the task's [error value](05-lua-environment.md#error-values), handed back without raising, so the wait itself succeeds and your code decides what to do with the failure. A common guard is `assert(ok, tostring(result))`, which puts a failed task's error value in the error message.
 
@@ -604,7 +607,7 @@ The first two messages are the error value's whole message. The third is a refus
 
 ### How `tasks.join_any` picks a member
 
-`tasks.join_any(set, opts?)` waits on a set of tasks the caller owns. It returns at once, without parking, when a member has already ended, and otherwise it parks the caller until a member ends and delivers the first one to end. When several members have already ended, it returns the first of them in the order you listed them, not the order they finished. Before returning anything, it checks every member, so one member the caller does not own, or one already delivered, fails the whole wait even when another member has already ended.
+`tasks.join_any(set, opts?)` waits on a set of tasks the caller owns. It returns at once, without parking, when a member has already ended or holds a reply no wait has taken, and otherwise it parks the caller until a member ends or replies and delivers the first one to do so. When several members already have a result to deliver, it returns the first of them in the order you listed them, not the order they finished. Before returning anything, it checks every member, so one member the caller does not own, or one already delivered, fails the whole wait even when another member has already ended.
 
 The handle `tasks.join_any` returns is a new table, so you learn which member it delivered by comparing its `task` field with the `task` field of a handle you kept, as in `first.task == a.task`, rather than comparing the tables with `==`. Which member it returns when several are pending is not fixed, so a prompt branches on the returned handle instead of assuming an order.
 
@@ -651,6 +654,8 @@ wait-once.md:14: task `0.0` was already delivered: a task's result is taken by o
 
 The refusal in the middle always reads `` task `{task}` was already delivered: a task's result is taken by one wait ``. A `task_consumed` left uncaught ends the run with that error, under its own [error code](16-limits-and-errors.md#run-error-codes) `task_consumed`, and a message that is that refusal followed by ` (at {file}:{line})`.
 
+An idle task gives the same error to a wait that comes after a wait took its latest reply, until its owner sends it a message (see [Each reply goes to one wait](#each-reply-goes-to-one-wait)).
+
 ### Waiting in finish order
 
 A loop that waits on several tasks one at a time and drops each one from its set once delivered handles the tasks in finish order and leaves nothing live. In a prompt with sections `## A`, `## B`, and `## C`, this block returns the ids in the order the tasks finish, such as `0.1 0.0 0.2`:
@@ -676,9 +681,9 @@ return order
 
 ### How `tasks.join` fills its results
 
-`tasks.join(set, opts?)` takes a list of task handles and waits until every listed task finishes, and the section continues once all of them have. It returns two values: a results sequence, then a `timed_out` boolean, which [Time limits on waits](#time-limits-on-waits) covers. Each results entry is a table with the fields `task`, `ok`, and `result`, placed at the same position as its member in the set:
+`tasks.join(set, opts?)` takes a list of task handles and waits until every listed task finishes or replies, and the section continues once all of them have. It returns two values: a results sequence, then a `timed_out` boolean, which [Time limits on waits](#time-limits-on-waits) covers. Each results entry is a table with the fields `task`, `ok`, and `result`, placed at the same position as its member in the set:
 
-- When the member succeeded, its entry has `ok == true`, and `result` holds the value its section returned.
+- When the member succeeded, its entry has `ok == true`, and `result` holds the value its section returned, or the reply it handed back with `tasks.reply`.
 - When the member raised, its entry has `ok == false`, and `result` holds the error value, whose `kind` and `tostring` describe the failure.
 
 Entries follow the order the set lists the handles, not the order the tasks finish, so `results[1]` always belongs to the first handle: `tasks.join({ b, a })` puts `b`'s entry first. Each entry, `{ task, ok, result }`, is itself a task handle whose `task` field holds the id string, so you can pass it to any other `tasks` function. A join that did not time out returns results with no holes, so `#results` equals the length of the set and `ipairs` walks every position. [Collecting the members a timeout left running](#collecting-the-members-a-timeout-left-running) covers the holes a timeout leaves.
@@ -782,13 +787,14 @@ After a cancel, the task's status and listing change at once:
 - `tasks.pending()` no longer lists the task.
 - The task's section never reaches its `return`.
 
-`tasks.cancel` is idempotent. Canceling a task that has already ended succeeds, leaves the task as it is, reports nothing, and raises nothing, so calling it more than once is safe. It is answered at once, without a round trip to the Host, so the section continues straight to its next statement, the same as `tasks.spawn`, `tasks.ready`, `tasks.status`, `tasks.pending`, and `tasks.note`. You can cancel several tasks one after another in any order, such as `tasks.cancel(b)` before `tasks.cancel(a)`.
+`tasks.cancel` is idempotent. Canceling a task that has already ended succeeds, leaves the task as it is, reports nothing, and raises nothing, so calling it more than once is safe. It is answered at once, without a round trip to the Host, so the section continues straight to its next statement, the same as `tasks.spawn`, `tasks.ready`, `tasks.status`, `tasks.pending`, `tasks.note`, and `tasks.send`. You can cancel several tasks one after another in any order, such as `tasks.cancel(b)` before `tasks.cancel(a)`.
 
 A cancel stops a task wherever it is:
 
 - A task still queued for a concurrency slot never starts its section.
 - A task parked waiting on an effect, such as a `store.write`, never resumes past that call.
 - A task waiting on a model reply ends, and so does a task parked on a batch of in-flight tool calls inside `models.loop`.
+- A task waiting on its inbox ends, whether it waits in `tasks.receive()` or is [idle](#idle-tasks) after `tasks.reply`. An idle task has not finished, so a reply no wait has taken is dropped with it, and the messages left in a canceled task's inbox are dropped too.
 
 Canceling a task withdraws every tool call it still has unanswered, even a call to a tool marked to survive a Host stop, so the canceled task never receives those results, and their late answers start no new round. Canceling a task while it waits on Harness work, such as a store call, a model round, or a timeout, does not fail the run, and the late answer is discarded when it arrives. A store write the task had already issued when it was canceled is not withdrawn, though, so that write can still take effect even though the canceled task never sees its answer.
 
@@ -830,7 +836,7 @@ A canceled task's error value shares kind `canceled` with a canceled run or a st
 
 `tasks.pending()` returns the caller's own live tasks in spawn order, as a 1-based sequence of task handles, each shaped `{ task = id }`. When nothing is live, it returns an empty sequence, never `nil`, so `#` and `ipairs` need no `nil` check.
 
-Only tasks that are still running are listed, so ended tasks drop out whether or not a wait took their results. After you spawn `a`, `b`, and `c` and wait on `b`, `tasks.pending()` holds two handles, for `a` and then for `c`. A task that a [timed-out wait](#time-limits-on-waits) left running is still listed, and a task drops out once a wait delivers it, so `tasks.pending()` returns an empty list once every task the caller spawned is canceled or delivered. The list holds only tasks the calling chain spawned directly, not tasks those tasks spawned.
+Only live tasks are listed, running or [idle](#idle-tasks), so ended tasks drop out whether or not a wait took their results. After you spawn `a`, `b`, and `c` and wait on `b`, `tasks.pending()` holds two handles, for `a` and then for `c`. A task that a [timed-out wait](#time-limits-on-waits) left running is still listed, and so is an idle task after a wait took its reply, since it has not ended. A task that has ended drops out, so `tasks.pending()` returns an empty list once every task the caller spawned has ended. The list holds only tasks the calling chain spawned directly, not tasks those tasks spawned.
 
 Each handle `tasks.pending` returns carries the task id in its `task` field and works with every `tasks` function, so it passes straight to `tasks.cancel`.
 
@@ -881,6 +887,207 @@ return 'careful answer'
 
 The run result is the text of whichever task ended first, `quick answer` or `careful answer`, since which one wins is not fixed. Either way the section ends with nothing left running: a task still running is canceled, and a task that already ended has dropped out of `tasks.pending()`.
 
+## Messages between tasks
+
+After this section you can send a task you started a message with `tasks.send`, read a task's messages with `tasks.receive()`, and keep a task open for follow-ups with `tasks.reply`.
+
+````markdown
+---
+name: draft-loop
+description: Asks a task for a draft and sends it two follow-ups.
+runvil: 0
+---
+
+# Draft loop
+
+## Main
+
+```lua
+local t = tasks.spawn('## Worker')
+local _, _, first = tasks.join_any({ t })
+tasks.send(t, 'shorten it')
+local _, _, second = tasks.join_any({ t })
+tasks.send(t, 'done')
+local _, _, last = tasks.join_any({ t })
+return first .. '|' .. second .. '|' .. last
+```
+
+## Worker
+
+```lua
+local text = tasks.reply('long draft')
+text = tasks.reply('short draft after ' .. text)
+return 'returned after ' .. text
+```
+````
+
+````text
+long draft|short draft after shorten it|returned after done
+````
+
+`## Worker` hands back `long draft` with `tasks.reply` instead of `return`, so the task stays open: the first `tasks.join_any` takes the reply, and the task waits for its owner's next message. `tasks.send(t, 'shorten it')` puts that text in the task's inbox, the waiting `tasks.reply` returns it, and the task runs again and replies a second time, which the second wait takes. The message `done` resumes the second reply, the task returns, and the last wait takes its final text, as it would from any task that returns.
+
+### Each task's inbox
+
+Every task has an inbox, a queue of text messages, oldest first, like the main chain's inbox that holds the operator's messages (see [Messages that arrive first](05-lua-environment.md#messages-that-arrive-first)). Only the task's owner fills it, with `tasks.send`, and only the task reads it, with `tasks.receive()` or `tasks.reply`. A section the task runs with `call` has no inbox of its own and reads the task's (see [How a called chain runs](08-jump-and-call.md#how-a-called-chain-runs)). No chain can send to the main chain, whose inbox only the Host fills.
+
+A message stays in the inbox until the task reads it, and a stop leaves it there (see [What a stop leaves running](16-limits-and-errors.md#what-a-stop-leaves-running)). A task that ends with messages still in its inbox drops them, and its owner sees how the task ended through a wait or `tasks.status`.
+
+### Sending with `tasks.send`
+
+`tasks.send(task, text)` puts `text` last in the inbox of a task the caller owns and returns `true`. It takes a task handle or a task id string, like every `tasks` function that names a task, and it answers at once without parking the caller. The task reads the text exactly as sent. A message reaches only the task it names, and what it does there depends on what the task is doing:
+
+- A task waiting in `tasks.receive()` or `tasks.reply` resumes, and that call returns the text.
+- A task inside `models.loop` whose model request has no answer yet has that request withdrawn, and the loop sends it again with the message appended (see [Messages that arrive while the loop runs](11-conversations.md#messages-that-arrive-while-the-loop-runs)).
+- Otherwise the message waits in the inbox. The task's next `tasks.receive()` or `tasks.reply` returns the oldest message at once, and `models.loop` appends every queued message before its next model request, so a task whose loop is running tool calls reads the message once they finish.
+
+`tasks.send` returns `false` once the task has ended, whether it returned, failed, was canceled, or was closed by the [idle cap](#the-idle-cap), and the text is dropped: it enters no inbox and reports no event. With this block as the Lua block of `## Main` in `one-task`, the run returns `false`:
+
+````lua
+local t = tasks.spawn('## Child')
+tasks.join({ t })
+return tostring(tasks.send(t, 'too late'))
+````
+
+Only the owner may send to a task, so `tasks.send` raises a [`task_not_owned`](#only-the-owner-may-touch-a-task) error value for a task the caller does not own and for an id that names no task. That covers a task sending to a sibling, a task sending to itself with `tasks.send(sys.taskid, text)`, since no chain owns itself, and the main chain sending to its own `sys.taskid`, which is `0`. A `text` that is not a string raises a `lua` error, `tasks.send text must be a string, got {type}`, before anything is sent (see [Argument errors from the `tasks` functions](#argument-errors-from-the-tasks-functions)).
+
+### Reading a task's inbox with `tasks.receive()`
+
+In a task, `tasks.receive()` reads the task's own inbox, the way it reads the main chain's (see [What `tasks.receive()` takes](05-lua-environment.md#what-tasksreceive-takes)). It returns the oldest queued message at once, or parks the task until its owner sends one, and it returns the text exactly as sent. With these two sections in place of those in `one-task`, the run returns `got: also cover the tests`:
+
+````markdown
+## Main
+
+```lua
+local t = tasks.spawn('## Child')
+tasks.send(t, 'also cover the tests')
+local results = tasks.join({ t })
+return 'got: ' .. results[1].result
+```
+
+## Child
+
+```lua
+return tasks.receive()
+```
+````
+
+The send comes before the task first runs, so the message waits in the inbox and the task's `tasks.receive()` returns it at once. Sent while the task waits, the same message resumes it.
+
+While a task waits on its inbox, `tasks.status(t).blocked` reads `inbox`, and the task gives back its concurrency slot, as a task waiting on other tasks does (see [Waiting gives a slot back](#waiting-gives-a-slot-back)). The wait issues no effect, so only the owner's `tasks.send` ends it, unless a cancel or the owner's end stops the task first.
+
+### Answering with `tasks.reply`
+
+`tasks.reply(value)` hands `value` to the task's owner as the task's latest result, then waits on the task's inbox and returns the owner's next message, as `tasks.receive()` does. The owner takes the reply the way it takes a finished task's result, with `tasks.join_any` or `tasks.join`, so `ok` is `true` and the result is the reply's text. The task keeps its section entry while it waits, its locals and its `messages` list included, so a task that holds a conversation keeps it across follow-ups.
+
+`tasks.reply` turns `value` into text the way a section's `return` does. A string stays as it is and a number or a boolean becomes its text, so `tasks.reply(42)` hands over `42`, and `tasks.reply()` or `tasks.reply(nil)` hands over the empty string, the result of a task whose walk returns nothing. A table raises a `lua` error whose message includes `cannot return a table as a result`, as a section's table return does, and so does any other value with no text form, such as a function.
+
+When a message already waits in the inbox, `tasks.reply` publishes the reply and returns the oldest message at once, so the task runs on without waiting. A reply that no wait has taken yet is replaced by the task's next reply, so a wait always takes the latest one. With these two sections in place of those in `one-task`, the run returns `first|got early`:
+
+````markdown
+## Main
+
+```lua
+local t = tasks.spawn('## Child')
+tasks.send(t, 'early')
+local _, _, first = tasks.join_any({ t })
+local _, _, second = tasks.join_any({ t })
+return first .. '|' .. second
+```
+
+## Child
+
+```lua
+return 'got ' .. tasks.reply('first')
+```
+````
+
+The first wait takes the reply `first`. The message `early` was already queued, so the reply returns it at once, the task returns `got early`, and the second wait takes that final text.
+
+`tasks.reply` works only inside a task. On the main chain, which has no owner, it raises a `lua` error with the refusal `tasks.reply has no owner to reply to on the main chain`, and so does a section the main chain runs with `call`. A section a task runs with `call` replies for that task.
+
+### Idle tasks
+
+A task that has replied and waits on its empty inbox is idle. An idle task is still live, so the `tasks` functions read it like a task waiting in `tasks.receive()`:
+
+- `tasks.status(t)` reads `state` `running` and `blocked` `inbox`, with no `ok`, and its `section` names the section the task replied from, the called section when the reply came from a `call`.
+- `tasks.ready(t)` is `true` while the task's latest reply waits for a wait to take it, and `false` once a wait has taken it.
+- `tasks.pending()` lists the task, since it has not ended.
+- The task gives back its concurrency slot while it is idle, so another task can run in it.
+
+An idle task runs again only when its owner sends it a message, which its `tasks.reply` returns. It ends by returning or failing after that, or when its owner cancels it, when its owner ends, or when the [idle cap](#the-idle-cap) closes it. Canceling an idle task ends it `canceled` and drops a reply no wait has taken, so a later wait gives back the `canceled` error value (see [What a wait gives back for a canceled task](#what-a-wait-gives-back-for-a-canceled-task)). An owner may end while it has idle tasks: each is abandoned with it, but an idle task already handed its owner a reply, so unlike a running task it is no leak, and the owner ends without `tasks_live` (see [When a chain ends with live tasks](#when-a-chain-ends-with-live-tasks)).
+
+### Each reply goes to one wait
+
+A wait takes each reply once, as it takes a finished task's result once. A wait on an idle task whose latest reply a wait has already taken, with no message sent to it since, raises [`task_consumed`](#delivering-a-result-once-with-task_consumed), because no other result can come until the owner sends one. With this block as the Lua block of `## Main` in `draft-loop`, the run returns `running false task_consumed`:
+
+````lua
+local t = tasks.spawn('## Worker')
+tasks.join_any({ t })
+local state = tasks.status(t).state
+local ok, err = pcall(tasks.join_any, { t })
+return state .. ' ' .. tostring(ok) .. ' ' .. err.kind
+````
+
+Once the owner sends a message, the task runs again, and the next wait waits for its next reply or its end, which is how `draft-loop` waits on one task three times. `tasks.join` takes a reply the same way, so its entry's `result` holds the reply text. A wait that takes a reply joins the task, as every delivery does, so the store writes the task made before it replied are visible to the owner from its next operation (see [Store writes after a wait](#store-writes-after-a-wait)).
+
+### The idle cap
+
+An idle task keeps its Lua VM, so a run holds at most a set number of idle tasks, the idle cap: 8 by default, which the Harness sets as `max_idle_tasks` (see [Run limits and their defaults](16-limits-and-errors.md#run-limits-and-their-defaults)). The cap counts idle tasks across the whole run, whoever owns them. When a reply would put the run past the cap, the task idle longest, other than the one replying, closes: its chain ends, and its latest reply stays its result, as if it had returned it.
+
+A task the idle cap closed reads like a task that returned:
+
+- `tasks.status` reads `state` `done` and `ok` `true`, and the run reports a `TaskSucceeded` event for it.
+- `tasks.send` to it returns `false`.
+- A wait on it takes its latest reply when no wait has, and otherwise raises `task_consumed`.
+
+The cap never abandons a task, because its owner is still live and can still take the reply. Nothing in the run's record says that the cap closed the task.
+
+### Inbox events
+
+Two run events report inboxes, each under the provenance of the chain whose inbox it is, so a task's inbox events report under its own task id (see [Run events and records](04-how-a-prompt-runs.md#run-events-and-records)):
+
+- `inbox_message` reports each message that enters an inbox, with the message in its `text` field. For a `tasks.send`, the step that applies the message reports it under the receiving task, in the section the task is in. A message the Host sends to the main chain is reported when the Host hands it over, ahead of the step that applies it.
+- `inbox_waiting` reports a chain parking in `tasks.receive()` or `tasks.reply` with its inbox empty, in the step where it parks. A read that finds a message waiting reports nothing.
+
+A `tasks.send` that returns `false` reports neither event. On the main chain, task `0`, a Host reads `inbox_waiting` as the run waiting for the operator, and `inbox_message` as the operator's message reaching it.
+
+### When nothing can move
+
+A task waiting on its inbox can be woken only by its owner, so a run can reach a point where no chain can move: the owner waits on the task, and the task waits for a message only that owner could send. When no chain can move and the main chain does not wait on its own inbox, the run ends with code `stalled`:
+
+````markdown
+---
+name: stalled-wait
+description: Waits on a task that waits for a message nobody sends.
+runvil: 0
+---
+
+# Stalled wait
+
+## Main
+
+```lua
+local t = tasks.spawn('## Worker')
+tasks.join({ t })
+return 'unreachable'
+```
+
+## Worker
+
+```lua
+return tasks.receive()
+```
+````
+
+The run fails with code `stalled` and this message:
+
+````text
+the run stalled: no chain can move, and these tasks wait on their inboxes: 0.0
+````
+
+The message names the tasks that wait on their inboxes, in id order, and the run error's facts hold their ids. A stall ends the run outside any Lua, so no `pcall` catches it, and it points at no line (see [Run codes](16-limits-and-errors.md#run-codes)). Send a task its message before you wait on it, or do not wait on a task that waits for one. The main chain is the exception: the Host can send it a message, so a main chain that waits in `tasks.receive()` with nothing else to run leaves the run waiting for the operator, not stalled (see [While the section waits](05-lua-environment.md#while-the-section-waits)).
+
 ## Ownership, leaked tasks, and abandonment
 
 After this section you can end every chain cleanly, read the `task_not_owned` and `tasks_live` errors, and tell an abandoned task from a canceled one.
@@ -916,7 +1123,7 @@ return 'child result'
 done
 ````
 
-A chain ends cleanly when every task it spawned has been waited on or canceled. `## Main` cancels every handle left in `tasks.pending()` before it returns, so the run ends with text `done` and leaks nothing. Leave the loop out, and the same block ends with two live tasks:
+A chain ends cleanly when no task it spawned is still running: each one has ended, been canceled, or been left [idle](#idle-tasks) after a reply. `## Main` cancels every handle left in `tasks.pending()` before it returns, so the run ends with text `done` and leaks nothing. Leave the loop out, and the same block ends with two live tasks:
 
 ````lua
 tasks.spawn('## Child')
@@ -976,7 +1183,7 @@ Tasks spawned in the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) are handed o
 
 ### Only the owner may touch a task
 
-Only the chain that spawned a task may wait on it, check it, list it, or cancel it. The one exception is that code running inside a task may read that task's own status with `tasks.status(sys.taskid)`. Any other task operation, whether a wait, a status read, or a cancel, that names a task the caller does not own raises an error of kind `task_not_owned`, and `err.task` holds the id. That includes a task naming itself with any operation other than a status read:
+Only the chain that spawned a task may wait on it, check it, list it, send it a message, or cancel it. The one exception is that code running inside a task may read that task's own status with `tasks.status(sys.taskid)`. Any other task operation, whether a wait, a status read, a send, or a cancel, that names a task the caller does not own raises an error of kind `task_not_owned`, and `err.task` holds the id. That includes a task naming itself with any operation other than a status read:
 
 ````markdown
 ---
@@ -1008,7 +1215,7 @@ return tostring(ok) .. ' ' .. err.kind .. ' ' .. err.task
 false task_not_owned 0.0
 ````
 
-Inside `## Child`, `tasks.status(me)` would work, but `pcall(tasks.cancel, me)` is refused, and so are `tasks.ready` and a wait such as `pcall(tasks.join_any, { me })` on its own id. A task that names its owner's task is refused too, such as `'0'` from a task the main walk spawned, since the main walk is task `0` and a caller may name only tasks it owns or its own task. An id that names no task at all is refused the same way, so a caller learns nothing about tasks it never started: `pcall(tasks.cancel, '9.9')` gives `err.kind == 'task_not_owned'` and `err.task == '9.9'`.
+Inside `## Child`, `tasks.status(me)` would work, but `pcall(tasks.cancel, me)` is refused, and so are `tasks.ready`, `tasks.send`, and a wait such as `pcall(tasks.join_any, { me })` on its own id. A task that names its owner's task is refused too, such as `'0'` from a task the main walk spawned, since the main walk is task `0` and a caller may name only tasks it owns or its own task. An id that names no task at all is refused the same way, so a caller learns nothing about tasks it never started: `pcall(tasks.cancel, '9.9')` gives `err.kind == 'task_not_owned'` and `err.task == '9.9'`.
 
 The error's message points at the refused call and names the task the caller reached for, such as `0.0`, and the error sets the field `task`. In `not-owned` it reads:
 
@@ -1022,7 +1229,9 @@ The refusal in the middle always reads `` task `{task}` is not a task this chain
 
 ### When a chain ends with live tasks
 
-A chain must wait on or cancel every task it spawned before it ends. When a section or other chain ends normally, by a scalar return or by running out of sections, while a task it spawned is still live, its outcome becomes an error value of kind `tasks_live` in place of the returned value, and the owner chain fails. A leaked task is treated as a bug in your prompt, and only a normal ending with at least one leaked task produces `tasks_live`. Canceled tasks leave nothing live at chain end, so a run that cancels its tasks ends normally, with text such as `done`, and without `tasks_live`.
+A chain must wait on or cancel every task it spawned before it ends. When a section or other chain ends normally, by a scalar return or by running out of sections, while a task it spawned is still running, its outcome becomes an error value of kind `tasks_live` in place of the returned value, and the owner chain fails. A leaked task is treated as a bug in your prompt, and only a normal ending with at least one leaked task produces `tasks_live`. Canceled tasks leave nothing live at chain end, so a run that cancels its tasks ends normally, with text such as `done`, and without `tasks_live`.
+
+An [idle](#idle-tasks) task is no leak. It already handed its owner a reply, so an owner may end while it has idle tasks: they are abandoned with it, and its outcome stays its own. An owner that ends with an idle task and a running one fails with `tasks_live` naming only the running one.
 
 The rule applies to every owner, whether the root walk, a `call` chain, or another task. Because tasks belong to the chain and not to the section, a task spawned in a section that falls through is still owned by the walk, and the next section's return leaks it:
 
@@ -1108,11 +1317,11 @@ A `tasks_live` left uncaught ends the run with that error, under its own error c
 
 A chain that fails with its own error while it still owns live tasks keeps that error rather than becoming `tasks_live`, because the leak is the lesser fault. A section that runs `tasks.spawn('## Child')` and then `error('spawner boom')` fails with that error, and its live tasks are still abandoned along with their failed owner, with reason `owner_failed`. An owner that is itself being aborted produces no `tasks_live` for tasks it leaks, because no one receives its outcome, and a run that is ending reports no `tasks_live` for the tasks left live, for the same reason.
 
-Only a task still running at its owner's end is abandoned or counted toward `tasks_live`. A task that has already finished, whether or not a wait took its result, is left as it is, so a section that spawns and never waits still ends the run normally when its tasks finish first. That makes timing matter: whether a run that leaves spawned tasks running ends `done` or `tasks_live` can depend on the order its pending store writes are answered, since that decides whether the spawning section resumes before or after its task ends. A run that ends normally has no live tasks left, because each chain settled its own.
+Only a task still live at its owner's end is abandoned, and only a running one counts toward `tasks_live`, since an idle task is abandoned without counting. A task that has already finished, whether or not a wait took its result, is left as it is, so a section that spawns and never waits still ends the run normally when its tasks finish first. That makes timing matter: whether a run that leaves spawned tasks running ends `done` or `tasks_live` can depend on the order its pending store writes are answered, since that decides whether the spawning section resumes before or after its task ends. A run that ends normally has no live tasks left, because each chain settled its own.
 
 ### Abandoned tasks
 
-A task ends with its owner chain. When a task's owner ends while the task is still running, the Engine ends the task, which then ends in state `abandoned` with `ok` false, so a task never keeps running after its owner ends. Every task the ending owner still has running is abandoned and its chain stopped from outside, along with every task that chain owns in turn, so an owner's end reaches every live chain nested below it. In the clean-end prompt without its cancel loop, both leaked tasks, `0.0` and `0.1`, end `abandoned` when `## Main` returns, not `done` or `canceled`.
+A task ends with its owner chain. When a task's owner ends while the task is still live, running or idle, the Engine ends the task, which then ends in state `abandoned` with `ok` false, so a task never keeps running after its owner ends. Every task the ending owner still has live is abandoned and its chain stopped from outside, along with every task that chain owns in turn, so an owner's end reaches every live chain nested below it. In the clean-end prompt without its cancel loop, both leaked tasks, `0.0` and `0.1`, end `abandoned` when `## Main` returns, not `done` or `canceled`.
 
 `abandoned` is a terminal state of its own, distinct from `canceled`, because losing an owner and being stopped on purpose are different facts for a log and a UI. Canceled means the owner stopped the task on purpose, and abandoned means the owner ended while the task was live. The status `state` and the task's trace event both keep them apart.
 
@@ -1126,15 +1335,15 @@ Abandonment reaches nested work:
 - When a fanout arm is canceled because a sibling arm failed (see [When an arm fails](14-fanout.md#when-an-arm-fails)), a task that arm spawned is abandoned, and a task that had not started yet never runs its section's code.
 - A task owned by a canceled chain ends `abandoned`, not `canceled`, while the owner itself is the one reported as canceled: a canceled arm `0.0` is reported canceled once, and its spawned task `0.0.0` ends `abandoned` with no cancel report.
 
-When the run is canceled, every spawned task that is still running is abandoned. When the run itself ends with tasks live, each one is abandoned exactly once, with `run_terminated` for a task the run's end stranded directly and `owner_aborted` for a task nested under one, so no task is recorded twice. Fanout arms stranded by the run's end report no cancel or failure of their own, and the run's end settles each one with exactly one `abandoned` terminal event that names the run's end.
+When the run is canceled, every spawned task that is still live, running or idle, is abandoned. When the run itself ends with tasks live, each one is abandoned exactly once, with `run_terminated` for a task the run's end stranded directly and `owner_aborted` for a task nested under one, so no task is recorded twice. Fanout arms stranded by the run's end report no cancel or failure of their own, and the run's end settles each one with exactly one `abandoned` terminal event that names the run's end.
 
 ### Abandon reasons
 
-An abandoned task carries the reason it was abandoned, which says how its owner chain ended while the task was still running, and its abandonment event records that reason. Each reason has a phrase, which is what the `TaskAbandoned` trace line renders for it. The five reasons are written in snake_case:
+An abandoned task carries the reason it was abandoned, which says how its owner chain ended while the task was still live, and its abandonment event records that reason. An idle task abandoned with its owner gets the same reason a running one would, and the [idle cap](#the-idle-cap) never abandons a task, so neither adds a reason. Each reason has a phrase, which is what the `TaskAbandoned` trace line renders for it. The five reasons are written in snake_case:
 
 | Reason | Phrase | When it applies |
 |---|---|---|
-| `owner_returned` | `the section ended` | The owner ended normally, by a scalar return or by running out of sections, without waiting on or canceling the task |
+| `owner_returned` | `the section ended` | The owner ended normally, by a scalar return or by running out of sections, while the task was still live, without canceling it |
 | `owner_failed` | `the owner failed` | The owner failed with its own error while the task was live |
 | `tool_loop_exhausted` | `the tool loop was exhausted` | The owner's `models.loop` ran past its round cap while the task was live |
 | `owner_aborted` | `the owner was aborted` | The owner was stopped from outside, by fail-fast after a sibling arm failed fatally or because the owner's own owner ended first |
@@ -1298,19 +1507,19 @@ While the task is in its first model round, its status holds `target` `Child`, `
 
 | `state` | The task |
 |---|---|
-| `running` | Is still in flight, with its chain or request still running |
-| `done` | Has ended with a result, whether or not a wait has delivered it |
+| `running` | Is still in flight, with its chain or request still running, or is idle after a reply |
+| `done` | Has ended with a result, whether or not a wait has delivered it, the idle cap's close included |
 | `canceled` | Was canceled by its owner |
 | `abandoned` | Was still live when its owner ended |
 
-`state` reads `running` while the task is in flight, and once the task ends it reads `done`, `canceled`, or `abandoned`. A queued task reads `state == 'running'` as well, so being queued is not a separate task state, and the `blocked` field is what shows a task is queued. A task whose result a wait has already taken still reads `state = "done"`, because delivery is the owner's bookkeeping rather than a change in the task's lifecycle. [Canceling and listing tasks](#canceling-and-listing-tasks) covers `canceled`, and [Ownership, leaked tasks, and abandonment](#ownership-leaked-tasks-and-abandonment) covers `abandoned`.
+`state` reads `running` while the task is in flight, and once the task ends it reads `done`, `canceled`, or `abandoned`. A queued task reads `state == 'running'` as well, so being queued is not a separate task state, and the `blocked` field is what shows a task is queued. A task whose result a wait has already taken still reads `state = "done"`, because delivery is the owner's bookkeeping rather than a change in the task's lifecycle. An [idle](#idle-tasks) task reads `running`, because it is still live and its owner can send it a message, and a task the [idle cap](#the-idle-cap) closed reads `done`, as if it had returned its latest reply. [Canceling and listing tasks](#canceling-and-listing-tasks) covers `canceled`, and [Ownership, leaked tasks, and abandonment](#ownership-leaked-tasks-and-abandonment) covers `abandoned`.
 
 ### The `ok` field
 
 `ok` is the task's success flag, taken from its state. It is a boolean once the Engine reports one and nil otherwise:
 
-- While the task runs, `ok` is nil, because a running task has no `ok` value until it ends.
-- A task that finishes moves to state `done`, with `ok` `true` when its section returned and `false` when it failed, for example by raising an error such as `error('beta boom')`.
+- While the task runs, `ok` is nil, because a running task has no `ok` value until it ends. An idle task has none either, even after a wait took its reply.
+- A task that finishes moves to state `done`, with `ok` `true` when its section returned and `false` when it failed, for example by raising an error such as `error('beta boom')`. A task the idle cap closed reads `ok` `true`.
 - A canceled or abandoned task has `ok` `false`, so a canceled task reads `state` `canceled` with `ok` `false`.
 
 A task whose result a wait has taken keeps its flag. Because `ok` can be `false`, compare it with `nil` to tell a running task from a failed one, since a running task has no `ok` at all while a finished one has a boolean:
@@ -1338,11 +1547,11 @@ end
 | `tool_call` | A tool call |
 | `store` | A store operation |
 | `tasks` | Other tasks, in a wait with or without a time limit |
-| `inbox` | A message to its own inbox, in `tasks.receive()` |
+| `inbox` | A message to its own inbox, in `tasks.receive()` or idle after `tasks.reply` |
 | `call` | A chain it started with `call` |
 | `queued` | A concurrency slot, before admission or to retake one after a wait |
 
-A task waiting on a model reply, such as a task running `return models.infer('slow please')`, reports `blocked = 'chat'`, and the field reads nil once the task finishes. A wait for a message is never a tool call: a task waiting in `tasks.receive()` reports `blocked = 'inbox'`, and gives back its concurrency slot while it waits. Only the main chain reads the operator's messages (see [Asking the operator](05-lua-environment.md#asking-the-operator)). A task waiting in `tasks.join_any` reports `blocked = 'tasks'` whether the wait is timed or not, so a task inside `tasks.join_any({ g }, { timeout = 30 })` reads `tasks`.
+A task waiting on a model reply, such as a task running `return models.infer('slow please')`, reports `blocked = 'chat'`, and the field reads nil once the task finishes. A wait for a message is never a tool call: a task waiting in `tasks.receive()` reports `blocked = 'inbox'`, and gives back its concurrency slot while it waits. An [idle](#idle-tasks) task reports `blocked = 'inbox'` too, with `section` naming the section it replied from. Only the main chain reads the operator's messages (see [Asking the operator](05-lua-environment.md#asking-the-operator)), and a task's inbox holds only what its owner sends (see [Messages between tasks](#messages-between-tasks)). A task waiting in `tasks.join_any` reports `blocked = 'tasks'` whether the wait is timed or not, so a task inside `tasks.join_any({ g }, { timeout = 30 })` reads `tasks`.
 
 `queued` means the task is waiting for a slot under the concurrency limit while its `state` is still `running` (see [Concurrency, nesting, and scheduling](#concurrency-nesting-and-scheduling)). A spawned task that cannot run yet waits for an admission slot, and while it waits, `tasks.status` reads `state` `running` and `blocked` `queued` until it is admitted and first runs. So a status read right after `tasks.spawn` shows `state = 'running'`, `section = nil`, and `blocked = 'queued'`, as `fresh` did in `task-status`. When the run's concurrency limit is 1, a second task reads `state` `running` and `blocked` `queued` while the first one runs. A task waiting to retake its slot after a wait answers also reads `queued`, the same as a fresh spawn waiting for its first slot. Once a task is admitted, or retakes its slot after a wait, its status no longer reads `queued`.
 
@@ -1404,7 +1613,7 @@ A `tasks.note` from a section reached by `call` inside a task records on the tas
 
 ### Checking without waiting with `tasks.ready`
 
-`tasks.ready(task)` takes exactly one task to check, and that task argument is required. It returns `true` once the task has ended and `false` before, and it never waits. It reports `true` for an owned task once the task has ended in any way, whether or not a wait has taken its result, so a task already collected by `tasks.join_any({ t })` and a task stopped by `tasks.cancel(t)` both read `true`. With this block as the body of `## Main` in `task-status`, the run returns `true`:
+`tasks.ready(task)` takes exactly one task to check, and that task argument is required. It returns `true` once the task has ended, or while a reply the task handed back with `tasks.reply` waits for a wait to take it, so that a wait would return at once, and `false` otherwise. It never waits. It reports `true` for an owned task once the task has ended in any way, whether or not a wait has taken its result, so a task already collected by `tasks.join_any({ t })` and a task stopped by `tasks.cancel(t)` both read `true`. An [idle](#idle-tasks) task whose reply a wait has taken reads `false`, because it has not ended and holds no result to take. With this block as the body of `## Main` in `task-status`, the run returns `true`:
 
 ````lua
 local t = tasks.spawn('## Child')
@@ -1947,7 +2156,7 @@ A spawned task can itself spawn and join tasks, so tasks nest. Here `## Main` sp
 
 Each [suspending call](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals), meaning `models.infer`, `models.loop`, `tools.call`, `call`, and every `store` operation, pauses only the current block and hands control to the scheduler, so other chains, such as spawned tasks and `tasks.fanout` arms, run while it waits.
 
-`tasks.spawn`, `tasks.ready`, `tasks.status`, `tasks.pending`, `tasks.note`, `tasks.concurrency`, and `tasks.cancel` answer right away and never park the caller. A queued task is admitted only when no chain is ready to run, so a loop that does nothing but call these functions never lets a queued task start.
+`tasks.spawn`, `tasks.ready`, `tasks.status`, `tasks.pending`, `tasks.note`, `tasks.send`, `tasks.concurrency`, and `tasks.cancel` answer right away and never park the caller, and so do `tasks.receive()` and `tasks.reply` when a message already waits in the inbox. A queued task is admitted only when no chain is ready to run, so a loop that does nothing but call these functions never lets a queued task start. A chain that sends a message and then waits, as `## Main` in `draft-loop` does, lets the task it sent to run.
 
 After `tasks.spawn` returns, the new task waits in the admission queue, with its status reading `blocked` as `queued` (see [What a live task is doing: `section` and `blocked`](#what-a-live-task-is-doing-section-and-blocked)). It is admitted only once its spawner has parked or ended and a slot is free under every limit it counts against:
 
@@ -1976,13 +2185,13 @@ A queued task whose owner is aborted before the task is admitted, for example be
 
 ### Waiting gives a slot back
 
-A task parked on a wait for other tasks, such as a join, gives its concurrency slot back for the length of the wait, so its own tasks can be admitted and run under its limit. That is why nested spawn-and-join does not deadlock, even when the run admits only one task at a time. In `nested-tasks` with a run concurrency limit of 1, `### Outer` gives its slot back while it joins, so the two `#### Inner` tasks can take it one after the other, and the run still returns `inner 0.0.0/inner 0.0.1`.
+A task parked on a wait for other tasks, such as a join, gives its concurrency slot back for the length of the wait, so its own tasks can be admitted and run under its limit. A task waiting on its inbox gives its slot back the same way, in `tasks.receive()` or [idle](#idle-tasks) after `tasks.reply`, so a task waiting for its owner's next message never holds a slot another task could use. That is why nested spawn-and-join does not deadlock, even when the run admits only one task at a time. In `nested-tasks` with a run concurrency limit of 1, `### Outer` gives its slot back while it joins, so the two `#### Inner` tasks can take it one after the other, and the run still returns `inner 0.0.0/inner 0.0.1`.
 
 These rules decide who gives a slot back and how a waiting chain continues:
 
 - A `call` chain running inside a task that parks on a task wait gives back the slot of the task it runs inside, so the tasks under that task can run during the wait.
 - The main walk holds no slot, so a wait in the main walk, or in a `call` chain under the main walk, gives no slot back.
-- When a task wait that gave back a slot answers, the waiting task or `call` chain queues again and must retake that slot before it continues, reading `blocked` `queued` while it waits.
+- When a wait that gave back a slot answers, a task wait or a message that ends an inbox wait, the waiting task or `call` chain queues again and must retake that slot before it continues, reading `blocked` `queued` while it waits.
 - The main walk and the H1 pass resume right away when the wait answers, without queueing for a slot.
 
 ### The depth cap for spawned tasks
@@ -2081,6 +2290,7 @@ Every started task records exactly one start event and exactly one terminal even
 - A task's events report under the task's own id, so the log shows which task produced them.
 - The same task id marks everything a task reports while it runs, so a handle's `task` field matches those reports to the task (see [Task ids and handles](#task-ids-and-handles)).
 - A spawned task's section events and logs appear under the target section's name, not the spawner's.
+- Between its start and its end, a task that reads its inbox reports `inbox_waiting` each time it parks on its empty inbox, and each message its owner sends it reports `inbox_message` under the task (see [Inbox events](#inbox-events)). A reply is not a terminal event: the task's one terminal event comes when it ends.
 
 ### The `TaskStarted` event
 
@@ -2104,12 +2314,13 @@ A finished task fires a `TaskSucceeded` or `TaskFailed` event under its target s
 - A task whose section returns normally reports a single `TaskSucceeded` terminal event under its section, after its `TaskStarted`.
 - A task whose section raises an error reports `TaskFailed` under its section and never reports `TaskSucceeded`.
 - `TaskSucceeded` events appear in the order the tasks actually finish, which can differ from the order you collect them.
+- A task the [idle cap](#the-idle-cap) closes reports `TaskSucceeded` under its target section, stamped with its own provenance, as if it had returned its latest reply, and the event does not say that the cap closed it.
 
 In a fanout, every started arm produces exactly one terminal task event: `TaskSucceeded` for an arm that returns, `TaskFailed` for an arm that raises, and `TaskCanceled` for a sibling canceled by fail-fast (see [When an arm fails](14-fanout.md#when-an-arm-fails)). A failing arm reports a `TaskFailed` event, and when the fanout fails no arm reports `TaskSucceeded`.
 
 Canceling a started task reports a `TaskCanceled` event exactly once, attributed to the canceled task's section (see [Canceling and listing tasks](#canceling-and-listing-tasks)):
 
-- Canceling a started task that is still running emits one `TaskCanceled` event naming the task, after the events of everything the task owned.
+- Canceling a started task that is still live, running or idle, emits one `TaskCanceled` event naming the task, after the events of everything the task owned.
 - The event carries the canceled task's own provenance, not that of the chain that canceled it.
 - A canceled task reports no other terminal event, so no `TaskSucceeded`, `TaskFailed`, or `TaskAbandoned` appears for it.
 - Canceling a task that was still queued for a concurrency slot emits no `TaskCanceled` event, since it never started.
@@ -2132,10 +2343,13 @@ What each function takes, and the `lua` error message it raises for anything els
 
 - The `tasks.spawn` target must be a string, the same rule `call` applies to its target (see [Calling a section](08-jump-and-call.md#calling-a-section)), and any other type raises the byte-identical error `call` raises, `section target must be a string, got {type}`, such as `section target must be a string, got integer`.
 - `tasks.spawn` takes a string `opts.input`, JSON data in `opts.item`, and a Lua integer of 0 or more in `opts.index`. Otherwise the call raises an error naming the field: `input must be a string, got {type}`, `item must be JSON data, got {type}`, or `index must be a non-negative integer, got {index}` for an integer below 0, while an `index` of another type, floats included, ends in its type name, such as `got number`.
-- Every call that names a task, `tasks.join_any`, `tasks.join`, `tasks.ready`, `tasks.status`, and `tasks.cancel`, takes a task handle or a task id string such as `0.1`. Any other value raises `{call} expects a Task handle or task id, got {type}`, and a string that is not a dot-separated id raises an error whose refusal starts `` `{text}` is not a task id such as `0.1`: ``.
+- Every call that names a task, `tasks.join_any`, `tasks.join`, `tasks.ready`, `tasks.status`, `tasks.send`, and `tasks.cancel`, takes a task handle or a task id string such as `0.1`. Any other value raises `{call} expects a Task handle or task id, got {type}`, and a string that is not a dot-separated id raises an error whose refusal starts `` `{text}` is not a task id such as `0.1`: ``.
 - `tasks.join_any` and `tasks.join` take a non-empty table of tasks and an optional `opts` table whose `timeout` is a non-negative finite number of seconds. Otherwise they raise one of these before any wait starts: `{call} expects a set of tasks, got {type}`, `{call} requires at least one task`, `{call} opts must be a table, got {type}`, `{call} timeout must be a number, got {type}`, or `timeout must be a non-negative finite number of seconds, got {seconds}`.
 - `tasks.pending` takes no arguments, and any argument other than `nil` raises `tasks.pending takes no arguments, got {type}`, such as `tasks.pending takes no arguments, got table`.
 - `tasks.note` takes a string, and otherwise raises `tasks.note text must be a string, got {type}`, such as `tasks.note text must be a string, got integer`.
+- `tasks.receive` takes no arguments, and any argument, `nil` included, raises `tasks.receive takes no arguments, got {type}`, such as `tasks.receive takes no arguments, got string`. A refused call takes no message from the inbox.
+- `tasks.send` takes a string `text` after its task, and otherwise raises `tasks.send text must be a string, got {type}`, such as `tasks.send text must be a string, got integer`. A `text` that is not valid UTF-8 raises an error whose refusal reads `text must be a valid UTF-8 string`.
+- `tasks.reply` takes one value a section could return, and a table, or any other value with no text form, raises an error whose refusal reads `cannot return a {type} as a result`, such as `cannot return a table as a result`.
 - `tasks.concurrency` takes a positive whole number, and [Concurrency and the admission window](14-fanout.md#concurrency-and-the-admission-window) gives the messages it raises for anything else.
 
 ### Spawn failures as error values
@@ -2162,13 +2376,13 @@ Every spawn failure, including the depth cap, an unresolved target, a list-secti
 
 ### Refusals the Engine raises
 
-When the Engine refuses a `tasks` operation, the call raises the Engine's error value instead of returning it. That holds for a refused `tasks.spawn`, `tasks.join_any`, `tasks.join`, `tasks.ready`, `tasks.status`, `tasks.pending`, `tasks.note`, `tasks.cancel`, or `tasks.concurrency`, including a wait whose `timeout` the Engine rejects before any wait starts.
+When the Engine refuses a `tasks` operation, the call raises the Engine's error value instead of returning it. That holds for a refused `tasks.spawn`, `tasks.join_any`, `tasks.join`, `tasks.ready`, `tasks.status`, `tasks.pending`, `tasks.note`, `tasks.receive`, `tasks.send`, `tasks.reply`, `tasks.cancel`, or `tasks.concurrency`, including a wait whose `timeout` the Engine rejects before any wait starts.
 
 | Error kind | Raised when | Field to read |
 | --- | --- | --- |
-| `lua` | an argument is wrong, a target does not resolve, the depth cap is crossed, or the target is a list section | `message` |
-| `task_not_owned` | code reaches for a task it does not own | `task` |
-| `task_consumed` | a wait asks for a task result that was already delivered | `task` |
+| `lua` | an argument is wrong, a target does not resolve, the depth cap is crossed, the target is a list section, or `tasks.reply` runs on the main chain | `message` |
+| `task_not_owned` | code reaches for a task it does not own, a `tasks.send` included | `task` |
+| `task_consumed` | a wait asks for a task result that was already delivered, an idle task's taken reply included | `task` |
 | `store` | a Host-supplied store refuses during task setup | `message` |
 
 Ownership and delivery refusals keep their own kinds, `task_not_owned` and `task_consumed`, rather than `lua` (see [Ownership, leaked tasks, and abandonment](#ownership-leaked-tasks-and-abandonment) and [Waiting with `tasks.join_any` and `tasks.join`](#waiting-with-tasksjoin_any-and-tasksjoin)). You read `err.task` on a `task_not_owned` error, a `task_consumed` error, or a canceled task's error value to get the task id. Put this block in the `## Spawner` section of `task-events` in place of the first one:

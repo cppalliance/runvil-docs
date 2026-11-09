@@ -232,7 +232,7 @@ When the model answers `first reply` and then `second reply`, the run result is:
 4|first reply|second reply
 ````
 
-Each request carries every record the earlier loops left in the list, so the second request's messages are `first question`, `first reply`, and `second question`, and the two loops leave 4 records. Wrapping a call in `pcall` runs the loop normally and still appends the reply, so the chat can guard each call against errors. The chat prompt built into Workshop has this shape: inside `while true do`, it calls `messages:user(text)` with each chat turn's text and then `pcall(function() return models.loop(compact) end)`, where `compact` is a compactor that summarizes older turns when a turn overflows the model's context window (see [Writing your own compactor](#writing-your-own-compactor)). A failed loop ends only that turn, and a failed compaction (see [When a compaction fails](#when-a-compaction-fails)) also leaves `messages` as it was before the compaction.
+Each request carries every record the earlier loops left in the list, so the second request's messages are `first question`, `first reply`, and `second question`, and the two loops leave 4 records. Wrapping a call in `pcall` runs the loop normally and still appends the reply, so the chat can guard each call against errors. The chat prompt built into Workshop has this shape: inside `while true do`, it calls `messages:user(tasks.receive())`, which waits for the operator's next message (see [Asking the operator](05-lua-environment.md#asking-the-operator)), and then `pcall(function() return models.loop(compact) end)`, where `compact` is a compactor that summarizes older turns when a turn overflows the model's context window (see [Writing your own compactor](#writing-your-own-compactor)). A failed loop ends only that turn, and a failed compaction (see [When a compaction fails](#when-a-compaction-fails)) also leaves `messages` as it was before the compaction. A stop raises `canceled` inside the `pcall`, which ends only that turn too, and a message the operator sends meanwhile stays queued for the next `tasks.receive()`.
 
 ## Message records
 
@@ -1194,6 +1194,37 @@ The model's sampling options (see [Sampling options on `models.use`](10-models.m
 
 Before every round, the loop checks the whole list again against the [cross-record rules](#checking-and-composing-before-each-request), such as no duplicate tool-call id, no orphan tool record, and no assistant tool call without a result. It then builds the request from the records the list holds at that moment, so a list you edit between calls is checked each time. The per-record checks that a builder method such as `messages:user` runs when it adds a record do not run again.
 
+### Messages that arrive while the loop runs
+
+A message can reach a chain while its `models.loop` runs: the operator's message on the main chain (see [Asking the operator](05-lua-environment.md#asking-the-operator)), or the owner's [`tasks.send`](15-tasks.md#sending-with-taskssend) in a task. The loop reads the chain's inbox at every request, so the model sees each message at its next request, and how the message gets there depends on what the round is doing when it arrives:
+
+- A message already queued when a round would go out is appended first, so the request holds it. The loop appends every queued message, oldest first, each as its own `user` record.
+- A message that arrives while the round's model request has no answer yet, the reply still streaming included, withdraws that request. The loop appends the message and sends the request again. Nothing of the withdrawn request reaches `messages`, no error reaches Lua, and the withdrawn request counts toward neither the [round cap](#tool-rounds-and-the-round-cap) nor the [round counter](#the-round-counter-and-what-each-round-reports).
+- A message that arrives while the round's tool calls run, or while its tools render, withdraws nothing. Every call finishes and records its real result, and the loop appends the message before its next request.
+- After the final reply, the loop reads the inbox once more. A message it finds there is appended after the reply and starts another round, which counts toward the round cap, so the loop never returns with a message unread.
+
+Each message the loop appends starts with a line that says it arrived while the model was working, then a blank line, then the text as sent. On the main chain, the record for `shorter please` holds:
+
+````text
+This message arrived while you were working:
+
+shorter please
+````
+
+In a task the line reads `The task that started you sent this message while you were working:` instead. Only the loop adds the line: a message a prompt reads itself, with `tasks.receive()` or `tasks.reply`, comes back exactly as sent.
+
+Two messages that arrive before one request stay two `user` records in `messages`, each with its own line. The request joins consecutive user records into one provider message, with a blank line between them (see [Same-role merging](#same-role-merging)), so the model reads them as one message. With this block in the `## Chat` section of `first-chat`, an operator who sends `one` and then `two` before the loop's request goes out, and a model that answers `ok`, give the run result `user user user assistant`:
+
+````lua
+messages:user('hi')
+models.loop()
+local roles = {}
+for i = 1, #messages do roles[i] = messages[i].role end
+return table.concat(roles, ' ')
+````
+
+A stop is not a message. A stop that lands while a round waits raises `canceled` at the `models.loop` call, as [Stopping the round in flight](16-limits-and-errors.md#stopping-the-round-in-flight) describes, and when the Host stops the round and then sends, the stop comes first: the loop raises `canceled`, and the message stays queued for the chain's next read.
+
 ### How the loop judges an answer
 
 Each round that returns an answer ends in exactly one of four outcomes the loop acts on, and the loop judges them in this fixed order:
@@ -1203,7 +1234,7 @@ Each round that returns an answer ends in exactly one of four outcomes the loop 
 3. A non-empty text reply, which the loop appends as the terminal record before it returns.
 4. The clean exit: an empty reply that finishes with `stop` after at least one answered tool call (see [Empty replies and finish reasons](#empty-replies-and-finish-reasons)).
 
-Any other answer raises an `empty_model_reply` error. Two more rules shape every call: `models.loop` stops at the round cap (see [Setting the round cap](#setting-the-round-cap)), and it uses `compactors.fail` when no compactor is passed (see [Choosing a compactor for a call](#choosing-a-compactor-for-a-call)).
+Any other answer raises an `empty_model_reply` error. Two more rules shape every call: `models.loop` stops at the round cap (see [Setting the round cap](#setting-the-round-cap)), and it uses `compactors.fail` when no compactor is passed (see [Choosing a compactor for a call](#choosing-a-compactor-for-a-call)). After a text reply or the clean exit, the loop reads its chain's inbox once more before it returns, and a message it finds there starts another round (see [Messages that arrive while the loop runs](#messages-that-arrive-while-the-loop-runs)).
 
 While the run is being canceled, an error that an adhoc tool handler or a compactor raises is raised again at once, unchanged, so the cancellation ends the conversation. A handler that returns normally during the cancellation still has its result reported.
 
@@ -1302,7 +1333,7 @@ return #messages
 
 ### The round counter and what each round reports
 
-Each round that returns a reply advances the run's round counter by one, whether the reply is text, a batch of tool calls, or an empty reply. A round refused for context overflow, and a round that fails, leave the count unchanged. The records a loop reports hold this number in `turn`, so one `models.loop` call with two tool rounds and a final reply reports the `turn` values 1, 2, and 3.
+Each round that returns a reply advances the run's round counter by one, whether the reply is text, a batch of tool calls, or an empty reply. A round refused for context overflow, a round that fails, and a request a message withdrew (see [Messages that arrive while the loop runs](#messages-that-arrive-while-the-loop-runs)) leave the count unchanged. The records a loop reports hold this number in `turn`, so one `models.loop` call with two tool rounds and a final reply reports the `turn` values 1, 2, and 3.
 
 Each round reports a model-turn observation, completed, failed, or truncated, and each tool call reports a succeeded or failed observation, in order (see [Run events and records](04-how-a-prompt-runs.md#run-events-and-records)). A text reply that ends the loop takes one round, and the run reports one model-turn-completed event for it under the section that runs the loop. A failed round is reported as a model-turn-failed event before the error propagates, and the events for a failed round leave out the backend's response body and the messages you send.
 

@@ -28,7 +28,7 @@ The run result is:
 finished
 ````
 
-Even this small run observes a full set of run limits. The run limits are the bounds every run works within: how many model rounds one loop call may take, how many tasks run at once, and how much memory and logging each section's Lua may use. A model round is one request to a model and its reply. One set of run limits holds across the whole run, and those limits are the built-in defaults unless the [Harness](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host) that runs the prompt sets its own values for that run. How large a model reply may be and how long a wait for a model reply may last are not run limits but request limits, which the gateway client applies to each model request.
+Even this small run observes a full set of run limits. The run limits are the bounds every run works within: how many model rounds one loop call may take, how many tasks run at once, how many tasks wait idle after a reply, and how much memory and logging each section's Lua may use. A model round is one request to a model and its reply. One set of run limits holds across the whole run, and those limits are the built-in defaults unless the [Harness](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host) that runs the prompt sets its own values for that run. How large a model reply may be and how long a wait for a model reply may last are not run limits but request limits, which the gateway client applies to each model request.
 
 ### The run limits in brief
 
@@ -36,6 +36,7 @@ Each run limit has its own default and its own owner, and [Run limits and their 
 
 - The [round cap](11-conversations.md#tool-rounds-and-the-round-cap), the most model rounds one `models.loop` call takes.
 - The [concurrency limit](14-fanout.md#concurrency-and-the-admission-window), the most tasks that run at once.
+- The [idle cap](15-tasks.md#the-idle-cap), the most tasks the run holds idle after a `tasks.reply`.
 - The memory ceiling, the most Lua heap each [section VM](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals) may use.
 - The log event quota, the most `log` calls each section VM records, together with the log byte quota that follows from it.
 
@@ -108,20 +109,21 @@ When the model answers with text within its three rounds, the run result is that
 
 The `max_tool_iterations: 3` line sets this prompt's round cap to 3, so the [`models.loop`](11-conversations.md#starting-a-conversation) call in `## Ask` takes at most three model rounds. Reaching the round cap fails the loop call with an error value whose `kind` is `tool_loop_exhausted`, and the block catches it with [`pcall`](05-lua-environment.md#raising-and-catching-errors) and returns its kind and its message. The message starts with `capped.md:17: `, the line of the loop call, followed by the failure's prose (see [Where an error points](#where-an-error-points)).
 
-### The four run limits
+### The five run limits
 
-A run observes four limits, each with a default:
+A run observes five limits, each with a default:
 
 | Limit | Default | Applies to | Who changes it |
 |---|---|---|---|
 | Round cap | 24 model rounds | each `models.loop` call | the prompt's `max_tool_iterations`, or the Harness |
 | Concurrency limit | 8 tasks at once | every task the run admits, fanout arms included | the Harness, and `tasks.concurrency` lowers it for a chain's own spawns |
+| Idle cap | 8 idle tasks | every task idle after a `tasks.reply`, across the whole run | the Harness, as `max_idle_tasks` |
 | Memory ceiling | 64 MiB | the Lua heap of each section VM | the Harness |
 | Log event quota | 1024 `log` events | each section VM | the Harness |
 
 These built-in values are the default limits, the set every run starts from. The Engine accepts other limits from the code that starts a run, but the Harness passes none, so every run observes these defaults. One set of limits applies to the whole run, the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) and every section included.
 
-Every count and size limit of a run is at least 1, so the round cap, the concurrency limit, the memory ceiling, and the log event quota can never be zero.
+Every count and size limit of a run is at least 1, so the round cap, the concurrency limit, the idle cap, the memory ceiling, and the log event quota can never be zero.
 
 The gateway client also applies two request limits to each model request, each with a default:
 
@@ -134,7 +136,7 @@ The response cap is at least 1 byte, so it can never be zero.
 
 ### The one limit a prompt sets
 
-`max_tool_iterations` is the only run limit a prompt's frontmatter can change (see [Optional keys and unknown keys](02-file-structure.md#optional-keys-and-unknown-keys)), and the other three run limits come from the Harness that runs the prompt. A prompt's own `max_tool_iterations` value replaces the run's round cap. Without the key, the run's cap applies, which is 24 unless the Harness sets another.
+`max_tool_iterations` is the only run limit a prompt's frontmatter can change (see [Optional keys and unknown keys](02-file-structure.md#optional-keys-and-unknown-keys)), and the other four run limits come from the Harness that runs the prompt. A prompt's own `max_tool_iterations` value replaces the run's round cap. Without the key, the run's cap applies, which is 24 unless the Harness sets another.
 
 The round cap allows 24 model rounds by default in each `models.loop` call. Each call starts its own count at zero, so two loop calls in one section can each use up to the full cap.
 
@@ -144,13 +146,15 @@ Reaching the round cap fails the loop call with an error value whose `kind` is `
 
 The concurrency limit caps how many tasks run at once across the whole run, 8 by default. The Harness sets it, and no frontmatter key changes it. By default a run admits at most 8 tasks at once, fanout arms included; the Harness can set a different limit, and `tasks.concurrency` lowers it for a chain's own spawns.
 
+The idle cap bounds how many tasks the whole run holds idle after a `tasks.reply`, 8 by default. Each idle task keeps its Lua VM, so the cap bounds the memory idle tasks hold. The Harness sets it as `max_idle_tasks`, and no frontmatter key changes it. One more reply past the cap closes the task idle longest, which ends as if it had returned its latest reply (see [The idle cap](15-tasks.md#the-idle-cap)).
+
 The response cap and the receive timeout are request limits, not run limits: the gateway client applies them to each model request. Each model reply may be at most 16 MiB by default, and each wait for the next piece of a model reply times out after 120 seconds by default. No frontmatter key changes either. [Model request limits and failures](#model-request-limits-and-failures) shows how both bound a model round.
 
 The memory ceiling and the log event quota bound each section entry's Lua, and [Lua memory and log quotas](#lua-memory-and-log-quotas) covers them.
 
 ### The call depth cap is not a run limit
 
-The call depth cap of 8 is a fixed Engine constant, not one of the four run limits, so neither the Harness nor a prompt's frontmatter can change it. [The recursion depth cap](08-jump-and-call.md#the-recursion-depth-cap) covers how that cap works.
+The call depth cap of 8 is a fixed Engine constant, not one of the five run limits, so neither the Harness nor a prompt's frontmatter can change it. [The recursion depth cap](08-jump-and-call.md#the-recursion-depth-cap) covers how that cap works.
 
 ## Lua memory and log quotas
 
@@ -699,7 +703,7 @@ A run error has an optional location of its own, and a failed run's message is t
 
 A failure with no location ends with its own text. A Lua runtime failure's text already names its place: it starts with a `{block}:{line}:` tag, where `{block}` is the block's location label, such as ``section `S` prologue`` (see [How errors name each block](03-blocks-and-prose.md#how-errors-name-each-block)), and a stack traceback follows it. The ` (at {file}:{line})` suffix comes after the traceback.
 
-These forms hold for every failed run, a parse failure that the Harness finds before the run starts included, so that failure ends with its location form just like a parse failure that the run's first step finds. A Lua compile failure, code `lua_compile`, ends with ` (at {file}:{line})` on the line its diagnostic names, and the `dup` prompt's repeated heading ends with ` (prompt dup, line 13, column 1)`. The parse error's own location fields stay beside the message as well, for a Host such as Workshop to read (see [Location fields](#location-fields)). A model lookup failure or an input staging failure has no location, so its message is its own text.
+These forms hold for every failed run, a parse failure that the Harness finds before the run starts included, so that failure ends with its location form just like a parse failure that the run's first step finds. A Lua compile failure, code `lua_compile`, ends with ` (at {file}:{line})` on the line its diagnostic names, and the `dup` prompt's repeated heading ends with ` (prompt dup, line 13, column 1)`. The parse error's own location fields stay beside the message as well, for a Host such as Workshop to read (see [Location fields](#location-fields)). A model lookup failure, an input staging failure, or a `stalled` run has no location, so its message is its own text.
 
 The run's own first step finds a few failures of its own. A missing `runvil:` key fails with `structure_invalid`, with the prompt's name but no line, so the `version-zero` prompt without its `runvil:` line fails with `not a runvil prompt: no runvil version (prompt version-zero)` (see [A missing version](02-file-structure.md#a-missing-version)). An unsupported `runvil:` version fails with `unsupported_version` and ends with ` (at {file}:{line})` on the `runvil:` line, as `future` shows in [Run error codes](#run-error-codes), and a requirements refusal ends the same way when it is located (see [The requirements notice](04-how-a-prompt-runs.md#the-requirements-notice)).
 
@@ -716,6 +720,8 @@ Each located failure points at one line:
 - An unsupported `runvil:` version: the `runvil:` line.
 - A requirements refusal: the `uses:` or `models:` line of the first gap the prompt caused. A refusal whose every gap is the caller's has no location.
 - An `internal` fault: the Engine source line of the fault.
+
+A `stalled` run points at no line, because no one line caused it: its message names the tasks that wait on their inboxes instead (see [Run codes](#run-codes)).
 
 A parse failure that happens before the prompt's `name` is known has no name.
 
@@ -889,7 +895,7 @@ Every code also has a number, and the number's hundreds place the code in one of
 | Model codes (4xx) | `context_overflow`, `rate_limited`, `quota_exhausted`, `overloaded`, `refused`, `timeout`, `transport`, `server_error`, `rejected`, `malformed_response`, `empty_reply`, `unavailable`, `invalid_parts`, `context_exhausted`, `model_required` | a model call fails or gets an empty reply, the Harness cannot fetch the Host's list of models, a request overflows the model's context window and compaction does not make it fit, or a model round runs when the Host gave no model |
 | Tool codes (5xx) | `tool_invalid_arguments`, `tool_backend`, `tool_transport`, `tool_other`, `out_of_scope_tool`, `unbound_tool`, `model_only_tool`, `tool_loop_exhausted`, `tool_schema_invalid`, `tool_sets_invalid` | a tool fails, is out of scope or unknown, a script calls a model-only tool, the tool-call loop reaches its round cap, or a section entry's first loop round cannot freeze its tool sets |
 | Store codes (6xx) | `not_found`, `already_exists`, `not_a_directory`, `is_a_directory`, `directory_not_empty`, `not_utf8`, `invalid_path`, `invalid_range`, `anchor`, `permission_denied`, `approval_required`, `scope_ended`, `read_only`, `outside_root`, `root_protected`, `no_store`, `cross_mount`, `io`, `unsupported`, `conflict`, `backend`, `determinism` | a `store` operation fails uncaught, the run declares no store, the store backend fails as the run starts, the store refuses to stage the input file, or a store call meets a claims conflict |
-| Run codes (7xx) | `requirements_unmet`, `canceled`, `internal` | the environment falls short of what the prompt needs, the run is canceled, or an Engine invariant breaks |
+| Run codes (7xx) | `requirements_unmet`, `canceled`, `internal`, `stalled` | the environment falls short of what the prompt needs, the run is canceled, an Engine invariant breaks, or no chain can move |
 | Caller codes (8xx) | `recorder_failed`, `plugin_load_failed`, `no_output` | the code around a run fails, such as a recorder that refuses a write; a caller code never ends a run |
 
 A failed `{{ }}` substitution is an ordinary Lua error that `pcall` can catch, and it ends the run with `substitution` when uncaught. A cancel ends the run with `canceled`, a run code, yet a canceled run is not a failed run, and Workshop's run log records it as `canceled`, not `failed`.
@@ -1011,7 +1017,15 @@ That gap is the caller's, as a reserved Pack id is, so a refusal made only of th
 
 A run ends with `canceled` when the Host cancels it, or when the canceled error from a stop goes uncaught. A canceled run is not a failed run, and Workshop reports it as `the agent run was canceled` (see [Canceled runs and runs that end before they start](#canceled-runs-and-runs-that-end-before-they-start) and [Cancellation and stops](#cancellation-and-stops)).
 
-A run fails with `internal` when an Engine invariant breaks, a fault in the Engine rather than in the prompt. That includes Harness mistakes such as an answer of the wrong kind, an answer for an id never issued, or a second answer to one effect. The message starts with `internal invariant violated: {message}` and ends with ` (at {file}:{line})`, which names an Engine source file and line rather than a place in the prompt. The Harness also ends a run with `internal` when the run is still pending but the Harness has nothing to wait for, which means it lost track of an effect, and the message is then `the effect loop has nothing to await for a pending run`.
+A run fails with `internal` when an Engine invariant breaks, a fault in the Engine rather than in the prompt. That includes Harness mistakes such as an answer of the wrong kind, an answer for an id never issued, or a second answer to one effect. The message starts with `internal invariant violated: {message}` and ends with ` (at {file}:{line})`, which names an Engine source file and line rather than a place in the prompt. The Harness also ends a run with `internal` when the run is still pending, its main chain does not wait for input, and the Harness has nothing to wait for, which means it lost track of an effect, and the message is then `the effect loop has nothing to await for a pending run`.
+
+A run fails with `stalled` when no chain can move and the main chain does not wait on its own inbox, the one inbox the Host can fill. Every chain left waits on something only another waiting chain could end, such as an owner waiting on a task that waits for a message only that owner could send (see [When nothing can move](15-tasks.md#when-nothing-can-move)). The message names, in id order, the tasks that wait on their inboxes, and the error's facts hold their ids. A stall has no location, so the message is its own text:
+
+````text
+the run stalled: no chain can move, and these tasks wait on their inboxes: {ids}
+````
+
+When no task waits on its inbox, the message stops after `the run stalled: no chain can move`. A main chain that waits in `tasks.receive()` with nothing else to run never stalls: the run waits for the Host's next message or a cancel (see [While the section waits](05-lua-environment.md#while-the-section-waits)).
 
 ### Caller codes
 
@@ -1366,6 +1380,7 @@ Every failure other than a transient model call failure is never retryable, and 
 - an exceeded call depth
 - an exhausted context
 - store failures, claims conflicts included
+- a stalled run, where no chain can move
 
 ### The completion error kind decides
 
@@ -1444,7 +1459,7 @@ Your code cannot swallow a cancel. Every protected call raises the instruction h
 
 ### Stopping the round in flight
 
-The Host can [stop the round](01-what-a-prompt-is.md#effects-and-harness-work) in flight without canceling the run. Each `models.infer`, `models.loop` round, `tools.call`, tool call the model makes, and timed `tasks.join` or `tasks.join_any` that is waiting when the stop lands resumes with the canceled error.
+The Host can [stop the round](01-what-a-prompt-is.md#effects-and-harness-work) in flight without canceling the run. Each `models.infer`, `models.loop` round, `tools.call`, tool call the model makes, and timed `tasks.join` or `tasks.join_any` that is waiting when the stop lands resumes with the canceled error. A wait on an inbox is none of these, so a stop leaves it waiting (see [What a stop leaves running](#what-a-stop-leaves-running)).
 
 ````markdown
 ---
@@ -1522,7 +1537,7 @@ A stop reaches only the calls waiting when it lands. A stop that lands while no 
 
 A stop drops a tool's calls unless the tool's Pack marks it as surviving a stop; by default a tool does not survive a stop. A tool call that survives a stop still ends when the run ends.
 
-A stop leaves a wait for the operator open: a [`tasks.receive()`](05-lua-environment.md#asking-the-operator) on the main chain keeps waiting through the stop, and the operator's next message still reaches the prompt. A stop never touches the main chain's inbox either, so it never drops a message queued there. A stop that cuts short a timed `tasks.join` or `tasks.join_any` does not cancel the tasks it waits on, so a later wait still joins them (see [Time limits on waits](15-tasks.md#time-limits-on-waits)).
+A stop leaves every inbox alone, the main chain's and each task's. A [`tasks.receive()`](05-lua-environment.md#asking-the-operator) keeps waiting through the stop, and so does a task idle after [`tasks.reply`](15-tasks.md#answering-with-tasksreply), so the operator's next message, or the owner's, still reaches the prompt, and a stop never drops a message queued in any inbox. A message is not a stop either: it never raises `canceled`, and a message that arrives while a `models.loop` round waits steers the loop instead (see [Messages that arrive while the loop runs](11-conversations.md#messages-that-arrive-while-the-loop-runs)). When the Host stops the round and then sends a message, the stop comes first: the stopped round raises `canceled`, and the message stays queued for the chain's next read. A stop that cuts short a timed `tasks.join` or `tasks.join_any` does not cancel the tasks it waits on, so a later wait still joins them (see [Time limits on waits](15-tasks.md#time-limits-on-waits)).
 
 ## Gateway environment variables
 

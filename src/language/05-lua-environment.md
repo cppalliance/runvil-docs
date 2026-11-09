@@ -2470,7 +2470,7 @@ return first .. '|' .. second
 
 Every part of the main chain reads that one inbox: the H1 pass, the walk after it, and every section the main chain runs with [`call`](08-jump-and-call.md#calling-a-section), so a `tasks.receive()` in a section run with `call` takes the operator's next message. A message the H1 pass leaves unread is still queued when the walk begins.
 
-The operator's messages reach only the main chain. A task, whether [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) or [`tasks.fanout`](14-fanout.md#fanout-in-one-call) started it, has an inbox of its own, so a `tasks.receive()` in a task waits on that inbox and never takes the operator's messages.
+The operator's messages reach only the main chain. A task, whether [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) or [`tasks.fanout`](14-fanout.md#fanout-in-one-call) started it, has an inbox of its own, so a `tasks.receive()` in a task waits on that inbox and never takes the operator's messages. Only the task's owner fills it (see [Messages between tasks](15-tasks.md#messages-between-tasks)).
 
 ### While the section waits
 
