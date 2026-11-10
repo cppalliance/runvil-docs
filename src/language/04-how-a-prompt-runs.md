@@ -39,7 +39,7 @@ Every run goes through these stages, in this order:
 5. The section walk. The top-level sections run in file order. See [The section walk](#the-section-walk).
 6. The result. The run ends with its text or with the error that ended it. See [The run result](#the-run-result).
 
-Before it parses, the Harness draws the run's seed and start time, begins the run's record, and looks up the Host's current model. Parsing is the first check after that, so a file that does not parse never reaches the checks of Packs and model roles. A prompt whose H1 body holds no `lua` block and no prose skips the H1 pass and goes straight to its first section, as `hello` does. A run that completes ends with its final text, and any other run ends with the error that ended it. A cancel is one of those errors: a run the Host cancels ends with the error whose code is `canceled`.
+The Harness parses the prompt before the run exists, so a file that does not parse starts no run and never reaches the checks of Packs and model roles. Once the prompt parses, the Harness draws the run's seed and start time, begins the run's record, and looks up the Host's current model. A prompt whose H1 body holds no `lua` block and no prose skips the H1 pass and goes straight to its first section, as `hello` does. A run that completes ends with its final text, and any other run ends with the error that ended it. A cancel is one of those errors: a run the Host cancels ends with the error whose code is `canceled`.
 
 ### A run can be refused before it starts
 
@@ -123,12 +123,12 @@ A call that needs Harness work looks synchronous to you: the block pauses at the
 
 ## Parsing comes first
 
-After this section you can tell what parsing checks, what a parse failure stops, and which parse events open every run's record.
+After this section you can tell what parsing checks, in what order it compiles your Lua, and what a parse failure stops.
 
 ````markdown
 ---
 name: t
-description: Shows the events a parse reports.
+description: Holds one Lua block for the parse to compile.
 runvil: 0
 ---
 
@@ -143,16 +143,7 @@ local secret = 42
 p
 ````
 
-Parsing this prompt reports four parse events, in this order. Each event has a kind and the name of the section it belongs to:
-
-| Order | Event kind | Section name |
-|---|---|---|
-| 1 | `parse_started` | `Prompt` |
-| 2 | `lua_compilation_started` | `T` |
-| 3 | `lua_compilation_succeeded` | `T` |
-| 4 | `parse_succeeded` | `Prompt` |
-
-The H1 block's `local secret = 42` compiles during the parse, but none of it runs then. Parsing builds the prompt's tree of H1, sections, and blocks without running any of its Lua or prose. Section `S` holds only prose, so it adds no compilation events.
+Parsing this prompt compiles one Lua block, the H1 block's `local secret = 42`, and runs none of it. Parsing builds the prompt's tree of H1, sections, and blocks without running any of its Lua or prose. Section `S` holds only prose, so it gives the parse nothing to compile.
 
 ### The whole file parses before anything runs
 
@@ -165,24 +156,11 @@ the environment cannot satisfy this prompt:
 - missing required Pack: web
 ````
 
-Each check ends the run before the next one starts, so the order of failures is fixed. A failed model lookup is reported ahead of any parse failure, a parse failure ahead of any input failure, and an input failure ahead of the start checks, which check the version, then the store, then the requirements.
+Each check stops the prompt before the next one starts, so the order of failures is fixed. A parse failure is reported ahead of any failed model lookup, a failed model lookup ahead of any input failure, and an input failure ahead of the start checks, which check the version, then the store, then the requirements.
 
-### The six parse event kinds
+### Lua blocks compile in source order
 
-A parse event is an event the run reports while the prompt is parsed (see [A Markdown file that is a program](01-what-a-prompt-is.md#a-markdown-file-that-is-a-program) for run events). Parsing a prompt reports `parse_started` under the section name `Prompt`, then `parse_succeeded` or `parse_failed`, also under `Prompt`. Compiling each Lua block reports `lua_compilation_started` under the name of the section that holds the block, or the H1 title for an H1 block, then `lua_compilation_succeeded` or `lua_compilation_failed`. Every lifecycle event's `kind` is its event name in snake case.
-
-A parse reports only these six event kinds, and no other events:
-
-| Event kind | Reported when |
-|---|---|
-| `parse_started` | parsing begins |
-| `parse_succeeded` | the whole file parsed |
-| `parse_failed` | the parse failed |
-| `lua_compilation_started` | a Lua block starts to compile |
-| `lua_compilation_succeeded` | that Lua block compiled |
-| `lua_compilation_failed` | that Lua block failed to compile |
-
-A successful parse reports `parse_started`, then one `lua_compilation_started` and `lua_compilation_succeeded` pair for each Lua block in source order, then `parse_succeeded`. A section with a prologue and an epilog (see [Prologue, prose, and epilog](03-blocks-and-prose.md#prologue-prose-and-epilog)) adds two pairs. Replace `## S` in the prompt above with this section:
+Compiling is part of parsing: the parse compiles every Lua block, without running it, in source order. The H1 body's blocks come first, then each section's blocks in the order the file holds them. A section with a prologue and an epilog (see [Prologue, prose, and epilog](03-blocks-and-prose.md#prologue-prose-and-epilog)) holds two blocks, and its prologue compiles first. Replace `## S` in the prompt above with this section:
 
 ````markdown
 ## S
@@ -198,25 +176,17 @@ local after = 2
 ```
 ````
 
-The parse now reports two `lua_compilation_started` and `lua_compilation_succeeded` pairs named `S`, after the pair named `T` and before `parse_succeeded`. A prose-only section, like the first version of `S`, adds no compilation events.
+The parse now compiles three blocks: the H1 block, then the prologue of `S`, then its epilog. A prose-only section, like the first version of `S`, has no block to compile.
 
-A Lua block that fails to compile reports `lua_compilation_started` and then `lua_compilation_failed`, and the whole parse fails. That parse reports `parse_started`, a `lua_compilation_started` and `lua_compilation_succeeded` pair for each block compiled before the failing one, the failing block's `lua_compilation_started` and `lua_compilation_failed`, and `parse_failed`, so a failure in the prompt's first Lua block gives exactly four events. The compile error names the failing block by its section and its place in it, such as ``section `Private section` prologue``, or the epilog when the epilog fails.
+A Lua block that fails to compile fails the whole parse with the code `lua_compile`. The parse stops at that block: the blocks before it compiled, and the blocks after it are never compiled. The compile error names the failing block by its section and its place in it, such as ``section `Private section` prologue``, or the epilog when the epilog fails.
 
-A prompt that breaks a Lua fence rule (see [Exact fence rules and fence errors](03-blocks-and-prose.md#exact-fence-rules-and-fence-errors)) fails its parse before any Lua compiles. Its parse reports only `parse_started` and `parse_failed`, both named `Prompt` rather than the H1 title, even when the H1 body holds Lua.
+A prompt that breaks a Lua fence rule (see [Exact fence rules and fence errors](03-blocks-and-prose.md#exact-fence-rules-and-fence-errors)) fails its parse before any Lua compiles, even when the H1 body holds Lua.
 
-Every parse event is reported under task `0`, because parsing happens before any run starts. Every parse event also holds the execution id the parse ran under, so each one reads back as execution, section, and kind. Parse and compilation events hold only the execution id, the section name, and their task and sequence number. They never include any of the prompt's Lua source, not even from a Lua block that fails to compile.
+### A prompt that does not parse starts no run
 
-### Parse events open the run's record
+Parsing happens before the run exists. A prompt that does not parse starts no run: none of its Lua or prose runs, no model is asked for anything, and no run record is made. The Host gets the parse error and reports it. Its code is a parse code such as `fence_invalid`, or `lua_compile` when a Lua block does not compile. Its message is the parse error's full cause chain, followed by where the parse failed (see [Where a run error's message points](16-limits-and-errors.md#where-a-run-errors-message-points)).
 
-A prompt's parse events are the first records of its run (see [Effects and Harness work](01-what-a-prompt-is.md#effects-and-harness-work) for the recorder), and they are recorded whether or not the parse succeeds. When a run stops before any section runs, its first and last events tell you where it stopped:
-
-| How the run stops | First event | Last event |
-|---|---|---|
-| the prompt does not parse | `parse_started` | `parse_failed` |
-| the input is refused | `parse_started` | `parse_succeeded` |
-| a start check fails on the run's first step: an unsupported or missing version, no declared store, a store that fails its probe, or unmet requirements | `parse_started` | `parse_succeeded` |
-
-A prompt that does not parse ends its run with the parse error's code, a parse code such as `fence_invalid`, or `lua_compile` when a Lua block does not compile. The failure message is the parse error's full cause chain, followed by where the parse failed (see [Where a run error's message points](16-limits-and-errors.md#where-a-run-errors-message-points)). The start checks run only after the prompt parses, so the record of a run they refuse ends with `parse_succeeded`. The prompt is also parsed before its input is checked, so an input refusal always follows a successful parse, and the refused run's last event is `parse_succeeded`. A refused or unparseable prompt runs no section code, and its record holds only parse events. A run that ends before its parse, because the model lookup failed or a cancel came first, has no events in its record at all.
+Parsing reports no run events. A run's events begin with `run_started`, which the run reports once it passes its start checks (see [Run events and records](#run-events-and-records)). A run that stops before then reports no events, so its record holds none, only the run's own values and the error that ended it. That is the case when a cancel comes before the run or during the model lookup, when the model lookup fails, when the input is refused, and when a start check fails on the run's first step.
 
 ## Preparing the run
 
@@ -276,9 +246,9 @@ A real notice holds a line only for each gap the run has. [The requirements noti
 
 Before any section runs, the Harness and the run work in a fixed order:
 
-1. The Harness draws the run's seed and start time and begins the run's record (see [The Engine, the Harness, and the Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host)).
-2. It looks up the Host's current model.
-3. It parses the prompt.
+1. The Harness parses the prompt. A prompt that does not parse starts no run.
+2. It draws the run's seed and start time and begins the run's record (see [The Engine, the Harness, and the Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host)).
+3. It looks up the Host's current model.
 4. It stages the input file the prompt declares.
 5. It picks the run's Packs from the prompt's `uses:` entries.
 6. It waits for the run's Packs to be ready.
@@ -286,9 +256,9 @@ Before any section runs, the Harness and the run work in a fixed order:
 8. It builds the run with a role map that holds the Host's current model under `default`, which fills the five model roles.
 9. The run's first step checks the `runvil` version, then the store, then the requirements, and refuses the run when one of them fails.
 
-The model lookup lists the Host's models and finds the one the Host selected, or takes the first model listed when the Host selected none. When the list cannot be fetched, the run fails with the model code the listing failed with, such as `transport`, and when the list does not hold the selected model, the run fails with `requirements_unmet`. The message is the lookup error with its chain of causes, such as ``the selected model `{id}` is absent from the fetched catalog``. A cancel that comes before the run or during the lookup ends the run with the canceled error. A run that ends here has not parsed, so its record holds no events.
+The model lookup lists the Host's models and finds the one the Host selected, or takes the first model listed when the Host selected none. When the list cannot be fetched, the run fails with the model code the listing failed with, such as `transport`, and when the list does not hold the selected model, the run fails with `requirements_unmet`. The message is the lookup error with its chain of causes, such as ``the selected model `{id}` is absent from the fetched catalog``. A cancel that comes before the run or during the lookup ends the run with the canceled error. A run that ends here never started, so its record holds no events.
 
-The version check is the first start check (see [The `runvil` version key](02-file-structure.md#the-runvil-version-key)). Version `0` proceeds, and any other version is refused as unsupported, with a message that ends with ` (at {file}:{line})`, the line of the `runvil:` key. A missing version fails with the message `not a runvil prompt: no runvil version (prompt {name})`, where `{name}` is the prompt's frontmatter `name`. Either way, a prompt with an unsupported or missing version produces no section result. The run then checks its store: a run that declares no store fails with the store code `no_store`, and a run whose store backend fails its probe fails with the store code of that failure. The requirements check comes last. A run that a start check refuses reports no run events, so its record ends with `parse_succeeded`, the last parse event. When the run's cancel flag is set as a start check fails, the run ends with the canceled error instead of the check's own error.
+The version check is the first start check (see [The `runvil` version key](02-file-structure.md#the-runvil-version-key)). Version `0` proceeds, and any other version is refused as unsupported, with a message that ends with ` (at {file}:{line})`, the line of the `runvil:` key. A missing version fails with the message `not a runvil prompt: no runvil version (prompt {name})`, where `{name}` is the prompt's frontmatter `name`. Either way, a prompt with an unsupported or missing version produces no section result. The run then checks its store: a run that declares no store fails with the store code `no_store`, and a run whose store backend fails its probe fails with the store code of that failure. The requirements check comes last. A run that a start check refuses reports no run events, so its record holds no events. When the run's cancel flag is set as a start check fails, the run ends with the canceled error instead of the check's own error.
 
 ### Staging the input file
 
@@ -340,7 +310,7 @@ the environment cannot satisfy this prompt:
 - missing required Pack: web (at needs-web.md:5)
 ````
 
-The refused run's record ends with the `parse_succeeded` event, because the prompt parsed before the environment refused it.
+The refused run's record holds no events, because the run was refused before it started.
 
 ### Declared Packs are required Packs
 
@@ -1578,7 +1548,7 @@ When the Host cancels a run, the run ends with the canceled error, whose code is
 
 A cancel that lands while every chain is waiting takes effect at the run's next step, which tears down every chain, while Lua code that is already running sees the cancel as it runs. A run canceled while a `tools.call` to a script tool is suspended ends with the canceled error rather than a text result or the tool's own error. A model request cut short by a cancel is not reported as a failed model call.
 
-A start check that fails after the run's cancel fired, whether on the version, the store, or the requirements, ends the run with the canceled error instead of the check's own error, as when a cancel cuts the wait short while a needed Pack is still starting (see [Waiting for Packs and taking the snapshot](#waiting-for-packs-and-taking-the-snapshot)). A cancel that comes before the run, or while the Harness looks up the model, ends the run with the canceled error before the prompt is parsed.
+A start check that fails after the run's cancel fired, whether on the version, the store, or the requirements, ends the run with the canceled error instead of the check's own error, as when a cancel cuts the wait short while a needed Pack is still starting (see [Waiting for Packs and taking the snapshot](#waiting-for-packs-and-taking-the-snapshot)). A cancel that comes before the run, or while the Harness looks up the model, ends the run with the canceled error before the Harness prepares it.
 
 ### Failed runs and error codes
 
@@ -1615,15 +1585,17 @@ The run fails with error code `lua_runtime` and a message containing `expected f
 
 ### Runs that end before the walk
 
-A run that ends before the walk still has a record, because the Harness begins the record before anything else. The run's record ends with the error that ended it, its code and its located message, and the recorded code tells you why a run that never reached its sections failed:
+A run that ends before the walk still has a record, because the Harness begins the record before anything else in the run. The run's record ends with the error that ended it, its code and its located message, and the recorded code tells you why a run that never reached its sections failed:
 
 - The model code the listing failed with, such as `transport`, when the Harness cannot fetch the Host's list of models, and `requirements_unmet` when that list does not hold the selected model.
-- The parse error's code when the prompt does not parse, such as `fence_invalid` or `lua_compile`, `structure_invalid` when its `runvil:` version is missing, and `unsupported_version` when the version is unsupported.
+- `structure_invalid` when the prompt's `runvil:` version is missing, and `unsupported_version` when the version is unsupported.
 - `requirements_unmet` when the launch input does not match the prompt's [input file](02-file-structure.md#input-and-output-file-declarations) declaration, and the store code of the refusal, such as `approval_required`, when the store refuses to stage the input.
 - `no_store` when the run declares no store, and the store code of the failure when its store fails the probe.
 - `requirements_unmet` when the environment falls short of the prompt's requirements.
 
 A run whose cancel fires first ends with the canceled error instead, even when the cancel comes before the run starts.
+
+A prompt that does not parse is not one of these runs. It starts no run and has no record, and its parse error goes to the Host (see [A prompt that does not parse starts no run](#a-prompt-that-does-not-parse-starts-no-run)).
 
 ## Run events and records
 
@@ -1649,20 +1621,16 @@ This run records these events, in this order, each with the name it carries:
 
 | Order | Event kind | Name |
 |---|---|---|
-| 1 | `parse_started` | `Prompt` |
-| 2 | `lua_compilation_started` | `Only` |
-| 3 | `lua_compilation_succeeded` | `Only` |
-| 4 | `parse_succeeded` | `Prompt` |
-| 5 | `run_started` | `Loop` |
-| 6 | `section_started` | `Only` |
-| 7 | `lua_chunk_started` | `Only` |
-| 8 | `lua_chunk_succeeded` | `Only` |
-| 9 | `lua_teardown_started` | `Only` |
-| 10 | `lua_teardown_succeeded` | `Only` |
-| 11 | `section_finished` | `Only` |
-| 12 | `run_succeeded` | `Loop` |
+| 1 | `run_started` | `Loop` |
+| 2 | `section_started` | `Only` |
+| 3 | `lua_chunk_started` | `Only` |
+| 4 | `lua_chunk_succeeded` | `Only` |
+| 5 | `lua_teardown_started` | `Only` |
+| 6 | `lua_teardown_succeeded` | `Only` |
+| 7 | `section_finished` | `Only` |
+| 8 | `run_succeeded` | `Loop` |
 
-The parse events come first, whether or not the parse succeeds (see [Parsing comes first](#parsing-comes-first)), and the run's own events then open with `run_started` under the H1 title `Loop`. `# Loop` has no H1 body, so the run goes straight from `run_started` to the first section's `section_started`.
+The run's events open with `run_started` under the H1 title `Loop`. Parsing comes before the run and reports no events (see [Parsing comes first](#parsing-comes-first)). `# Loop` has no H1 body, so the run goes straight from `run_started` to the first section's `section_started`.
 
 ### The order of run events
 
@@ -1703,7 +1671,7 @@ A `log` checkpoint is recorded under the name of the section whose Lua wrote it,
 
 ### Events from a run that ends early
 
-When a run ends before it starts, the events recorded before it ended stay in its record and can still be read. A prompt that parsed and was then refused still has its parse events, ending with the parse-succeeded event. A run that ended before its parse, on a failed model lookup or an early cancel, has no events in its record, only the values below and the error that ended it.
+A run that ends before it starts has no events in its record, only the values below and the error that ended it. That holds for a run refused on its input or by a start check, and for one that ended on a failed model lookup or an early cancel.
 
 ### What a run's record holds
 
@@ -1719,9 +1687,9 @@ Each run of a prompt is recorded as its own run with its own run id, even when t
 
 Beside these values, the record holds the run's history: every event the run reports, every piece of [Harness work](01-what-a-prompt-is.md#the-five-kinds-of-harness-work) the run asks for, and the answer to each.
 
-The run's name is the run metadata's `name` and also the `execution` field of every event the run records, from its parse events through its last event. The same prompt text always yields the same prompt hash across runs.
+The run's name is the run metadata's `name` and also the `execution` field of every event the run records, from its first event through its last. The same prompt text always yields the same prompt hash across runs.
 
-Each run draws its own fresh [seed](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host) from the operating system's cryptographic random source and records it at the start of the run, before anything else, so two runs of the same prompt get different seeds. The run's start time, `started_at`, is stamped once from the system wall clock when the Harness begins the run's record, because the Engine reads no clock of its own, and a later run never starts earlier. The Harness supplies both the seed and the start instant, drawing them before the prompt is parsed, and a prompt cannot set either one.
+Each run draws its own fresh [seed](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host) from the operating system's cryptographic random source and records it at the start of the run, before anything else, so two runs of the same prompt get different seeds. The run's start time, `started_at`, is stamped once from the system wall clock when the Harness begins the run's record, because the Engine reads no clock of its own, and a later run never starts earlier. The Harness supplies both the seed and the start instant, drawing them when it begins the run's record, and a prompt cannot set either one.
 
 Two runs of the same prompt running at the same time stay separate. Each returns its own result, and each run's records hold only its own events, Harness work and answers, `log` checkpoints, and final `run_succeeded`.
 
