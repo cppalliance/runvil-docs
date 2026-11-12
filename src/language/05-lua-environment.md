@@ -125,13 +125,13 @@ The run result is:
 fresh VM
 ````
 
-Inside one section entry, every `lua` block runs in the same Lua environment, so a global set in an earlier block is readable in every later block of that entry. Here `note`, set in the first block of `## First`, is still there in the second block, even with a prose block between the two. A function defined in one block, such as `decorate`, can be called from any later block in that entry. The same holds for fields set on `var` (see [Keeping state in `var`](#keeping-state-in-var)), such as `var.decorated`, and for saved references to Engine globals.
+Inside one section entry, every `lua` block runs in the same Lua environment, so a global set in an earlier block is readable in every later block of that entry. Here `note`, set in the first block of `First`, is still there in the second block, even with a prose block between the two. A function defined in one block, such as `decorate`, can be called from any later block in that entry. The same holds for fields set on `var` (see [Keeping state in `var`](#keeping-state-in-var)), such as `var.decorated`, and for saved references to Engine globals.
 
 That one Lua environment serves every block in the section entry, and the Engine globals in it stay live for the entry's whole lifecycle, so a later block sees the same `log` and `store` as an earlier one. A first block can run `saved_log = log`, and a later block of the same entry can call `saved_log('still here')`.
 
 Every section entry gets a brand-new section VM, created for that section by name, and the H1 pass gets one too (see [The H1 pass](04-how-a-prompt-runs.md#the-h1-pass)). That holds whether the walk reaches the section by fall-through, by [`jump`](08-jump-and-call.md#jumping-to-a-section), or by [`call`](08-jump-and-call.md#calling-a-section). The section VM is torn down when the section entry ends.
 
-So a plain global assigned in one section entry reads as nil when the next entry runs, because globals live in that entry's own Lua VM. After `note` is set in `## First`, `assert(note == nil)` passes in `## Second`, and the same goes for any plain global, such as `reply` after `reply = 'custom'`. Each section entry gets its own fresh Lua environment, so globals created or changed in one entry never appear in another. When a `counter` global in one section VM has counted up to `2`, a `counter` global in a second section VM starts over at `1`.
+So a plain global assigned in one section entry reads as nil when the next entry runs, because globals live in that entry's own Lua VM. After `note` is set in `First`, `assert(note == nil)` passes in `Second`, and the same goes for any plain global, such as `reply` after `reply = 'custom'`. Each section entry gets its own fresh Lua environment, so globals created or changed in one entry never appear in another. When a `counter` global in one section VM has counted up to `2`, a `counter` global in a second section VM starts over at `1`.
 
 Functions follow the same rule. A function such as `greet` that one section defines through [`require`](03-blocks-and-prose.md#sharing-code-with-require) reads as nil in a later section, where `tostring(greet)` is `nil`, because a library's globals stay in each VM that ran it.
 
@@ -165,16 +165,16 @@ first_saw_store = store.read('seed.txt')
 Every section VM, in the H1 pass and in walked sections alike, starts with these Engine globals:
 
 - `args`, `argv`, `sys`, `var`, and `prose`
-- `log`, `store`, `untrusted`, and `json`
+- `log`, `store`, `untrusted`, `json`, and `markdown`
 - `models`, `tools`, `messages`, and `compactors`
 - `call`, `jump`, `prompt`, and `require`
 - `tasks`
 
-Two more Engine globals are installed only in some section VMs. `ui` is installed when the run has an application-state snapshot (see [Run facts in `sys` and `ui`](#run-facts-in-sys-and-ui)), and `item` is installed in a spawned chain, such as a fanout arm (see [What an arm sees](14-fanout.md#what-an-arm-sees)). That makes 20 Engine globals in all.
+Two more Engine globals are installed only in some section VMs. `ui` is installed when the run has an application-state snapshot (see [Run facts in `sys` and `ui`](#run-facts-in-sys-and-ui)), and `item` is installed in a spawned chain, such as a fanout arm (see [What an arm sees](14-fanout.md#what-an-arm-sees)). That makes 21 Engine globals in all.
 
-Together they give every section's Lua logging through `log` (see [Logging and lifecycle reports](#logging-and-lifecycle-reports)), tool scoping through `tools`, store operations through `store`, and the `var` and `argv` globals, all inside the sandboxed section VM. `prose` is the global that reads pending prose (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)), `prompt` holds the section reads (see [Reading sections with `prompt.section` and `prompt.list`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptlist)), and `models` holds the model functions: [`models.infer`](10-models.md#running-a-round-with-modelsinfer), `models.loop`, and `models.compact` run model rounds, and `models.use`, `models.get`, and `models.current` choose and read the model (see [The `models` global](10-models.md#the-models-global)). The rest are taught where they are used: `args` in [The argument string in `args`](06-arguments.md#the-argument-string-in-args), `argv` in [Reading parsed input from `argv`](06-arguments.md#reading-parsed-input-from-argv), `store` in [What the store is](09-the-store.md#what-the-store-is), `untrusted` in [Handing store text to a model with `untrusted`](09-the-store.md#handing-store-text-to-a-model-with-untrusted), `json` in [Encoding and decoding JSON with `json`](#encoding-and-decoding-json-with-json), `messages`, the section entry's own conversation that each new section VM starts empty, in [`messages` is the section entry's conversation](11-conversations.md#messages-is-the-section-entrys-conversation), `compactors` in [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion), `tools` in [The members of `tools`](12-tools.md#the-members-of-tools), and `tasks` in [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn).
+Together they give every section's Lua logging through `log` (see [Logging and lifecycle reports](#logging-and-lifecycle-reports)), tool scoping through `tools`, store operations through `store`, and the `var` and `argv` globals, all inside the sandboxed section VM. `prose` is the global that reads pending prose (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)), `prompt` holds the section reads (see [Reading sections with `prompt.section` and `prompt.section_or`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptsection_or)), and `models` holds the model functions: [`models.infer`](10-models.md#running-a-round-with-modelsinfer), `models.loop`, and `models.compact` run model rounds, and `models.use`, `models.get`, and `models.current` choose and read the model (see [The `models` global](10-models.md#the-models-global)). The rest are taught where they are used: `args` in [The argument string in `args`](06-arguments.md#the-argument-string-in-args), `argv` in [Reading parsed input from `argv`](06-arguments.md#reading-parsed-input-from-argv), `store` in [What the store is](09-the-store.md#what-the-store-is), `untrusted` in [Handing store text to a model with `untrusted`](09-the-store.md#handing-store-text-to-a-model-with-untrusted), `json` in [Encoding and decoding JSON with `json`](#encoding-and-decoding-json-with-json), `markdown` in [Parsing Markdown with `markdown`](#parsing-markdown-with-markdown), `messages`, the section entry's own conversation that each new section VM starts empty, in [`messages` is the section entry's conversation](11-conversations.md#messages-is-the-section-entrys-conversation), `compactors` in [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion), `tools` in [The members of `tools`](12-tools.md#the-members-of-tools), and `tasks` in [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn).
 
-The Engine installs no global beyond these 20. Fanout is `tasks.fanout`, a function on the `tasks` table (see [Fanout in one call](14-fanout.md#fanout-in-one-call)), and reading a list section goes through `prompt.list`.
+The Engine installs no global beyond these 21. Fanout is `tasks.fanout`, a function on the `tasks` table (see [Fanout in one call](14-fanout.md#fanout-in-one-call)), and reading a list kept in a section goes through `prompt.section`.
 
 The H1 pass and every walked section see the same set of globals. The one difference is `argv`: it is writable in the H1 pass, so H1 code can assign it (see [Checking and repairing `argv` in the H1 pass](06-arguments.md#checking-and-repairing-argv-in-the-h1-pass)), and frozen in every other section.
 
@@ -184,7 +184,7 @@ Every section VM is set up in one fixed order. The same order applies to every s
 
 1. `untrusted`, when the VM is built
 2. `args`, `argv`, `sys`, `var`, `tools`, `models`, `messages`, and `compactors`
-3. `log`, `store`, and `json`
+3. `log`, `store`, `json`, and `markdown`
 4. `ui`
 5. `item`
 6. `jump` and the `prompt` reads
@@ -195,7 +195,7 @@ Every section VM is set up in one fixed order. The same order applies to every s
 
 ### Reserved names
 
-The Engine reserves the name of every global it installs in a section VM, and its reserved-name list matches that set exactly. The list holds 62 names: the 20 Engine globals, the 19 Lua globals the sandbox keeps (listed in [The sandbox](#the-sandbox)), and the 23 Lua 5.5 keywords. It classes each name as an Engine global, a Lua global, or a Lua keyword.
+The Engine reserves the name of every global it installs in a section VM, and its reserved-name list matches that set exactly. The list holds 63 names: the 21 Engine globals, the 19 Lua globals the sandbox keeps (listed in [The sandbox](#the-sandbox)), and the 23 Lua 5.5 keywords. It classes each name as an Engine global, a Lua global, or a Lua keyword.
 
 The 23 Lua 5.5 keywords in prompt Lua are `and`, `break`, `do`, `else`, `elseif`, `end`, `false`, `for`, `function`, `global`, `goto`, `if`, `in`, `local`, `nil`, `not`, `or`, `repeat`, `return`, `then`, `true`, `until`, and `while`. A Lua keyword never reads as a global. Every Engine global and Lua global on the list reads non-nil in a section entry once its conditional bindings apply, such as `ui` with a snapshot and `item` in a spawned chain.
 
@@ -241,7 +241,7 @@ These are the suspending calls:
 - the `tasks` functions, [`tasks.fanout`](14-fanout.md#fanout-in-one-call), [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn), and [`tasks.receive`](#asking-the-operator) included
 - the `store` calls (see [Writing and reading files](09-the-store.md#writing-and-reading-files))
 
-Each one resumes with its result, and `tasks.spawn` resumes with the task table. `jump`, `prompt.section`, and `prompt.list` return without suspending.
+Each one resumes with its result, and `tasks.spawn` resumes with the task table. `jump`, `prompt.section`, `prompt.section_or`, and the `markdown` functions return without suspending.
 
 A model call reads the same way. `models.infer("hi")` suspends the section's Lua and resumes with the model's answer, so `local reply = models.infer(prose)` holds the reply on the next line. A write followed by a model round over what was written is two lines:
 
@@ -259,7 +259,7 @@ return "pcall:" .. result
 
 A block pauses at a suspending call and resumes with the result, so you never write callbacks or manage coroutines, and `coroutine` reads nil in a block. A block pauses only at one of the Engine's suspending calls and never yields on its own, because the `coroutine` library is not available to it.
 
-While a suspending call waits, only the calling [chain](04-how-a-prompt-runs.md#the-section-walk) pauses, and other chains keep running. Two tasks started with `tasks.spawn` that each run `call('#### Leaf')` both complete, in whichever order their answers arrive.
+While a suspending call waits, only the calling [chain](04-how-a-prompt-runs.md#the-section-walk) pauses, and other chains keep running. Two tasks started with `tasks.spawn` that each run `call('Leaf')` both complete, in whichever order their answers arrive.
 
 The suspending calls work in every section's Lua, the H1 pass and fanout arms included, so a fanout arm (see [What an arm sees](14-fanout.md#what-an-arm-sees)) can pass its `item` straight to `tools.call`.
 
@@ -383,7 +383,7 @@ On values other than `_G`, `getmetatable` and `setmetatable` behave as in stock 
 
 The other base functions work as in standard Lua 5.5. You call `ipairs(t)`, `select(n, ...)`, and `tonumber(v)` as in any Lua program, and `select('#', ...)` and `select(2, pcall(...))` give the same results as in stock Lua. `tonumber` turns a numeric string read from the store into a number, as in `tonumber(ok and v or '0') + 1`. `assert(cond, message)` checks a condition with a message. `ipairs` walks an array table, such as a table literal, in order, so `for _, text in ipairs({ 'first question', 'second question' }) do` handles `first question` before `second question`.
 
-The standard functions `string.rep`, `select`, `table.concat`, `ipairs`, `type`, `tostring`, `getmetatable`, and `assert` work around Engine calls too, `models.loop` included, as in `select('#', models.loop())` and `getmetatable(err) == nil`. Section Lua combines them freely, as in `assert(not pcall(require, '## broken'), 'the broken library raises')`, which checks that requiring a broken library raises.
+The standard functions `string.rep`, `select`, `table.concat`, `ipairs`, `type`, `tostring`, `getmetatable`, and `assert` work around Engine calls too, `models.loop` included, as in `select('#', models.loop())` and `getmetatable(err) == nil`. Section Lua combines them freely, as in `assert(not pcall(require, '/broken'), 'the broken library raises')`, which checks that requiring a broken library raises.
 
 The kept globals are ordinary globals, so you can reassign one in prompt code. `error = function() end` runs without complaint.
 
@@ -970,7 +970,7 @@ return var.trail .. 'c'
 abc
 ````
 
-`## First` sets a plain global, `note`, and a `var` field, `var.trail`. Each section entry gets a fresh section VM (see [A fresh section VM for every section entry](#a-fresh-section-vm-for-every-section-entry)), so `note` reads as `nil` in `## Second`, while `var.trail` still holds `ab`. A section's final `var` becomes the starting `var` of the next section, so a value one section stores in `var` is readable in later sections of the same walk, both across fall-through and after a [`jump`](08-jump-and-call.md#jumping-to-a-section).
+`First` sets a plain global, `note`, and a `var` field, `var.trail`. Each section entry gets a fresh section VM (see [A fresh section VM for every section entry](#a-fresh-section-vm-for-every-section-entry)), so `note` reads as `nil` in `Second`, while `var.trail` still holds `ab`. A section's final `var` becomes the starting `var` of the next section, so a value one section stores in `var` is readable in later sections of the same walk, both across fall-through and after a [`jump`](08-jump-and-call.md#jumping-to-a-section).
 
 A value you assign to a `var` field stays in `var` after the block that set it ends. Whenever the run needs that state, it reads `var` back as JSON data, as [When the run reads `var` back](#when-the-run-reads-var-back) explains.
 
@@ -1056,7 +1056,7 @@ count:2
 
 The H1 pass starts from an empty `var` table, since it runs first and is never entered again, so the first H1 block finds `var.executions` unset and stores `1`. `var` writes accumulate across the Lua blocks of the H1 pass, so the counter bumped in two H1 blocks reads `2`. Whatever `var` holds when the H1 pass ends is the `var` the section walk starts with, so a value an H1 Lua block stores in `var` is readable in the first `##` section and in every later walked section. A prompt without H1 blocks starts its first top-level walked section with `var` set to an empty table.
 
-`## Result` builds its return value from a `var` value with Lua's `..` operator. A number operand turns into text in the result, which is why `'count:' .. var.executions` gives `count:2`.
+`Result` builds its return value from a `var` value with Lua's `..` operator. A number operand turns into text in the result, which is why `'count:' .. var.executions` gives `count:2`.
 
 ### Showing a `var` value in prose
 
@@ -1090,7 +1090,7 @@ Say hi there to the reader.
 
 ### What `var` can hold
 
-JSON data is the set of values JSON can express: numbers, strings, booleans, and tables of arrays and objects built from them, nested to any depth. A `var` field holds only JSON data. With this block as the Lua block of `## Main` in the `greeting` prompt, the run succeeds:
+JSON data is the set of values JSON can express: numbers, strings, booleans, and tables of arrays and objects built from them, nested to any depth. A `var` field holds only JSON data. With this block as the Lua block of `Main` in the `greeting` prompt, the run succeeds:
 
 ````lua
 var.n = 1
@@ -1119,7 +1119,7 @@ var.t.kept = 'yes'
 return var.t.kept
 ````
 
-As the Lua block of `## Main` in the `greeting` prompt, this returns `yes`, and `var` reads back as `{ "t": { "kept": "yes" } }`. Every nested write passes the same JSON data check as a top-level write.
+As the Lua block of `Main` in the `greeting` prompt, this returns `yes`, and `var` reads back as `{ "t": { "kept": "yes" } }`. Every nested write passes the same JSON data check as a top-level write.
 
 ### Assigning a table stores a copy
 
@@ -1132,7 +1132,7 @@ list[2] = 'changed'
 return var.list[2]
 ````
 
-As the Lua block of `## Main` in the `greeting` prompt, this returns `two`. To change the stored value, write through `var` itself, as in `var.list[2] = 'three'`, after which `var.list[2]` reads `three`.
+As the Lua block of `Main` in the `greeting` prompt, this returns `two`. To change the stored value, write through `var` itself, as in `var.list[2] = 'three'`, after which `var.list[2]` reads `three`.
 
 ### Removing a key
 
@@ -1145,7 +1145,7 @@ var.k = nil
 return tostring(var.k == nil)
 ````
 
-As the Lua block of `## Main` in the `greeting` prompt, this returns `true`, and `var` reads back as `{ "kept": "yes" }`. The removed key reads as `nil` and is gone from the read-back `var` data, and removing one key leaves the other keys `var` already held untouched.
+As the Lua block of `Main` in the `greeting` prompt, this returns `true`, and `var` reads back as `{ "kept": "yes" }`. The removed key reads as `nil` and is gone from the read-back `var` data, and removing one key leaves the other keys `var` already held untouched.
 
 ### Reading arrays and other tables from `var`
 
@@ -1160,7 +1160,7 @@ end
 return table.concat(out) .. ' ' .. #var.items .. ' ' .. table.concat(var.items, '', 1, 3)
 ````
 
-As the Lua block of `## Main` in the `greeting` prompt, this returns `abc 0 abc`. The values you store through `var` live in hidden storage behind a guard, so the `var` table itself stays empty, and so does every table you read from it. Your code cannot reach that hidden storage, because it lives in the Lua registry and the [sandbox](#the-sandbox) has no `debug` library.
+As the Lua block of `Main` in the `greeting` prompt, this returns `abc 0 abc`. The values you store through `var` live in hidden storage behind a guard, so the `var` table itself stays empty, and so does every table you read from it. Your code cannot reach that hidden storage, because it lives in the Lua registry and the [sandbox](#the-sandbox) has no `debug` library.
 
 Because a table read from `var` holds no entries of its own, a few Lua operations see it as empty:
 
@@ -1654,6 +1654,424 @@ The budget comes from the Lua memory limit of the section VM, `lua_memory_bytes`
 
 Debug mode raises this error too. A `var` write spends the same value and byte budgets before it converts the value, as [When a value is not JSON data](#when-a-value-is-not-json-data) describes.
 
+## Parsing Markdown with `markdown`
+
+After this section you can parse Markdown text into plain Lua tables, find a section or a single block in it, and write blocks back as Markdown text.
+
+````markdown
+---
+name: markdown-parse
+description: Parses a Markdown document and reads a section, a list, and a fence from it.
+runvil: 0
+---
+
+# Markdown parse
+
+## Main
+
+```lua
+local md = markdown.parse(prompt.section('Reply', 'fence markdown').text)
+local findings = markdown.section(md, '/Report/Findings', 'list').items
+local data = json.decode(markdown.section(md, '//Data', 'fence json').text)
+return #md .. '|' .. md[1].title .. '|' .. findings[2] .. '|' .. data.count
+```
+
+### Reply
+
+```markdown
+# Report
+
+Two findings.
+
+## Findings
+
+- tides follow the moon
+- storms raise the sea
+
+## Data
+
+~~~json
+{ "count": 2 }
+~~~
+```
+````
+
+The run result is:
+
+````text
+1|Report|storms raise the sea|2
+````
+
+`markdown.parse` turns Markdown text into a list of blocks, here one block, the section `Report` with everything under it. `markdown.section` then finds a section by a path of titles and picks one block in it: the list under `Findings`, and the `json` fence under `Data`, found at any depth by `//Data`. The text here comes from a fence in the prompt, read with [`prompt.section`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptsection_or). A model reply or a store file parses the same way.
+
+`markdown` is an Engine global, a plain table like `json`, with five functions:
+
+- `markdown.parse(text)` parses Markdown text into a list of blocks.
+- `markdown.section(blocks, path)` finds one section, and `markdown.section(blocks, path, selector, n?)` finds one block of that section. Both raise when what they name is not there.
+- `markdown.section_or` takes the same arguments and returns `nil` when the section or the block is not there.
+- `markdown.select(blocks, selector)` collects every block of one kind, at any depth.
+- `markdown.render(blocks)` writes a list of blocks back as Markdown text.
+
+`markdown` is in every section VM, the H1 pass, fanout arms, spawned tasks, and libraries loaded with `require` included, so you never import it. It takes text and never a file name: you read a file with [`store.read`](09-the-store.md#writing-and-reading-files) and parse what it returns. Every function is pure. The same input gives the same result, and none of them performs an effect or suspends. Nothing in the text is run or substituted, so a `{{ name }}` placeholder comes back as written.
+
+Every error a `markdown` function raises is an [error value](#error-values) of kind `lua`, so `pcall` catches it, and `tostring(err)` gives its message: the error's own text, such as `markdown.section: path "/Guide/" has an empty step`, as [author prose](#reading-kind-and-message) after the line of the failing call. The messages this section quotes are that own text.
+
+### The blocks `markdown.parse` returns
+
+A parsed document is a list of blocks. A block is a plain table with a `kind`, the `line` it starts on, and the fields of its kind:
+
+| `kind` | Fields | What it is |
+| --- | --- | --- |
+| `frontmatter` | `data` | The YAML mapping that opens the text, as tables shaped like decoded JSON. It is only ever the first block. |
+| `section` | `level`, `title`, `blocks` | A heading and everything under it. `level` is 1 to 6, and `blocks` is a list of blocks, subsections included. |
+| `prose` | `text` | A run of Markdown that is no other kind: paragraphs, block quotes, indented code, HTML, and link definitions. |
+| `fence` | `lang`, `info`, `text` | A fenced code block. `info` is the whole info string, `lang` is its first word, and `text` is the body. |
+| `list` | `ordered`, `items` | A bulleted or numbered list. `items` is a list of strings with the markers removed. |
+| `rule` | none | A thematic break such as `---`. |
+
+Take this text, which the rest of this section calls the notes document:
+
+````markdown
+---
+title: Notes
+tags: [a, b]
+---
+
+Preface paragraph.
+
+# Guide
+
+Intro text
+on two lines.
+
+- alpha
+- beta
+
+## Templates
+
+Use these.
+
+```lua
+return 1
+```
+
+```markdown
+# Hello
+```
+
+Then the fallback:
+
+```json strict
+{ "ok": true }
+```
+
+### Extras
+
+---
+
+```lua
+return 2
+```
+
+## Usage
+
+1. first
+2. second
+````
+
+`local md = markdown.parse(text)` gives three top-level blocks: the frontmatter, the preface, and the section `Guide`, which holds the rest. Ordinary indexing reads all of it:
+
+````lua
+#md                              --> 3
+md[1].kind                       --> 'frontmatter'
+md[1].data.title                 --> 'Notes'
+md[1].data.tags[2]               --> 'b'
+md[2].text                       --> 'Preface paragraph.'
+md[2].line                       --> 6
+md[4]                            --> nil
+
+local guide = md[3]
+guide.kind                       --> 'section'
+guide.level                      --> 1
+guide.title                      --> 'Guide'
+#guide.blocks                    --> 4
+guide.blocks[1].text             --> 'Intro text\non two lines.'
+guide.blocks[2].items[1]         --> 'alpha'
+guide.blocks[2].ordered          --> false
+
+local templates = guide.blocks[3]
+templates.title                  --> 'Templates'
+templates.line                   --> 16
+templates.blocks[2].lang         --> 'lua'
+templates.blocks[5].lang         --> 'json'
+templates.blocks[5].info         --> 'json strict'
+templates.blocks[5].text         --> '{ "ok": true }'
+templates.blocks[6].title        --> 'Extras'
+templates.blocks[6].blocks[1]    --> { kind = 'rule', line = 36 }
+templates.blocks[2].title        --> nil
+````
+
+The result is plain data, with a few fixed shapes:
+
+- Every value is a string, a number, a boolean, or a table, and no table has methods. A table is either a list or a record with named fields, never both, which is why a section keeps its members in `blocks`. So a parse result passes [`json.encode`](#encoding-values-with-jsonencode), can be stored in [`var`](#keeping-state-in-var), and can be a [`tasks.fanout` collection](14-fanout.md#collections-and-member-order).
+- The document, every `blocks`, and every `items` are marked lists (see [Keeping empty lists with `json.array`](#keeping-empty-lists-with-jsonarray)), so an empty one encodes as `[]`.
+- A field that a kind does not have reads as `nil`, as `templates.blocks[2].title` does for a fence.
+- `title`, a fence's `text`, and an item can be the empty string. A prose `text` never is.
+- No block points at its parent or its neighbors.
+
+`line` is 1-based and counts lines of the text given to `markdown.parse`, frontmatter lines included. It is the heading line for a section, the opening fence line for a fence, the first marker line for a list, and the first non-blank line for prose. It is stored when the text is parsed, and no lookup changes it.
+
+### How text becomes blocks
+
+`markdown.parse` reads the text as CommonMark with no extensions, the same reading the prompt parser gives a prompt, so a heading or a fence means the same thing in a prompt and in parsed text. Tables, task lists, and footnotes are not parsed as such, and they stay in prose or in an item's string. These rules decide the blocks:
+
+- Only top-level constructs become blocks. A heading, fence, list, or thematic break inside a block quote stays in the surrounding prose, and one inside a list item stays in that item's string.
+- Nothing is dropped. Every non-blank line of the text belongs to exactly one block, counting a heading line as part of its section.
+- Frontmatter is recognized only at the very start: the first line is `---`, a later line is `---`, and the lines between parse as a YAML mapping. In `data`, a mapping is a record, a sequence is a marked list, and a YAML null is [`json.null`](#null-values-and-jsonnull). When any of that fails there is no frontmatter, and those lines are ordinary Markdown, so the first line is a `rule`.
+- A heading opens a section, which ends at the next heading of the same or a smaller level. A deeper heading opens a subsection inside it, even when it skips levels, so an H4 directly under an H2 is a member of the H2's `blocks` with `level` 4. `title` is the heading's text with inline markup removed, so ``## The *big* `foo` API`` has the title `The big foo API`.
+- Prose is a maximal run. Two paragraphs separated by a blank line are one block, and a second prose block exists only when a fence, list, or rule sits between it and the first. `text` is the source as written, with leading blank lines and trailing whitespace removed.
+- Backtick fences and tilde fences both count. `info` is the info string, `lang` is its first word, or `''` when the fence has none, and `text` is the lines between the two fence lines without the final line ending. A `#` line inside a fence is not a heading. A fence with no closing line runs to the end of the text.
+- Each list is one block, and a change of marker, such as `-` then `*`, starts a new list. `ordered` is `true` for a numbered list. An item is its source with the marker removed. An item that spans lines or holds nested content keeps it as raw Markdown, such as `'a\n- a1\n- a2'`, so `markdown.parse(item)` recovers its structure. A marker with no content is the item `''`.
+
+Parsing does not fail on content. Any UTF-8 text within the size limit is a document: skipped levels, repeated titles, and an unclosed fence are all accepted, and empty text gives an empty list. This is looser than the prompt parser on purpose, because `markdown` reads text you do not control, such as a model reply. A byte-order mark at the very start is dropped, and `\r\n` and a lone `\r` are read as `\n`, so every string in the result uses `\n` only.
+
+`markdown.parse` takes a string of at most 8,388,608 bytes, the limit [`json.decode`](#decoding-json-text-with-jsondecode) has, and raises three errors:
+
+| When | Message |
+| --- | --- |
+| The argument is not a string | `markdown.parse expects a string, got {type}` |
+| The string is longer than the cap | `markdown.parse: input exceeds the 8388608-byte limit` |
+| The text is not valid UTF-8 | `markdown.parse: text is not valid UTF-8` |
+
+### Finding a section with a path
+
+`markdown.section(blocks, path)` returns the one section that `path` names, starting from the list `blocks`. The path is a [section path](02-file-structure.md#section-paths) from the top of that list: it always starts with `/`, each step is a section's title, and a title matches exactly and case-sensitively. With the notes document:
+
+````lua
+markdown.section(md, '/Guide').title                    --> 'Guide'
+markdown.section(md, '/Guide/Templates').line           --> 16
+markdown.section(md, '/Guide/Templates/Extras').level   --> 3
+markdown.section(md, '//Extras').line                   --> 34
+markdown.section(md, '/Guide//Extras').line             --> 34
+markdown.section(guide.blocks, '/Usage').line           --> 42
+markdown.section(md, '/Templates')                      --> raises
+markdown.section(md, '/guide')                          --> raises
+markdown.section_or(md, '/Templates')                   --> nil
+````
+
+A path over parsed text has two forms a path in a prompt does not have:
+
+- `/title` steps to the sections with that title among the direct members of the current list.
+- `//title` steps to the sections with that title at any depth in the current list, direct members included.
+- `[n]` after a title keeps the `n`th section that step matched, where `[1]` is the first and `[-1]` is the last.
+
+The first step starts from `blocks`, and each later step starts from the `blocks` of every section the step before it kept. After the last step, one section is the result, none is a miss, and more than one raises. Only the last step has to end with one section, so a step in the middle may keep several.
+
+Parsed text may repeat a title among siblings, which a prompt may not, and an index picks one. With `log` parsed from `# Log`, then `## Entry` over the paragraph `first`, then a second `## Entry` over `second`:
+
+````lua
+markdown.section(log, '/Log/Entry')                    --> raises
+markdown.section(log, '/Log/Entry[1]').line            --> 3
+markdown.section(log, '/Log/Entry[-1]').line           --> 7
+markdown.section(log, '/Log/Entry[3]')                 --> raises
+markdown.section_or(log, '/Log/Entry[3]')              --> nil
+markdown.section(log, '/Log/Entry[2]', 'prose').text   --> 'second'
+````
+
+The first line raises because the path matches two sections, and the message says so: `markdown.section: path "/Log/Entry" is ambiguous; it matches 2 sections, at lines 3 and 7; add an index such as "/Log/Entry[1]"`. An index counts everything its step matched, in the order the headings appear in the text, so `//Entry[2]` is the second `Entry` anywhere in the document.
+
+A few more rules round out the path:
+
+- The path must start with `/`. Parsed text has no place a relative path could start from, so `'Guide/Usage'` raises, and so does a path that uses `..`.
+- Only a bracketed integer at the very end of a step is an index. `/[Draft] Notes` and `/Notes [old]` are plain titles, and a title that itself ends in a bracketed integer escapes the bracket, as in `/Appendix \[2]`. A slash in a title is written `\/` and a backslash `\\`.
+- A section whose title is empty, a bare `##`, cannot be named by a path. Indexing and `markdown.select` still reach it.
+
+The `blocks` argument is a list of blocks: the value `markdown.parse` returned, any section's `blocks`, or a list you built. A lookup sees only the list it is given, so passing `guide.blocks` searches inside `Guide` and nowhere else, which is why `'/Usage'` finds a section there that `'/Usage'` over `md` would not. A section is not a list. Passing the section table itself raises, and the message points at its `blocks` field.
+
+A lookup returns the table that is already inside the list it was given, not a copy, so `markdown.section(md, '/Guide') == md[3]` is `true`. An edit made through a lookup's result is therefore an edit of `md`, and a later `markdown.render(md)` writes it. The selector forms of `prompt.section` are the opposite: they build a new table on every call.
+
+### Picking a block with a selector
+
+`markdown.section(blocks, path, selector, n?)` finds the section as above, then picks one block among that section's own `blocks`. Blocks inside its subsections are not counted. The selector and the index are the ones [`prompt.section`](03-blocks-and-prose.md#reading-one-block-with-a-selector) takes:
+
+| Selector | Picks |
+| --- | --- |
+| `'frontmatter'`, `'section'`, `'prose'`, `'fence'`, `'list'`, `'rule'` | a block of that kind |
+| `'fence markdown'` | a fence whose `lang` is `markdown`, compared exactly and case-sensitively, and likewise for any other language |
+| `'fence ""'` | a fence with no language, the one whose `lang` is `''` |
+
+Without an index, the selector must match exactly one block. With an index, it may match any number, and the index picks among them: `1` is the first match and `-1` is the last.
+
+````lua
+markdown.section(md, '/Guide/Templates', 'fence markdown').text   --> '# Hello'
+markdown.section(md, '/Guide/Templates', 'fence lua').text        --> 'return 1'
+markdown.section(md, '/Guide/Templates', 'section').title         --> 'Extras'
+markdown.section(md, '/Guide', 'list').items[2]                   --> 'beta'
+markdown.section(md, '/Guide/Templates', 'fence', 3).text         --> '{ "ok": true }'
+markdown.section(md, '/Guide/Templates', 'fence', -1).lang        --> 'json'
+markdown.section(md, '/Guide/Templates', 'prose', 2).text         --> 'Then the fallback:'
+markdown.section(md, '/Guide/Templates', 'list')                  --> raises
+markdown.section(md, '/Guide/Templates', 'fence')                 --> raises
+markdown.section(md, '/Guide/Templates', 'fence', 4)              --> raises
+````
+
+`'fence lua'` matches one fence in `Templates`, because the other `lua` fence is in its subsection `Extras`. The last three lines raise for three different reasons: `Templates` holds no list, it holds three fences and the call gives no index, and it has no fourth fence. To take every direct member of one kind, loop over the section's `blocks` with `ipairs` and test `kind`.
+
+`markdown.section` and `markdown.section_or` take the same arguments and find the same thing. They differ only when it is not there:
+
+| Outcome | `markdown.section` | `markdown.section_or` |
+| --- | --- | --- |
+| The path names no section | raises | `nil` |
+| The selector matches no block, or fewer blocks than the index asks for | raises | `nil` |
+| The path matches several sections | raises | raises |
+| The selector matches several blocks and no index is given | raises | raises |
+| The path, selector, or index is malformed, or `blocks` is not a list of blocks | raises | raises |
+
+The first two rows are things that are absent. The rest are mistakes in the call, or a choice that only an index can make, and both functions raise for them. An index that runs past the last match is an absence, so a loop can count upward with `markdown.section_or` until it returns `nil`:
+
+````lua
+markdown.section_or(md, '/Guide/Templates', 'list')         --> nil
+markdown.section_or(md, '/Guide/Templates', 'fence ""')     --> nil
+markdown.section_or(md, '/Guide/Templates', 'fence lua', 2) --> nil
+markdown.section_or(md, '/Guide/Nope', 'fence')             --> nil
+markdown.section_or(md, '/Guide/Templates', 'fence')        --> raises
+````
+
+### Collecting blocks with `markdown.select`
+
+`markdown.select(blocks, selector)` collects every block that matches the selector at any depth, in the order the blocks appear in the text, with a section before its members. It returns a new list that holds the matching block tables themselves, and an empty list when nothing matches:
+
+````lua
+#markdown.select(md, 'section')                      --> 4
+#markdown.select(md, 'fence')                        --> 4
+#markdown.select(md, 'fence lua')                    --> 2
+markdown.select(md, 'fence lua')[2].text             --> 'return 2'
+markdown.select(md, 'list')[2].ordered               --> true
+#markdown.select(md, 'fence python')                 --> 0
+markdown.select(templates.blocks, 'prose')[1].text   --> 'Use these.'
+````
+
+The four sections are `Guide`, `Templates`, `Extras`, and `Usage`. Like the lookups, `markdown.select` searches only the list it is given, so the last line looks inside `Templates` alone. It is the function to reach for when the text's shape is not known ahead of time, as with a model reply: `markdown.select(markdown.parse(reply), 'fence json')[1]` is the first `json` fence wherever the reply put it, or `nil`.
+
+### Writing blocks with `markdown.render`
+
+`markdown.render(blocks)` writes a list of blocks back as Markdown, each block in one fixed style. Blocks are joined by one blank line, the result has no trailing newline, and an empty list gives the empty string:
+
+````lua
+markdown.render(guide.blocks[4].blocks)   --> '1. first\n2. second'
+markdown.render({ guide.blocks[4] })      --> '## Usage\n\n1. first\n2. second'
+````
+
+A section's `blocks` render without its heading, and wrapping the section in a list renders the heading too. Each kind is written like this:
+
+| Block | Written as |
+| --- | --- |
+| `frontmatter` | `---`, the data as YAML with its keys sorted, then `---` |
+| `section` | `#` repeated `level` times, a space and the title when the title is not empty, then its `blocks` |
+| `prose` | `text`, unchanged |
+| `fence` | a backtick fence of at least three backticks and one longer than the longest run of backticks in `text`, then `info`, or `lang` when there is no `info`, then `text`, then the closing fence. A tilde fence is used instead when the info string holds a backtick. |
+| `list` | `- item` for each item, or `1. item` numbered from 1, with the later lines of an item indented to sit under its first. A list right after a list of the same type is written with `*`, or with `1)`, so the two stay separate lists. |
+| `rule` | `---`, or `***` when the rule is the first block, so the output never opens with a line that could start frontmatter |
+
+`markdown.render` does not escape, so text that came from a parse is written back as it was read. For blocks that `markdown.parse` produced, parsing the output gives the same blocks apart from `line`. The one exception is a title whose text Markdown reads as markup: a heading written `## \*x\*` has the title `*x*`, which is written as `## *x*` and reads back as `x`.
+
+The blocks need not come from a parse. You can edit a parsed document in place, or build a list by hand, and render it:
+
+````lua
+local usage = markdown.section(md, '/Guide/Usage')
+usage.title = 'How to use it'
+table.insert(usage.blocks, { kind = 'prose', text = 'Done.' })
+return markdown.render({ usage })
+````
+
+````text
+## How to use it
+
+1. first
+2. second
+
+Done.
+````
+
+`markdown.render` checks every field of every block it writes, and it raises for a block it cannot write. The message names the block by its place, such as `blocks[2].text`:
+
+| When | Message |
+| --- | --- |
+| The value is a section, not a list of blocks | `markdown.render: blocks must be a list of blocks, got a section; pass its blocks field` |
+| A field is missing or of the wrong type | `markdown.render: blocks[1].text must be a string, got nil` |
+| The `kind` is unknown | `markdown.render: blocks[1].kind must be one of frontmatter, section, prose, fence, list, rule, got "table"` |
+| A `list` has no items | `markdown.render: blocks[1].items must hold at least one item` |
+
+A `level` that is not an integer from 1 to 6, a `title`, `info`, or `lang` that holds a line break, a `frontmatter` that is not the first block, and a `frontmatter` whose `data` is not a record raise the same way. `line` is never required.
+
+### Keeping parsed blocks
+
+Every section entry gets a fresh section VM, so a parse result does not survive a fall-through or a `jump`. Two things can carry it:
+
+- `var.doc = md` stores a deep copy as JSON, and reading it back gives [guarded views](#reading-arrays-and-other-tables-from-var). The `markdown` functions read through them, so `markdown.section(var.doc, '/Guide/Usage', 'list').items[1]` is `'first'` in a later section.
+- A fanout collection gives each arm one block as its `item`, as in `tasks.fanout('Worker', markdown.select(md, 'section'))`.
+
+Carrying the text, or the name of a store file, and parsing it where it is needed is usually cheaper than carrying the tables.
+
+`line` always counts lines of the text that was parsed, never lines of a part of it, so `markdown.section(guide.blocks, '/Templates', 'fence', 3).line` is still `30`. A new parse counts from 1: `markdown.parse(templates.blocks[3].text)[1].line` is `1`, and `markdown.parse(prompt.section(path))` counts from the first line of that section's text. The selector forms of `prompt.section` count lines of the prompt file instead.
+
+The lookups read only the fields they need, `kind`, `title`, `blocks`, and `lang`, and a block whose `kind` they do not know matches nothing. A list nested more than 127 levels deep, or a list that contains itself, raises.
+
+### Errors from the lookups
+
+The lookups check the call before they search. Each row raises from `markdown.section_or` too, with `markdown.section_or` at the start of the message, except the three misses at the end, for which it returns `nil`:
+
+| Call | Message |
+| --- | --- |
+| `markdown.section(guide, '/Usage')` | `markdown.section: blocks must be a list of blocks, got a section; pass its blocks field` |
+| `markdown.section('text', '/Usage')` | `markdown.section: blocks must be a list of blocks, got string` |
+| `markdown.section(md, 42)` | `markdown.section: path must be a string, got integer` |
+| `markdown.section(md, 'Guide/Setup')` | `markdown.section: a path starts with "/", got "Guide/Setup"` |
+| `markdown.section(md, '/Guide/../Usage')` | `markdown.section: path "/Guide/../Usage" uses ".."; parsed text has no parent to step to` |
+| `markdown.section(md, '/Guide/')` | `markdown.section: path "/Guide/" has an empty step` |
+| `markdown.section(md, [[/a\b]])` | `markdown.section: path "/a\b" has an unknown escape "\b"; the escapes are "\/", "\\", and "\["` |
+| `markdown.section(md, '/Guide[0]')` | `markdown.section: path "/Guide[0]" has index 0; an index is a nonzero integer` |
+| `markdown.section(log, '/Log/Entry')` | `markdown.section: path "/Log/Entry" is ambiguous; it matches 2 sections, at lines 3 and 7; add an index such as "/Log/Entry[1]"` |
+| `markdown.section(md, '/Guide', 'fences')` | `markdown.section: unknown kind "fences"; kinds are frontmatter, section, prose, fence, list, rule` |
+| `markdown.section(md, '/Guide', 'list lua')` | `markdown.section: only a fence selector takes a language, got "list lua"` |
+| `markdown.section(md, '/Guide', nil, 1)` | `markdown.section: an index needs a selector before it` |
+| `markdown.section(md, '/Guide', 'fence', 0)` | `markdown.section: index must be a nonzero integer, got 0` |
+| `markdown.section(md, '/Guide/Templates', 'fence')` | `markdown.section: selector "fence" matches 3 blocks, at lines 20, 24, and 30; add an index, such as 1 for the first` |
+| `markdown.section(md, '/Guide/Nope')` | `markdown.section: path "/Guide/Nope" matches no section; step 2, "Nope", matches nothing` |
+| `markdown.section(md, '/Guide/Templates', 'list')` | `markdown.section: no block in "/Guide/Templates" matches selector "list"` |
+| `markdown.section(md, '/Guide/Templates', 'fence', 4)` | `markdown.section: selector "fence" matches 3 blocks in "/Guide/Templates"; there is no block 4` |
+
+`markdown.select` raises the `blocks` and selector messages under its own name, as in `markdown.select: selector must be a string, got integer`.
+
+### Common uses
+
+````lua
+-- the JSON a model replied with, wherever the reply put the fence
+local reply = models.infer(prose)
+local found = markdown.select(markdown.parse(reply), 'fence json')[1]
+local data = found and json.decode(found.text)
+
+-- a section a model's reply may have left out, or written twice
+local findings = markdown.section_or(markdown.parse(reply), '//Findings[1]')
+local summary = findings and markdown.render(findings.blocks) or ''
+
+-- one section of a stored document, as text for a model; it raises when the document has no Abstract
+local paper = markdown.parse(store.read('paper.md'))
+local abstract = markdown.render(markdown.section(paper, '//Abstract').blocks)
+
+-- each top-level section of that document
+for _, block in ipairs(paper) do
+  if block.kind == 'section' then
+    log(block.title)
+  end
+end
+
+-- several blocks of one section of the prompt: parse it once and index the result
+local blocks = markdown.parse(prompt.section('Template'))
+````
+
+Text from a model, a tool, or the store is still untrusted text after it is parsed. The strings in the blocks are plain Lua strings, so wrap one with [`untrusted`](09-the-store.md#handing-store-text-to-a-model-with-untrusted) before it reaches a model.
+
 ## Run facts in `sys` and `ui`
 
 After this section you can read the facts the run keeps about itself from `sys`, read the Host's state from `ui()`, and know when each value is fixed.
@@ -1752,7 +2170,7 @@ return sys.section_name
 Title Demo
 ````
 
-Fanout arms, and chains that an arm starts with `call`, see the same `sys.section_count` as the run, its top-level section count, and a child worker section does not add to it. With `## Parent` as the only top-level section, a `### Worker` arm under it reads `sys.section_count == 1`.
+Fanout arms, and chains that an arm starts with `call`, see the same `sys.section_count` as the run, its top-level section count, and a child worker section does not add to it. With `Parent` as the only top-level section, a `Worker` arm under it reads `sys.section_count == 1`.
 
 ### The task id in `sys.taskid`
 
@@ -1769,7 +2187,7 @@ runvil: 0
 
 ```lua
 assert(sys.taskid == '0')
-local results = tasks.fanout('### Worker', {'a'})
+local results = tasks.fanout('Worker', {'a'})
 return results[1].text
 ```
 
@@ -1784,7 +2202,7 @@ return sys.taskid
 0.0
 ````
 
-`sys.taskid` is a string holding the id of the nearest enclosing task, the task the code runs inside (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn)). It reads `'0'` on the main walk and in the H1 pass, which is why the assertion in `## Parent` holds. Every section a chain enters reads the same `sys.taskid`, the chain's task id.
+`sys.taskid` is a string holding the id of the nearest enclosing task, the task the code runs inside (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn)). It reads `'0'` on the main walk and in the H1 pass, which is why the assertion in `Parent` holds. Every section a chain enters reads the same `sys.taskid`, the chain's task id.
 
 Inside a spawned task or a fanout arm, `sys.taskid` reads that task's own id, the same value as the `task` field of the handle `tasks.spawn` returns, so the first task spawned from the main walk reads `0.0`, as the arm above does. Inside a called chain, `sys.taskid` reads the caller's task, because a `call` starts no task, while inside a fanout arm or a `tasks.spawn` chain it reads that task's own id.
 
@@ -1802,7 +2220,7 @@ unknown sys field '{field}'
 
 So reading `sys.index` in an ordinary walked section raises `unknown sys field 'index'`. The error is a runtime error with error kind `lua`. Left uncaught, it ends the run with code `lua_runtime`, or with `requirements_unmet` in the H1 pass. A prose placeholder for an absent field fails with its own message, which repeats the placeholder after `missing`, so `{{ sys.index }}` in an ordinary walked section's prose fails with `missing {{ sys.index }}`.
 
-To read a `sys` field that may be absent, such as `sys.model` before any tool call, wrap the read in `pcall`. As the Lua block of `## Only` in the `where-am-i` prompt, this returns `no tool call yet`:
+To read a `sys` field that may be absent, such as `sys.model` before any tool call, wrap the read in `pcall`. As the Lua block of `Only` in the `where-am-i` prompt, this returns `no tool call yet`:
 
 ````lua
 local ok, model = pcall(function() return sys.model end)
@@ -1920,7 +2338,7 @@ return var.before .. ' / ' .. prose
 ```
 ````
 
-The H1 block selects the `strong` role, and the walk starts on that model (see [The current model](10-models.md#the-current-model)), so `## Main` runs on `strong`. On a Host whose role map fills `strong` with the model `gateway/claude-sonnet-4-6` (a one-model map fills every role with that model), once the fetch answers, the run result is:
+The H1 block selects the `strong` role, and the walk starts on that model (see [The current model](10-models.md#the-current-model)), so `Main` runs on `strong`. On a Host whose role map fills `strong` with the model `gateway/claude-sonnet-4-6` (a one-model map fills every role with that model), once the fetch answers, the run result is:
 
 ````text
 no tool call yet / Model name is claude-sonnet-4-6.
@@ -1932,7 +2350,7 @@ At the section entry's first tool call, `sys.model` takes the chain's current mo
 
 `sys.model` appears at the section entry's first tool call: a call to a catalog tool or an adhoc tool, or the model's call to a discovery tool, whether a Lua block makes it with `tools.call` or the model makes it during a conversation, such as a tool call inside [`models.loop`](11-conversations.md#starting-a-conversation). A discovery call that the Engine answers with refusal text still counts as that first call. A call refused before it is dispatched does not: a `tools.call` that fails with `unbound_tool` or `model_only_tool`, and a model call that fails with `out_of_scope_tool`, create neither `sys.model` nor `tools.stats`. A model round, one request to a model and its reply, never sets `sys.model` by itself, so a [`models.infer`](10-models.md#running-a-round-with-modelsinfer) or `models.loop` round with no tool call leaves it unreadable. A section entry that makes no tool call, or has no model when its first tool call runs, never gets the field.
 
-Reading `sys.model` before the section entry's first tool call fails with `unknown sys field 'model'`, even when the H1 pass selected a model with `models.use('strong')`. That holds whether the read is in the section's opening Lua block or inside a function from a library the section loads with [`require`](03-blocks-and-prose.md#sharing-code-with-require), as in `require '## sys_reader'` followed by `return read_sys_model()`.
+Reading `sys.model` before the section entry's first tool call fails with `unknown sys field 'model'`, even when the H1 pass selected a model with `models.use('strong')`. That holds whether the read is in the section's opening Lua block or inside a function from a library the section loads with [`require`](03-blocks-and-prose.md#sharing-code-with-require), as in `require '/sys_reader'` followed by `return read_sys_model()`.
 
 Inside a fanout arm, once the arm's first tool call has been dispatched, `sys.model` reads the name part of the arm's current model's id in the same way. In the two-argument form `tasks.fanout(worker, collection)`, an arm starts on the model its parent was on when the arm was dispatched, so an arm for the member `a` that returns `sys.model .. ':' .. item`, with the parent on `strong` as above, gives `claude-sonnet-4-6:a`. With `tasks.fanout(model, worker, collection)`, every arm starts on the given handle's model instead.
 
@@ -2012,7 +2430,7 @@ The H1 pass and the walk share one root chain, `0`. The H1 Lua reads `sys.id` as
 
 A section entry id is its chain's id followed by a dot and the entry's index, so entries 0 and 7 of chain `0.3` read `0.3.0` and `0.3.7`, and the first section entered by chain `0.3` reads `0.3.0`. Section entries on the main walk read `0.N` because the main walk is chain `0`.
 
-Every section entry gets a fresh `sys.id`, so a section entered more than once in the same chain, including through `jump`, reads a new id each time: the id counts entries, not sections. `sys.id` counts up by one for each section the walk chain enters, and a `jump` into a child level stays in the same chain, so the count continues rather than restarting. Across `## A`, `### X`, `### Y`, and `## B`, entered in that order, the ids are `0.1`, `0.2`, `0.3`, and `0.4`.
+Every section entry gets a fresh `sys.id`, so a section entered more than once in the same chain, including through `jump`, reads a new id each time: the id counts entries, not sections. `sys.id` counts up by one for each section the walk chain enters, and a `jump` into a child level stays in the same chain, so the count continues rather than restarting. Across `A`, `X`, `Y`, and `B`, entered in that order, the ids are `0.1`, `0.2`, `0.3`, and `0.4`.
 
 ### Ids inside a `call`
 
@@ -2028,8 +2446,8 @@ runvil: 0
 ## Main
 
 ```lua
-local a = call('### Sub')
-local b = call('### Sub')
+local a = call('Sub')
+local b = call('Sub')
 var.ids = table.concat({ sys.id, a, b }, ',')
 ```
 
@@ -2050,19 +2468,19 @@ return var.ids .. ',' .. sys.id
 0.1,0.0.0,0.1.0,0.2
 ````
 
-Each `call` starts a contained child chain nested under the caller's chain. The first `call` from `## Main` is the root chain's first child, so it opens chain `0.0`, and its section entries read `0.0.N`, starting with `0.0.0` for the called section. A section run by `call` or as a fanout arm is the first entry of its new chain, so its `sys.id` ends in `.0`.
+Each `call` starts a contained child chain nested under the caller's chain. The first `call` from `Main` is the root chain's first child, so it opens chain `0.0`, and its section entries read `0.0.N`, starting with `0.0.0` for the called section. A section run by `call` or as a fanout arm is the first entry of its new chain, so its `sys.id` ends in `.0`.
 
-Each `call` starts a new child chain numbered in call order, so entering the same section through two calls gives two distinct `sys.id` values, `0.0.0` and `0.1.0`. After `call` returns, the caller's `sys.id` is unchanged, so `## Main` still reads `0.1` after both calls, and the walk goes on to `## Last` as `0.2`.
+Each `call` starts a new child chain numbered in call order, so entering the same section through two calls gives two distinct `sys.id` values, `0.0.0` and `0.1.0`. After `call` returns, the caller's `sys.id` is unchanged, so `Main` still reads `0.1` after both calls, and the walk goes on to `Last` as `0.2`.
 
-Call chains are numbered as children of the calling chain, not of the calling section's entry. The two calls from `## Main`, itself entry `0.1`, start chains `0.0` and `0.1`, so the second chain's section reads `0.1.0` even though the calling section is also `0.1`. Child chains are numbered by the calling chain's own child counter in the order they start, and calls, tasks, fanout arms, and each [timed wait](15-tasks.md#the-timer-behind-a-time-limit)'s internal timer all share that counter no matter which section made the call, so each new call or arm takes the next child chain number.
+Call chains are numbered as children of the calling chain, not of the calling section's entry. The two calls from `Main`, itself entry `0.1`, start chains `0.0` and `0.1`, so the second chain's section reads `0.1.0` even though the calling section is also `0.1`. Child chains are numbered by the calling chain's own child counter in the order they start, and calls, tasks, fanout arms, and each [timed wait](15-tasks.md#the-timer-behind-a-time-limit)'s internal timer all share that counter no matter which section made the call, so each new call or arm takes the next child chain number.
 
-A chain started by `call` numbers its own section entries. With this `## Main` and its children in place of the ones in the `called-ids` prompt, the run result is `0.1,0.0.1,0.2`:
+A chain started by `call` numbers its own section entries. With this `Main` and its children in place of the ones in the `called-ids` prompt, the run result is `0.1,0.0.1,0.2`:
 
 ````markdown
 ## Main
 
 ```lua
-var.ids = sys.id .. ',' .. call('### Sub')
+var.ids = sys.id .. ',' .. call('Sub')
 ```
 
 ### Sub
@@ -2096,9 +2514,9 @@ runvil: 0
 ## Main
 
 ```lua
-local a = call('### Sub')
-local r = tasks.fanout('### Worker', {'x', 'y', 'z'})
-local b = call('### Sub')
+local a = call('Sub')
+local r = tasks.fanout('Worker', {'x', 'y', 'z'})
+local b = call('Sub')
 var.ids = table.concat({ sys.id, a, r[1].text, r[2].text, r[3].text, b }, ',')
 ```
 
@@ -2127,7 +2545,7 @@ return var.ids .. ',' .. sys.id
 
 Each fanout arm is a new child chain of the caller's chain, numbered by the caller's next child slot, so its worker section reads `sys.id` as that chain id followed by `.0`. Here the first `call` took `0.0`, so the three arms read `0.1.0`, `0.2.0`, and `0.3.0`, and the second `call` takes the next slot, `0.4.0`. With no earlier children, three arms from the main walk read `0.0.0`, `0.1.0`, and `0.2.0`. Fanout arms take their ids in collection order when the fanout dispatches, so the ids never depend on which arm finishes first.
 
-`tasks.fanout`, alone or followed by a `call`, leaves the calling section entry's `sys.id` unchanged, so `## Main` still reads `0.1` after its arms return. Dispatching calls and fanout arms does not advance the walk's own entry count either, so after `## Main` makes two calls and a three-arm fanout, `## Last` still reads `0.2`.
+`tasks.fanout`, alone or followed by a `call`, leaves the calling section entry's `sys.id` unchanged, so `Main` still reads `0.1` after its arms return. Dispatching calls and fanout arms does not advance the walk's own entry count either, so after `Main` makes two calls and a three-arm fanout, `Last` still reads `0.2`.
 
 Ids nest the same way at every depth:
 
@@ -2135,7 +2553,7 @@ Ids nest the same way at every depth:
 |---|---|
 | the first section a `jump` reaches after the worker, in the first arm | `0.0.1` |
 | the first section of a `call` made inside arm chain `0.0` | `0.0.0.0` |
-| the two arms of `tasks.fanout('## Worker', {'a', 'b'})` inside a called `## Sub` (chain `0.0`) | `0.0.0.0` and `0.0.1.0` |
+| the two arms of `tasks.fanout('../Worker', {'a', 'b'})` inside a called `Sub` (chain `0.0`) | `0.0.0.0` and `0.0.1.0` |
 | the inner arms of a fanout inside outer arm `0.0`, whose worker reads `0.0.0` | `0.0.0.0` and `0.0.1.0` |
 
 Sections that a `jump` reaches from a fanout arm continue the arm chain's `sys.id` sequence. A `call` made inside an arm starts a contained chain that is the arm's child, so with the arm at chain `0.0` the called chain is `0.0.0`. A fanout inside a called section nests its arm ids under the called section's chain, not under the root chain, and a fanout inside a fanout arm nests the inner arms under the outer arm's chain.
@@ -2154,7 +2572,7 @@ runvil: 0
 ## Main
 
 ```lua
-local r = tasks.fanout('### Worker', {'x', 'y'})
+local r = tasks.fanout('Worker', {'x', 'y'})
 return r[1].text .. ' | ' .. r[2].text .. ' | ' .. sys.id
 ```
 
@@ -2171,7 +2589,7 @@ return sys.taskid .. ' ' .. sys.id .. ' ' .. sys.index
 
 Each arm is a task. Inside a spawned task, `sys.id` is a section entry id that extends the task id, while `sys.taskid` is the task id itself, so the first section of task `0.0` reads `sys.taskid` as `0.0` and `sys.id` as `0.0.0`. A task started with [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) follows the same rule.
 
-A `sys.id` can have the same text as a task id, because a chain counts its section entries and its children separately. Here `## Main` reads `sys.id` as `0.1` while its second arm is task `0.1`, and `0.0` can be both the H1 body's `sys.id` and the first task's id. Task ids are reproducible in the same way as `sys.id`, because they come from the same chain-local child counters, so the arm tasks `0.0` and `0.1` keep their ids whichever arm finishes first.
+A `sys.id` can have the same text as a task id, because a chain counts its section entries and its children separately. Here `Main` reads `sys.id` as `0.1` while its second arm is task `0.1`, and `0.0` can be both the H1 body's `sys.id` and the first task's id. Task ids are reproducible in the same way as `sys.id`, because they come from the same chain-local child counters, so the arm tasks `0.0` and `0.1` keep their ids whichever arm finishes first.
 
 ### Using `sys.id` as a key
 
@@ -2284,13 +2702,13 @@ Lua: finish started
 
 Each `log` checkpoint is tagged with, and attributed to, the section name of the section whose Lua called `log`, and it is also tagged with the run's execution id. A `log` call in the H1 body records its checkpoint under the prompt's title, ahead of every section's checkpoints, so `H1 ran` is recorded under `Log Checkpoints`. The next two are recorded under `Prepare`, and `finish started` under `Finish`.
 
-A checkpoint is attributed to the section whose code called `log`, including a section reached through `call`: when `## Outer` runs `call('## Inner')`, `log('inner ran')` in `## Inner` is attributed to `Inner`. Calling `log` inside a task's section records the message as a checkpoint under that section's name, and `log` records each message under the name of the section that logs it, in order, including inside a spawned child. When several runs execute at the same time, each run's checkpoints keep that run's execution id and appear in that run's call order.
+A checkpoint is attributed to the section whose code called `log`, including a section reached through `call`: when `Outer` runs `call('../Inner')`, `log('inner ran')` in `Inner` is attributed to `Inner`. Calling `log` inside a task's section records the message as a checkpoint under that section's name, and `log` records each message under the name of the section that logs it, in order, including inside a spawned child. When several runs execute at the same time, each run's checkpoints keep that run's execution id and appear in that run's call order.
 
 ### Checkpoint order
 
 The run records each `log` message verbatim, attributed to the section that called it, in call order across blocks. Several `log` calls in one section appear in the trace in the order the Lua made them, and checkpoints from separate Lua blocks in the same section appear in the order the blocks run, as `prepare started` and `prepare finished` do above.
 
-Checkpoints come out in a deterministic order across the H1 pass, prologues, and epilogs, and code that never runs logs nothing. In `## Finish`, the prologue returns, so the epilog never runs and `unreachable epilog` is never recorded. Checkpoints logged before an early return, such as `finish started`, still appear in the trace.
+Checkpoints come out in a deterministic order across the H1 pass, prologues, and epilogs, and code that never runs logs nothing. In `Finish`, the prologue returns, so the epilog never runs and `unreachable epilog` is never recorded. Checkpoints logged before an early return, such as `finish started`, still appear in the trace.
 
 `log` emits its checkpoint at the moment of the call, through the same channel the runtime's own reports use, so checkpoints sit in call order among chunk, store, and teardown reports. `log` checkpoints, message text included, interleave with Engine operation reports such as [store](09-the-store.md#writing-and-reading-files) reports in program order:
 
@@ -2450,7 +2868,7 @@ end
 return 'nobody to ask'
 ````
 
-With this block as the Lua block of `## Main` in a copy of `ask-once` that leaves out `uses:`, a run with a user whose operator sends `hi` returns `you said: hi`, and a run with no user returns `nobody to ask`.
+With this block as the Lua block of `Main` in a copy of `ask-once` that leaves out `uses:`, a run with a user whose operator sends `hi` returns `you said: hi`, and a run with no user returns `nobody to ask`.
 
 ### What `tasks.receive()` takes
 
@@ -2476,7 +2894,7 @@ The operator's messages reach only the main chain. A task, whether [`tasks.spawn
 
 ### While the section waits
 
-The section entry's Lua VM state survives a `tasks.receive()` wait, however long the operator takes. With this block as the Lua block of `## Main` in the `ask-once` prompt, an operator who sends `kept` gets the run result `41 kept`:
+The section entry's Lua VM state survives a `tasks.receive()` wait, however long the operator takes. With this block as the Lua block of `Main` in the `ask-once` prompt, an operator who sends `kept` gets the run result `41 kept`:
 
 ````lua
 local before = 41
@@ -2556,7 +2974,7 @@ Messages you meet through `tostring(err)` include these, shown without the `{fil
 - `models.loop takes (compactor?) or (model, compactor?). The Lua code failed at runtime. Fix the code at this location.`
 - `lua log event quota exceeded. The section logged more than its budget allows. Log less.`
 - `the model replied with no text and no tool calls`
-- ``section heading `## Missing` not found; available sections: {sections}. The Lua code failed at runtime. Fix the code at this location.``
+- ``section `../Missing` not found: {where}. The Lua code failed at runtime. Fix the code at this location.``
 - ``recursion exceeded cap of 8. Calls nest deeper than the cap allows. Nest `call`, `tasks.spawn`, and `tasks.fanout` less deeply.``
 - `argv is frozen outside H1: assign it in H1 only. The Lua code failed at runtime. Fix the code at this location.`
 
@@ -2752,15 +3170,15 @@ A failed Engine call raises the Engine's error value right at the call site, so 
 
 - `pcall(models.infer, prose)` returns a status and the round's error value instead of ending the block.
 - `pcall(models.loop)` catches an error the loop raises, and `err.kind` names it, such as `empty_model_reply`, `canceled`, `out_of_scope_tool`, or `unbound_tool`. With a compactor, as in `pcall(models.loop, f)`, it catches the loop's failures the same way, and the model rounds inside still suspend and resume normally.
-- `pcall(call, '## Heading')` catches a failed call, such as one to a missing or non-visible section, and returns `false` and the error value instead of failing the run. A target that is not a string, as in `pcall(call, 42)`, comes back with a message containing `section target must be a string`.
-- `pcall(jump, '## Other')` catches a failed [`jump`](08-jump-and-call.md#jumping-to-a-section).
-- `pcall(tasks.fanout, '### Worker', 5)` returns `false` and an error value whose message is about the collection, and `pcall(tasks.spawn, ...)` catches a failed spawn.
+- `pcall(call, '../Missing')` catches a failed call, such as one whose path names no section, and returns `false` and the error value instead of failing the run. A target that is not a string, as in `pcall(call, 42)`, comes back with a message containing `section target must be a string`.
+- `pcall(jump, '../Other')` catches a failed [`jump`](08-jump-and-call.md#jumping-to-a-section).
+- `pcall(tasks.fanout, 'Worker', 5)` returns `false` and an error value whose message is about the collection, and `pcall(tasks.spawn, ...)` catches a failed spawn.
 - `pcall(tools.call, 'web/fetch', { url = url })` returns `false` and the raised value when the tool call fails.
 - `pcall(store.append, 'notes.md', line)` takes a store function directly.
 - `pcall(tasks.concurrency, value)` passes its argument on to the Engine function, and returns `false` and the error value when the call fails.
-- `pcall(require, '## broken_style')` returns `false` when a library raises, and `pcall(require, 'os')` lets the block recover from a sandbox refusal and keep running.
+- `pcall(require, '/broken_style')` returns `false` when a library raises, and `pcall(require, 'os')` lets the block recover from a sandbox refusal and keep running.
 
-Reading or assigning `prose` can fail with the read-only, recursive, and missing-key failures (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)), and `pcall(function() return prose end)` catches them as an error value whose `tostring` carries the message. The refusals of assignments to `argv` and `prose` are caught the same way, with the refusal on the first line of `tostring` of the caught error. A failed read through `prompt.section` or `prompt.list` (see [Reading sections with `prompt.section` and `prompt.list`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptlist)) is catchable with `pcall` too, and `tostring` on it gives text containing the message.
+Reading or assigning `prose` can fail with the read-only, recursive, and missing-key failures (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)), and `pcall(function() return prose end)` catches them as an error value whose `tostring` carries the message. The refusals of assignments to `argv` and `prose` are caught the same way, with the refusal on the first line of `tostring` of the caught error. A failed read through `prompt.section` or `prompt.section_or` (see [Reading sections with `prompt.section` and `prompt.section_or`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptsection_or)) is catchable with `pcall` too, and `tostring` on it gives text containing the message.
 
 ### Which failures become error values
 
@@ -2804,7 +3222,7 @@ The run fails with code `lua_runtime`, the run error's text contains `the answer
 
 `error(message)` raises `message` and stops the current block, so nothing after it runs, including the prose after the fence. A string raised this way, as in `error('boom')`, fails the block with an ordinary Lua runtime error whose message includes your text. Called in a block, its top-level code included, `error(message)` fails that block and with it the whole run, and the run error's text contains your message.
 
-`error` fails the run only when it executes. That lets you place `error(message)` in a section as a guard that a `jump`, a chain's jump, or a fall-through (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)) should skip. In a `## Skipped` section that the walk is meant to jump past, a block holding only `error('the jump target must skip this section')` fails the run if the jump ever misses, and when the section is skipped, the `error` never fires and the run succeeds.
+`error` fails the run only when it executes. That lets you place `error(message)` in a section as a guard that a `jump`, a chain's jump, or a fall-through (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)) should skip. In a `Skipped` section that the walk is meant to jump past, a block holding only `error('the jump target must skip this section')` fails the run if the jump ever misses, and when the section is skipped, the `error` never fires and the run succeeds.
 
 `error(message, 0)` raises at level 0, so the raised value is the bare message string with no position prefix, which suits code whose text must arrive exactly as written, as in `error('compacted', 0)`. Passing `error` itself as the protected function, as in `pcall(error, 'boom')`, gives the string back as the error value with no position prefix.
 
@@ -2848,11 +3266,11 @@ A `lua` error value raised again after another suspending call ends the block as
 
 ### Raising an error value after another suspending call
 
-An error value kept in a local survives a suspending call such as `call`, so you can still raise it afterward with `error`. This fragment comes from a section with a `### Sibling` child:
+An error value kept in a local survives a suspending call such as `call`, so you can still raise it afterward with `error`. This fragment comes from a section with a `Sibling` child:
 
 ````lua
 local ok, err = pcall(store.read, 'missing.txt')
-call('### Sibling', '')
+call('Sibling', '')
 error(err)
 ````
 
@@ -2922,9 +3340,9 @@ A block's first Lua line is the line right after its ```` ```lua ```` opener. In
 
 An error on a block's first line reports the line where the block's Lua starts, and an error on a later line reports that exact line, not the block's first line. A block whose Lua starts on line 40 reports line 40 for a failure on its only line, line 41 for a failure on its second line, and line 43 for one on its fourth. The rule holds in every kind of block:
 
-- a section's prologue: a `## Work` prologue whose fence opens on line 10 reports an `assert(false)` on line 11 as line 11
-- a section's epilog: an `assert(false)` on line 14 of a `## Check` epilog reports line 14
-- a block between prose blocks: the third of four Lua blocks in `## S`, starting on line 23, reports an `assert(false)` on line 24 as line 24
+- a section's prologue: a `Work` prologue whose fence opens on line 10 reports an `assert(false)` on line 11 as line 11
+- a section's epilog: an `assert(false)` on line 14 of a `Check` epilog reports line 14
+- a block between prose blocks: the third of four Lua blocks in `S`, starting on line 23, reports an `assert(false)` on line 24 as line 24
 - a block under the H1 title: one whose code starts on line 9 reports its `assert(false)` as line 9
 - a block deep in a long prompt: one starting on line 112 reports an `assert(false)` on its second line as line 113
 
@@ -2941,13 +3359,13 @@ An error message names the block by its location label, followed by a colon and 
 | Any other Lua block of a section | ``section `{name}` lua {ordinal}`` |
 | A Lua block under the H1 title | ``H1 `{title}` lua`` |
 
-`{ordinal}` is the block's 1-based place among the section's Lua blocks. The role follows from the block's position, the section's block count, whether the section has any prose, and the block's place among the section's Lua blocks, so it matches the prologue and epilog of [Prologue, prose, and epilog](03-blocks-and-prose.md#prologue-prose-and-epilog) for an ordinary section. One section's two blocks read ``section `Private section` prologue`` and ``section `Private section` epilog``, a failing block under the heading `## lib` reports ``section `lib` prologue:19: load fault``, and the second block of `## lib` is ``section `lib` lua 2``.
+`{ordinal}` is the block's 1-based place among the section's Lua blocks. The role follows from the block's position, the section's block count, whether the section has any prose, and the block's place among the section's Lua blocks, so it matches the prologue and epilog of [Prologue, prose, and epilog](03-blocks-and-prose.md#prologue-prose-and-epilog) for an ordinary section. One section's two blocks read ``section `Private section` prologue`` and ``section `Private section` epilog``, a failing block under the heading `## lib` reports ``section `lib` prologue:19: load fault``, and the second block of `lib` is ``section `lib` lua 2``.
 
-Every Lua block is its own unit with its own location, so four Lua blocks in `## S` have four distinct locations. A long section name appears in full, so `## Gather Background Research Notes` gives ``section `Gather Background Research Notes` prologue``. A location of any length still maps, so a block labeled ``section `Shared Research Helper Functions` (line 1200) prologue`` still reports `{location}:40:`.
+Every Lua block is its own unit with its own location, so four Lua blocks in `S` have four distinct locations. A long section name appears in full, so `Gather Background Research Notes` gives ``section `Gather Background Research Notes` prologue``. A location of any length still maps, so a block labeled ``section `Shared Research Helper Functions` (line 1200) prologue`` still reports `{location}:40:`.
 
 ### Sections that share a section name
 
-When another section heading anywhere after the H1, at any level, has the same section name, the location adds the heading's line as `(line {heading_abs_line})`, so you can tell the two sections' errors apart. With `### Helpers` on line 10 under `## A` and another `### Helpers` on line 18 under `## B`, the first section's prologue is ``section `Helpers` (line 10) prologue`` and the second's is ``section `Helpers` (line 18) prologue``.
+When another section heading anywhere after the H1, at any level, has the same section name, the location adds the heading's line as `(line {heading_abs_line})`, so you can tell the two sections' errors apart. With `Helpers` on line 10 under `A` and another `Helpers` on line 18 under `B`, the first section's prologue is ``section `Helpers` (line 10) prologue`` and the second's is ``section `Helpers` (line 18) prologue``.
 
 The number is the line of the heading itself, not of the fence or the code, so a `### Helpers` heading on line 10 whose fence opens on line 12, with code from line 13, gives `(line 10)`. A heading line of three or more digits appears in full, as in ``section `Research Worker Notes` (line 109) prologue``. A section whose name no other section uses gets a location without a line number, such as ``section `C` prologue``, even when other sections in the file share names.
 
@@ -3026,7 +3444,7 @@ runvil: 0
 ## Main
 
 ```lua
-require '## lib'
+require '/lib'
 boom()
 ```
 
@@ -3050,7 +3468,7 @@ The first line of an uncaught library error carries exactly one leading prefix n
 - A raise during a library's load reports the library block's location and the line of the raise, not the requiring block's line, so a library block whose Lua starts on line 40 and raises on its fourth line reports ``section `lib` prologue:43: load fault``.
 - A raise from a library function called after the load reports the line inside the function body where the raise happened, so `error('later fault')` on the library block's second line reports ``section `lib` prologue:41: later fault``.
 - In a library with several blocks, a raise in a later block maps to that block's own location and line rather than the first block's, as in ``section `lib` lua 3:21: second fault``.
-- A message whose lines are already mapped keeps them when it passes back through the same block's mapping, such as when raised again with `error(msg, 0)` in a section that ran `require '## lib'`. For a library block whose Lua starts on line 50, a mapped line 51 stays 51 and never shifts a second time to 100.
+- A message whose lines are already mapped keeps them when it passes back through the same block's mapping, such as when raised again with `error(msg, 0)` in a section that ran `require '/lib'`. For a library block whose Lua starts on line 50, a mapped line 51 stays 51 and never shifts a second time to 100.
 
 ## Giving `_G` a metatable
 
@@ -3070,7 +3488,7 @@ runvil: 0
 Tone: {{ tone }}.
 
 ```lua
-require '## defaults'
+require '/defaults'
 return prose
 ```
 
@@ -3106,7 +3524,7 @@ This block returns `fallback missing_name`.
 `__index` and `__newindex` are read from your metatable at every lookup, so a change takes effect at the next global access, and your handlers run once per lookup however many blocks have run. An edit through `getmetatable(_G)` therefore works at once, so after the `defaults` library has run, this block returns `live tone`:
 
 ````lua
-require '## defaults'
+require '/defaults'
 getmetatable(_G).__index = function(_, key) return 'live ' .. key end
 return tone
 ````
