@@ -107,7 +107,7 @@ Sections can also nest deeper than `##`. In a prompt titled `# Fanout`, a `### W
 
 You write the frontmatter in YAML at the very top of the file. The first line of the file must be `---`, and spaces before or after the dashes on that line are ignored. A file that starts any other way is rejected with the message `file must begin with a --- frontmatter delimiter`, which [Frontmatter delimiters, byte-order mark, and line endings](#frontmatter-delimiters-byte-order-mark-and-line-endings) covers with the other delimiter rules.
 
-The frontmatter declares the prompt's files with the optional `input` and `output` keys, its Packs with the `uses` list, its arguments with `args`, and its model roles with `models`. None of these is needed for a prompt to parse and run. A frontmatter of only `name`, `description`, and `runvil: 0` between the `---` lines is complete:
+The frontmatter declares the prompt's files with the optional `input` and `output` keys, its Packs with the `uses` list, its arguments with `args`, and requirements on its model roles with `models`. None of these is needed for a prompt to parse and run. A frontmatter of only `name`, `description`, and `runvil: 0` between the `---` lines is complete:
 
 ````markdown
 ---
@@ -207,7 +207,7 @@ runvil: 0
 frontmatter was not closed with ---
 ````
 
-Neither delimiter error names a prompt, because the prompt's name is not known yet when the error is raised.
+Both errors point at line 1, where the frontmatter opens or should open, and neither names a prompt, because the prompt's name is not known yet when the error is raised.
 
 ## Writing YAML in the frontmatter
 
@@ -221,15 +221,14 @@ runvil: 0
 uses:
   - web
 models:
-  analyst:
+  strong:
     min_context: 40000
-    description: A model suited for careful analysis
 ---
 
 # Analyst Example
 ````
 
-You write the frontmatter as YAML, and the parser decodes that YAML into the set of frontmatter keys a prompt accepts. This prompt writes its nested values in YAML block style: the key sits alone on its line, and more-indented lines under it hold `key: value` map entries or `- ` list items. Here `models:` holds a map two levels deep, with `analyst:` under it and `min_context: 40000` and `description: A model suited for careful analysis` under that, and `uses:` holds the single list item `- web`.
+You write the frontmatter as YAML, and the parser decodes that YAML into the set of frontmatter keys a prompt accepts. This prompt writes its nested values in YAML block style: the key sits alone on its line, and more-indented lines under it hold `key: value` map entries or `- ` list items. Here `models:` holds a map two levels deep, with `strong:` under it and `min_context: 40000` under that, and `uses:` holds the single list item `- web`.
 
 ### Flow style
 
@@ -241,13 +240,13 @@ name: analyst_example
 description: Demonstrate frontmatter model roles and models.use for careful model selection.
 runvil: 0
 uses: [web]
-models: { analyst: { min_context: 40000, description: A model suited for careful analysis } }
+models: { strong: { min_context: 40000 } }
 ---
 
 # Analyst Example
 ````
 
-Both files decode to the same frontmatter. Flow style suits short declarations, such as `uses: [web]`, `models: { writer: { keywords: [fast] } }`, or `args: { times: { type: integer, optional: true, default: 1 }, name: { type: string } }`.
+Both files decode to the same frontmatter. Flow style suits short declarations, such as `uses: [web]`, `models: { strong: { thinking: true } }`, or `args: { times: { type: integer, optional: true, default: 1 }, name: { type: string } }`.
 
 The two styles mix, so a block-style `models:` key can hold a flow-style entry on its indented line:
 
@@ -257,7 +256,7 @@ name: hello
 description: Say hello
 runvil: 0
 models:
-  writer: {}
+  fast: {}
 ---
 
 # Hello World
@@ -339,7 +338,7 @@ By convention, prompts write `name` as a lowercase snake_case identifier, with w
 
 The `name` value does not have to match the file name. The file `research-person.md` declares `name: research_person`, `analyst-example.md` declares `name: analyst_example`, and `prologue-prose-epilog.md` declares `name: phase_boundaries`.
 
-Every parse error found past the frontmatter reports the prompt's `name`, beside its line and column when the error has them, so you can tell which prompt failed. A duplicate `## S` section heading in a prompt with `name: dup` fails with parse error kind `Structure` and names `dup` (see [Sibling name uniqueness](#sibling-name-uniqueness)). A frontmatter failure, such as malformed YAML, fails with parse error kind `Frontmatter` and reports no name.
+Every parse error found past the frontmatter, a `Lua` compile failure included, reports the prompt's `name`, beside its line and column when the error has them, so you can tell which prompt failed; only an internal fault reports none. A duplicate `## S` section heading in a prompt with `name: dup` fails with parse error kind `Structure` and names `dup` (see [Sibling name uniqueness](#sibling-name-uniqueness)). A frontmatter failure, such as malformed YAML, fails with parse error kind `Frontmatter` and reports no name.
 
 ### The `description` key
 
@@ -435,7 +434,7 @@ The `runvil:` value must be a non-negative integer that fits in 32 bits, `0` thr
 
 ### When the version is checked
 
-A file parses whether or not it has a `runvil:` key, and the run checks the declared version when it starts, before any section runs. The run checks the version before it checks the run's store, so a prompt with a missing or unsupported version reports the version failure even when the run also has no usable store.
+A file parses whether or not it has a `runvil:` key, and the run checks the declared version on its first step, before any section runs. The run checks the version first, then its store, then its requirements, so a prompt with a missing or unsupported version reports the version failure even when the run also has no usable store or an environment that falls short of the prompt.
 
 A prompt whose `runvil` version is missing or unsupported fails before any section runs. None of its sections run, nothing is reported beyond that one failure, and its own `return` never runs.
 
@@ -458,17 +457,17 @@ return "ran"
 ```
 ````
 
-The run ends on its first step with run error kind `Parse`, as a `Structure` parse error with this message:
+The run ends on its first step with error code `structure_invalid`, as a `Structure` parse error with this message:
 
 ````text
-not a runvil prompt: no runvil version
+not a runvil prompt: no runvil version (prompt version-zero)
 ````
 
-The error's location names the prompt by its frontmatter `name`, here `version-zero`.
+The message ends by naming the prompt by its frontmatter `name`, here `version-zero`.
 
 ### An unsupported version
 
-A file that declares a major other than `0` still parses, but this build does not support that major, so the run ends on its first step with run error kind `Version`. The version check never falls back to major 0. A prompt runs only when it declares `runvil: 0`, and any other declared major fails the run with an error that names that major:
+A file that declares a major other than `0` still parses, but this build does not support that major, so the run ends on its first step with error code `unsupported_version`. The version check never falls back to major 0. A prompt runs only when it declares `runvil: 0`, and any other declared major fails the run with an error that names that major:
 
 ````markdown
 ---
@@ -487,10 +486,10 @@ return "ran"
 ````
 
 ````text
-unsupported runvil version: 1 (this build supports major 0)
+unsupported runvil version: 1 (this build supports major 0) (at version-zero.md:4)
 ````
 
-The message always has the form `unsupported runvil version: {n} (this build supports major 0)`, where `{n}` is the declared number, so `runvil: 2` or `runvil: 7` gives the same message with its own number. A failure caused by an unsupported `runvil` version is not retryable.
+The error's message always has the form `unsupported runvil version: {n} (this build supports major 0)`, where `{n}` is the declared number, so `runvil: 2` or `runvil: 7` gives the same message with its own number. The run's message then ends with ` (at {file}:{line})`, the line of the `runvil:` key, here line 4 (see [Where a run error's message points](16-limits-and-errors.md#where-a-run-errors-message-points)). A failure caused by an unsupported `runvil` version is not retryable.
 
 ## Optional keys and unknown keys
 
@@ -519,19 +518,19 @@ This table lists the nine keys in the order this chapter teaches them, with what
 |---|---|---|
 | `name` | yes | the parse fails |
 | `description` | yes | the parse fails |
-| `runvil` | no, but needed to run | no declared version: the file parses, and running it fails with `not a runvil prompt: no runvil version` |
+| `runvil` | no, but needed to run | no declared version: the file parses, and running it fails with `not a runvil prompt: no runvil version (prompt {name})` |
 | `max_tool_iterations` | no | the built-in round cap stays in force |
 | `input` | no | no declared input file |
 | `output` | no | no declared output file |
 | `uses` | no | no Packs |
 | `args` | no | the default declaration of one optional `string` argument named `prose` |
-| `models` | no | no model roles |
+| `models` | no | no requirements on any model role |
 
 Because every key besides `name` and `description` has a default, a frontmatter of just those two parses, and so does a prompt with none of the contract keys. `max_tool_iterations` accepts a value from 1 to 1000, and [Tool rounds and the round cap](11-conversations.md#tool-rounds-and-the-round-cap) covers what it controls. [Input and output file declarations](#input-and-output-file-declarations) teaches `input` and `output`.
 
 ### Adding keys a prompt needs
 
-The `hello` prompt under [Flow style](#flow-style) shows the pattern. The shipped `hello` prompt's frontmatter holds only `name`, `description`, `runvil`, and `models`, and leaves out `max_tool_iterations`, `input`, `output`, `uses`, and `args` because it does not need them. Its `models:` key declares a `writer: {}` role next to the usual three keys, and its H1 body then calls `models.default("writer")`.
+The `hello` prompt under [Flow style](#flow-style) shows the pattern. Its frontmatter holds only `name`, `description`, `runvil`, and `models`, and leaves out `max_tool_iterations`, `input`, `output`, `uses`, and `args` because it does not need them. Its `models:` key names a `fast: {}` role next to the usual three keys. The shipped `hello.md` prompt declares no model requirements, so it leaves out `models` too, and its frontmatter holds only `name`, `description`, and `runvil`.
 
 The optional `input:` and `output:` declarations sit in the same frontmatter block as the other keys, as in a prompt whose frontmatter reads `name: files`, `description: d`, `runvil: 0`, then an `input:` map and an `output:` map.
 
@@ -541,9 +540,9 @@ The contract keys are `uses`, `args`, and `models` (see [Putting the parts toget
 
 - `uses` lists the Packs the prompt requires, and each one listed is required.
 - `args` types the arguments the prompt takes.
-- `models` declares the model roles (see [Model roles instead of models](10-models.md#model-roles-instead-of-models)) that concrete models are bound to when the run is prepared.
+- `models` attaches requirements to the five built-in model roles (see [Model roles instead of models](10-models.md#model-roles-instead-of-models)): a minimum context and a thinking switch for each role it names.
 
-Checking these declarations against the caller's environment happens when the run is prepared, not at parse time. For example, a `checker` role that asks for the `no-thinking` keyword is reported as an unmet requirement when the supplied model falls short of it.
+Checking these declarations against the caller's environment happens on the run's first step, not at parse time. For example, a `small` role that sets `thinking: false` is reported as an unmet requirement when the model filling that role always thinks.
 
 All three contract keys can sit together in one frontmatter block alongside `name`, `description`, and `runvil: 0`, next to `input:` and `output:`, and each reads back as declared:
 
@@ -556,13 +555,13 @@ input: { path: names.md, description: The names to greet }
 output: { path: note.md, description: The note the greeter leaves }
 uses: [web]
 args: { times: { type: integer, optional: true, default: 1 }, name: { type: string } }
-models: { writer: { keywords: [fast] } }
+models: { strong: { min_context: 40000 } }
 ---
 
 # Greeter
 ````
 
-A frontmatter with `uses: [web, user-input]`, an `args:` map holding `use_mcp`, and a `models:` map holding `analyst` and `triage` parses and reads back the same way.
+A frontmatter with `uses: [web, user]`, an `args:` map holding `use_mcp`, and a `models:` map holding `strong` and `fast` parses and reads back the same way.
 
 ### Unknown keys
 
@@ -581,7 +580,7 @@ usse: [web]
 
 The message has the `invalid frontmatter: {message}` form, and `{message}` names the offending key, here `usse`.
 
-Unknown keys are rejected inside nested declarations too. An `input:` or `output:` declaration accepts only `path` and `description`, an arg entry and a model role each accept only their own fixed set of keys, and any other key inside them fails the parse with parse error kind `Frontmatter`.
+Unknown keys are rejected inside nested declarations too. An `input:` or `output:` declaration accepts only `path` and `description`, an arg entry and a model role each accept only their own fixed set of keys (a model role takes only `min_context` and `thinking`), and any other key inside them fails the parse with parse error kind `Frontmatter`.
 
 ## Input and output file declarations
 
@@ -661,20 +660,20 @@ The output file is the one store file a prompt leaves behind when it finishes, d
 
 A prompt produces its declared output file by writing it with `store.write` at the declared path, because nothing else writes it. With `paper.md` holding `the paper body`, the call `store.write('report.md', 'report on: ' .. paper)` after `local paper = store.read('paper.md')` leaves `report.md` holding `report on: the paper body`. The Harness collects the file from the store after the run ends, and whatever the prompt wrote at the declared path is the file the caller reads as the run's output once the run completes.
 
-The Harness's run report carries the output file's text only for a completed run. The report for a failed or cancelled run skips the output file.
+The Harness's run report carries the output file's text only for a completed run. The report for a run that ends with an error, a canceled run included, skips the output file.
 
 ### When the files cannot be put in place
 
 The parser accepts a declared `path` as written. The store's path rules (see [Store paths](09-the-store.md#store-paths)) apply only when the Harness stages the input or reads the output, so a path the store refuses shows up when the run starts, not at parse time.
 
-Each input problem refuses the run before any section runs, and the run ends as failed with kind `Input`. Every such refusal carries the message `the prompt's declared input file cannot be put in place`, and its cause tells the problems apart:
+Each input problem refuses the run before any section runs, and the run fails. The error code and the message tell the problems apart:
 
-| Situation | What the cause says |
-|---|---|
-| The launch supplies input text, but the prompt declares no `input:` file for it to go to | that the text has no declared file to go to |
-| The prompt declares an `input:` file that is neither supplied at launch nor already in the store | the missing path, such as `paper.md` |
-| The store refuses the write that stages the input, for example because the store requires approval for the write | the declared path, with the store's own error (see [When a store call fails](09-the-store.md#when-a-store-call-fails)) |
-| The store refuses the declared `input:` path under its path rules | the declared path, with the store's own error |
+| Situation | Error code | What the message says |
+|---|---|---|
+| The launch supplies input text, but the prompt declares no `input:` file for it to go to | `requirements_unmet` | ``the launch supplied input text, but the prompt declares no `input:` file`` |
+| The prompt declares an `input:` file that is neither supplied at launch nor already in the store | `requirements_unmet` | the missing path, as in ``the prompt declares the input file `paper.md`, but the launch supplied no input text and the store has no such file`` |
+| The store refuses the write that stages the input, for example because the store requires approval for the write | the store code of the refusal, here `approval_required` | ``the input file `{path}` could not be staged``, then the store's own error (see [When a store call fails](09-the-store.md#when-a-store-call-fails)) |
+| The store refuses the declared `input:` path under its path rules | the store code of the refusal, such as `invalid_path` | ``the input file `{path}` could not be staged``, then the store's own error |
 
 A missing output file is not a run failure. A prompt that declares an `output:` file but never writes it still runs to success, and the run report then carries this error in place of the output text, naming the declared path:
 
@@ -682,9 +681,9 @@ A missing output file is not a run failure. A prompt that declares an `output:` 
 the run completed without writing its declared output file `{path}`
 ````
 
-## The name grammar for role labels, arg names, and adhoc tool names
+## The name grammar for arg names and adhoc tool names
 
-After this section you can choose names for role labels, arg names, and adhoc tool names that both the parser and the Engine accept.
+After this section you can choose names for args and adhoc tools that both the parser and the Engine accept, and you know why the keys under `models:` are outside that grammar.
 
 ````markdown
 ---
@@ -692,23 +691,23 @@ name: contract_names
 description: d
 runvil: 0
 args: { use_mcp: { type: boolean }, max_items: { type: integer, optional: true, default: 1 } }
-models: { analyst: {}, triage: {}, fast-model: {} }
+models: { strong: {}, fast: {} }
 ---
 
 # Contract Names
 ````
 
-This frontmatter parses. The keys under `models:` are role labels, and the keys under `args:` are arg names. A role label is the key that names a model role, such as `analyst`. An arg name is the key that names one argument, and the argument reaches Lua as a field of `argv`. Both follow the same name grammar as an adhoc tool name, which is the `name` Lua code gives an adhoc tool (see [Effects and Harness work](01-what-a-prompt-is.md#effects-and-harness-work)) in the attrs table of `tools.adhoc` (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)).
+This frontmatter parses. The keys under `args:` are arg names, and the keys under `models:` are role names. An arg name is the key that names one argument, and the argument reaches Lua as a field of `argv`. An arg name follows the same name grammar as an adhoc tool name, which is the `name` Lua code gives an adhoc tool (see [Effects and Harness work](01-what-a-prompt-is.md#effects-and-harness-work)) in the attrs table of `tools.adhoc` (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)). A role name is one of the five built-in model roles, `default`, `strong`, `small`, `fast`, and `creative`, so the grammar does not apply to it.
 
 ### The prompt-local alias grammar
 
-Every role label, arg name, and adhoc tool name follows the prompt-local alias grammar:
+Every arg name and adhoc tool name follows the prompt-local alias grammar:
 
 ````text
 [A-Za-z][A-Za-z0-9_-]{0,63}
 ````
 
-In words, a name is 1 to 64 ASCII characters: a letter first, then letters, digits, `_`, or `-`. Names such as `search`, `fetch`, `writer`, `analyst`, `use_mcp`, `limit`, `query`, `fast-model`, and `max_items` are all valid. Rule by rule:
+In words, a name is 1 to 64 ASCII characters: a letter first, then letters, digits, `_`, or `-`. Names such as `search`, `fetch`, `use_mcp`, `limit`, `query`, `fast-model`, and `max_items` are all valid. Rule by rule:
 
 - Length: a name is 1 to 64 characters long, so it always has at least one character. A name of exactly 64 characters is valid, and 64 is the limit.
 - First character: an ASCII letter of either case, `A` to `Z` or `a` to `z`.
@@ -723,37 +722,30 @@ Put the other way, a name fails the grammar when it is empty or longer than 64 c
 
 ### Where the grammar applies
 
-At parse time, the grammar applies to every key under `models:` and `args:`, such as the role labels `analyst` and `triage` and the arg name `use_mcp` above. Role labels and arg names such as `writer`, `checker`, `times`, and `name` are valid too, with `times` and `name` under `args:` and `writer` and `checker` under `models:`.
+At parse time, the grammar applies to every key under `args:`, such as the arg name `use_mcp` above. Arg names such as `times` and `name` are valid too. A key under `models:` is not checked against the grammar. It must be one of the five role names, spelled exactly, so a key such as `reviewer` or `Fast` is rejected even though both fit the grammar. Lua code refers to a role by its name as a string, as in `models.use("strong")`.
 
-Shipped prompts name each model role with a plain lowercase label, such as `writer` or `researcher`, and Lua code refers to the role by that same string, as in `models.default("writer")` and `models.default("researcher")`.
+At run time, the Engine enforces the same grammar for the `name` Lua passes to `tools.adhoc`, with the same length, first-character, and later-character rules.
 
-At run time, the Engine enforces the same grammar, with the same length, first-character, and later-character rules. Role labels and adhoc tool names share that one rule, so a name that is valid as one is valid as the other, and `models.use` checks its label with the same rule that `tools.adhoc` applies to its `name`. The grammar applies when Lua passes a name to these calls (see [Model roles instead of models](10-models.md#model-roles-instead-of-models)):
-
-- `tools.adhoc`, for its `name`
-- `models.use`, for its label
-- `models.default`, for its label
-- `models.get`, only for a name that matches none of the prompt's model roles, since a declared role's handle comes back first
-
-When the Host allows raw model ids, `models.get` skips the grammar for a name that matches no declared role and reads the name as a raw model id instead, the name a gateway model is listed under, because model names can contain `/`, `.`, and `:`. With raw model ids allowed, `models.get('qwen/qwen3-8b')` returns a handle bound to `gateway/qwen/qwen3-8b`, whose `model_id` is `qwen/qwen3-8b`. Without them, `models.get('ghost')` fails because `ghost` is not a bound model role.
+`models.use` and `models.get` apply no grammar. `models.use` compares the name with the five role names, so a name outside the grammar and a well-formed name that is not a role fail with the same message, which [Run-time name errors](#run-time-name-errors) gives. `models.get` does the same unless the Host allows raw model ids. With raw model ids allowed, `models.get` reads a name outside the five as a raw model id instead, the name a gateway model is listed under, because model names can contain `/`, `.`, and `:`, so `models.get('qwen/qwen3-8b')` returns a handle bound to `gateway/qwen/qwen3-8b`, whose `model_id` is `qwen/qwen3-8b`. A role name always resolves as the role, with or without raw model ids.
 
 ### Contract maps and duplicate keys
 
-A contract map is the `models:` map or the `args:` map. The two share one set of key rules, so the grammar check and the uniqueness check apply the same way to both. Each key appears once within its map. Keys are compared exactly, so labels that differ only in case, such as `Fast` and `fast`, are two distinct entries.
+A contract map is the `models:` map or the `args:` map. The two share the uniqueness check: each key appears once within its map. Keys are compared exactly, so arg names that differ only in case, such as `Times` and `times`, are two distinct entries.
 
-A repeated key fails the parse with parse error kind `Frontmatter`, and the message names the key kind and the repeated key, where the key kind `{what}` is `model role label` for `models:` and `arg name` for `args:`:
+A repeated key fails the parse with parse error kind `Frontmatter`, and the message names the key kind and the repeated key, where the key kind `{what}` is `model role` for `models:` and `arg name` for `args:`:
 
 ````text
 duplicate {what} `{key}`: contract map keys must be unique
 ````
 
-The parser checks each key against the grammar first and for uniqueness second, and it checks a key before it reads the key's value. It walks the keys in source order and stops at the first bad one, so:
+The parser checks each key first, against the grammar for `args:` and against the five role names for `models:`, and for uniqueness second, and it checks a key before it reads the key's value. It walks the keys in source order and stops at the first bad one, so:
 
 - A map with several bad keys reports only the first one.
 - An entry with both a bad key and a bad value reports the key error.
 
 ### Reserved names
 
-A reserved name is a name that is already taken in a section entry's Lua environment, such as the global `store`, the Lua function `pairs`, or the keyword `end` (see [The sandbox](05-lua-environment.md#the-sandbox)). Role labels and arg names are not checked against reserved names, because neither becomes a Lua global: an arg is a field of `argv`, and Lua code reaches a role through `models.get(label)`. So every reserved name the grammar allows works as a role label, and `prose`, `store`, and `end` work as arg names:
+A reserved name is a name that is already taken in a section entry's Lua environment, such as the global `store`, the Lua function `pairs`, or the keyword `end` (see [The sandbox](05-lua-environment.md#the-sandbox)). Arg names are not checked against reserved names, because an arg does not become a Lua global: it is a field of `argv`. So every reserved name the grammar allows works as an arg name, and `prose`, `store`, and `end` are all accepted:
 
 ````markdown
 ---
@@ -761,30 +753,36 @@ name: reserved
 description: d
 runvil: 0
 args: { prose: { type: string }, store: { type: string }, end: { type: boolean } }
-models: { 'store': {} }
 ---
 
 # Reserved
 ````
 
-This frontmatter declares three args, named `prose`, `store`, and `end`, and the prompt holds a role under the name `store`. A reserved name such as `pairs` or `end` works as a role label the same way.
+This frontmatter declares three args, named `prose`, `store`, and `end`. A reserved name such as `pairs` works as an arg name the same way.
 
 ### Parse-time name errors
 
-A key outside the grammar fails the parse with parse error kind `Frontmatter`. The `{message}` of the `invalid frontmatter: {message}` message names the key kind and the offending key, and it shows the grammar:
+A key under `args:` that is outside the grammar fails the parse with parse error kind `Frontmatter`. The `{message}` of the `invalid frontmatter: {message}` message names the offending key and shows the grammar:
 
 ````text
-invalid {what} `{key}`: expected [A-Za-z][A-Za-z0-9_-]{0,63}
-````
-
-The key kind `{what}` reads `model role label` for a key under `models:` and `arg name` for a key under `args:`, because `args:` keys go through the same key rules as `models:` keys. So the two details read:
-
-````text
-invalid model role label `{key}`: expected [A-Za-z][A-Za-z0-9_-]{0,63}
 invalid arg name `{key}`: expected [A-Za-z][A-Za-z0-9_-]{0,63}
 ````
 
-Writing `models:` or `args:` as something other than a map, such as a list or a scalar, fails with parse error kind `Frontmatter` and this detail, where `{found}` is the YAML reader's description of the value you gave and `{what}` is again `model role label` or `arg name`:
+A key under `models:` that is not one of the five role names fails the parse with parse error kind `Frontmatter` too. The message contains the YAML reader's own text for an unknown name, which names the key and lists the five roles:
+
+````text
+unknown variant `{key}`, expected one of `default`, `strong`, `small`, `fast`, `creative`
+````
+
+Inside a role, a field other than `min_context` and `thinking` fails the same way, with a message that contains this text, where `{field}` is the rejected field:
+
+````text
+unknown field `{field}`, expected `min_context` or `thinking`
+````
+
+So a role that carries a `description:` field is rejected, even though `input:`, `output:`, and the prompt itself take one.
+
+Writing `models:` or `args:` as something other than a map, such as a list or a scalar, fails with parse error kind `Frontmatter` and this detail, where `{found}` is the YAML reader's description of the value you gave and `{what}` is `model role` or `arg name`:
 
 ````text
 invalid type: {found}, expected a map of {what} keys to declarations
@@ -792,19 +790,25 @@ invalid type: {found}, expected a map of {what} keys to declarations
 
 Each grammar, duplicate, and map-type error from `models:` and `args:` reports the file line and column of the offending entry, such as line 5, column 5.
 
-Every grammar violation, whether an empty name, a name that is too long, a bad first character, or a bad later character, produces the same single message form. The message shows the grammar but not which rule failed, so check the name against every rule in [The prompt-local alias grammar](#the-prompt-local-alias-grammar).
+Every arg name violation, whether an empty name, a name that is too long, a bad first character, or a bad later character, produces the same single message form. The message shows the grammar but not which rule failed, so check the name against every rule in [The prompt-local alias grammar](#the-prompt-local-alias-grammar).
 
 ### Run-time name errors
 
-When a role label passed to a Lua call breaks the grammar, the call fails with a `Lua` error. Its message names the rejected alias and the grammar, again in one form for every rule:
+When the name passed to `models.use` is not one of the five role names, the call fails with a `lua_runtime` error whose text names the rejected label and lists the five roles, in one form for every rejected name:
 
 ````text
-invalid alias "{alias}": expected [A-Za-z][A-Za-z0-9_-]{0,63}
+models.use label "{label}" is not a model role: expected default, strong, small, fast or creative
 ````
 
-The rejected alias appears in double quotes with escaping, so a quote, backslash, or control character in the name appears escaped.
+`models.get` fails the same way when the name is not a role and the Host has not allowed raw model ids, with `models.get` in place of `models.use`:
 
-When the `name` passed to `tools.adhoc` breaks the grammar, the `tools.adhoc` call fails with a `Lua` error whose message names the rejected name and the grammar, again in one form for every rule:
+````text
+models.get label "{label}" is not a model role: expected default, strong, small, fast or creative
+````
+
+The rejected label appears in double quotes with escaping, so a quote, backslash, or control character in the name appears escaped. For example, `models.use('reviewer')` fails with `models.use label "reviewer" is not a model role: expected default, strong, small, fast or creative`. Caught with `pcall`, the error value's message puts the file and line of the call in front of that text and the default text for a Lua failure after it (see [Where a caught error's message points](16-limits-and-errors.md#where-a-caught-errors-message-points)), and the same holds for every error in this section.
+
+When the `name` passed to `tools.adhoc` breaks the grammar, the `tools.adhoc` call fails with a `lua_runtime` error whose text names the rejected name and the grammar, again in one form for every rule:
 
 ````text
 tools.adhoc: invalid name "{name}": expected [A-Za-z][A-Za-z0-9_-]{0,63}
@@ -818,7 +822,7 @@ local _, err = pcall(tools.adhoc, { name = 'web/search', description = 'x' }, fu
 
 After this line, `tostring(err)` contains `tools.adhoc: invalid name "web/search"`.
 
-Each adhoc tool name can be defined once in a section entry. A second `tools.adhoc` call with a name that is already defined fails with this message:
+Each adhoc tool name can be defined once in a section entry. A second `tools.adhoc` call with a name that is already defined fails with this text:
 
 ````text
 tools.adhoc name "{name}" is already registered
@@ -826,7 +830,7 @@ tools.adhoc name "{name}" is already registered
 
 So defining the name `gh_search` a second time fails with `tools.adhoc name "gh_search" is already registered`.
 
-An adhoc tool's id is `adhoc/` followed by its name in lowercase, so two names that differ only in letter case would share one id. The second of them fails with this message, where `{id}` is that shared id, `adhoc/` followed by the name in lowercase, and `{other}` is the name that already holds the id:
+An adhoc tool's id is `adhoc/` followed by its name in lowercase, so two names that differ only in letter case would share one id. The second of them fails with this text, where `{id}` is that shared id, `adhoc/` followed by the name in lowercase, and `{other}` is the name that already holds the id:
 
 ````text
 tools.adhoc name "{name}" has the id {id}, which "{other}" already holds
@@ -866,7 +870,7 @@ The title text can be any phrase, including spaces and capitals, such as `# Shor
 
 The H1 title is free text, separate from the frontmatter `name` key, and it need not match it. `name: hello` can sit above `# Hello World`, and `name: greeter` with `# Greeter` gives the name `greeter` and the title `Greeter`.
 
-A `##` section can have the same text as the H1 title, as in `# Self` with a `## Self` section, and the prompt still parses and runs. When that `## Self` section calls `jump('## Self')`, the call fails with `not found` at heading resolution (see [Resolving heading references](08-jump-and-call.md#resolving-heading-references)), which has nothing to do with the shared text.
+A `##` section can have the same text as the H1 title, as in `# Self` with a `## Self` section, and the prompt still parses and runs. When that `## Self` section calls `jump('../Self')`, the call fails with `not found`, because a section is not its own sibling (see [The visible set](08-jump-and-call.md#the-visible-set)). That has nothing to do with the shared text.
 
 A `#` heading inside a block quote or a list item is not an H1. It never becomes the title and does not count toward the one-H1 rule, and quoted or listed headings such as `> ## Quoted` and `- ## Listed` stay in the surrounding prose.
 
@@ -973,7 +977,7 @@ A prompt with no H1 title, or with more than one H1 title, fails to parse with p
 | More than one H1 | `prompt must contain exactly one H1 title, found {count} at lines {lines}` |
 | An empty or whitespace-only H1 | `prompt H1 title must not be empty` |
 
-These three errors name no section and give no line or column. Only the more-than-one message lists line numbers, inside its text.
+These three errors name no section. A missing H1 gives no line or column, a repeated H1 points at the line of the second H1, and an empty H1 points at its own line, each at column 1. Only the more-than-one message also lists line numbers inside its text.
 
 This file goes straight from the frontmatter to prose and a section, with no H1:
 
@@ -1098,7 +1102,7 @@ runvil: 0
 ## B
 ````
 
-Here `## A` holds `### X` and `### Y`, `### X` holds `#### P` and `#### Q`, and `## B` is a sibling of `## A`. Lua names section B with the heading reference `'## B'` (see [Heading references](#heading-references)).
+Here `## A` holds `### X` and `### Y`, `### X` holds `#### P` and `#### Q`, and `## B` is a sibling of `## A`. Lua written in section A names section B with the section path `'../B'`, and it names A's child X with `'X'` (see [Section paths](#section-paths)).
 
 The rule behind this shape is that a heading deeper than the current section becomes its child, and a heading at the same or a shallower level ends that section and belongs to an ancestor. So each H2 after the H1 starts a new top-level section, including an H2 that follows a nested H3 child. Top-level sections keep their file order without counting nested `###` sections, so `## First`, `### Child`, `## Second` gives two top-level sections, First and Second.
 
@@ -1138,7 +1142,7 @@ The name keeps only the visible text of the heading:
 
 Headings are read as plain CommonMark with no Markdown extensions, so extension syntax such as a trailing `{#id}` stays part of the section name.
 
-A section's name is how the section is found at run time: jumps, lookups, and fanout find the section by its heading level together with that name (see [Resolving heading references](08-jump-and-call.md#resolving-heading-references)).
+A section's name is how the section is found at run time: jumps, calls, reads, and fanout name a section by a section path, which is made of section names (see [Section paths](#section-paths)).
 
 ### What each section owns
 
@@ -1218,7 +1222,7 @@ an H2 section heading must not be empty
 
 ## Sibling name uniqueness
 
-After this section you can name sibling sections so that every heading reference finds exactly one target.
+After this section you can name sibling sections so that every section path finds exactly one target.
 
 ````markdown
 ---
@@ -1269,13 +1273,13 @@ q
 duplicate sibling section name `S`: first declared at line 8, again at line 12; sibling section names must be unique
 ````
 
-The message names the section and the lines of both headings. The line numbers count from the top of the prompt file, including the frontmatter, so with this four-line frontmatter the two `## S` headings are at lines 8 and 12. The failure also reports the prompt's frontmatter `name`, here `dup`, and the line and column of the second same-named heading, line 12, column 1. It also carries a non-empty byte span over the second heading, with offsets measured in the prompt body, after the frontmatter and any leading byte-order mark.
+The message names the section and the lines of both headings. The line numbers count from the top of the prompt file, including the frontmatter, so with this four-line frontmatter the two `## S` headings are at lines 8 and 12. The failure also reports the prompt's frontmatter `name`, here `dup`, and the line and column of the second same-named heading, line 12, column 1. Its location covers that whole heading line and ends at line 13, column 1 (see [Location fields](16-limits-and-errors.md#location-fields)).
 
 This file has no `runvil:` key, which is fine for showing a parse error, because the version is checked only when a run starts.
 
 ### How sibling names are compared
 
-Sibling names are compared exactly as written, so names that differ only in letter case or inner spacing count as different sections. Within one set of siblings, each section's heading level and name together are unique, so a heading names at most one section among its siblings.
+Sibling names are compared exactly as written, so names that differ only in letter case or inner spacing count as different sections. Within one set of siblings each section name is unique, so a section path names at most one section.
 
 The comparison uses section names, not raw heading lines. Because emphasis, link, and code-span markers add nothing to a name (see [Section names](#section-names)), sibling headings that differ only in Markdown markup share one name. So ``## Run `fetch` `` and `## Run fetch` under the same parent fail as duplicate siblings.
 
@@ -1287,74 +1291,117 @@ Sibling names are unique, and a section's children sit exactly one heading level
 - A heading more than one level deeper than its parent is rejected as an orphan.
 - A repeated sibling name is rejected.
 
-When a section has several problems, the parse reports the first one it meets. For each section it checks the heading level, then the name, then the section's blocks, then its child sections, then its list items, and only then a duplicate sibling name. A `lua` fence rule break anywhere in the body fails with parse error kind `Fence` before any of these section checks run.
+When a section has several problems, the parse reports the first one it meets. For each section it checks the heading level, then the name, then the section's blocks, then its child sections, and only then a duplicate sibling name. A `lua` fence rule break anywhere in the body fails with parse error kind `Fence` before any of these section checks run.
 
-## Heading references
+## Section paths
 
-After this section you can name any section from Lua with a heading reference string.
+After this section you can name any section from Lua with a section path.
 
 ````markdown
 ---
-name: require_library
-description: Exercise a required library section and nested author prose
+name: paths
+description: Names a child, a sibling, and a section from the top.
 runvil: 0
 ---
 
-# Require Library
-
-The helper library is available to each section that requires it.
+# Paths
 
 ## Prepare
 
 ```lua
-require '## helpers'
+local shout = require '/helpers'
+var.note = shout(prompt.section('Author note'))
+jump('../Finish')
+```
+
+### Author note
+
+Keep the subject short.
+
+## Skipped
+
+```lua
+return 'skipped'
+```
+
+## Finish
+
+```lua
+return var.note
 ```
 
 ## helpers
 
 ```lua
-local greeting = 'hello'
+return function(text) return text:upper() end
 ```
 ````
 
-In this file, the string `'## helpers'` names the H2 section whose name is `helpers`. A heading reference is a section heading's `#` markers, a space, and the section name, written as a Lua string. So `'## loader'` names the H2 section named `loader`, and `'### Worker'` names an H3 section named `Worker`.
+````text
+KEEP THE SUBJECT SHORT.
+````
 
-### Writing a heading reference
+The block in `Prepare` names three sections, each with a section path. `'/helpers'` starts at the top of the prompt and names the top-level section `helpers`. `'Author note'` names `Prepare`'s own child, and `'../Finish'` names its sibling `Finish`. A section path is one or more section names separated by `/`, written as a Lua string.
 
-You write one `#` marker per heading level, then the section name, such as `'### Worker'` for an H3 or `'## Arm'` for an H2. The number of markers is the target's heading level at whatever depth the section sits, so `'## Help'` names an H2 and `'##### Child'` names an H5. A section name can contain an underscore, such as `house_style`, and still be reached by a heading reference like `'## house_style'`.
+### Writing a section path
 
-You use this same form with every call that names a section, whether the Lua sits in a section or in the H1 body:
+A section path has three forms:
 
-| Call | Example |
-|---|---|
-| `tasks.fanout` | `tasks.fanout('### Worker', topics)` |
-| `tasks.spawn` | `tasks.spawn('## Arm', { item = 'a' })` |
-| `call` | `call('## Sub')` |
-| `jump` | `jump('## C')` |
-| `require` | `require '## helpers'` |
-| `prompt.list` | `prompt.list('### Items')` |
-| `prompt.section` | `prompt.section('## house_style')` |
+- `name` names the direct child with that section name. In the H1 body the top-level sections are the children, so `call('Prepare')` written there runs `Prepare`.
+- `../name` names the sibling with that section name, which is another section under the same parent. A top-level section's siblings are the other top-level sections. The H1 has no siblings.
+- `/a/b` starts at the top of the prompt and names one section per level, so `'/Prepare/Author note'` names the section `Author note` under the top-level section `Prepare`. The H1 title is not part of the path. A path from the top names the same section wherever it is written.
 
-[Resolving heading references](08-jump-and-call.md#resolving-heading-references) explains which sections each call can reach.
+The first two forms are relative paths. A relative path starts at the section its code is written in, and it names a neighbor of that section. The heading level plays no part in any path. A section is found by where it sits, so moving a section and its neighbors to another depth changes none of the paths between them.
+
+Which forms a call takes depends on what the call does:
+
+| Call | Forms | Example |
+|---|---|---|
+| `call` | relative | `call('Sub')` |
+| `jump` | relative | `jump('../C')` |
+| `tasks.spawn` | relative | `tasks.spawn('Arm', { item = 'a' })` |
+| `tasks.fanout` | relative | `tasks.fanout('Worker', topics)` |
+| `prompt.section`, `prompt.section_or` | relative, or from the top | `prompt.section('/house_style')` |
+| `require` | from the top | `require '/helpers'` |
+
+The four calls that run a section take only the relative forms, so each of them reaches only a neighbor of the section it starts from (see [The visible set](08-jump-and-call.md#the-visible-set)). The prompt reads and `require` leave the walk where it is, and they can name any section in the prompt. [Resolving section paths](08-jump-and-call.md#resolving-section-paths) explains where each call starts and what it does when a path names no section.
 
 ### Exact matching
 
-A heading reference matches its target by exact level and name together, case-sensitively. So `'## Worker'` never finds the section `### Worker`, because the levels differ.
+Each name in a path matches a section name exactly and case-sensitively, so `'worker'` never finds the section `Worker`. A section name can contain spaces, underscores, and punctuation, such as `Author note` or `house_style`, and the path writes it as it is.
 
-A heading reference is one or more `#` markers, then whitespace, then the section's non-empty name. Within that shape, whitespace works like this:
+Whitespace works like this:
 
-- Whitespace around the whole heading reference is ignored, so `'  ## Rules  '` names `## Rules`.
-- Any whitespace, such as several spaces or a tab, can separate the markers from the name, so `'###    Worker'` names `### Worker`.
-- Whitespace inside the name part is kept and must match the section's name exactly.
+- Whitespace around the whole path and around each name is ignored, so `'  ../Rules  '` and `' .. / Rules '` both name the sibling `Rules`.
+- Whitespace inside a name is kept and must match the section name exactly.
 
-### Malformed heading references
+Three characters need a backslash in front of them when they are part of a name:
 
-A malformed heading reference is never silently reinterpreted. It raises a Lua error instead (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)), and each message ends with the reference trimmed of its surrounding whitespace, shown as `{stripped}` here:
+- A slash is written `\/`, because a bare slash separates two names.
+- A backslash is written `\\`.
+- The bracket of a name that ends in a bracketed whole number, such as `Appendix [2]`, is written `\[`, because a path over parsed text reads that ending as an index (see [Parsing Markdown with `markdown`](05-lua-environment.md#parsing-markdown-with-markdown)).
+
+A quoted Lua string doubles each backslash, so the section named `Input/Output` is `'Input\\/Output'`. A long-bracket string needs no doubling, as in `[[Input\/Output]]`.
+
+A section whose name is exactly `..` cannot be named by a path.
+
+### Malformed section paths
+
+A malformed section path is never silently reinterpreted. It raises a Lua error instead (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)), and the message quotes the path, shown as `{path}` here:
 
 | Problem | Message |
 |---|---|
-| No `#` markers | `section heading must include ### markers, got bare name: {stripped}` |
-| No whitespace after the markers | `section heading must have whitespace after the {markers} markers: {stripped}` |
-| Markers only, with or without whitespace after them | `section heading has no name: {stripped}` |
+| The path is not a string | `section target must be a string, got {type}` |
+| An empty name, as in `''`, `'Kid/'`, or `'../'` | `section path "{path}" has an empty step` |
+| A relative path with more than one name, as in `'Kid/Grand'` or `'../../Top'` | `section path "{path}" has more than one name; a relative path is a child's name, or "../" and a sibling's name` |
+| `'..'` with no name after it | `section path "{path}" needs a name after ".."` |
+| `..` in a path from the top, as in `'/Main/../Nums'` | `section path "{path}" uses ".."; a path from the top takes none` |
+| A name that ends in an index, as in `'Kid[1]'` | `section path "{path}" has an index; a path in a prompt takes none` |
+| A backslash before any other character, as in `[[a\b]]` | `section path "{path}" has an unknown escape "\b"; the escapes are "\/", "\\", and "\["` |
+| A backslash at the end of the path | `section path "{path}" ends in a backslash` |
+| A path from the top given to `call`, `jump`, `tasks.spawn`, or `tasks.fanout` | `section path "{path}" starts with "/"; only require, prompt.section, and prompt.section_or take a path from the top` |
+| A relative path given to `require` | `section path "{path}" does not start with "/"; require takes a path from the top, such as "/helpers"` |
 
-In the second message, `{markers}` is the run of `#` marks you wrote. So the bare name `'Nums'` reports `got bare name: Nums`, the reference `'##Nums'` reports `must have whitespace after the ## markers`, and `'###'` or `'### '` reports `section heading has no name`.
+`require` has its own message for a path that is not a string: `require takes a section path such as '/helpers', got {type}`.
+
+A well-formed path that names no section is not malformed. It is a miss, and [The not-found error](08-jump-and-call.md#the-not-found-error) covers what each call does with one.

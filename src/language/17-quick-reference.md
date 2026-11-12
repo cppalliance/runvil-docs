@@ -1,6 +1,6 @@
 # Quick reference
 
-This page lists every name a prompt author can write, grouped by kind, with a link to the section that teaches each one. Rows are alphabetical, except the top-level frontmatter keys, which follow the order the file structure chapter teaches them.
+This page lists every name a prompt author can write, grouped by kind, with a link to the section that teaches each one. Rows are alphabetical, except the top-level frontmatter keys, which follow the order the file structure chapter teaches them, and the run error code families, which follow code order.
 
 ## Frontmatter keys
 
@@ -19,15 +19,14 @@ Frontmatter is YAML between two `---` delimiter lines at the very top of the fil
 | `output.description` | string giving the output file's purpose | yes | none | [Input and output file declarations](02-file-structure.md#input-and-output-file-declarations) |
 | `output.path` | store path of the output file, such as `report.md` | yes | none | [Input and output file declarations](02-file-structure.md#input-and-output-file-declarations) |
 | `uses` | list of Pack ids or `vendor/name` entries, such as `[web, acme/poop]`, each Pack id named once | no | none | [Tools, Packs, and the `uses:` key](12-tools.md#tools-packs-and-the-uses-key) |
-| `args` | map of arg name to arg declaration, each name once and matching `[A-Za-z][A-Za-z0-9_-]{0,63}` | no | one optional `string` arg named `prose` | [The name grammar for role labels, arg names, and adhoc tool names](02-file-structure.md#the-name-grammar-for-role-labels-arg-names-and-adhoc-tool-names) |
+| `args` | map of arg name to arg declaration, each name once and matching `[A-Za-z][A-Za-z0-9_-]{0,63}` | no | one optional `string` arg named `prose` | [The name grammar for arg names and adhoc tool names](02-file-structure.md#the-name-grammar-for-arg-names-and-adhoc-tool-names) |
 | `args.<name>.default` | value whose YAML kind matches `type`, or `null` for none | no | none | [Optional arguments, defaults, and descriptions](06-arguments.md#optional-arguments-defaults-and-descriptions) |
 | `args.<name>.description` | string, kept as written | no | none | [Optional arguments, defaults, and descriptions](06-arguments.md#optional-arguments-defaults-and-descriptions) |
 | `args.<name>.optional` | boolean | no | `false` | [Optional arguments, defaults, and descriptions](06-arguments.md#optional-arguments-defaults-and-descriptions) |
 | `args.<name>.type` | `string`, `boolean`, `integer`, or `number` | yes | none | [Argument types](06-arguments.md#argument-types) |
-| `models` | map of role label to role declaration, each label once and matching `[A-Za-z][A-Za-z0-9_-]{0,63}` | no | none | [The name grammar for role labels, arg names, and adhoc tool names](02-file-structure.md#the-name-grammar-for-role-labels-arg-names-and-adhoc-tool-names) |
-| `models.<label>.description` | free prose, kept as written | no | the bound model's own description | [Declaring roles under `models:`](10-models.md#declaring-roles-under-models) |
-| `models.<label>.keywords` | list from hard `thinking`, `no-thinking` and soft `frontier`, `fast`, `small`, `creative`, `chat` | no | empty list | [Declaring roles under `models:`](10-models.md#declaring-roles-under-models) |
-| `models.<label>.min_context` | whole number of tokens from 1 to 4294967295 | no | none | [Declaring roles under `models:`](10-models.md#declaring-roles-under-models) |
+| `models` | map of role name to role declaration, each name once and one of `default`, `strong`, `small`, `fast`, `creative` | no | none | [Declaring roles under `models:`](10-models.md#declaring-roles-under-models) |
+| `models.<role>.min_context` | whole number of tokens from 1 to 4294967295 | no | none | [Declaring roles under `models:`](10-models.md#declaring-roles-under-models) |
+| `models.<role>.thinking` | boolean: `true` requires a model that can think, `false` requires one that can run without thinking | no | none | [Declaring roles under `models:`](10-models.md#declaring-roles-under-models) |
 
 ## Lua globals and members
 
@@ -49,32 +48,30 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `debug` | not loaded | Never loaded; no stack frame, local, or hook inspection | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `dofile` | removed | Reads nil; no running a Lua file from disk | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `err.anchor` | field | Anchor text passed to a failed `store.str_replace` | [Editing, deleting, and checking files](09-the-store.md#editing-deleting-and-checking-files) |
+| `err.code` | field | Stable snake_case tag of the exact failure, such as `lua_quota`, `not_found`, or `overloaded`; on every error value | [Error values](05-lua-environment.md#error-values) |
 | `err.count` | field | Times the anchor matched: `0` absent, `2` or more ambiguous | [Editing, deleting, and checking files](09-the-store.md#editing-deleting-and-checking-files) |
 | `err.finish_reason` | field | Empty round's finish reason, such as `stop` or `length`; `nil` if unreported | [Empty replies and finish reasons](11-conversations.md#empty-replies-and-finish-reasons) |
-| `err.kind` | field | Lowercase error kind string, one of fifteen, to branch on | [Error values](05-lua-environment.md#error-values) |
-| `err.message` | field | Message text; `tostring(err)` and `..` give the same text | [Error values](05-lua-environment.md#error-values) |
+| `err.kind` | field | Lowercase error kind string, one of sixteen, to branch on | [Error values](05-lua-environment.md#error-values) |
+| `err.message` | field | `{file}:{line}: {prose}` when the failure is located, else the prose alone; `tostring(err)` and `..` give the same text | [Error values](05-lua-environment.md#error-values) |
+| `err.name` | field | Tool name the call used, on `unbound_tool`, `model_only_tool`, and `out_of_scope_tool` only | [Tool errors](12-tools.md#tool-errors) |
 | `err.path` | field | Path or pattern as passed; `not_a_directory` may name the blocking file | [When a store call fails](09-the-store.md#when-a-store-call-fails) |
 | `err.reason` | field | Store tag such as `not_found`, or a `context_exhausted` reason such as `precheck` or `provider` | [When a store call fails](09-the-store.md#when-a-store-call-fails) |
 | `err.rule` | field | Broken rule's snake_case tag, such as `traversal` or `wildcard` | [Store paths](09-the-store.md#store-paths) |
-| `err.task` | field | Task id on `task_not_owned`, `task_consumed`, and a cancelled task's error | [Cancelling and listing tasks](15-tasks.md#cancelling-and-listing-tasks) |
+| `err.task` | field | Task id on `task_not_owned`, `task_consumed`, and `task_canceled` | [Canceling and listing tasks](15-tasks.md#canceling-and-listing-tasks) |
 | `err.tasks` | field | On `tasks_live`, leaked task ids in spawn order joined by `, ` | [Ownership, leaked tasks, and abandonment](15-tasks.md#ownership-leaked-tasks-and-abandonment) |
 | `err.valid_up_to` | field | Byte offset where valid UTF-8 ends, on a `not_utf8` failure | [Writing and reading files](09-the-store.md#writing-and-reading-files) |
 | `error` | function | Raises a string or table and stops the current block | [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors) |
 | `getfenv` | removed | Reads nil; no function environments | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `getmetatable` | function | Reads a metatable, as in stock Lua on values other than `_G` | [The sandbox](05-lua-environment.md#the-sandbox) |
-| `handle.capabilities` | field | Role's keywords, a sequence of kebab-case strings in declaration order | [Model handles](10-models.md#model-handles) |
 | `handle.context` | field | Bound model's context window in tokens, a positive integer | [Model handles](10-models.md#model-handles) |
-| `handle.description` | field | Role's `description:`, or the bound model's catalog description | [Model handles](10-models.md#model-handles) |
-| `handle.label` | field | Role label or raw model id, the same string as `handle.name` | [Model handles](10-models.md#model-handles) |
+| `handle.description` | field | Bound model's catalog description, which can be empty; on a raw-id handle, the id itself | [Model handles](10-models.md#model-handles) |
+| `handle.label` | field | Role name, or the raw model id when the Host passed a Host-state snapshot, the same string as `handle.name` | [Model handles](10-models.md#model-handles) |
 | `handle.max_tokens` | field | `max_tokens` option from `models.use`, or `nil` | [Model handles](10-models.md#model-handles) |
 | `handle.model_id` | field | Name part of the bound model's model id | [Model handles](10-models.md#model-handles) |
-| `handle.name` | field | Role label, or the raw model id, as a string | [Model handles](10-models.md#model-handles) |
+| `handle.name` | field | Role name, or the raw model id when the Host passed a Host-state snapshot, as a string | [Model handles](10-models.md#model-handles) |
 | `handle.provider` | field | Provider id the model catalog records, or `nil` | [Model handles](10-models.md#model-handles) |
 | `handle.temperature` | field | `temperature` option from `models.use`, or `nil` | [Model handles](10-models.md#model-handles) |
-| `handle.thinking` | field | `true` for `thinking`, `false` for `no-thinking`, `nil` for neither | [Model handles](10-models.md#model-handles) |
-| `handle:infer` | method | Runs one round on the handle's model and returns the reply | [Model handles](10-models.md#model-handles) |
-| `handle:loop` | method | Runs the section entry's `messages` on the handle's model, optional compactor; returns `nil` | [How the loop runs](11-conversations.md#how-the-loop-runs) |
-| `input.ask` | function | Returns the operator's next message as typed; needs `user-input` declared | [Asking the operator](05-lua-environment.md#asking-the-operator) |
+| `handle.thinking` | field | `true` for `thinking: true`, `false` for `thinking: false`, `nil` when the role declares no `thinking` | [Model handles](10-models.md#model-handles) |
 | `io` | not loaded | Never loaded; no file or stream I/O | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `ipairs` | function | Walks an array table in order | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `item` | global | The member a fanout arm runs for, or a task's `item` seed | [What an arm sees](14-fanout.md#what-an-arm-sees) |
@@ -86,18 +83,19 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `json.encode_lines` | function | Encodes each list item as one line, each followed by a newline | [JSON Lines with `json.encode_lines` and `json.decode_lines`](05-lua-environment.md#json-lines-with-jsonencode_lines-and-jsondecode_lines) |
 | `json.null` | field | Truthy userdata standing for JSON null; test with `v == json.null` | [Null values and `json.null`](05-lua-environment.md#null-values-and-jsonnull) |
 | `jump` | function | Ends the block and moves the walk to another section | [Jumping to a section](08-jump-and-call.md#jumping-to-a-section) |
-| `kind = "cancelled"` | error kind | Cancelled task delivered by a wait, or a stopped run or call | [Cancelling and listing tasks](15-tasks.md#cancelling-and-listing-tasks) |
+| `kind = "canceled"` | error kind | Canceled task delivered by a wait, or a canceled run or stopped call | [Canceling and listing tasks](15-tasks.md#canceling-and-listing-tasks) |
 | `kind = "context_exhausted"` | error kind | Conversation overflows the context window and compaction does not make it fit, or `compactors.fail` raises | [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion) |
 | `kind = "empty_model_reply"` | error kind | No text or tool calls, except an empty `stop` after tool calls | [Empty replies and finish reasons](11-conversations.md#empty-replies-and-finish-reasons) |
 | `kind = "internal"` | error kind | A failure with no kind of its own, such as a failed tool freeze or an Engine fault | [Error kinds in Lua and the run error they become](16-limits-and-errors.md#error-kinds-in-lua-and-the-run-error-they-become) |
 | `kind = "lua"` | error kind | An authoring or runtime failure, such as a compile or argument error | [Error values](05-lua-environment.md#error-values) |
 | `kind = "model_failure"` | error kind | A model call's transport, backend, or decode failure, or a disabled gateway | [Error kinds in Lua and the run error they become](16-limits-and-errors.md#error-kinds-in-lua-and-the-run-error-they-become) |
-| `kind = "model_required"` | error kind | A model call with no model selected, the missing-model error | [Error kinds in Lua and the run error they become](16-limits-and-errors.md#error-kinds-in-lua-and-the-run-error-they-become) |
+| `kind = "model_only_tool"` | error kind | A script `tools.call` names a catalog tool marked `model_only_call`; carries `name` | [Model-only tools](12-tools.md#model-only-tools) |
+| `kind = "model_required"` | error kind | A `models.infer` or `models.loop` round when the Host gave no model, the missing-model error | [Error kinds in Lua and the run error they become](16-limits-and-errors.md#error-kinds-in-lua-and-the-run-error-they-become) |
 | `kind = "out_of_scope_tool"` | error kind | Model calls a tool outside the scope, raised at `models.loop` | [Tool errors](12-tools.md#tool-errors) |
 | `kind = "store"` | error kind | Any failure the store itself reports for an operation | [When a store call fails](09-the-store.md#when-a-store-call-fails) |
 | `kind = "task_consumed"` | error kind | A wait names a task whose result is already delivered | [Waiting with `tasks.join_any` and `tasks.join`](15-tasks.md#waiting-with-tasksjoin_any-and-tasksjoin) |
 | `kind = "task_not_owned"` | error kind | A task operation names an unowned task or an unknown id | [Ownership, leaked tasks, and abandonment](15-tasks.md#ownership-leaked-tasks-and-abandonment) |
-| `kind = "tasks_live"` | error kind | A chain ends normally while a task it spawned is live | [Ownership, leaked tasks, and abandonment](15-tasks.md#ownership-leaked-tasks-and-abandonment) |
+| `kind = "tasks_live"` | error kind | A chain ends normally while a task it spawned is still running; an idle task is no leak | [Ownership, leaked tasks, and abandonment](15-tasks.md#ownership-leaked-tasks-and-abandonment) |
 | `kind = "tool"` | error kind | A bound tool fails on a script `tools.call`, invalid structured JSON included | [Tool errors](12-tools.md#tool-errors) |
 | `kind = "tool_loop_exhausted"` | error kind | Loop reaches the round cap without a final reply | [Tool rounds and the round cap](11-conversations.md#tool-rounds-and-the-round-cap) |
 | `kind = "unbound_tool"` | error kind | A script `tools.call` names an id that is neither a defined adhoc tool nor a catalog tool | [Tool errors](12-tools.md#tool-errors) |
@@ -105,6 +103,13 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `loadfile` | removed | Reads nil; no loading a Lua file from disk | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `loadstring` | removed | Reads nil; no loading code from a string | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `log` | function | Records one single-line checkpoint of at most 256 characters | [Logging and lifecycle reports](05-lua-environment.md#logging-and-lifecycle-reports) |
+| `markdown` | global | Table of Markdown functions: `parse`, `section`, `section_or`, `select`, `render` | [Parsing Markdown with `markdown`](05-lua-environment.md#parsing-markdown-with-markdown) |
+| `markdown.parse` | function | Parses Markdown text into a list of blocks, plain tables with a `kind`, a `line`, the `source` text of the block, and the fields of the kind | [Parsing Markdown with `markdown`](05-lua-environment.md#parsing-markdown-with-markdown) |
+| `markdown.render` | function | Writes the `source` of each block of a list back as one text; a parsed document comes back as the text it was parsed from | [Parsing Markdown with `markdown`](05-lua-environment.md#parsing-markdown-with-markdown) |
+| `markdown.section` | function | Returns the one section that a path such as `/Guide/Setup` names in a list of blocks; raises when there is none | [Parsing Markdown with `markdown`](05-lua-environment.md#parsing-markdown-with-markdown) |
+| `markdown.section (blocks, path, selector, n)` | form | Returns one block of that section, picked by a selector such as `fence json` and an optional index; raises when there is none | [Parsing Markdown with `markdown`](05-lua-environment.md#parsing-markdown-with-markdown) |
+| `markdown.section_or` | function | The same lookup as `markdown.section`, in both forms; returns `nil` when the section or the block is not there | [Parsing Markdown with `markdown`](05-lua-environment.md#parsing-markdown-with-markdown) |
+| `markdown.select` | function | Returns a new list of every block that matches a selector, at any depth; the selector `*` matches every block | [Parsing Markdown with `markdown`](05-lua-environment.md#parsing-markdown-with-markdown) |
 | `math` | global | Standard `math` library, as in Lua 5.5 | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `messages` | global | The section entry's conversation, a message list created empty at each entry; cannot be reassigned | [`messages` is the section entry's conversation](11-conversations.md#messages-is-the-section-entrys-conversation) |
 | `#messages` | method | Number of records in the message list | [Reading records](11-conversations.md#reading-records) |
@@ -115,13 +120,15 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `messages:tool` | method | Appends a `tool` record answering a `tool_call_id`, optional `meta`; returns the list | [Building a message list](11-conversations.md#building-a-message-list) |
 | `messages:user` | method | Appends a `user` record, optional `meta`; returns the list | [Building a message list](11-conversations.md#building-a-message-list) |
 | `messages[i]` | field | Read-only view of record `i`, or `nil` past the end | [Reading records](11-conversations.md#reading-records) |
-| `models` | global | Table that selects model roles by label and runs rounds | [Model roles instead of models](10-models.md#model-roles-instead-of-models) |
+| `models` | global | Table that selects model roles by name and runs rounds | [Model roles instead of models](10-models.md#model-roles-instead-of-models) |
 | `models.compact` | function | Runs `compactor(reason)` once over `messages` outside any loop, checking the structural rules; returns `nil` | [Compacting on demand with `models.compact`](11-conversations.md#compacting-on-demand-with-modelscompact) |
-| `models.default` | function | Sets the prompt-wide default role and returns its handle | [The prompt-wide default with `models.default`](10-models.md#the-prompt-wide-default-with-modelsdefault) |
-| `models.get` | function | Returns a handle for a role label or raw model id | [Getting handles with `models.get`](10-models.md#getting-handles-with-modelsget) |
-| `models.infer` | function | Runs one round on the section entry's model and returns the reply | [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer) |
+| `models.current` | function | Returns a handle for the chain's current model; takes no arguments | [Reading the current model with `models.current`](10-models.md#reading-the-current-model-with-modelscurrent) |
+| `models.get` | function | Returns a handle for a role name, or for a raw model id when the Host passed a Host-state snapshot, leaving the chain's current model as it is | [Getting handles with `models.get`](10-models.md#getting-handles-with-modelsget) |
+| `models.infer` | function | Runs one round on the chain's current model and returns the reply | [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer) |
+| `models.infer (model, prompt)` | form | Runs one round on the given model handle, leaving the chain's current model as it is, and returns the reply | [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer) |
 | `models.loop` | function | Runs the section entry's `messages` to a final reply, appending records, optional compactor; its first round fixes the section entry's tool list; returns `nil` | [Starting a conversation](11-conversations.md#starting-a-conversation) |
-| `models.use` | function | Selects a role for the current section entry and returns its handle | [Selecting a role per section entry with `models.use`](10-models.md#selecting-a-role-per-section-entry-with-modelsuse) |
+| `models.loop (model, compactor)` | form | Runs every round of the loop on the given model handle, optional compactor; returns `nil` | [Starting a conversation](11-conversations.md#starting-a-conversation) |
+| `models.use` | function | Takes a role name or a model handle as the chain's current model until the next `models.use`, and returns a handle for it | [Selecting a role with `models.use`](10-models.md#selecting-a-role-with-modelsuse) |
 | `models.use (max_tokens)` | option | Response token limit, a whole number from 1 to 4294967295 | [Sampling options on `models.use`](10-models.md#sampling-options-on-modelsuse) |
 | `models.use (temperature)` | option | Sampling temperature, a finite number from 0.0 to 2.0 | [Sampling options on `models.use`](10-models.md#sampling-options-on-modelsuse) |
 | `next` | function | Steps through keys in the same fixed order as `pairs` | [Deterministic table iteration](05-lua-environment.md#deterministic-table-iteration) |
@@ -134,9 +141,10 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `pack.required` | field | `true` when the Pack is declared under `uses:`; always `false` for the adhoc Pack | [Tool objects, Pack objects, and `tools.packs`](12-tools.md#tool-objects-pack-objects-and-toolspacks) |
 | `pack.tools` | field | Fresh array of the Pack's Tool objects in tool id order | [Tool objects, Pack objects, and `tools.packs`](12-tools.md#tool-objects-pack-objects-and-toolspacks) |
 | `print` | removed | Reads nil; `log` is the output path instead | [The sandbox](05-lua-environment.md#the-sandbox) |
-| `prompt` | global | Table holding `prompt.section` and `prompt.list` | [Reading sections with `prompt.section` and `prompt.list`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptlist) |
-| `prompt.list` | function | Returns a visible list section's items as strings, or `nil` | [Reading sections with `prompt.section` and `prompt.list`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptlist) |
-| `prompt.section` | function | Returns a visible section's own raw Markdown body, or `nil` | [Reading sections with `prompt.section` and `prompt.list`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptlist) |
+| `prompt` | global | Table holding `prompt.section` and `prompt.section_or` | [Reading sections with `prompt.section` and `prompt.section_or`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptsection_or) |
+| `prompt.section` | function | Returns a section's own raw Markdown body; raises when no section has the path | [Reading sections with `prompt.section` and `prompt.section_or`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptsection_or) |
+| `prompt.section (path, selector, n)` | form | Returns one block of the section, such as a list or a fenced template, picked by a selector and an optional index; raises when there is none | [Reading sections with `prompt.section` and `prompt.section_or`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptsection_or) |
+| `prompt.section_or` | function | The same read as `prompt.section`, in both forms; returns `nil` when the section or the block is not there | [Reading sections with `prompt.section` and `prompt.section_or`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptsection_or) |
 | `prose` | global | Read-only pending prose above the block, placeholders rendered | [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global) |
 | `rawequal` | removed | Reads nil; no raw table access | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `rawget` | removed | Reads nil; no raw table access | [The sandbox](05-lua-environment.md#the-sandbox) |
@@ -147,7 +155,7 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `record.role` | field | Message role: `system`, `user`, `assistant`, or `tool` | [Message records](11-conversations.md#message-records) |
 | `record.tool_call_id` | field | On a `tool` record, the id of the call it answers | [Message records](11-conversations.md#message-records) |
 | `record.tool_calls` | field | Assistant's tool calls, each with `id`, `name`, and `arguments` | [Message records](11-conversations.md#message-records) |
-| `require` | function | Loads a section's Lua as a library; replaces stock Lua `require` | [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require) |
+| `require` | function | Loads the Lua of the section a path from the top names, as a library; replaces stock Lua `require` | [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require) |
 | `result.exhausted` | field | `true` only when the arm's `models.loop` hits the round cap | [Reading the results](14-fanout.md#reading-the-results) |
 | `result.item` | field | The member the arm runs on, keeping its Lua type | [Reading the results](14-fanout.md#reading-the-results) |
 | `result.ok` | field | `true` when the arm completes normally, `false` at the round cap | [Reading the results](14-fanout.md#reading-the-results) |
@@ -155,12 +163,12 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `select` | function | `select(n, ...)` as in standard Lua 5.5 | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `setfenv` | removed | Reads nil; no function environments | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `setmetatable` | function | Sets a metatable; refuses finalizers and weak globals | [The sandbox](05-lua-environment.md#the-sandbox) |
-| `status.blocked` | field | What the task waits on: `chat`, `tool_call`, `store`, `tasks`, `call`, `queued` | [Checking on a task with `tasks.status`, `tasks.ready`, and `tasks.note`](15-tasks.md#checking-on-a-task-with-tasksstatus-tasksready-and-tasksnote) |
+| `status.blocked` | field | What the task waits on: `chat`, `tool_call`, `store`, `tasks`, `inbox`, `call`, `queued`; `inbox` also while the task is idle after `tasks.reply` | [Checking on a task with `tasks.status`, `tasks.ready`, and `tasks.note`](15-tasks.md#checking-on-a-task-with-tasksstatus-tasksready-and-tasksnote) |
 | `status.depth` | field | The task chain's `call` depth, `1` when spawned from the main walk | [Checking on a task with `tasks.status`, `tasks.ready`, and `tasks.note`](15-tasks.md#checking-on-a-task-with-tasksstatus-tasksready-and-tasksnote) |
 | `status.note` | field | The task's latest progress note from `tasks.note` | [Checking on a task with `tasks.status`, `tasks.ready`, and `tasks.note`](15-tasks.md#checking-on-a-task-with-tasksstatus-tasksready-and-tasksnote) |
 | `status.ok` | field | `true` or `false` once the task ends, `nil` while it runs | [Checking on a task with `tasks.status`, `tasks.ready`, and `tasks.note`](15-tasks.md#checking-on-a-task-with-tasksstatus-tasksready-and-tasksnote) |
 | `status.section` | field | The section the live task is in now | [Checking on a task with `tasks.status`, `tasks.ready`, and `tasks.note`](15-tasks.md#checking-on-a-task-with-tasksstatus-tasksready-and-tasksnote) |
-| `status.state` | field | Task state: `running`, `done`, `cancelled`, or `abandoned` | [Checking on a task with `tasks.status`, `tasks.ready`, and `tasks.note`](15-tasks.md#checking-on-a-task-with-tasksstatus-tasksready-and-tasksnote) |
+| `status.state` | field | Task state: `running`, `done`, `canceled`, or `abandoned` | [Checking on a task with `tasks.status`, `tasks.ready`, and `tasks.note`](15-tasks.md#checking-on-a-task-with-tasksstatus-tasksready-and-tasksnote) |
 | `status.target` | field | Section name the task's chain starts at, without `#` marks | [Checking on a task with `tasks.status`, `tasks.ready`, and `tasks.note`](15-tasks.md#checking-on-a-task-with-tasksstatus-tasksready-and-tasksnote) |
 | `status.tasks` | field | Id strings of its own live tasks, in spawn order | [Checking on a task with `tasks.status`, `tasks.ready`, and `tasks.note`](15-tasks.md#checking-on-a-task-with-tasksstatus-tasksready-and-tasksnote) |
 | `status.turns` | field | Count of finished model rounds | [Checking on a task with `tasks.status`, `tasks.ready`, and `tasks.note`](15-tasks.md#checking-on-a-task-with-tasksstatus-tasksready-and-tasksnote) |
@@ -178,7 +186,7 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `sys.execution` | field | The run's name, which the Harness assigns | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
 | `sys.id` | field | Current section entry id, such as `0.1` | [Section entry ids](05-lua-environment.md#section-entry-ids) |
 | `sys.index` | field | An arm's 1-based position in collection order, or a task's `index` seed | [What an arm sees](14-fanout.md#what-an-arm-sees) |
-| `sys.model` | field | Name part of the bound model's model id, such as `fast` for `gateway/fast`, readable after the section entry's first tool call | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
+| `sys.model` | field | Name part of the current model's model id, such as `fast` for `gateway/fast`, readable after the section entry's first tool call | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
 | `sys.section_count` | field | Number of top-level sections in the prompt | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
 | `sys.section_name` | field | Running section's name; the H1 title in the H1 pass | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
 | `sys.taskid` | field | Nearest enclosing task's id, `'0'` on the main walk | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
@@ -186,15 +194,19 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `table` | global | Standard `table` library, as in Lua 5.5 | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `table.concat` | function | Joins strings, numbers, and `__tostring` values with a separator | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `tasks` | global | Table holding every task function, `fanout` included | [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) |
-| `tasks.cancel` | function | Ends a task the caller owns and returns nothing | [Cancelling and listing tasks](15-tasks.md#cancelling-and-listing-tasks) |
+| `tasks.cancel` | function | Ends a task the caller owns and returns nothing | [Canceling and listing tasks](15-tasks.md#canceling-and-listing-tasks) |
 | `tasks.concurrency` | function | Sets or reads the chain's concurrency limit, returning the effective limit | [Concurrency and the admission window](14-fanout.md#concurrency-and-the-admission-window) |
 | `tasks.fanout` | function | Runs a worker section once per member, results in collection order | [Fanout in one call](14-fanout.md#fanout-in-one-call) |
-| `tasks.join` | function | Waits for all tasks; returns `{ task, ok, result }` entries, then `timed_out` | [Waiting with `tasks.join_any` and `tasks.join`](15-tasks.md#waiting-with-tasksjoin_any-and-tasksjoin) |
-| `tasks.join_any` | function | Waits for the first task to end; returns handle, `ok`, result | [Waiting with `tasks.join_any` and `tasks.join`](15-tasks.md#waiting-with-tasksjoin_any-and-tasksjoin) |
+| `tasks.fanout (model, worker, collection)` | form | Runs every arm on the given model handle, results in collection order; the caller's own model is unchanged | [Running arms on a model](14-fanout.md#running-arms-on-a-model) |
+| `tasks.join` | function | Waits for every task to end or reply; returns `{ task, ok, result }` entries, then `timed_out` | [Waiting with `tasks.join_any` and `tasks.join`](15-tasks.md#waiting-with-tasksjoin_any-and-tasksjoin) |
+| `tasks.join_any` | function | Waits for the first task to end or reply; returns handle, `ok`, result | [Waiting with `tasks.join_any` and `tasks.join`](15-tasks.md#waiting-with-tasksjoin_any-and-tasksjoin) |
 | `tasks.join_any (timeout)` | option | Wait limit in seconds, also on `tasks.join`; never cancels tasks | [Time limits on waits](15-tasks.md#time-limits-on-waits) |
 | `tasks.note` | function | Publishes the caller's own task's latest progress note | [Checking on a task with `tasks.status`, `tasks.ready`, and `tasks.note`](15-tasks.md#checking-on-a-task-with-tasksstatus-tasksready-and-tasksnote) |
-| `tasks.pending` | function | Lists the caller's live task handles in spawn order; takes no arguments | [Cancelling and listing tasks](15-tasks.md#cancelling-and-listing-tasks) |
-| `tasks.ready` | function | Checks without waiting whether a task has ended | [Checking on a task with `tasks.status`, `tasks.ready`, and `tasks.note`](15-tasks.md#checking-on-a-task-with-tasksstatus-tasksready-and-tasksnote) |
+| `tasks.pending` | function | Lists the caller's live task handles in spawn order; takes no arguments | [Canceling and listing tasks](15-tasks.md#canceling-and-listing-tasks) |
+| `tasks.ready` | function | Checks without waiting whether a task has ended or holds a reply no wait has taken | [Checking on a task with `tasks.status`, `tasks.ready`, and `tasks.note`](15-tasks.md#checking-on-a-task-with-tasksstatus-tasksready-and-tasksnote) |
+| `tasks.receive` | function | Waits for the chain's next inbox message and returns its text as sent, oldest first; on the main chain, the operator's next message, and in a task, its owner's; takes no arguments | [Asking the operator](05-lua-environment.md#asking-the-operator) |
+| `tasks.reply` | function | Hands the task's owner a result and stays open, then returns the owner's next message; raises on the main chain | [Answering with `tasks.reply`](15-tasks.md#answering-with-tasksreply) |
+| `tasks.send` | function | Queues text in the inbox of a task the caller owns and returns `true`, or `false` once the task has ended | [Sending with `tasks.send`](15-tasks.md#sending-with-taskssend) |
 | `tasks.spawn` | function | Starts a section as a task, returns handle `{ task = id }` at once | [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) |
 | `tasks.spawn (index)` | option | Integer of 0 or more that becomes the task's `sys.index` | [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) |
 | `tasks.spawn (input)` | option | String that replaces the task's `args`, re-deriving `argv` | [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) |
@@ -203,6 +215,7 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `tonumber` | function | Turns a value such as a numeric string into a number | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `tool.description` | field | The tool's description: the catalog text, or an adhoc tool's `description` attr | [Tool objects, Pack objects, and `tools.packs`](12-tools.md#tool-objects-pack-objects-and-toolspacks) |
 | `tool.id` | field | The tool's canonical tool id, such as `web/search` or `adhoc/grab` | [Tool objects, Pack objects, and `tools.packs`](12-tools.md#tool-objects-pack-objects-and-toolspacks) |
+| `tool.model_only_call` | field | `true` when only a model may call the tool, so a script's `tools.call` refuses it; always `false` for an adhoc tool | [Tool objects, Pack objects, and `tools.packs`](12-tools.md#tool-objects-pack-objects-and-toolspacks) |
 | `tool.pack` | field | Pack object of the Pack named by the tool id; the adhoc Pack for an adhoc tool | [Tool objects, Pack objects, and `tools.packs`](12-tools.md#tool-objects-pack-objects-and-toolspacks) |
 | `tool.parameters` | field | Fresh table holding the tool's parameter schema, converted the way `json.decode` converts | [Tool objects, Pack objects, and `tools.packs`](12-tools.md#tool-objects-pack-objects-and-toolspacks) |
 | `tools` | global | Table holding every tool operation | [Tools, Packs, and the `uses:` key](12-tools.md#tools-packs-and-the-uses-key) |
@@ -248,11 +261,10 @@ Each form goes in a section's prose and takes effect when a Lua block reads `pro
 
 ## Pack tools
 
-Each Pack tool comes from a Pack you declare under `uses:` by its Pack id, `web` or `user-input`, while Provided by gives the fully qualified name of the Pack, which a Host's Plugin adds.
+Each Pack tool comes from a Pack you declare under `uses:` by its Pack id, here `web`, while Provided by gives the fully qualified name of the Pack, which a Host's Plugin adds. The built-in Packs `subagents` and `user` offer no tools, so neither has a row; the `user` Pack marks a prompt that needs an operator (see [Asking the operator](05-lua-environment.md#asking-the-operator)).
 
 | Tool | Provided by | Arguments | Returns | Taught in |
 |---|---|---|---|---|
-| `user-input/ask` | `runvil/user-input` | none | The operator's next message as trusted plain text | [Asking the operator](05-lua-environment.md#asking-the-operator) |
 | `web/fetch` | `runvil/web` | `url` (required); `max_chars` (default 40,000; 1 to 40,000); `raw` (default `false`) | Untrusted text: a `url:`, `truncated:`, and `extraction:` header, a blank line, then the page | [Fetching a page](13-web-fetch-and-search.md#fetching-a-page) |
 | `web/search` | `runvil/web` | `query` (required; 1 to 400 characters, not only whitespace); `count` (search provider default; 1 to 20); `freshness` (`pd`, `pw`, `pm`, or `py`); `country` (not blank, at most 128 characters); `search_lang` (not blank, at most 128 characters); `safesearch` (`off`, `moderate`, or `strict`); `include_domains` (default empty; at most 20 bare hostnames); `exclude_domains` (default empty; at most 20 bare hostnames) | Untrusted compact JSON of `query` and `results`, each with `title`, `url`, and `description` | [Searching the web](13-web-fetch-and-search.md#searching-the-web) |
 
@@ -271,6 +283,7 @@ Each row gives a limit, its default, and who can change it, and the Pack tools t
 | `lua_log_events` | 1024 `log` events per section VM | Harness | [Lua memory and log quotas](16-limits-and-errors.md#lua-memory-and-log-quotas) |
 | `lua_memory_bytes` | 64 MiB per section VM | Harness | [Lua memory and log quotas](16-limits-and-errors.md#lua-memory-and-log-quotas) |
 | `max_concurrency` | 8 tasks at once | Harness | [Run limits and their defaults](16-limits-and-errors.md#run-limits-and-their-defaults) |
+| `max_idle_tasks` | 8 tasks idle after `tasks.reply` across the run; one more reply closes the task idle longest that owns no live task, or else the one idle longest | Harness | [Run limits and their defaults](16-limits-and-errors.md#run-limits-and-their-defaults) |
 | `max_response_bytes` | 16 MiB per model reply, a request limit the gateway client applies | Harness | [Run limits and their defaults](16-limits-and-errors.md#run-limits-and-their-defaults) |
 | `max_tool_iterations` | 24 model rounds per loop call unless the Harness sets another | frontmatter | [Run limits and their defaults](16-limits-and-errors.md#run-limits-and-their-defaults) |
 | output reserve | `max_tokens`, else one eighth of the window up to 8192 tokens, at most half the window | fixed | [The context precheck](11-conversations.md#the-context-precheck) |
@@ -285,45 +298,47 @@ Each parse failure has one parse error kind, the four fence rules say what a `Fe
 | Name | Type | Meaning | Taught in |
 | --- | --- | --- | --- |
 | `Closer` | fence rule | a closing line after an exact `lua` opener that is not exactly three backticks | [Exact fence rules and fence errors](03-blocks-and-prose.md#exact-fence-rules-and-fence-errors) |
-| `column` | location field | the 1-based column of the mistake, read with the line | [Where an error points](16-limits-and-errors.md#where-an-error-points) |
+| `column` | location field | the 1-based column where the mistake starts, read with the line | [Where an error points](16-limits-and-errors.md#where-an-error-points) |
+| `end column` | location field | the 1-based column just past where the mistake ends, read with the end line | [Where an error points](16-limits-and-errors.md#where-an-error-points) |
+| `end line` | location field | the 1-based line where the mistake ends, the next line for a mistake that covers a whole line | [Where an error points](16-limits-and-errors.md#where-an-error-points) |
 | `Fence` | parse error kind | a `lua` fence left open, or a break of the Label, Opener, Closer, or Lookalike rule | [Parse errors and their kinds](16-limits-and-errors.md#parse-errors-and-their-kinds) |
+| `file` | location field | the prompt's file, as the Host names it | [Where an error points](16-limits-and-errors.md#where-an-error-points) |
 | `Frontmatter` | parse error kind | frontmatter missing, unclosed, or not valid YAML, or a key or value the contract rejects | [Parse errors and their kinds](16-limits-and-errors.md#parse-errors-and-their-kinds) |
 | `Internal` | parse error kind | the parser fails through no fault of the prompt, such as a Lua compiler that cannot start | [Parse errors and their kinds](16-limits-and-errors.md#parse-errors-and-their-kinds) |
 | `Label` | fence rule | a fence label that starts with `lua` in any letter case but is not exactly `lua` | [Exact fence rules and fence errors](03-blocks-and-prose.md#exact-fence-rules-and-fence-errors) |
-| `line` | location field | the 1-based line in the prompt file as written | [Where an error points](16-limits-and-errors.md#where-an-error-points) |
-| `List` | parse error kind | a list section item that is a marker with no text after it | [Parse errors and their kinds](16-limits-and-errors.md#parse-errors-and-their-kinds) |
+| `line` | location field | the 1-based line in the prompt file as written, where the mistake starts | [Where an error points](16-limits-and-errors.md#where-an-error-points) |
 | `Lookalike` | fence rule | a line outside every fence that looks like a `lua` opening line | [Exact fence rules and fence errors](03-blocks-and-prose.md#exact-fence-rules-and-fence-errors) |
 | `Lua` | parse error kind | a Lua block that does not compile because of a syntax error | [Parse errors and their kinds](16-limits-and-errors.md#parse-errors-and-their-kinds) |
-| `name` | location field | the prompt's frontmatter `name`, on a `Structure`, `Fence`, or `List` failure after the frontmatter | [Where an error points](16-limits-and-errors.md#where-an-error-points) |
+| `name` | location field | the prompt's frontmatter `name`, on a `Structure`, `Fence`, or `Lua` failure after the frontmatter | [Where an error points](16-limits-and-errors.md#where-an-error-points) |
 | `Opener` | fence rule | a `lua` fence whose opening line is not exactly three backticks then `lua` | [Exact fence rules and fence errors](03-blocks-and-prose.md#exact-fence-rules-and-fence-errors) |
-| `span` | location field | the byte range of the offending region in the body after the frontmatter, when the failure can locate it | [Where an error points](16-limits-and-errors.md#where-an-error-points) |
 | `Structure` | parse error kind | an invalid H1 title or heading tree, such as two sibling sections with one name | [Parse errors and their kinds](16-limits-and-errors.md#parse-errors-and-their-kinds) |
 
-## Run error kinds
+## Run error codes
 
-A failed run reports exactly one run error kind, and a failed `{{ }}` placeholder names its substitution kind in its message.
+A run that does not complete ends with exactly one error, named by its code: a snake_case tag such as `lua_runtime`, which a caught error value holds as `err.code`. The hundreds of each code's number give its family. A failed run's message is its error's located message, which ends with where the failure happened when it has a location, such as ` (at {file}:{line})` (see [Where an error points](16-limits-and-errors.md#where-an-error-points)).
+
+| Family | Codes | Meaning | Taught in |
+| --- | --- | --- | --- |
+| Parse codes (1xx) | `frontmatter_invalid`, `structure_invalid`, `fence_invalid`, `unsupported_version`, `invalid_value` | the frontmatter, the body's structure, or a `lua` fence fails to parse; the `runvil:` key is missing, which is `structure_invalid`, or declares a major version other than `0`, which is `unsupported_version`; or a value such as an id, a tag, or a setting is missing or fails to validate, which is `invalid_value` | [Parse codes](16-limits-and-errors.md#parse-codes) |
+| Lua codes (2xx) | `lua_runtime`, `lua_compile`, `lua_quota`, `call_depth_exceeded`, `substitution` | an uncaught runtime error, running past the memory ceiling, a block that returns a table, or a Pack prelude that cannot install, all `lua_runtime`; a Lua block that does not compile; a block that runs out its `log` event or byte quota; a `call`, `tasks.spawn`, or `tasks.fanout` arm that nests past the call depth cap; or a failed `{{ }}` placeholder | [Lua codes](16-limits-and-errors.md#lua-codes) |
+| Task codes (3xx) | `tasks_live`, `task_not_owned`, `task_consumed`, `task_canceled` | a chain ends while a task it spawned is still running and not idle, a task operation names a task its chain does not own, a wait names a result already delivered, or a canceled task's error value is raised again after a wait delivers it | [Task codes](16-limits-and-errors.md#task-codes) |
+| Model codes (4xx) | `context_overflow`, `rate_limited`, `quota_exhausted`, `overloaded`, `refused`, `timeout`, `transport`, `server_error`, `rejected`, `malformed_response`, `empty_reply`, `unavailable`, `invalid_parts`, `context_exhausted`, `model_required` | a model call fails at the transport, backend, or decode layer, an empty reply goes uncaught, or the Harness cannot fetch the Host's list of models; a request overflows the model's context window and the selected compactor leaves it over, or a direct `compactors.fail` call goes uncaught, which is `context_exhausted`; or a model round runs when the Host gave no model, which is `model_required` | [Model codes](16-limits-and-errors.md#model-codes) |
+| Tool codes (5xx) | `tool_invalid_arguments`, `tool_backend`, `tool_transport`, `tool_other`, `out_of_scope_tool`, `unbound_tool`, `model_only_tool`, `tool_loop_exhausted`, `tool_schema_invalid`, `tool_sets_invalid` | a dispatched tool fails, the model calls a tool outside its round's scope, a `tools.call` names an id that is neither a defined adhoc tool nor a catalog tool, a script's `tools.call` names a catalog tool marked `model_only_call`, or `models.loop` reaches its round cap; or a section entry's first loop round fails to freeze its tool sets because two tools share a wire name, a tool's wire name is invalid, or its parameter schema is not a JSON object, unless an adhoc tool in the same set shadows it, or because a render answer breaks the render rules, which is `tool_schema_invalid` for a bad wire name or parameter schema and `tool_sets_invalid` for a shared wire name or a broken render rule | [Tool codes](16-limits-and-errors.md#tool-codes) |
+| Store codes (6xx) | `not_found`, `already_exists`, `not_a_directory`, `is_a_directory`, `directory_not_empty`, `not_utf8`, `invalid_path`, `invalid_range`, `anchor`, `permission_denied`, `approval_required`, `scope_ended`, `read_only`, `outside_root`, `root_protected`, `no_store`, `cross_mount`, `io`, `unsupported`, `conflict`, `backend`, `determinism` | an uncaught `store` failure, a store backend that fails as the run starts, or a store that refuses to stage the input file, each under the code of its failure; a run that declares no store, which is `no_store`; or a claims conflict, which is `determinism` and which no `pcall` catches | [Store codes](16-limits-and-errors.md#store-codes) |
+| Run codes (7xx) | `requirements_unmet`, `canceled`, `internal`, `stalled` | the environment falls short of what the prompt needs, an H1 block fails the hard gate, the launch input does not match the `input:` declaration, or the Host's selected model is missing, all `requirements_unmet`; the Host cancels the run, which is `canceled`; an Engine invariant breaks, a fault in the Engine rather than the prompt, or the Harness has nothing to wait for while the run is still pending, which is `internal`; or no chain can move while the main chain does not wait on its inbox and at least one task waits on its own inbox, which is `stalled` | [Run codes](16-limits-and-errors.md#run-codes) |
+| Caller codes (8xx) | `recorder_failed`, `plugin_load_failed`, `no_output` | a recorder that refuses a write, a Plugin that does not load, or a run report with no output text; a caller code never ends a run, so a prompt that raises an error value whose `code` names one ends the run with `internal`, keeping the message | [Caller codes](16-limits-and-errors.md#caller-codes) |
+
+A `{{ }}` placeholder that fails names one of these substitution kinds in its message, and left uncaught it ends the run with `substitution`:
 
 | Name | Type | Meaning | Taught in |
 | --- | --- | --- | --- |
 | `BadPath` | substitution kind | `{{ var }}` or `{{ sys }}` written with no key | [Substitution error kinds](07-substitution.md#substitution-error-kinds) |
-| `Binding` | run error kind | `models.infer` or `models.loop` runs with neither `models.use` nor `models.default` in effect, or a section entry's first loop round fails to freeze its tool sets because two tools share a wire name, a tool's wire name is invalid, or its parameter schema is not a JSON object, unless an adhoc tool in the same set shadows it, or because a render answer breaks the render rules | [`Binding`, `Completion`, and `Tool`](16-limits-and-errors.md#binding-completion-and-tool) |
-| `Completion` | run error kind | a model call fails at the transport, backend, or decode layer, or an `empty_model_reply` goes uncaught | [Run error kinds](16-limits-and-errors.md#run-error-kinds) |
-| `ContextExhausted` | run error kind | a request overflows the model's context window and the selected compactor leaves it over, or a direct `compactors.fail` call goes uncaught | [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion) |
-| `Determinism` | run error kind | a store call meets a claims conflict, which no `pcall` catches | [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism) |
 | `EmptySegment` | substitution kind | an empty or space-padded path segment, as in `{{ var. }}` or `{{ }}` | [Substitution error kinds](07-substitution.md#substitution-error-kinds) |
-| `Internal` | run error kind | an Engine invariant breaks, a fault in the Engine rather than the prompt | [Run error kinds](16-limits-and-errors.md#run-error-kinds) |
-| `Lua` | run error kind | an uncaught runtime error or `{{ }}` failure, running past the memory ceiling, a block that returns a table, a Pack prelude that cannot install, or a task fault: a leaked task, a task its chain does not own, a result waited on twice, or a cancelled task's error raised again right after its wait | [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals) |
 | `MissingKey` | substitution kind | an absent key under `var`, `sys`, `argv`, or a global, as in `{{ sys.bogus }}`, or a path that continues past a scalar or aims at an array element | [Inserting `var` and `sys` values](07-substitution.md#inserting-var-and-sys-values) |
 | `NilArgv` | substitution kind | any `argv` placeholder while `argv` is nil, as when the argument string is not JSON | [Inserting arguments with `args` and `argv`](07-substitution.md#inserting-arguments-with-args-and-argv) |
 | `NilItem` | substitution kind | `{{ item }}` where no item is seeded, such as in a walked section | [Inserting the fanout or task `item`](07-substitution.md#inserting-the-fanout-or-task-item) |
 | `NotATable` | substitution kind | a dotted path after `args` or `item`, as in `{{ args.x }}` | [Inserting arguments with `args` and `argv`](07-substitution.md#inserting-arguments-with-args-and-argv) |
 | `NullValue` | substitution kind | a path that lands on JSON null, under every root except `item` | [Substitution error kinds](07-substitution.md#substitution-error-kinds) |
-| `Parse` | run error kind | the frontmatter or the body's structure fails to parse, a Lua block does not compile, or the `runvil:` key is missing | [Run error kinds](16-limits-and-errors.md#run-error-kinds) |
-| `Quota` | run error kind | a block runs out its `log` event or byte quota, or a `call`, `tasks.spawn`, or `tasks.fanout` arm nests past the call depth cap | [The recursion depth cap](08-jump-and-call.md#the-recursion-depth-cap) |
-| `RequirementsUnmet` | run error kind | the environment falls short of a requirement the prompt states, or an H1 block fails the hard gate | [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run) |
 | `Serialize` | substitution kind | a bare global that is not JSON data, and `{{ prose }}` | [Inserting Lua globals by bare name](07-substitution.md#inserting-lua-globals-by-bare-name) |
-| `Tool` | run error kind | a dispatched tool fails, the model calls a tool outside its round's scope, a `tools.call` names an id that is neither a defined adhoc tool nor a catalog tool, or `models.loop` reaches its round cap | [Tool rounds and the round cap](11-conversations.md#tool-rounds-and-the-round-cap) |
 | `Unclosed` | substitution kind | a `{{` with no `}}` anywhere later in the prose | [Substitution error kinds](07-substitution.md#substitution-error-kinds) |
 | `UnknownNamespace` | substitution kind | a first segment that is neither a root nor a set global, as in `{{ ghost }}` | [Inserting Lua globals by bare name](07-substitution.md#inserting-lua-globals-by-bare-name) |
-| `Version` | run error kind | the `runvil:` key declares a major version other than `0` | [The `runvil` version key](02-file-structure.md#the-runvil-version-key) |
-| `Vfs` | run error kind | an uncaught `store` failure, a run that declares no store, or a store backend that fails as the run starts | [When a store call fails](09-the-store.md#when-a-store-call-fails) |

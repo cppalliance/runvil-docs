@@ -99,7 +99,7 @@ return tostring(before) .. ' ' .. tostring(during) .. ' ' .. tostring(after)
 false true false
 ````
 
-`store.glob` sorts its results, whatever order the files were written in. With the block in `## Main` of `presence` replaced by this one, the run returns `src/a.rs` first even though `src/b.rs` was written first:
+`store.glob` sorts its results, whatever order the files were written in. With the block in `Main` of `presence` replaced by this one, the run returns `src/a.rs` first even though `src/b.rs` was written first:
 
 ````lua
 store.write('src/b.rs', '')
@@ -143,7 +143,7 @@ return store.read('note.txt')
 handoff text
 ````
 
-`## Writer` writes `note.txt` and does not return, so the walk falls through to `## Reader` (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)), which reads the file back and returns its text. A section that writes a store file and does not return hands that file to the next section this way, so the store hands state across fall-through.
+`Writer` writes `note.txt` and does not return, so the walk falls through to `Reader` (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)), which reads the file back and returns its text. A section that writes a store file and does not return hands that file to the next section this way, so the store hands state across fall-through.
 
 Every section of a run shares one store. Each section entry starts in a fresh Lua VM and its context clears on the transition (see [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals)), but the store stays: a file that one section writes or appends is readable, and can be extended, in any later section. [Appending to a file](#appending-to-a-file) shows a file that grows by one line per section.
 
@@ -210,13 +210,13 @@ return store.read('todo.md')
 ship it
 ````
 
-This block asks for two store operations, a write and then a read. `store.write(path, contents)` takes a store path and a text string, both required strings. It writes the text as UTF-8 to the file at the path, creating the file when it does not exist yet or replacing its whole text when it does, and it returns nil. `store.read(path)` with no line bounds reads an existing file whole and returns its text as a string. The block returns what the read gave it, so the file's text becomes the run result (see [The run result and outcomes](04-how-a-prompt-runs.md#the-run-result-and-outcomes)), just as `notebook` ends with `remember this`.
+This block asks for two store operations, a write and then a read. `store.write(path, contents)` takes a store path and a text string, both required strings. It writes the text as UTF-8 to the file at the path, creating the file when it does not exist yet or replacing its whole text when it does, and it returns nil. `store.read(path)` with no line bounds reads an existing file whole and returns its text as a string. The block returns what the read gave it, so the file's text becomes the run result (see [The run result](04-how-a-prompt-runs.md#the-run-result)), just as `notebook` ends with `remember this`.
 
 Each call also reports how it went. A write reports `VFS_WRITE_SUCCEEDED`, or `VFS_WRITE_FAILED` when the write fails, and a read reports `VFS_READ_SUCCEEDED`, or `VFS_READ_FAILED` when the read fails. [How store calls run and what they report](#how-store-calls-run-and-what-they-report) covers these reports.
 
 ### A write replaces the whole file
 
-`store.write` replaces a file's whole contents, so a second write to the same path discards the first and the last write wins. With the block in `## Main` of `todo` replaced by this one, the run returns only the second text:
+`store.write` replaces a file's whole contents, so a second write to the same path discards the first and the last write wins. With the block in `Main` of `todo` replaced by this one, the run returns only the second text:
 
 ````lua
 store.write('todo.md', 'first')
@@ -232,7 +232,7 @@ A write keeps the exact string you pass, with no added newline or wrapping, so i
 
 ### A read returns the text exactly
 
-A whole-file `store.read` returns the file's contents exactly as stored: the same bytes, the same line endings, any trailing newline, and no line numbers added. With the block in `## Main` of `todo` replaced by this one, the block compares the read with the text it wrote:
+A whole-file `store.read` returns the file's contents exactly as stored: the same bytes, the same line endings, any trailing newline, and no line numbers added. With the block in `Main` of `todo` replaced by this one, the block compares the read with the text it wrote:
 
 ````lua
 store.write('data.txt', 'alpha\nbeta\n')
@@ -247,7 +247,7 @@ Every reader gets exactly the text last written to the file, byte for byte, whet
 
 ### Working with the text a read returns
 
-`store.read(path)` returns an ordinary Lua string, so you use it like any other string. With the block in `## Main` of `todo` replaced by this one, the block builds a new string from a read:
+`store.read(path)` returns an ordinary Lua string, so you use it like any other string. With the block in `Main` of `todo` replaced by this one, the block builds a new string from a read:
 
 ````lua
 store.write('paper.md', '# Paper')
@@ -263,7 +263,7 @@ You can concatenate it, as here, compare it, as in `store.read('paper.md') == '#
 
 ### When a write is visible
 
-A write is visible at once. With `## Main` of `todo` replaced by this section, the second block reads what the first block wrote:
+A write is visible at once. With `Main` of `todo` replaced by this section, the second block reads what the first block wrote:
 
 ````markdown
 ## Main
@@ -281,7 +281,7 @@ return store.read('state.txt')
 kept
 ````
 
-A later `store.read` sees a write in the same block, in later blocks of the same section, and in every section after that, which is how `## Reader` in `handoff` reads the file `## Writer` wrote. Files a block writes are in the store by the time the block returns, and a read returns the text that an earlier write to the path stored in the same run, including a write made just before it in the same block. Every other store call sees the write the same way: right after `store.write('a.txt', 'na na na')`, a `store.str_replace('a.txt', 'na', 'la')` finds all three matches of `na` (see [Editing, deleting, and checking files](#editing-deleting-and-checking-files)).
+A later `store.read` sees a write in the same block, in later blocks of the same section, and in every section after that, which is how `Reader` in `handoff` reads the file `Writer` wrote. Files a block writes are in the store by the time the block returns, and a read returns the text that an earlier write to the path stored in the same run, including a write made just before it in the same block. Every other store call sees the write the same way: right after `store.write('a.txt', 'na na na')`, a `store.str_replace('a.txt', 'na', 'la')` finds all three matches of `na` (see [Editing, deleting, and checking files](#editing-deleting-and-checking-files)).
 
 A note you write reads back with the same text for the rest of the run, even when a library wrote the file as it loaded and a later section reads it (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)). Text written with `store.write` persists in the run's shared store beyond the block and the Lua code that wrote it, so readers outside the prompt's Lua code see it too.
 
@@ -317,13 +317,13 @@ First
 Second
 ````
 
-`store.append(path, contents)` takes the same two required string arguments as `store.write`. It adds the text to the end of the file at the path, so the next read returns the old and new text together, and it returns nil. When nothing exists at the path yet, the first append creates the file, as the one in `## First` does, and later appends add to its end. An append reports `VFS_APPEND_SUCCEEDED`, or `VFS_APPEND_FAILED` when the append fails.
+`store.append(path, contents)` takes the same two required string arguments as `store.write`. It adds the text to the end of the file at the path, so the next read returns the old and new text together, and it returns nil. When nothing exists at the path yet, the first append creates the file, as the one in `First` does, and later appends add to its end. An append reports `VFS_APPEND_SUCCEEDED`, or `VFS_APPEND_FAILED` when the append fails.
 
 `store.append` adds no separator of its own between the existing text and the new text, so you write any newline between pieces yourself. Writing `'one'` and then appending `'two'` leaves `'onetwo'`, while appending `'one\n'` and then `'two'` leaves `'one\ntwo'`. An append also builds on whatever the last write left: writing `one`, then `two`, then appending `!` reads back `two!`, not `onetwo!`.
 
 To keep records in a file, [`json.encode_lines`](05-lua-environment.md#encoding-and-decoding-json-with-json) ends every record with a newline, so `store.append('rows.jsonl', json.encode_lines(rows))` appends whole records, and `json.decode_lines(store.read('rows.jsonl'))` reads them all back as a list.
 
-Successive `store.append` calls keep their call order in the file, including across sections and child `###` sections (see [Section headings and nesting](02-file-structure.md#section-headings-and-nesting)), so appends from successive sections accumulate in order. A whole-file `store.read` returns everything earlier sections of the same run wrote or appended to the file, which is why `## Second` in `order` returns `First\nSecond\n`.
+Successive `store.append` calls keep their call order in the file, including across sections and child `###` sections (see [Section headings and nesting](02-file-structure.md#section-headings-and-nesting)), so appends from successive sections accumulate in order. A whole-file `store.read` returns everything earlier sections of the same run wrote or appended to the file, which is why `Second` in `order` returns `First\nSecond\n`.
 
 ### Nested paths create their directories
 
@@ -356,19 +356,19 @@ Writing to a nested path, with directory names separated by `/` as in `src/b.rs`
 
 The store holds text, so a table goes through [`json.encode`](05-lua-environment.md#encoding-and-decoding-json-with-json) before a write and `json.decode` after a read. The `path` and `contents` you pass to `store.write` and `store.append` must be valid UTF-8, and an argument that is not raises `path must be a valid UTF-8 string` or `contents must be a valid UTF-8 string`, naming the argument. Every file your prompt creates with `store.write` therefore reads back as text.
 
-Reading needs UTF-8 as well. `store.read`, `store.read_numbered`, and `store.str_replace` need the file's contents to be UTF-8, and reading or editing a file whose bytes are not valid UTF-8 fails with a `store` error whose reason is `not_utf8`. The error value has a string `path` field and an integer `valid_up_to` field, and its message has this form:
+Reading needs UTF-8 as well. `store.read`, `store.read_numbered`, and `store.str_replace` need the file's contents to be UTF-8, and reading or editing a file whose bytes are not valid UTF-8 fails with a `store` error whose reason is `not_utf8`. The error value has a string `path` field and an integer `valid_up_to` field, and the store's message for it, the store's own wording that [Store error messages](#store-error-messages) describes, has this form:
 
 ````text
 file in store is not UTF-8 after byte {valid_up_to}: {path}
 ````
 
-`valid_up_to` is the length in bytes of the longest valid UTF-8 prefix of the contents, which is the byte offset where valid UTF-8 ends and so locates the first bad byte, and the message repeats it. A file `a.bin` whose first four bytes are valid gives `file in store is not UTF-8 after byte 4: a.bin`, and a file whose bytes are `a` followed by two invalid bytes gives a `valid_up_to` of 1.
+`valid_up_to` is the length in bytes of the longest valid UTF-8 prefix of the contents, which is the byte offset where valid UTF-8 ends and so locates the first bad byte, and the store's message repeats it. A file `a.bin` whose first four bytes are valid gives `file in store is not UTF-8 after byte 4: a.bin`, and a file whose bytes are `a` followed by two invalid bytes gives a `valid_up_to` of 1.
 
 A store the Host backs with a real directory also needs the names of its real files and directories to be UTF-8. A real file or directory whose name is not valid UTF-8 gives the same `not_utf8` reason, and then `valid_up_to` measures the name and `path` names the directory holding the bad name. Either way, `path` is a logical store path in the form the prompt uses, and never the Host's own path, even when the Host mounts the store away from the root.
 
 ### Reading a file that does not exist
 
-Reading a store file that does not exist raises an [error value](05-lua-environment.md#error-values) of kind `store` with reason `not_found` and a `path` field. Its message has the form `file not found in store: {path}`, naming the path as the prompt wrote it. [`pcall`](05-lua-environment.md#raising-and-catching-errors) catches the error so the block can read its fields:
+Reading a store file that does not exist raises an [error value](05-lua-environment.md#error-values) of kind `store` with reason `not_found` and a `path` field. The store's message for it has the form `file not found in store: {path}`, naming the path as the prompt wrote it. [`pcall`](05-lua-environment.md#raising-and-catching-errors) catches the error so the block can read its fields:
 
 ````markdown
 ---
@@ -388,10 +388,10 @@ return err.reason .. ': ' .. tostring(err)
 ````
 
 ````text
-not_found: file not found in store: missing.txt
+not_found: missing.md:12: That path does not exist. Check the path, or list its directory to find the right one.
 ````
 
-`err.reason` is `not_found`, and `tostring(err)` gives the message. [When a store call fails](#when-a-store-call-fails) lists every store reason and the fields each one has.
+`err.reason` is `not_found`, and `tostring(err)` gives the error value's message: the file and line of the failing `store.read`, then the fixed prose for `not_found`. The store's message reaches you only when nothing catches the failure, as the run's failure message followed by the call's location (see [Store failures that end the run](#store-failures-that-end-the-run)). [When a store call fails](#when-a-store-call-fails) lists every store reason and the fields each one has.
 
 ### When a write or an append fails
 
@@ -443,7 +443,7 @@ Paths such as `a.txt`, `src/a.rs`, and `secret/path.txt` are valid store paths. 
 
 Names that only resemble a device name, or merely contain a device word, are ordinary store names: `console.md`, `console.txt`, `nullable.txt`, `com10.md`, `com10.txt`, `com¹0.txt`, `lpt⁴.txt`, and `lpt.md` are all accepted, because the reserved-name rule matches only an exact device base (see [Reserved device names and colons](#reserved-device-names-and-colons)).
 
-A store path is an ordinary Lua string, so you can build one at run time by concatenating Lua values. With the block in `## Main` of `paths` replaced by this one, the block writes one file per name and reads both back by their literal paths:
+A store path is an ordinary Lua string, so you can build one at run time by concatenating Lua values. With the block in `Main` of `paths` replaced by this one, the block writes one file per name and reads both back by their literal paths:
 
 ````lua
 for _, name in ipairs({'one', 'two'}) do
@@ -460,7 +460,7 @@ Writing or appending to a nested path such as `drafts/plan.md` creates any missi
 
 ### Case in store paths
 
-Store paths are case-sensitive: case is kept and compared exactly as written. In the default in-memory store, `Notes.md` and `notes.md` are two different files, as this block shows in place of the one in `## Main` of `paths`:
+Store paths are case-sensitive: case is kept and compared exactly as written. In the default in-memory store, `Notes.md` and `notes.md` are two different files, as this block shows in place of the one in `Main` of `paths`:
 
 ````lua
 store.write('Notes.md', 'upper')
@@ -482,7 +482,7 @@ Every path you pass to a `store` call is checked against the path rules before t
 
 ### The invalid-path error
 
-A path that breaks a rule fails the call with an error value of kind `store` whose `reason` is `invalid_path`. Its `path` field is the path exactly as you wrote it, and its `rule` field names the broken rule. With the block in `## Main` of `paths` replaced by this one, the block reads all three fields:
+A path that breaks a rule fails the call with an error value of kind `store` whose `reason` is `invalid_path`. Its `path` field is the path exactly as you wrote it, and its `rule` field names the broken rule. With the block in `Main` of `paths` replaced by this one, the block reads all three fields:
 
 ````lua
 local ok, err = pcall(function() return store.read('../x') end)
@@ -493,11 +493,13 @@ return err.reason .. ' ' .. err.rule .. ' ' .. err.path
 invalid_path traversal ../x
 ````
 
-The message has the form `invalid path "{path}": {reason}`, where `{reason}` is the broken rule as a sentence, such as `path is empty` or `path contains a traversal segment`. The path sits in double quotes exactly as supplied but escaped, so a backslash shows doubled and control characters appear as escapes. For `../x`, `tostring(err)` reads:
+The store's message for it has the form `invalid path "{path}": {reason}`, where `{reason}` is the broken rule as a sentence, such as `path is empty` or `path contains a traversal segment`. The path sits in double quotes exactly as supplied but escaped, so a backslash shows doubled and control characters appear as escapes. For `../x`, the store's message reads:
 
 ````text
 invalid path "../x": path contains a traversal segment
 ````
+
+A caught error value's `tostring(err)` gives the call's file and line and the fixed prose for `invalid_path` instead, as [When a store call fails](#when-a-store-call-fails) shows.
 
 Every store call except `store.glob` uses this message form, and `store.glob` says `invalid glob pattern` instead (see [Finding files with `store.glob`](#finding-files-with-storeglob)). Every store error names its path in the same store-relative form the prompt uses, such as `absent.txt`, never with the store's root or another internal prefix, even when the Host roots the store at a directory such as `/my/store`.
 
@@ -547,7 +549,7 @@ A store path holds no control character, meaning any byte below `0x20` or the by
 
 ### Backslashes
 
-The only separator in a store path is `/`. A path holding a backslash, such as `notes\today.md`, fails with rule `backslash` and the message `path contains a backslash`, because some kinds of storage treat a backslash as a separator and others as a literal byte. In Lua source that path is the string `'notes\\today.md'`, and the message shows the backslash doubled:
+The only separator in a store path is `/`. A path holding a backslash, such as `notes\today.md`, fails with rule `backslash` and the message `path contains a backslash`, because some kinds of storage treat a backslash as a separator and others as a literal byte. In Lua source that path is the string `'notes\\today.md'`, and the store's message shows the backslash doubled:
 
 ````text
 invalid path "notes\\today.md": path contains a backslash
@@ -608,7 +610,7 @@ Calling `store.read(path)` reads a store file, and passing `start` and `end` aft
 
 `start` and `end` are each optional, but an `end` counts only alongside a `start`, so a call passes neither bound, only `start`, or both. With neither bound the whole file comes back, exactly as [Writing and reading files](#writing-and-reading-files) describes. Leaving `start` or `end` out, or passing `nil`, puts no bound on that side of the range, and an omitted `end` means the last line, so a read with a start line and no end line reads through the file's last line.
 
-`store.read(path, start, end)` returns only lines `start` through `end`, inclusive at both ends. With the block in `## Main` of `slices` replaced by this one, the read returns the second line alone:
+`store.read(path, start, end)` returns only lines `start` through `end`, inclusive at both ends. With the block in `Main` of `slices` replaced by this one, the read returns the second line alone:
 
 ````lua
 store.write('list.txt', 'one\ntwo\nthree\n')
@@ -629,7 +631,7 @@ A ranged read and every `store.read_numbered` call split the file into lines at 
 
 ### Numbered lines with `store.read_numbered`
 
-`store.read_numbered(path)` returns the file with each line behind its line number. With the block in `## Main` of `slices` replaced by this one, the run returns every line numbered:
+`store.read_numbered(path)` returns the file with each line behind its line number. With the block in `Main` of `slices` replaced by this one, the run returns every line numbered:
 
 ````lua
 store.write('list.txt', 'one\ntwo\nthree\n')
@@ -655,7 +657,7 @@ A ranged `store.read_numbered(path, start, end)` returns the selected lines incl
 
 On an 85-line file, `store.read_numbered('a.txt', 84, 85)` returns `84| line84` and `85| line85`.
 
-`store.read_numbered` right-aligns each line number with leading spaces to the digit width of the largest number in that result, not the file's total line count, then writes `| ` and the line text, so the separators line up across a digit-count boundary. In place of the block in `## Main` of `slices`, this block builds a 100-line file and reads its last two lines:
+`store.read_numbered` right-aligns each line number with leading spaces to the digit width of the largest number in that result, not the file's total line count, then writes `| ` and the line text, so the separators line up across a digit-count boundary. In place of the block in `Main` of `slices`, this block builds a 100-line file and reads its last two lines:
 
 ````lua
 local lines = {}
@@ -699,7 +701,7 @@ A wrong-typed line bound fails with an error value of kind `lua`, not `store`, s
 
 ### Line range errors
 
-Line bounds that `store.read` or `store.read_numbered` cannot honor raise a `store` error with reason `invalid_range` and the message `invalid line range for {path}: {reason}`. The reason is a short human-readable explanation, and the path is the file exactly as the prompt wrote it. In place of the block in `## Main` of `slices`, this block catches one:
+Line bounds that `store.read` or `store.read_numbered` cannot honor raise a `store` error with reason `invalid_range` and the store's message `invalid line range for {path}: {reason}`. The reason is a short human-readable explanation, and the path is the file exactly as the prompt wrote it. In place of the block in `Main` of `slices`, this block catches one:
 
 ````lua
 store.write('notes.md', 'one\ntwo\nthree')
@@ -708,10 +710,10 @@ return err.reason .. ': ' .. tostring(err)
 ````
 
 ````text
-invalid_range: invalid line range for notes.md: start must be at least 1
+invalid_range: slices.md:13: That line range is not valid. Use a range within the file's lines.
 ````
 
-The error value has a string `path` field naming the file and no other range details, so the specific rule that failed appears only in the message. A range error gives one of three reasons:
+The error value has a string `path` field naming the file and no other range details, and its message gives only the call's location and the fixed prose for `invalid_range`, so the specific rule that failed appears only in the store's message, which an uncaught failure's run message shows. A range error gives one of three reasons:
 
 | Reason in the message | When the read raises it |
 |---|---|
@@ -768,7 +770,7 @@ the slow brown fox
 
 The edit matches anchor text rather than byte offsets, so it works on multibyte UTF-8 text: replacing `résumé` with `CV` in `café résumé café` leaves `café CV café`. A `store.str_replace` counts as a write, so the policy and claim checks a write goes through apply to it too.
 
-All three arguments are required strings, and an empty `new` removes the anchor text from the file. With the block in `## Main` of `editor` replaced by this one, the edit removes `quick` and the space after it:
+All three arguments are required strings, and an empty `new` removes the anchor text from the file. With the block in `Main` of `editor` replaced by this one, the edit removes `quick` and the space after it:
 
 ````lua
 store.write('fox.txt', 'the quick brown fox')
@@ -780,7 +782,7 @@ return store.read('fox.txt')
 the brown fox
 ````
 
-Each argument must be a Lua string of valid UTF-8. Any other value raises an error of kind `lua`, not `store`, with the message `{name} must be a string, got {type}`, where `{name}` is `path`, `old`, or `new`, and a string that is not valid UTF-8 raises `{name} must be a valid UTF-8 string`. The file has to be UTF-8 too, and editing a file whose bytes are not valid UTF-8 fails with reason `not_utf8` (see [Store files hold UTF-8 text](#store-files-hold-utf-8-text)).
+Each argument must be a Lua string of valid UTF-8. Any other value raises an error of kind `lua`, not `store`, with the refusal `{name} must be a string, got {type}`, where `{name}` is `path`, `old`, or `new`, and a string that is not valid UTF-8 raises `{name} must be a valid UTF-8 string`. The file has to be UTF-8 too, and editing a file whose bytes are not valid UTF-8 fails with reason `not_utf8` (see [Store files hold UTF-8 text](#store-files-hold-utf-8-text)).
 
 ### Making an anchor match once
 
@@ -806,13 +808,13 @@ return tostring(err) .. '\n' .. store.read('notes.md')
 ````
 
 ````text
-anchor "TODO" occurs 3 times in notes.md, expected exactly one; include more surrounding text so it matches once
+checklist.md:13: The text to replace was empty, missing, or found more than once. Use text that appears exactly once in the file.
 TODO: draft
 DONE: docs
 TODO: release
 ````
 
-The first edit is refused because `TODO` occurs three times, and the refused edit leaves the file exactly as it was. Its message gives the count and tells you to include more surrounding text. `TODO: docs` occurs once, so the second edit succeeds.
+The first edit is refused because `TODO` occurs three times, and the refused edit leaves the file exactly as it was. Its message names the line of the refused call and asks for text that appears exactly once, and the error value's `count` field holds the 3 matches. `TODO: docs` occurs once, so the second edit succeeds.
 
 ### When an edit is refused
 
@@ -822,7 +824,7 @@ A `store.str_replace` whose anchor cannot be applied raises an error value of ki
 - `anchor`: the anchor text you passed as `old`, a string.
 - `count`: how many times the anchor matched, an integer, which is `0` when the anchor was absent and `2` or more when the edit would be ambiguous.
 
-`count` arrives in Lua as an integer, not a string, so you compare it as a number, and `err.anchor` and `err.count` let a prompt branch on the failure. For an ambiguous anchor, `count` equals the number of places the anchor matched, as this block shows in place of the one in `## Main` of `editor`:
+`count` arrives in Lua as an integer, not a string, so you compare it as a number, and `err.anchor` and `err.count` let a prompt branch on the failure. For an ambiguous anchor, `count` equals the number of places the anchor matched, as this block shows in place of the one in `Main` of `editor`:
 
 ````lua
 store.write('a.txt', 'na na na')
@@ -834,7 +836,7 @@ return err.reason .. ' ' .. err.anchor .. ' ' .. err.count
 anchor na 3
 ````
 
-The message depends on why the anchor failed:
+The store's message depends on why the anchor failed:
 
 | Failure | `count` | Message |
 |---|---|---|
@@ -885,7 +887,7 @@ false true false
 
 Deleting a file leaves its directory in place. A store directory appears once a file is written beneath it and remains after its last file is deleted, until `store.delete` removes it, which is why `store.exists('notes')` is still `true` in `cleanup` until the final delete.
 
-`store.delete` removes a file or an empty directory, and only those, because removal is not recursive and the call takes no recursive option. Deleting a directory that still holds entries fails with reason `directory_not_empty` and the message `directory not empty in store: {path}`, and changes nothing, as this block shows in place of the one in `## Main` of `cleanup`:
+`store.delete` removes a file or an empty directory, and only those, because removal is not recursive and the call takes no recursive option. Deleting a directory that still holds entries fails with reason `directory_not_empty` and the message `directory not empty in store: {path}`, and changes nothing, as this block shows in place of the one in `Main` of `cleanup`:
 
 ````lua
 store.write('notes/a.txt', 'scratch')
@@ -894,14 +896,14 @@ return err.reason .. ': ' .. tostring(err)
 ````
 
 ````text
-directory_not_empty: directory not empty in store: notes
+directory_not_empty: cleanup.md:13: That directory is not empty. Remove it recursively, or empty it first.
 ````
 
 So deleting `notes` fails while `notes/a.txt` exists, and succeeds once that file is gone. After `store.delete` removes a file, `store.read` on its path fails with the not-found message `file not found in store: {path}`. `store.delete` also fails when the policy denies it, when another access holds a conflicting claim that is not ordered before it, or when the storage behind the store fails for any reason other than the path being absent.
 
 ### Checking with `store.exists`
 
-`store.exists` lets a block act only when a file is there. With the block in `## Main` of `cleanup` replaced by this one, in a run whose store holds no `state.txt`, the block returns its fallback text:
+`store.exists` lets a block act only when a file is there. With the block in `Main` of `cleanup` replaced by this one, in a run whose store holds no `state.txt`, the block returns its fallback text:
 
 ````lua
 if store.exists('state.txt') then
@@ -916,7 +918,7 @@ no state yet
 
 `store.exists(path)` takes a required string path and returns a boolean that says whether the path exists, `true` once a file has been written there. It reports a missing or never-written path as a plain `false` without raising, while an invalid path still fails with the invalid-path error (see [The invalid-path error](#the-invalid-path-error)). It reports whether anything is at the path, not only a file, so it returns `true` for a directory as well, as `store.exists('notes')` does in `cleanup`.
 
-`store.exists` returns `false` only when the path is confirmed absent, and raises any other failure as an error rather than returning `false`. It fails when the policy denies the check, when another access holds a conflicting claim on the path that is not ordered before it, or when the storage behind the store fails. A conflicting claim ends the run (see [Races, claims, and determinism](#races-claims-and-determinism)), but you can catch a policy denial or a storage failure with `pcall`, so the block keeps running and finishes cleanly, as this block does in place of the one in `## Main` of `cleanup`:
+`store.exists` returns `false` only when the path is confirmed absent, and raises any other failure as an error rather than returning `false`. It fails when the policy denies the check, when another access holds a conflicting claim on the path that is not ordered before it, or when the storage behind the store fails. A conflicting claim ends the run (see [Races, claims, and determinism](#races-claims-and-determinism)), but you can catch a policy denial or a storage failure with `pcall`, so the block keeps running and finishes cleanly, as this block does in place of the one in `Main` of `cleanup`:
 
 ````lua
 local ok, present = pcall(function() return store.exists('a.txt') end)
@@ -1125,12 +1127,12 @@ return err.kind .. ' ' .. err.reason .. ' ' .. err.rule .. ' ' .. err.path .. '\
 
 ````text
 store invalid_path wildcard a**b
-invalid glob pattern "a**b": pattern contains invalid wildcard grammar
+bad_pattern.md:12: That path is not valid. Use a relative path with no `.` or `..` segments, no backslashes, and no empty segments.
 ````
 
-The failure is an error value of error kind `store`, the kind every store failure has (see [When a store call fails](#when-a-store-call-fails)). Its `reason` is `invalid_path`, its `path` field names the pattern, and its `rule` field names the rule the pattern broke. Its message has the form `invalid glob pattern "{path}": {reason}`, with the pattern shown in quotes and the broken rule's reason text after the colon.
+The failure is an error value of error kind `store`, the kind every store failure has (see [When a store call fails](#when-a-store-call-fails)). Its `reason` is `invalid_path`, its `path` field names the pattern, and its `rule` field names the rule the pattern broke. Its message is the call's location and the fixed prose for `invalid_path`, while the store's message for it has the form `invalid glob pattern "{path}": {reason}`, with the pattern shown in quotes and the broken rule's reason text after the colon, as in `invalid glob pattern "a**b": pattern contains invalid wildcard grammar`.
 
-Each rule has a tag, which the `rule` field holds, and a reason text, which ends the message:
+Each rule has a tag, which the `rule` field holds, and a reason text, which ends the store's message:
 
 | Rule | The pattern breaks it when it | Reason text |
 |---|---|---|
@@ -1170,12 +1172,12 @@ return tostring(ok) .. ' ' .. err.kind .. ' ' .. tostring(err)
 ````
 
 ````text
-false store file not found in store: missing.md
+false store careful.md:12: That path does not exist. Check the path, or list its directory to find the right one.
 ````
 
 A failing store call raises its failure at your own call site: the error comes out of your `store.*` call itself. Wrapped in `pcall` (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)), the call returns `false` plus the failure as its second return value instead of ending the run. Both the short form `pcall(store.read, 'missing.md')` and the wrapped form `pcall(function() return store.read('missing.txt') end)` work, and afterward `ok` is `false` and `err` can be read field by field.
 
-The second value is a store error value: an error value whose error kind is `store`, and that carries a `message` and a `reason` field alongside the fields specific to that failure, such as `path`. Its `message` is the error's text, and `tostring(err)` returns that text, which is why `careful` returns `false store file not found in store: missing.md`.
+The second value is a store error value: an error value whose error kind is `store`, and that carries a `message` and a `reason` field alongside the fields specific to that failure, such as `path`. Its `message` is the file and line of the failing call, then the fixed prose the store reason has for a model to read, and `tostring(err)` returns that text, which is why `careful` returns `false store careful.md:12: That path does not exist. Check the path, or list its directory to find the right one.` The line is that of the `store.*` call itself, even inside a function that `pcall` runs (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). The store's own message for the failure, here `file not found in store: missing.md`, is what the run's failure message shows when nothing catches the error.
 
 A store failure reaches you in one of two ways. A `pcall` around the call catches it as a store error value, or, when nothing catches it, it ends the run as a run error (see [Store failures that end the run](#store-failures-that-end-the-run)). Every store operation, `store.exists` included, raises its failure the same way, as an error value of error kind `store` that aborts the current Lua block unless the call is wrapped in `pcall`.
 
@@ -1222,7 +1224,7 @@ The `reason` field holds the store reason: a stable tag that names the failure, 
 
 Every store reason is a string holding a lowercase snake_case tag. There are twenty-one of them, each naming exactly one failure, and no two failures share a tag: `not_found`, `already_exists`, `not_a_directory`, `is_a_directory`, `directory_not_empty`, `not_utf8`, `invalid_path`, `invalid_range`, `anchor`, `permission_denied`, `approval_required`, `scope_ended`, `read_only`, `outside_root`, `root_protected`, `no_store`, `cross_mount`, `io`, `unsupported`, `conflict`, and `backend`. Every store operation fails with this one family of reasons, so one branch on `reason` handles a failure from any `store.*` call.
 
-A missing file is the failure you meet most often. `store.read`, `store.read_numbered`, and `store.str_replace` on a missing file, whole or ranged, plain or numbered, fail with reason `not_found` and the message `file not found in store: {path}`, so `tostring(err)` gives `file not found in store: missing.txt` for a missing `missing.txt`. Two calls treat a missing file as normal instead: `store.delete` of a missing file succeeds, so removing the same path twice works, and `store.exists` reports absence as `false` without raising.
+A missing file is the failure you meet most often. `store.read`, `store.read_numbered`, and `store.str_replace` on a missing file, whole or ranged, plain or numbered, fail with reason `not_found` and the store's message `file not found in store: {path}`. So for a missing `missing.txt`, a caught failure's `tostring(err)` gives the call's file and line followed by `That path does not exist. Check the path, or list its directory to find the right one.`, and an uncaught one ends the run with `file not found in store: missing.txt` and the call's location. Two calls treat a missing file as normal instead: `store.delete` of a missing file succeeds, so removing the same path twice works, and `store.exists` reports absence as `false` without raising.
 
 ### Fields of a store error value
 
@@ -1247,21 +1249,21 @@ return err.kind .. '|' .. err.reason .. '|' .. err.path .. '|' .. tostring(err)
 ````
 
 ````text
-store|not_found|missing.txt|file not found in store: missing.txt
+store|not_found|missing.txt|fields.md:12: That path does not exist. Check the path, or list its directory to find the right one.
 ````
 
-The fields you can read are `err.kind`, `err.reason`, `err.path`, `err.anchor`, the integer `err.count`, and the others listed below, and the string ones concatenate as the example shows. Every store error value has `kind`, `message`, and `reason`. Besides those, it carries:
+The fields you can read are `err.kind`, `err.reason`, `err.path`, `err.anchor`, the integer `err.count`, and the others listed below, and the string ones concatenate as the example shows. Every store error value has `kind`, `code`, `message`, and `reason`, and its `code` holds the same tag as `reason`. Besides those, it carries:
 
 - `path`, a string, on every failure that names a path
 - `anchor` and `count` on an `anchor` failure
 - `rule` on an `invalid_path` failure
 - `valid_up_to` on a `not_utf8` failure, the failure for text that is not UTF-8
 
-`backend` and `no_store` failures name no path, and a `backend` error has no fields beyond `kind`, `message`, and `reason`. Any other detail, such as a denial reason, a range problem, an outside-root or cross-mount detail, an I/O message, or an unsupported-operation detail, appears only inside the message and never as its own field. So failures with reasons `invalid_range`, `permission_denied`, `approval_required`, `outside_root`, `cross_mount`, `io`, and `unsupported` carry only `path` as a field.
+`backend` and `no_store` failures name no path, and a `backend` error carries none of the extra fields above. Any other detail, such as a denial reason, a range problem, an outside-root or cross-mount detail, an I/O message, or an unsupported-operation detail, appears only inside the store's message and never as its own field, so a caught error value does not hold it. So failures with reasons `invalid_range`, `permission_denied`, `approval_required`, `outside_root`, `cross_mount`, `io`, and `unsupported` carry only `path` as a field.
 
-The `path` field names the path the failing call was given, exactly as you passed it, so a failed `store.read('missing.txt')` has `err.path == 'missing.txt'`. Only a `not_a_directory` failure differs: its `path` can name the file that sits where a directory is needed. Store errors name paths in the logical form you write, relative to the store root and without a leading `/`. When an error's prose embeds the path, as a permission denial's reason text or a conflict's detail does, that prose names the logical path too.
+The `path` field names the path the failing call was given, exactly as you passed it, so a failed `store.read('missing.txt')` has `err.path == 'missing.txt'`. Only a `not_a_directory` failure differs: its `path` can name the file that sits where a directory is needed. Store errors name paths in the logical form you write, relative to the store root and without a leading `/`. When the store's message embeds the path, as a permission denial's reason text or a conflict's detail does, it names the logical path too.
 
-The `valid_up_to` and `count` fields arrive in Lua as integers, capped at the largest 64-bit signed integer, 9223372036854775807. A store error value has the same fields whether the failure happens while a [Pack prelude](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals) is installing or during an ordinary store call, so Lua code sees no difference between the two. A failed read of `missing.txt` caught with `pcall` before the Pack preludes install still renders `store|not_found|missing.txt|file not found in store: missing.txt`.
+The `valid_up_to` and `count` fields arrive in Lua as integers, capped at the largest 64-bit signed integer, 9223372036854775807. A store error value has the same fields whether the failure happens while a [Pack prelude](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals) is installing or during an ordinary store call, so code that branches on `kind`, `reason`, or a field sees no difference between the two. Only the message differs: a store call made before the store functions take their run-time form, as while the Pack preludes install, puts the store's message ahead of the fixed prose, so a failed read of `missing.txt` there gives `file not found in store: missing.txt. That path does not exist. Check the path, or list its directory to find the right one.`, after the call's location when it has one.
 
 ### Store error messages
 
@@ -1285,12 +1287,12 @@ return 'context: ' .. err
 ````
 
 ````text
-context: file not found in store: missing.txt
+context: context.md:12: That path does not exist. Check the path, or list its directory to find the right one.
 ````
 
-`tostring(err)` returns the error value's model-facing message, because its `__tostring` returns its `message` field, so the wording you get is the same wording the store reports for a model to read. Concatenating the error value with a string, as in `'context: ' .. err`, gives the same message text as `tostring(err)`, so code that concatenates an error into a string works the same whether the error is a string or a store error value.
+`tostring(err)` returns the error value's `message` field, because its `__tostring` returns that field. For a store failure, that message is the file and line of the failing call, then the fixed prose for its reason, the text written for a model to read, which never carries the location itself. Concatenating the error value with a string, as in `'context: ' .. err`, gives the same message text as `tostring(err)`, so code that concatenates an error into a string works the same whether the error is a string or a store error value.
 
-The store's messages follow a few fixed rules:
+The store's message is a separate and more detailed text: the store's own wording for the failure, which names the path and the rule or detail that failed. It is the run's failure message when nothing catches the failure (see [Store failures that end the run](#store-failures-that-end-the-run)), while a caught error value keeps only the parts that have fields, such as `path`, `rule`, `anchor`, and `count`. The store's messages follow a few fixed rules:
 
 - A message is a lowercase phrase, and the store's own wording ends without a period, as in `file not found in store: {path}` and `store I/O failure on {path}: {message}`.
 - A message says what failed and, where there is a fix, how to make it. An anchor that occurs more than once gives a message ending `include more surrounding text so it matches once`, and an invalid path names the rule the path broke, as in `invalid path "../x": path contains a traversal segment`.
@@ -1326,10 +1328,10 @@ return e1.reason .. ' ' .. e1.path .. '\n' .. e2.reason .. ' ' .. e2.path .. '\n
 ````text
 is_a_directory notes
 not_a_directory a.txt
-not a directory in store: a.txt
+wrong_kind.md:15: That path is not a directory. Use a directory path for this operation.
 ````
 
-Once `notes/a.txt` exists, `notes` is a directory, so reading it fails with `is_a_directory` rather than `not_found`. Writing `a.txt/b.txt` while `a.txt` is a file fails with `not_a_directory`, and the error's `path` names the file `a.txt` that sits where a directory is needed. This table lists the messages for the reasons whose wording the store fixes, with the fields each carries beyond `kind`, `message`, and `reason`:
+Once `notes/a.txt` exists, `notes` is a directory, so reading it fails with `is_a_directory` rather than `not_found`. Writing `a.txt/b.txt` while `a.txt` is a file fails with `not_a_directory`, and the error's `path` names the file `a.txt` that sits where a directory is needed. The store's message for it is `not a directory in store: a.txt`. This table lists the store's messages for the reasons whose wording the store fixes, with the fields each carries beyond `kind`, `code`, `message`, and `reason`:
 
 | Reason | Message | Extra fields |
 |---|---|---|
@@ -1379,7 +1381,7 @@ lua
 
 Every `path`, `contents`, `old`, `new`, and `pattern` argument to a `store.*` call is a required string, and leaving one out or passing another type raises an error at the call. The Engine checks store arguments once, when it parses the call, so a bad argument to any `store.*` function raises at the call site, where `pcall` catches it.
 
-A store argument that fails its check raises an error value of error kind `lua`; only a failure the store itself reports has error kind `store`. The message has the form `{name} must be a string, got {type}`, worded the same for every store call, as in `path must be a string, got {type}` and `contents must be a string, got {type}`. Once a call's arguments pass their checks, any failure of the operation itself has error kind `store`.
+A store argument that fails its check raises an error value of error kind `lua`; only a failure the store itself reports has error kind `store`. Its message holds the refusal `{name} must be a string, got {type}` after the call's file and line, worded the same for every store call, as in `path must be a string, got {type}` and `contents must be a string, got {type}`. Once a call's arguments pass their checks, any failure of the operation itself has error kind `store`.
 
 ### Store failures that end the run
 
@@ -1401,11 +1403,11 @@ return store.read('missing.txt')
 ```
 ````
 
-This run never returns a result. The failed read stops the block at that call, and the run fails with run error kind `Vfs`, the run error kind for a store failure that ends a run. The run error carries the store's model-facing message, here `file not found in store: missing.txt`. Run error kinds as a whole are covered in [Run error kinds](16-limits-and-errors.md#run-error-kinds).
+This run never returns text. The failed read stops the block at that call, and the run fails with the error code `not_found`, the store code for a path that does not exist. The run's failure message is the store's message followed by the location of the failing call, here `file not found in store: missing.txt (at uncaught.md:12)`. Error codes as a whole are covered in [Run error codes](16-limits-and-errors.md#run-error-codes).
 
-An uncaught failure stops the block at the failing call, and the store operations that already ran keep their success events (see [How store calls run and what they report](#how-store-calls-run-and-what-they-report)). A block that writes, reads, then makes a failing `store.str_replace` records the write and the read as succeeded and the replace as failed, in statement order, and the block ends with an error. An uncaught store failure in the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) ends the run with `Vfs` too, the same as in a section (see [The store in the H1 body](#the-store-in-the-h1-body)).
+An uncaught failure stops the block at the failing call, and the store operations that already ran keep their success events (see [How store calls run and what they report](#how-store-calls-run-and-what-they-report)). A block that writes, reads, then makes a failing `store.str_replace` records the write and the read as succeeded and the replace as failed, in statement order, and the block ends with an error. An uncaught store failure in the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) ends the run with its store code too, the same as in a section (see [The store in the H1 body](#the-store-in-the-h1-body)).
 
-Catching a store failure and raising it again keeps its classification:
+Catching a store failure and raising it again keeps its code:
 
 ````markdown
 ---
@@ -1420,7 +1422,7 @@ runvil: 0
 
 ```lua
 local ok, err = pcall(function() return store.read('missing.txt') end)
-call('### Cleanup', '')
+call('Cleanup', '')
 error(err)
 ```
 
@@ -1431,11 +1433,11 @@ return 'tidied'
 ```
 ````
 
-The caught store error, raised again with `error(err)`, ends the run with `Vfs` and the original store message `file not found in store: missing.txt`. That holds even though another suspending call, `call('### Cleanup', '')` (see [Calling a section](08-jump-and-call.md#calling-a-section)), ran in between.
+The caught store error, raised again with `error(err)`, ends the run with its code, `not_found`, and the original store message, still placed on the `store.read` line: `file not found in store: missing.txt (at reraise.md:12)`. That holds even though another suspending call, `call('Cleanup', '')` (see [Calling a section](08-jump-and-call.md#calling-a-section)), ran in between.
 
-Two failures happen before any block runs, and both end the run with `Vfs`: a run whose Host handle declares no store fails before its first block, rather than on its first store call, with `this run declares no store, so no store operation can run`, and a store backend that fails as the run starts, for example by refusing its session, fails the run at its first step with a message that starts `store operation failed: ` followed by the store's own error text. [When the store cannot start](#when-the-store-cannot-start) covers both.
+Two failures happen before any block runs, and both end the run with a store code: a run whose Host handle declares no store fails before its first block, rather than on its first store call, with the code `no_store` and the message `this run declares no store, so no store operation can run`, and a store backend that fails as the run starts, for example by refusing its session, fails the run at its first step with the code of the store's own error, such as `backend`, and a message that starts `store operation failed: ` followed by the store's own error text. [When the store cannot start](#when-the-store-cannot-start) covers both.
 
-A store problem that ends a run has one of two run error kinds: `Vfs` for a store failure, and `Determinism` for a claims conflict, such as a library write that races across two [arms](14-fanout.md#what-an-arm-sees). A claims conflict is never raised at the call. It ends the run on the spot as `Determinism`, even when a `pcall` surrounds the call, so a library that runs `local ok = pcall(function() store.write('seeded.txt', 'seed') end)` in two racing arms still ends the run with `Determinism`. [Races, claims, and determinism](#races-claims-and-determinism) explains when a conflict happens.
+A store problem that ends a run has a store code, whether it is an ordinary store failure, which keeps its own code such as `not_found`, or a claims conflict, such as a library write that races across two [arms](14-fanout.md#what-an-arm-sees), which is `determinism`. A claims conflict is never raised at the call. It ends the run on the spot with `determinism`, even when a `pcall` surrounds the call, so a library that runs `local ok = pcall(function() store.write('seeded.txt', 'seed') end)` in two racing arms still ends the run with `determinism`. [Races, claims, and determinism](#races-claims-and-determinism) explains when a conflict happens.
 
 ## Sharing files across sections, calls, and tasks
 
@@ -1453,7 +1455,7 @@ runvil: 0
 ## Main
 
 ```lua
-call('## Gather')
+call('../Gather')
 return store.read('findings.md')
 ```
 
@@ -1468,7 +1470,7 @@ store.write('findings.md', 'three sources agree')
 three sources agree
 ````
 
-A run has one store, and every chain of the run uses it. A chain is a walk with its own entries, as the main walk, each `call`, and each task have (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)). So the file `## Gather` writes inside the `call` chain is readable by `## Main` as soon as `call` returns.
+A run has one store, and every chain of the run uses it. A chain is a walk with its own entries, as the main walk, each `call`, and each task have (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)). So the file `Gather` writes inside the `call` chain is readable by `Main` as soon as `call` returns.
 
 Store writes made inside a `call` chain stay in the store after the chain returns, so the caller and every later section read them. `var` writes made inside the call are discarded instead (see [Call input and `var`](08-jump-and-call.md#call-input-and-var)), which makes the store the place to put anything a called section needs to hand back besides its return value. Writes made by child-level sections and by sections in a `call` chain are visible to the caller and to later sections of the outer walk in the same run.
 
@@ -1476,9 +1478,9 @@ Store writes made inside a `call` chain stay in the store after the chain return
 
 The store orders each chain's calls through an identity, the name its store calls are tracked under, and sections that share an identity never get in each other's way. The main walk runs one section at a time, so all its sections act in the store as a single identity. The H1 pass and the section walk that follows share that one identity too, so sections in the walk read freely what the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) wrote, and nothing the pass wrote falsely conflicts with the walk.
 
-A `call` chain shares its caller's identity, so a `call` needs no join, and a called section's store operations on paths the caller already touched never conflict with the caller. When `## Main` appends to `ids.txt`, then calls `## Sub`, which appends to the same file, then appends again and reads every line back, nothing conflicts.
+A `call` chain shares its caller's identity, so a `call` needs no join, and a called section's store operations on paths the caller already touched never conflict with the caller. When `Main` appends to `ids.txt`, then calls `Sub`, which appends to the same file, then appends again and reads every line back, nothing conflicts.
 
-`store.write(path, text)` replaces a store file's content, and the new content is visible to later sections and to deeper call levels in the same run. A section that calls itself recursively can count its runs this way, rereading `n.txt` and writing `store.write('n.txt', tostring(n))` at each step. Store writes made before a `jump` are visible to the section the jump lands on (see [Jumping to a section](08-jump-and-call.md#jumping-to-a-section)): when `## Check` runs `store.write('seen.txt', 'check')` and then jumps to `## Help`, and `## Help` returns `'helped:' .. store.read('seen.txt')`, the run result is `helped:check`.
+`store.write(path, text)` replaces a store file's content, and the new content is visible to later sections and to deeper call levels in the same run. A section that calls itself recursively can count its runs this way, rereading `n.txt` and writing `store.write('n.txt', tostring(n))` at each step. Store writes made before a `jump` are visible to the section the jump lands on (see [Jumping to a section](08-jump-and-call.md#jumping-to-a-section)): when `Check` runs `store.write('seen.txt', 'check')` and then jumps to `Help`, and `Help` returns `'helped:' .. store.read('seen.txt')`, the run result is `helped:check`.
 
 ### Forks and joins between tasks
 
@@ -1496,9 +1498,9 @@ runvil: 0
 ## Parent
 
 ```lua
-local g = tasks.spawn('### Gather')
+local g = tasks.spawn('Gather')
 tasks.join({ g })
-local s = tasks.spawn('### Summarize')
+local s = tasks.spawn('Summarize')
 tasks.join({ s })
 return store.read('summary.md')
 ```
@@ -1525,7 +1527,7 @@ summary of: gathered content
 
 A chain that [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) starts runs beside its owner, the chain that spawned it, and for store ordering each arm of a fanout (see [What an arm sees](14-fanout.md#what-an-arm-sees)) is such a task as well. A task works on the same store as its owner and every other chain of the run. What differs is ordering: a task gets its own identity, forked from its owner's at the spawn.
 
-Spawning a task is a fork. Everything the owner did in the store before `tasks.spawn` comes ahead of anything the task does, so the task can build on files the owner wrote. In `summarize`, `### Summarize` is spawned after `## Parent` has joined `### Gather`, so it reads `gathered.md` freely. A task or a fanout arm sees every store write its owner made before spawning it, and it can write the same path itself without a conflict.
+Spawning a task is a fork. Everything the owner did in the store before `tasks.spawn` comes ahead of anything the task does, so the task can build on files the owner wrote. In `summarize`, `Summarize` is spawned after `Parent` has joined `Gather`, so it reads `gathered.md` freely. A task or a fanout arm sees every store write its owner made before spawning it, and it can write the same path itself without a conflict.
 
 Delivering a task's result is a join, and it orders everything the task did ahead of the owner's next step. After a wait delivers a task, everything that task did, its store operations included, counts as happening before the owner's next step. Each kind of delivery joins (see [Waiting with `tasks.join_any` and `tasks.join`](15-tasks.md#waiting-with-tasksjoin_any-and-tasksjoin)):
 
@@ -1533,7 +1535,7 @@ Delivering a task's result is a join, and it orders everything the task did ahea
 - `tasks.join` joins every member it delivers, including the delivered members of a timed join.
 - Telling the model that a task has completed delivers that task to the model, and that delivery joins it too.
 
-Within a run, an order between chains comes from exactly two sources, spawning a task and delivering a task's result, and everything a prompt writes to the store follows them. A task writes a file with `store.write(path, content)`, and a section that has joined the task reads the content back with `store.read(path)`, as `## Parent` reads `summary.md` after `tasks.join({ s })`. A prompt whose sections join a task before reading the files it wrote gets the same result however its chains happen to interleave.
+Within a run, an order between chains comes from exactly two sources, spawning a task and delivering a task's result, and everything a prompt writes to the store follows them. A task writes a file with `store.write(path, content)`, and a section that has joined the task reads the content back with `store.read(path)`, as `Parent` reads `summary.md` after `tasks.join({ s })`. A prompt whose sections join a task before reading the files it wrote gets the same result however its chains happen to interleave.
 
 Between the spawn and the delivery, the owner and its running task are unordered. A write the owner makes after `tasks.spawn` is not ordered before the task's access to the same path, so the store treats the pair as a conflict that names the path. [Races, claims, and determinism](#races-claims-and-determinism) shows what such a conflict does to the run.
 
@@ -1554,7 +1556,7 @@ runvil: 0
 
 ```lua
 local topics = { 'alpha', 'beta', 'gamma' }
-tasks.fanout('### Worker', topics)
+tasks.fanout('Worker', topics)
 local parts = {}
 for _, path in ipairs(store.glob('research/*.md')) do
   parts[#parts + 1] = store.read(path)
@@ -1576,13 +1578,13 @@ part beta
 part gamma
 ````
 
-Each arm writes its own path, built from its `sys.index` and its `item` (see [What an arm sees](14-fanout.md#what-an-arm-sees)). After `tasks.fanout` returns, or after `tasks.join` or `tasks.join_any` delivers a task, the caller can read, glob, and merge that task's files freely, as `## Parent` does here. A fanout arm can write a store path with `store.write(path, text)` and append to one with `store.append(path, text)`, so two sections that run inside one arm, one after the other, can both append to `order.txt`, which then holds both lines. Store files written by sections inside a fanout arm stay in the run's store after the arm and the run finish.
+Each arm writes its own path, built from its `sys.index` and its `item` (see [What an arm sees](14-fanout.md#what-an-arm-sees)). After `tasks.fanout` returns, or after `tasks.join` or `tasks.join_any` delivers a task, the caller can read, glob, and merge that task's files freely, as `Parent` does here. A fanout arm can write a store path with `store.write(path, text)` and append to one with `store.append(path, text)`, so two sections that run inside one arm, one after the other, can both append to `order.txt`, which then holds both lines. Store files written by sections inside a fanout arm stay in the run's store after the arm and the run finish.
 
-The delivery has to come first. Reading a task's file after a timed `tasks.join` ran out of time (see [Time limits on waits](15-tasks.md#time-limits-on-waits)) and before any delivery of that task ends the run with a `Determinism` error, even if the task has already written the file.
+The delivery has to come first. Reading a task's file after a timed `tasks.join` ran out of time (see [Time limits on waits](15-tasks.md#time-limits-on-waits)) and before any delivery of that task ends the run with a claims conflict, even if the task has already written the file.
 
 Joins carry writes along transitively. A section that joins a task which itself joined tasks it spawned can read those tasks' files too: when a task spawns two more tasks that write `sub-one.md` and `sub-two.md` and joins them, the section that delivers the outer task with `tasks.join_any` reads both files. A chain's end also joins every task it owns, so everything its tasks did counts as happening before the chain's own end, even for tasks no wait ever delivered, and nested work is ordered transitively.
 
-A cancelled task's store writes, however far the task got before [`tasks.cancel`](15-tasks.md#cancelling-and-listing-tasks), are readable by its owner once a wait such as `tasks.join_any` delivers the task. So `tasks.cancel(a)`, then `tasks.join_any({ a })`, then `store.read('partial.txt')` returns whatever `a` wrote before it stopped. After an owner joins a finished task, a task it spawns next can write, glob, or delete the same paths without a conflict.
+A canceled task's store writes, however far the task got before [`tasks.cancel`](15-tasks.md#canceling-and-listing-tasks), are readable by its owner once a wait such as `tasks.join_any` delivers the task. So `tasks.cancel(a)`, then `tasks.join_any({ a })`, then `store.read('partial.txt')` returns whatever `a` wrote before it stopped. After an owner joins a finished task, a task it spawns next can write, glob, or delete the same paths without a conflict.
 
 ### Tasks started in the H1 pass
 
@@ -1599,7 +1601,7 @@ runvil: 0
 
 ```lua
 store.write('config.md', 'configured')
-var.t = tasks.spawn('## Task')
+var.t = tasks.spawn('Task')
 ```
 
 ## Result
@@ -1621,7 +1623,7 @@ return 'written'
 configured/task wrote
 ````
 
-`## Result` reads `config.md` freely because the H1 pass and the walk share one identity, and it reads `t.txt` because `tasks.join_any({ var.t })` delivered the task the H1 pass spawned. `## Result` returns, which ends the run, so the walk never reaches `## Task` on its own.
+`Result` reads `config.md` freely because the H1 pass and the walk share one identity, and it reads `t.txt` because `tasks.join_any({ var.t })` delivered the task the H1 pass spawned. `Result` returns, which ends the run, so the walk never reaches `Task` on its own.
 
 ### Tools and the store
 
@@ -1631,7 +1633,7 @@ Two tool calls in flight at once each run under their own identity, forked from 
 
 An adhoc tool handler, the Lua function given to `tools.adhoc` for Lua or a model to call (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)), can use `store`, and a store call made there is an ordinary store operation. A handler whose body runs `store.write('grab.txt', 'kept ' .. args.value)` and then `return store.read('grab.txt')` returns `kept hi` when it is called with the value `hi`.
 
-A tool called from inside a task reads the task's own earlier writes, and the owner reads what that tool wrote once it joins the task. What a tool wrote stays readable by the calling section even when `tools.call` fails with error kind `cancelled` because the call's answer was dropped.
+A tool called from inside a task reads the task's own earlier writes, and the owner reads what that tool wrote once it joins the task. What a tool wrote stays readable by the calling section even when `tools.call` fails with error kind `canceled` because the call's answer was dropped.
 
 ## Races, claims, and determinism
 
@@ -1649,7 +1651,7 @@ runvil: 0
 ## Main
 
 ```lua
-tasks.fanout('### Worker', { 'alpha', 'beta' })
+tasks.fanout('Worker', { 'alpha', 'beta' })
 return store.read('log.txt')
 ```
 
@@ -1660,17 +1662,17 @@ store.append('log.txt', item .. ';')
 ```
 ````
 
-This run never reaches its `return`. Both arms append to `log.txt`, nothing orders one arm after the other, and the run fails with run error kind `Determinism` and a message of this form, where each identity names one of the two arms:
+This run never reaches its `return`. Both arms append to `log.txt`, nothing orders one arm after the other, and the run fails with the error code `determinism` and a message of this form, where each identity names one of the two arms and the location is the losing arm's `store.append`:
 
 ````text
-store determinism violation: write on log.txt by {id} conflicts with a write claim by {other}
+store determinism violation: write on log.txt by {id} conflicts with a write claim by {other} (at race.md:19)
 ````
 
 Every store call claims what it touches for the chain that made it, so the store tracks which chain touches which region. That record is a claim. Two store accesses that touch the same region conflict only when at least one of them is a write and the two are concurrent, and such a clash is a claims conflict. Two accesses are concurrent when they come from different chains of the run and no spawn or join orders one before the other, or when they come from two runs sharing one Host store at the same time.
 
 Read claims never conflict with each other, whether they come from `store.read`, `store.read_numbered`, `store.exists`, or `store.glob`. A chain never conflicts with itself either, so a chain may write a path, overwrite it, append to it, and read it back freely.
 
-A store write leaves a standing write claim on its path for the rest of the run. So when two fanout arms write or append to one path, whichever reaches the store second always meets the first's claim and fails with a claims conflict, however the run interleaves. The whole run then ends with a fatal `Determinism` error whose message names the conflicting path, as `race` shows. `Determinism` is the run error kind for a store operation that conflicts under the claims model, a determinism violation.
+A store write leaves a standing write claim on its path for the rest of the run. So when two fanout arms write or append to one path, whichever reaches the store second always meets the first's claim and fails with a claims conflict, however the run interleaves. The whole run then ends with a fatal claims conflict whose message names the conflicting path, as `race` shows. A store operation that conflicts under the claims model is a determinism violation, and it ends the run with the error code `determinism`, a store code like any other store failure's, except that no Lua code can catch it.
 
 Store race detection is deterministic. Whether an access conflicts depends only on the order that spawns, joins, and chain ends set, never on how the arms or tasks happen to interleave in time, so a prompt gets the same store verdicts and the same file contents in every interleaving. A race in your prompt shows up on every run, not only on unlucky ones.
 
@@ -1729,9 +1731,9 @@ The spawn and join rules from [Forks and joins between tasks](#forks-and-joins-b
 
 Reading a task's store files without a delivery that joined the task is a conflict, and the verdict depends only on the prompt's structure, never on which task happened to finish first. Reading a sibling's files without a join always fails, because sibling arms are never ordered after each other.
 
-A store read that is not ordered after another task's write, because no wait has delivered that task yet, ends the run with `Determinism`. When a section spawns two tasks, waits with [`tasks.join_any`](15-tasks.md#waiting-with-tasksjoin_any-and-tasksjoin), and then reads the file of the task `tasks.join_any` did not return, the run fails whichever task finished first. The failure does not depend on timing: an unordered read fails even in runs where the other task's write has already finished.
+A store read that is not ordered after another task's write, because no wait has delivered that task yet, ends the run with a claims conflict. When a section spawns two tasks, waits with [`tasks.join_any`](15-tasks.md#waiting-with-tasksjoin_any-and-tasksjoin), and then reads the file of the task `tasks.join_any` did not return, the run fails whichever task finished first. The failure does not depend on timing: an unordered read fails even in runs where the other task's write has already finished.
 
-A timed wait works the same way. Reading a late member's file after a timed join, such as `tasks.join` with a `timeout` (see [Time limits on waits](15-tasks.md#time-limits-on-waits)), ran out of time, but before a later wait delivers that member, fails the run with `Determinism`.
+A timed wait works the same way. Reading a late member's file after a timed join, such as `tasks.join` with a `timeout` (see [Time limits on waits](15-tasks.md#time-limits-on-waits)), ran out of time, but before a later wait delivers that member, fails the run with a claims conflict.
 
 ### Calls that leave no claim
 
@@ -1739,9 +1741,9 @@ A store call refused by argument or path validation, by the Host's store policy,
 
 Of two conflicting accesses, the second detects the conflict and never reaches the store, so the first one's write is the one that lands. In `race`, `log.txt` ends up holding exactly one arm's append, `alpha;` or `beta;`.
 
-### The `Determinism` failure
+### A claims conflict ends the run
 
-Run error kind `Determinism` means two store accesses that no spawn or join ordered touched one store region in conflicting ways. No `pcall` catches it, not even around the store call inside the arm that loses:
+A claims conflict means two store accesses that no spawn or join ordered touched one store region in conflicting ways. It ends the run with the error code `determinism`, and no `pcall` catches it, not even around the store call inside the arm that loses:
 
 ````markdown
 ### Worker
@@ -1751,7 +1753,7 @@ local ok, err = pcall(store.append, 'notes.md', item .. '\n')
 ```
 ````
 
-With this `### Worker` in place of the one in `race`, and the same two members `alpha` and `beta`, the run still ends as `Determinism`. A claims conflict between two chains is never raised at the store call. It ends the run before the losing call returns, so the losing arm never resumes into Lua, and no Lua code or `pcall` can catch it. A claims conflict in the H1 pass still ends the run as `Determinism`, not as `RequirementsUnmet` the way an H1 Lua failure does (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)).
+With this `Worker` in place of the one in `race`, and the same two members `alpha` and `beta`, the run still ends with the claims conflict. A claims conflict between two chains is never raised at the store call. It ends the run before the losing call returns, so the losing arm never resumes into Lua, and no Lua code or `pcall` can catch it. A claims conflict in the H1 pass still ends the run with `determinism`, not with `requirements_unmet` the way an H1 `lua_runtime` failure does (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)).
 
 When a claims conflict ends the run, no task or arm counts as failed. Every other live task is abandoned with the run, and at most the arm whose access came first completes. Store writes still in flight when the run ends finish before the run completes, so the write that landed is in the store even though the run fails.
 
@@ -1761,15 +1763,15 @@ The message has the form `store determinism violation: {detail}`, and the detail
 store determinism violation: {kind} on {path} by {id} conflicts with a {other_kind} claim by {other}
 ````
 
-The message begins with the fixed prefix `store determinism violation: `, names the contested path as the prompt wrote it, says `conflicts with`, gives each claim as `read` or `write`, and names both chains' identities, each rendered as `ExecId(...)`. `{kind}` and `{id}` belong to the access that detected the conflict, the one that came second, and `{other_kind}` and `{other}` belong to the earlier claim it ran into.
+The message begins with the fixed prefix `store determinism violation: `, names the contested path as the prompt wrote it, says `conflicts with`, gives each claim as `read` or `write`, and names both chains' identities, each rendered as `ExecId(...)`. `{kind}` and `{id}` belong to the access that detected the conflict, the one that came second, and `{other_kind}` and `{other}` belong to the earlier claim it ran into. The run's failure message follows this text with ` (at {file}:{line})`, the line of the store call that detected the conflict, even though that call never resumes into Lua.
 
 `store.read`, `store.read_numbered`, `store.exists`, and `store.glob` show as a `read` claim, and `store.write`, `store.append`, `store.str_replace`, and `store.delete` show as a `write` claim. The path in the message is the path the detecting access named, or its pattern when that access is a `store.glob`, even when the clash is over an ancestor directory or over the other chain's glob pattern. So when a `store.glob('research/*')` runs second and meets a sibling's write of `research/5.md`, the message names `research/*`.
 
 ### Conflicts in library code
 
-A claims conflict in library code while it loads (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)) ends the run with run error kind `Determinism`, exactly as in block code. That includes two fanout arms that each `require` a library whose top-level code writes the same path, such as a library that runs `store.write('seeded.txt', 'seed')`.
+A claims conflict in library code while it loads (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)) ends the run with the error code `determinism`, exactly as in block code. That includes two fanout arms that each `require` a library whose top-level code writes the same path, such as a library that runs `store.write('seeded.txt', 'seed')`.
 
-A load-time conflict cannot be caught with `pcall` either. A library that wraps its own write in `pcall`, as in `local ok = pcall(function() store.write('seeded.txt', 'seed') end)`, still ends the run with `Determinism` when two arms load it.
+A load-time conflict cannot be caught with `pcall` either. A library that wraps its own write in `pcall`, as in `local ok = pcall(function() store.write('seeded.txt', 'seed') end)`, still ends the run with the claims conflict when two arms load it.
 
 A store function captured at load time behaves like `store.*` when it is called after the load (see [Capturing a store function](#capturing-a-store-function)). When a library captures a store function as it loads and hands it out as `save_note`, and each arm runs `pcall(save_note, 'note.txt', item)`, the two arms racing on `note.txt` end the run with a determinism violation even though each arm catches its own failure with `pcall`.
 
@@ -1816,7 +1818,7 @@ When the Host supplies no store, the run result is:
 stock
 ````
 
-This prompt needs no setup. When the Host supplies nothing, the run's store is a fresh, empty, in-memory store rooted at `/`, made for this run alone. `## First` writes `default.txt`, the walk falls through to `## Second`, and its read returns `stock`.
+This prompt needs no setup. When the Host supplies nothing, the run's store is a fresh, empty, in-memory store rooted at `/`, made for this run alone. `First` writes `default.txt`, the walk falls through to `Second`, and its read returns `stock`.
 
 ### The default store
 
@@ -1865,7 +1867,7 @@ wrote report.md
 
 After the run, the Host reads `report.md` back as `report on: the paper body`. The Host uses the same store to seed files before the run and to collect what the run wrote after it, and it can read store files back by path or list them by pattern.
 
-Seeded files read without a conflict, because the Host's seeding ends before the run begins: a run that reads `brief.md` gets the seeded text `seeded`. Seeded files read the same way from any block and from [library](03-blocks-and-prose.md#sharing-code-with-require) code. A block's `store.read('paper.md')` returns the seeded `the paper body`, and a library loaded with `require '## loader'` can run `store.write('lib.md', 'stored')` and `store.read('lib.md')` and get `stored` back.
+Seeded files read without a conflict, because the Host's seeding ends before the run begins: a run that reads `brief.md` gets the seeded text `seeded`. Seeded files read the same way from any block and from [library](03-blocks-and-prose.md#sharing-code-with-require) code. A block's `store.read('paper.md')` returns the seeded `the paper body`, and a library loaded with `require '/loader'` can run `store.write('lib.md', 'stored')` and `store.read('lib.md')` and get `stored` back.
 
 Store reads, writes, and globs behave the same whether the store is served from memory or from a directory. A prompt whose [arms](14-fanout.md#what-an-arm-sees) write `arm-1.md` and `arm-2.md` and which then writes `merged.md` gives the same run result and the same contents for all three files on either kind of store. With a directory-backed store, each `store.write` lands as a real file in the real directory behind it.
 
@@ -1917,17 +1919,17 @@ Once a run ends, its claims no longer count (see [Claims shared with tools and o
 
 Runs the Host prepares over the same mounts share one claims table, the shared set of claims [Claims shared with tools and other runs](#claims-shared-with-tools-and-other-runs) describes. While one run is live, another run cannot write a file the first has written, whether that file is in the store or in a real directory beside it. When run a writes `/shared.txt` in a real directory mounted at `/` beside the store, and run b writes the same file while run a's claim is live, run b's write fails with a conflict whose message names the path, `/shared.txt`.
 
-Through `store.*`, that conflict ends the run on the spot with run error kind [`Determinism`](#races-claims-and-determinism), and `pcall` cannot catch it. The conflict holds no matter how many other paths the first run touches in between, and whether the second run started before or after those accesses. After the conflicting write is refused, the file still holds the first run's bytes, so `/shared.txt` still reads `from a`.
+Through `store.*`, that conflict ends the run on the spot as a [claims conflict](#races-claims-and-determinism), with the error code `determinism`, and `pcall` cannot catch it. The conflict holds no matter how many other paths the first run touches in between, and whether the second run started before or after those accesses. After the conflicting write is refused, the file still holds the first run's bytes, so `/shared.txt` still reads `from a`.
 
-The Host is held to the same claims. While a run is live, a Host write to a store file the run has read is refused as a conflict, the file keeps its contents, and the run still finishes. While a run that has read `notes.md` waits on [`input.ask`](05-lua-environment.md#asking-the-operator), the Host's write of `Ship on Monday.` to `notes.md` is refused, `notes.md` still reads `Ship on Friday.`, and the run result is `Ship on Friday. Approved.`
+The Host is held to the same claims. While a run is live, a Host write to a store file the run has read is refused as a conflict, the file keeps its contents, and the run still finishes. While a run that has read `notes.md` waits on [`tasks.receive()`](05-lua-environment.md#asking-the-operator), the Host's write of `Ship on Monday.` to `notes.md` is refused, `notes.md` still reads `Ship on Friday.`, and the run result is `Ship on Friday. Approved.`
 
 ### When the store cannot start
 
 A prompt whose store cannot be set up fails to start: it runs none of its sections and reports nothing. Even a prompt whose only section is `return 'never runs'` fails at its first step.
 
-When the Host's store has no working backend as the run starts, such as a backend that answers `the store backend refuses every session` when asked to open a session, the run's first step fails at once with run error kind `Vfs`. This happens even when the prompt never calls `store`, so a run never quietly runs against a throwaway store instead.
+When the Host's store has no working backend as the run starts, such as a backend that answers `the store backend refuses every session` when asked to open a session, the run's first step fails at once with the store code of the backend's error, here `backend`. This happens even when the prompt never calls `store`, so a run never quietly runs against a throwaway store instead.
 
-A store that fails while the run or a section sets up store access, such as at the start of the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) or of the section walk, fails the run with run error kind `Vfs` and the message `store operation failed: {error}`, where `{error}` is the storage layer's own text. When the Host's setup declares no store at all, the message is `this run declares no store, so no store operation can run` instead.
+A store that fails while the run or a section sets up store access, such as at the start of the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) or of the section walk, fails the run with the store code of the storage layer's error, such as `backend`, and the message `store operation failed: {error}`, where `{error}` is the storage layer's own text. When the Host's setup declares no store at all, the code is `no_store` and the message is `this run declares no store, so no store operation can run` instead.
 
 A Host store whose root does not exist yet still passes the startup check. Any other error from looking at the root fails the run.
 
@@ -2029,7 +2031,7 @@ Under a Host in Ask mode, with `note.md` holding `hello`, the run result is:
 hello | approval_required
 ````
 
-A store change in Ask mode raises reason `approval_required` with the message `store path {path} needs approval, which this run cannot give: {op} on {path} needs user approval: the Ask mode refuses all mutations`. For the write above, that is `store path note.md needs approval, which this run cannot give: Write on note.md needs user approval: the Ask mode refuses all mutations`.
+A store change in Ask mode raises reason `approval_required` with the store's message `store path {path} needs approval, which this run cannot give: {op} on {path} needs user approval: the Ask mode refuses all mutations`. For the write above, that is `store path note.md needs approval, which this run cannot give: Write on note.md needs user approval: the Ask mode refuses all mutations`.
 
 In Plan mode a store change succeeds only when its path ends in `.md`:
 
@@ -2057,7 +2059,7 @@ Under a Host in Plan mode, the run result is:
 # ok | permission_denied | false
 ````
 
-Plan mode's markdown test is case-sensitive, so a change to a path ending in `.MD` is refused too. A store change to a non-markdown path in Plan mode raises reason `permission_denied` with the message `permission denied for store path {path}: {op} on {path} is refused: the Plan mode allows mutations only to markdown paths`. For the write above, that is `permission denied for store path data.bin: Write on data.bin is refused: the Plan mode allows mutations only to markdown paths`.
+Plan mode's markdown test is case-sensitive, so a change to a path ending in `.MD` is refused too. A store change to a non-markdown path in Plan mode raises reason `permission_denied` with the store's message `permission denied for store path {path}: {op} on {path} is refused: the Plan mode allows mutations only to markdown paths`. For the write above, that is `permission denied for store path data.bin: Write on data.bin is refused: the Plan mode allows mutations only to markdown paths`.
 
 A mode refusal's reason text starts with the operation's kind name, followed by `on {path}` with the path in logical form. The kind name is `Write` for `store.write` and `store.str_replace`, `Append` for `store.append`, and `Delete` for `store.delete`.
 
@@ -2130,7 +2132,7 @@ beta
 
 Nothing is wrapped around either read. So wrap store contents with `untrusted` before you put them in front of a model. Stored content bound for a model is one of the two kinds of data the envelope exists for, and tool results from untrusted sources are the other.
 
-Text the operator pastes as data, such as a document to be summarized that arrives through [`input.ask`](05-lua-environment.md#asking-the-operator), gets the same treatment: wrap it with `untrusted(text)` before it reaches a model. `untrusted` wraps whatever string it is given, wherever that string came from.
+Text the operator pastes as data, such as a document to be summarized that arrives through [`tasks.receive()`](05-lua-environment.md#asking-the-operator), gets the same treatment: wrap it with `untrusted(text)` before it reaches a model. `untrusted` wraps whatever string it is given, wherever that string came from.
 
 ### Working with a wrapped string
 
@@ -2203,7 +2205,7 @@ Ship on Friday.
 </untrusted_input_{nonce}>
 ````
 
-`## Load` wraps the read and keeps it in `var.notes`, and the walk falls through to `## Brief`, whose prose holds `{{ var.notes }}`. To send that text in a model round, `## Brief` hands `prose` to [`models.infer`](10-models.md#running-a-round-with-modelsinfer) instead of returning it, and the model receives your instruction followed by the envelope. A `var` string always renders whole in its placeholder: prose `The word is {{ var.word }}.` with `var.word = 'mutated'` set before `return prose` gives `The word is mutated.`
+`Load` wraps the read and keeps it in `var.notes`, and the walk falls through to `Brief`, whose prose holds `{{ var.notes }}`. To send that text in a model round, `Brief` hands `prose` to [`models.infer`](10-models.md#running-a-round-with-modelsinfer) instead of returning it, and the model receives your instruction followed by the envelope. A `var` string always renders whole in its placeholder: prose `The word is {{ var.word }}.` with `var.word = 'mutated'` set before `return prose` gives `The word is mutated.`
 
 ### Defense in depth, not a security boundary
 
@@ -2371,7 +2373,7 @@ runvil: 0
 ## Main
 
 ```lua
-return require '## loader'
+return require '/loader'
 ```
 
 ## loader
@@ -2388,13 +2390,13 @@ The run result is:
 stored
 ````
 
-The library under `## loader` writes `lib.md` and reads it back while `require` loads it, and `lib.md` then holds `stored`. Its read becomes the library's value, which `return require '## loader'` makes the run result.
+The library under `loader` writes `lib.md` and reads it back while `require` loads it, and `lib.md` then holds `stored`. Its read becomes the library's value, which `return require '/loader'` makes the run result.
 
 ### The `store` global in every VM
 
 `store` is the reserved Engine global from [The `store` table](#the-store-table), which the Engine installs in the Lua VM of every section entry and of the H1, so it is always there for you to call. A section entry's `store` table is installed once, when the entry's Lua VM is set up, and stays in place for the entry's whole lifetime, so the same `store` table keeps working in every Lua block the entry runs.
 
-Store calls work in three places: in a section's blocks, in the blocks under the H1 during the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass), and in library code while `require` loads it. In all three, a call runs the same way and gives the same results, the same store errors, and the same [line-range](#reading-line-ranges-and-numbered-lines) rules, so an H1 block that runs `return store.read('missing.txt')` ends the run with run error kind `Vfs`, exactly as a section would (see [The store in the H1 body](#the-store-in-the-h1-body)).
+Store calls work in three places: in a section's blocks, in the blocks under the H1 during the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass), and in library code while `require` loads it. In all three, a call runs the same way and gives the same results, the same store errors, and the same [line-range](#reading-line-ranges-and-numbered-lines) rules, so an H1 block that runs `return store.read('missing.txt')` ends the run with the error code `not_found`, exactly as a section would (see [The store in the H1 body](#the-store-in-the-h1-body)).
 
 `require` is ready before the store functions take their run-time form, and that switch covers every reference to a store function, including any store function a [Pack prelude](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals) captured earlier.
 
@@ -2408,7 +2410,7 @@ Each `store` call runs over a store view derived from the access of the chain ru
 
 A `store.write` call pauses its chain until the write is answered, and the Lua code then continues with the next statement. With `store.write('notes.md', 'kept')`, the chain waits for the answer before its next line runs, so anything the block does after the write, such as starting another chain, happens only once the write is answered. While one run waits on its store write, another run started beside it starts and runs, because each run waits only on its own Harness work.
 
-An ordinary store failure is raised right at the store call, at your own call site, where a `pcall` around the call can catch it, as [When a store call fails](#when-a-store-call-fails) shows. A claims conflict, between two chains or between two runs, is the exception, since it ends the run on the spot (see [The `Determinism` failure](#the-determinism-failure)).
+An ordinary store failure is raised right at the store call, at your own call site, where a `pcall` around the call can catch it, as [When a store call fails](#when-a-store-call-fails) shows. A claims conflict, between two chains or between two runs, is the exception, since it ends the run on the spot (see [A claims conflict ends the run](#a-claims-conflict-ends-the-run)).
 
 A stop never cuts a `store` call short, because the Harness answers every `store` call as the run makes it, so no `store` call is ever waiting when a [stop](01-what-a-prompt-is.md#effects-and-harness-work) lands. Even when the store write itself raises the stop, the write completes and the run still finishes with its final text.
 
@@ -2432,7 +2434,7 @@ runvil: 0
 ## Main
 
 ```lua
-require '## notes'
+require '/notes'
 save_note('note.txt', 'kept')
 return 'saved'
 ```

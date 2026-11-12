@@ -97,15 +97,9 @@ The following prompt illustrates the usual flow: Lua prepares a value, prose inc
 name: greet
 description: Has the model repeat a greeting.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Greet
-
-```lua
-models.default("writer")
-```
 
 ## Main
 

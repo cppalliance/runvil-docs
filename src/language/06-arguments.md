@@ -31,7 +31,7 @@ Run it with the argument string `{"query":"papers"}`:
 Results for papers
 ````
 
-The `args:` key declares one argument, `query`, of type `string`. The argument string `{"query":"papers"}` is parsed as JSON, and the `## Search` section reads its `query` field as `argv.query`. The rest of this section names each piece involved, and the later sections give the full rules for each one.
+The `args:` key declares one argument, `query`, of type `string`. The argument string `{"query":"papers"}` is parsed as JSON, and the `Search` section reads its `query` field as `argv.query`. The rest of this section names each piece involved, and the later sections give the full rules for each one.
 
 ### The argument string
 
@@ -100,7 +100,7 @@ Hello, world!
 
 A block that does `return args` echoes the argument string back unchanged.
 
-Every section's Lua also reads the `argv` global, the parsed form of the argument string, side by side with the raw `args`. Under the search prompt's declaration, the argument string `{"query":"papers"}` gives `argv.query == 'papers'`. In the greeter prompt, which has no `args:` key, the argument string `hello there` gives both `argv.prose == 'hello there'` and `args == 'hello there'` in the same section, so this block passes both checks and returns `hello there` when it replaces the block in `## Greet`:
+Every section's Lua also reads the `argv` global, the parsed form of the argument string, side by side with the raw `args`. Under the search prompt's declaration, the argument string `{"query":"papers"}` gives `argv.query == 'papers'`. In the greeter prompt, which has no `args:` key, the argument string `hello there` gives both `argv.prose == 'hello there'` and `args == 'hello there'` in the same section, so this block passes both checks and returns `hello there` when it replaces the block in `Greet`:
 
 ````lua
 assert(argv.prose == 'hello there')
@@ -149,7 +149,7 @@ A required argument is an arg whose declaration has no `optional:` key, because 
 
 ### Arg names
 
-The `args:` key holds a set of named arg declarations, one entry per arg name. Each [arg name](02-file-structure.md#the-name-grammar-for-role-labels-arg-names-and-adhoc-tool-names) follows the frontmatter name grammar `[A-Za-z][A-Za-z0-9_-]{0,63}`: a letter, then up to 63 letters, digits, `_`, or `-`, so a name is 1 to 64 characters long. `query`, `use_mcp`, and `limit` all fit. A name outside the grammar, such as `'1bad'` in `args: { '1bad': { type: string } }`, fails to parse with parse error kind `Frontmatter` and a message containing this text, with the name in place of `{key}`:
+The `args:` key holds a set of named arg declarations, one entry per arg name. Each [arg name](02-file-structure.md#the-name-grammar-for-arg-names-and-adhoc-tool-names) follows the frontmatter name grammar `[A-Za-z][A-Za-z0-9_-]{0,63}`: a letter, then up to 63 letters, digits, `_`, or `-`, so a name is 1 to 64 characters long. `query`, `use_mcp`, and `limit` all fit. A name outside the grammar, such as `'1bad'` in `args: { '1bad': { type: string } }`, fails to parse with parse error kind `Frontmatter` and a message containing this text, with the name in place of `{key}`:
 
 ````text
 invalid arg name `{key}`: expected [A-Za-z][A-Za-z0-9_-]{0,63}
@@ -610,7 +610,7 @@ Run it with the argument string `bob`. `var.greeting` holds `hi bob`, `var.answe
 
 ### Ending a run with `args`
 
-A block that does `return args` gets back the argument string exactly as it was passed, so the run ends with that text unchanged as its [run result](04-how-a-prompt-runs.md#the-run-result-and-outcomes). The echo prompt above, run with `hello`, returns `hello`, and the shipped `echo` prompt likewise ends with whatever text it is given. A [prologue](03-blocks-and-prose.md#prologue-prose-and-epilog) can return it before the section's prose:
+A block that does `return args` gets back the argument string exactly as it was passed, so the run ends with that text unchanged as its [run result](04-how-a-prompt-runs.md#the-run-result). The echo prompt above, run with `hello`, returns `hello`, and the shipped `echo` prompt likewise ends with whatever text it is given. A [prologue](03-blocks-and-prose.md#prologue-prose-and-epilog) can return it before the section's prose:
 
 ````markdown
 ---
@@ -652,7 +652,7 @@ runvil: 0
 ## Result
 
 ```lua
-require '## helpers'
+require '/helpers'
 return read_args()
 ```
 
@@ -754,7 +754,7 @@ Run it with the argument string `{"query":"papers","items":["a","b"]}`:
 papers: a, b
 ````
 
-Outside the H1 body, the length operator `#`, `pairs`, and `next` see an empty table on any `argv` table, because each frozen table is an empty stand-in that forwards reads to the data. So `#argv.items` is `0` in the `## List` section above, and `ipairs` or numeric indexing is how you read an array there. Inside the H1 body, `argv` is a plain table, and all three work normally.
+Outside the H1 body, the length operator `#`, `pairs`, and `next` see an empty table on any `argv` table, because each frozen table is an empty stand-in that forwards reads to the data. So `#argv.items` is `0` in the `List` section above, and `ipairs` or numeric indexing is how you read an array there. Inside the H1 body, `argv` is a plain table, and all three work normally.
 
 ### Strings, numbers, and booleans
 
@@ -902,7 +902,7 @@ runvil: 0
 ## Search
 
 ```lua
-require '## helpers'
+require '/helpers'
 return search_all(argv.prose)
 ```
 
@@ -1064,7 +1064,7 @@ Run it with the argument string `{"query":"papers"}`:
 Results for papers
 ````
 
-Run it with the argument string `{}`, and the check in the H1 body fails the run with an error carrying the message `query is required`, so `## Search` never runs.
+Run it with the argument string `{}`, and the check in the H1 body fails the run with an error that carries the message `query is required` and ends with ` (at search.md:13)`, the line of the `assert` (see [Where an error points](16-limits-and-errors.md#where-an-error-points)), so `Search` never runs.
 
 ### Nothing checks values against the declaration
 
@@ -1074,7 +1074,7 @@ Nothing checks passed values against the `args:` declaration. A value whose shap
 
 Because the declaration advertises and documents the arguments but never enforces them, you check their shape and types in the prompt itself, usually in the Lua of the H1 body under the `#` title. A check such as `assert(argv and argv.query, 'query is required')` fails the run when the argument string is `{}`.
 
-The H1 pass runs before the walk, so a failing check stops the run with an error before any `##` section runs. In the prompt above, run with `{}`, the `## Search` section never runs.
+The H1 pass runs before the walk, so a failing check stops the run with an error before any `##` section runs. In the prompt above, run with `{}`, the `Search` section never runs.
 
 ### `argv` is writable in the H1 body
 
@@ -1175,10 +1175,10 @@ In the H1 body, you clear the arguments with `argv = nil`, after which `argv == 
 
 ### Keeping `argv` as JSON data
 
-In the H1 body, keep `argv` as [JSON data](05-lua-environment.md#keeping-state-in-var) or nil, meaning strings, numbers, booleans, and tables of them. The assignment itself accepts any value, so `argv = function() end` raises no error at that line, but a value that is not JSON data, such as a function, userdata other than `json.null`, or thread, fails the run once the H1 body finishes, with this message naming its Lua type in place of `{type}`:
+In the H1 body, keep `argv` as [JSON data](05-lua-environment.md#keeping-state-in-var) or nil, meaning strings, numbers, booleans, and tables of them. The assignment itself accepts any value, so `argv = function() end` raises no error at that line, but a value that is not JSON data, such as a function, userdata other than `json.null`, or thread, fails the run once the H1 body finishes, with this message naming its Lua type in place of `{type}` and pointing at the H1 body's last Lua block:
 
 ````text
-argv must be JSON data, got {type}
+argv must be JSON data, got {type} (at {file}:{line})
 ````
 
 The one userdata the freeze accepts is `json.null`, which freezes as JSON null, and later sections read it as `json.null` again, like any other JSON `null` in the arguments. So after an H1 body runs `argv = { a = json.null }`, a later section reads `argv.a` as `json.null`, and `argv.a == json.null` is true.
@@ -1237,9 +1237,9 @@ repaired
 
 The `argv` freeze happens when the H1 pass completes, before the walk starts: the Engine reads the value the H1 body left in `argv` back as JSON and freezes it for the rest of the run. So a repair the H1 body assigns to `argv` becomes the `argv` later sections see.
 
-Whatever `argv` holds when the H1 pass finishes, the parsed arguments or a repair, is the `argv` every walked section reads, both in Lua and in `{{ argv }}` and `{{ argv.field }}` placeholders. In the prompt above, `## First` and every section after it read `argv.query == 'repaired'`.
+Whatever `argv` holds when the H1 pass finishes, the parsed arguments or a repair, is the `argv` every walked section reads, both in Lua and in `{{ argv }}` and `{{ argv.field }}` placeholders. In the prompt above, `First` and every section after it read `argv.query == 'repaired'`.
 
-When the H1 body leaves `argv` untouched, later sections see the `argv` parsed from the argument string. An H1 body that only runs `require '## strict'` and never assigns `argv`, run with the argument string `{"query":"x"}`, leaves a later section reading `argv.query == 'x'`.
+When the H1 body leaves `argv` untouched, later sections see the `argv` parsed from the argument string. An H1 body that only runs `require '/strict'` and never assigns `argv`, run with the argument string `{"query":"x"}`, leaves a later section reading `argv.query == 'x'`.
 
 Outside the H1 pass, `argv` is never a raw global, and reading it returns its frozen value, which on the walk is the value the H1 body left behind. `argv` is frozen in every walked section after the H1 pass ends.
 
@@ -1262,15 +1262,15 @@ Writable `argv` is the H1 body's one privilege. Every other section gets `argv` 
 
 ### Non-JSON values at the freeze
 
-Leave `argv` as JSON data, meaning strings, numbers, booleans, and tables of them, or as nil, when the H1 body finishes, because a function, userdata other than `json.null`, or thread is refused at the freeze. The run fails with a `Lua` error when the H1 pass leaves `argv` holding data that is not JSON.
+Leave `argv` as JSON data, meaning strings, numbers, booleans, and tables of them, or as nil, when the H1 body finishes, because a function, userdata other than `json.null`, or thread is refused at the freeze. The run fails with a `lua_runtime` error when the H1 pass leaves `argv` holding data that is not JSON.
 
-Leaving `argv` as a function, userdata other than `json.null`, or thread when the H1 pass ends, as after `argv = function() end`, fails the freeze read-back with a run error of [run error kind](16-limits-and-errors.md#run-error-kinds) `Lua`, whose message names the Lua type `function`, `userdata`, or `thread` in place of `{type}`:
+Leaving `argv` as a function, userdata other than `json.null`, or thread when the H1 pass ends, as after `argv = function() end`, fails the freeze read-back with [error code](16-limits-and-errors.md#run-error-codes) `lua_runtime` and a message that names the Lua type `function`, `userdata`, or `thread` in place of `{type}` and ends with the location of the first line of the last `lua` block the H1 pass ran:
 
 ````text
-argv must be JSON data, got {type}
+argv must be JSON data, got {type} (at {file}:{line})
 ````
 
-The kind is `Lua` even though the failure happens at the end of the H1 pass. Leaving `argv` as data that cannot be represented as JSON, such as a table holding a value that cannot be JSON, also fails the read-back with a `Lua` error.
+The code is `lua_runtime` even though the failure happens at the end of the H1 pass. Leaving `argv` as data that cannot be represented as JSON, such as a table holding a value that cannot be JSON, also fails the read-back with a `lua_runtime` error.
 
 ### When the H1 pass leaves `argv` nil
 
@@ -1299,7 +1299,7 @@ return prose
 ```
 ````
 
-Run with the argument string `not json`, it fails the run with an error naming `argv`. [Substitution error kinds](07-substitution.md#substitution-error-kinds) lists the other substitution kinds.
+Run with the argument string `not json`, it fails the run with the message `{{ argv }} is nil (argv holds no value) [NilArgv at byte 7] (at search.md:14)`, which names `argv` and the placeholder's line. [Substitution error kinds](07-substitution.md#substitution-error-kinds) lists the other substitution kinds.
 
 ### Placeholders in the H1 body
 
@@ -1330,8 +1330,8 @@ end
 ## Main
 
 ```lua
-local own = call('## Sub', '{"query":"chain"}')
-local inherited = call('## Sub')
+local own = call('../Sub', '{"query":"chain"}')
+local inherited = call('../Sub')
 return own .. ' ' .. inherited
 ```
 
@@ -1342,13 +1342,13 @@ return argv.query
 ```
 ````
 
-Run it with the argument string `broken json`. The first `call` gives `## Sub` the `argv.query` value `chain`, and the second gives it the repaired `argv.query` value `repaired`:
+Run it with the argument string `broken json`. The first `call` gives `Sub` the `argv.query` value `chain`, and the second gives it the repaired `argv.query` value `repaired`:
 
 ````text
 chain repaired
 ````
 
-In `## Sub`, a write to a field of `argv` still fails under either `call`, because the chain's `argv` is frozen.
+In `Sub`, a write to a field of `argv` still fails under either `call`, because the chain's `argv` is frozen.
 
 Every arm reads its caller's `args` and frozen `argv` unchanged, including an `argv` repaired in the H1 pass, because `tasks.fanout` passes no argument string of its own to the arms it spawns.
 
@@ -1424,7 +1424,7 @@ Writing a string-keyed field of `argv` outside the H1 pass raises a Lua error wi
 
 Writing an integer key of `argv` outside the H1 pass, such as an array index, raises the same field write error with the integer shown without quotes, so `argv[1] = 1` gives `argv is frozen outside H1: cannot set field 1`.
 
-A write with a key that is neither a string nor an integer, such as a fractional number or a boolean, raises a refusal whose first line names the key's Lua type instead of its value, so `argv[2.5] = 1` gives `argv is frozen outside H1: cannot set field number`.
+A write with a key that is neither a string nor an integer, such as a fractional number or a boolean, raises a refusal that names the key's Lua type instead of its value, so `argv[2.5] = 1` gives `argv is frozen outside H1: cannot set field number`.
 
 Adding a new field to an `argv` table raises the same field write error as changing an existing field. On an `argv` holding only `query`, the new keys `argv[1]` and `argv[2.5]` get the same `argv is frozen outside H1: cannot set field ...` refusal as `argv.query`.
 
@@ -1440,15 +1440,21 @@ argv is frozen outside H1: cannot set field {field}
 
 ### Uncaught freeze errors
 
-An uncaught freeze error ends the run with the [run error kind](16-limits-and-errors.md#run-error-kinds) `Lua`, the same kind as any other runtime error in a section's Lua.
+An uncaught freeze error ends the run with the [error code](16-limits-and-errors.md#run-error-codes) `lua_runtime`, the same code as any other runtime error in a section's Lua.
 
 ### Catching freeze errors with `pcall`
 
-The frozen-`argv` refusal is an ordinary Lua error, so you catch it with [`pcall`](05-lua-environment.md#raising-and-catching-errors). `tostring(err)` on the caught value gives text that starts with `runtime error: ` and has the refusal on its first line, so this block returns the refusal text:
+The frozen-`argv` refusal is an ordinary Lua error, so you catch it with [`pcall`](05-lua-environment.md#raising-and-catching-errors). `tostring(err)` on the caught value gives the file and line of the write, then the refusal, then the fixed prose for a Lua runtime failure:
 
 ````lua
 local ok, err = pcall(function() argv.query = 1 end)
 return tostring(err)
+````
+
+This block returns:
+
+````text
+{file}:{line}: argv is frozen outside H1: cannot set field 'query'. The Lua code failed at runtime. Fix the code at this location.
 ````
 
 The prompt at the top of this section uses the same pattern with a flag instead: `local wrote = pcall(function() argv.mode = 'x' end)` followed by `if wrote then return 'written' end return 'refused'` returns `refused`.

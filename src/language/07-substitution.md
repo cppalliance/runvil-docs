@@ -275,7 +275,7 @@ Name: Ada Lovelace
 
 Operator text inside the braces is read as part of the path, so `{{ var.n + 1 }}` looks up a key named `n + 1` and fails with substitution kind `MissingKey` instead of computing.
 
-Dotted segments match table keys only and never index into an array, so pick the element in Lua first. With this section in place of the `## Main` section of the `full_name` prompt, the run result is `First tag: red`:
+Dotted segments match table keys only and never index into an array, so pick the element in Lua first. With this section in place of the `Main` section of the `full_name` prompt, the run result is `First tag: red`:
 
 ````markdown
 ## Main
@@ -365,7 +365,7 @@ Plan for rivers.
 
 ### Nested tables in `var`
 
-A dotted path inside a `var` placeholder reaches a nested field of a table stored in `var`, and a placeholder that names a whole table or array renders it as compact JSON, the JSON text with no spaces. With this section in place of the `## Main` section of the `paper` prompt, the run result is `cell 1, row {"a":1}, arr [1,2,3]`:
+A dotted path inside a `var` placeholder reaches a nested field of a table stored in `var`, and a placeholder that names a whole table or array renders it as compact JSON, the JSON text with no spaces. With this section in place of the `Main` section of the `paper` prompt, the run result is `cell 1, row {"a":1}, arr [1,2,3]`:
 
 ````markdown
 ## Main
@@ -478,7 +478,7 @@ Whole: {"n":2,"query":"papers"}; Field: papers
 q={{ argv.query }} cell={{ argv.row.a }}
 ````
 
-As the prose of the `query` prompt's `## Main` section, this line run with the argument string `{"query":"papers","row":{"a":1}}` renders `q=papers cell=1`. With the same argument string, `got {{ argv }}` renders `got {"query":"papers","row":{"a":1}}`.
+As the prose of the `query` prompt's `Main` section, this line run with the argument string `{"query":"papers","row":{"a":1}}` renders `q=papers cell=1`. With the same argument string, `got {{ argv }}` renders `got {"query":"papers","row":{"a":1}}`.
 
 ### Prompts with no `args:` key
 
@@ -516,7 +516,7 @@ Here `argv.prose` and `args` both equal `'hello there'`.
 
 ### When `argv` is nil
 
-Under an explicit declaration, `argv` is nil for substitution when the argument string does not parse as JSON, when it is the JSON `null`, or when the H1 pass leaves `argv` nil, so the argument strings `not json` and `null` both leave a nil `argv` under a `query` declaration. The default declaration always wraps the string instead. An `argv` placeholder never renders an empty string for a nil `argv`: `{{ argv }}` and every `{{ argv.field }}` fail with substitution kind `NilArgv`, the kind for a nil `argv` (see [Freezing `argv` after the H1 pass](06-arguments.md#freezing-argv-after-the-h1-pass)), with a message of the form `{{ {path} }} is nil (the args string is not JSON)` that uses the placeholder's own path. Check `argv` in Lua first and read `prose` only when the argument string parsed:
+Under an explicit declaration, `argv` is nil for substitution when the argument string does not parse as JSON, when it is the JSON `null`, or when the H1 pass leaves `argv` nil, so the argument strings `not json` and `null` both leave a nil `argv` under a `query` declaration. The default declaration always wraps the string instead. An `argv` placeholder never renders an empty string for a nil `argv`: `{{ argv }}` and every `{{ argv.field }}` fail with substitution kind `NilArgv`, the kind for a nil `argv` (see [Freezing `argv` after the H1 pass](06-arguments.md#freezing-argv-after-the-h1-pass)), with a message of the form `{{ {path} }} is nil (argv holds no value)` that uses the placeholder's own path. Check `argv` in Lua first and read `prose` only when the argument string parsed:
 
 ````markdown
 ---
@@ -550,7 +550,7 @@ Run with the argument string `{"query":"x"}`, the run result is:
 Value: {"query":"x"}
 ````
 
-Without the guard, the read of `prose` under `not json` fails with an error naming `argv`, `{{ argv }} is nil (the args string is not JSON)`. The guard works because prose that a block never reads never renders, so even prose holding an unclosed `{{` or a missing key runs clean when the block never reads `prose`.
+Without the guard, the read of `prose` under `not json` fails with an error naming `argv`, `{{ argv }} is nil (argv holds no value)`. The guard works because prose that a block never reads never renders, so even prose holding an unclosed `{{` or a missing key runs clean when the block never reads `prose`.
 
 ### The frozen `argv` and H1 repair
 
@@ -603,7 +603,7 @@ runvil: 0
 ## Main
 
 ```lua
-return call('## Sub', 'chain-args')
+return call('../Sub', 'chain-args')
 ```
 
 ## Sub
@@ -621,13 +621,13 @@ Run with the argument string `run-args`, the run result is:
 Args: chain-args
 ````
 
-A chain started by `call` with no argument string, such as `call('## Inner')`, keeps the argument string of the chain that started it, and so does a fanout arm. With these two sections in place of `## Sub` in the `chains` prompt, `## Inner` still renders `Args: chain-args`, not the run's `run-args`:
+A chain started by `call` with no argument string, such as `call('../Inner')`, keeps the argument string of the chain that started it, and so does a fanout arm. With these two sections in place of `Sub` in the `chains` prompt, `Inner` still renders `Args: chain-args`, not the run's `run-args`:
 
 ````markdown
 ## Sub
 
 ```lua
-return call('## Inner')
+return call('../Inner')
 ```
 
 ## Inner
@@ -639,7 +639,7 @@ return prose
 ```
 ````
 
-Such a chain also keeps its starter's frozen `argv`, H1 repair included, so `{{ argv }}` there renders the repaired value rather than a fresh parse of the argument string. With the H1 block setting `argv = { query = 'repaired' }` and `## Main` running `call('## Sub')` under the argument string `broken`, `## Sub` sees `argv.query == 'repaired'`. Every section of a task started by [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) with an `input` option sees that string through `{{ args }}` and `{{ argv }}`, as a `call` given an argument string does, so `tasks.spawn('## Child', ...)` with `input = 'child args'` among its options gives `## Child` the argument string `child args`.
+Such a chain also keeps its starter's frozen `argv`, H1 repair included, so `{{ argv }}` there renders the repaired value rather than a fresh parse of the argument string. With the H1 block setting `argv = { query = 'repaired' }` and `Main` running `call('../Sub')` under the argument string `broken`, `Sub` sees `argv.query == 'repaired'`. Every section of a task started by [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) with an `input` option sees that string through `{{ args }}` and `{{ argv }}`, as a `call` given an argument string does, so `tasks.spawn('../Child', ...)` with `input = 'child args'` among its options gives `Child` the argument string `child args`.
 
 ### Placeholders ignore the `args` and `argv` globals
 
@@ -688,7 +688,7 @@ runvil: 0
 ## Parent
 
 ```lua
-tasks.fanout('### Worker', {'alpha', 'beta'})
+tasks.fanout('Worker', {'alpha', 'beta'})
 return 'done'
 ```
 
@@ -736,7 +736,7 @@ runvil: 0
 ## Parent
 
 ```lua
-tasks.fanout('### Worker', {{7, 'x'}})
+tasks.fanout('Worker', {{7, 'x'}})
 return 'done'
 ```
 
@@ -758,12 +758,12 @@ In a keyed collection (see [Collections and member order](14-fanout.md#collectio
 `{{ item }}` works only where an item is seeded: the first section a fanout arm enters, or the first section of a task started with an `item` option. A spawned chain's first section consumes its seeds, so every later section that chain enters has no item, and neither does any other chain. Each fanout arm is spawned the same way as a task, with the arm's member as its `item`. To seed a task, pass `item` in the options of [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn):
 
 ````lua
-tasks.spawn('## Child', { item = 'alpha' })
+tasks.spawn('../Child', { item = 'alpha' })
 ````
 
 In the first section of that task, `{{ item }}` renders `alpha`. The `item` option is converted to JSON and seeded into the chain's first section, where it also becomes the chain's `item` global, and it renders by the same rule as in a fanout arm, because every seeded item uses one rendering rule.
 
-Prose in a library that an arm loads with [`require`](03-blocks-and-prose.md#sharing-code-with-require) can use `{{ item }}` too, and it renders that arm's item, because a section's own prose and the prose of the libraries it loads share one `item`. So when the arm for `'alpha'` runs `require '## house_style'`, whose prose reads `Plain words for {{ item }}.`, the library yields `Plain words for alpha.` A `{{ item }}` placeholder in a subsection's prose, such as `Do work on {{ item }}.` in a `### Worker` body, loads without any parse error.
+Prose in a library that an arm loads with [`require`](03-blocks-and-prose.md#sharing-code-with-require) can use `{{ item }}` too, and it renders that arm's item, because a section's own prose and the prose of the libraries it loads share one `item`. So when the arm for `'alpha'` runs `require '/house_style'`, whose prose reads `Plain words for {{ item }}.`, the library yields `Plain words for alpha.` A `{{ item }}` placeholder in a subsection's prose, such as `Do work on {{ item }}.` in a `Worker` body, loads without any parse error.
 
 ### Fields of a table item
 
@@ -805,7 +805,7 @@ return prose
 ```
 ````
 
-The run fails with an error containing `{{ item }} is nil`. Reading `{{ item }}` where no item is seeded, such as in a walked section like this one, in a section entered through `call`, or in a later section the same chain enters, fails with substitution kind `NilItem` and the message `{{ item }} is nil (no item is seeded into this section)`. The read of `prose` raises it as an ordinary Lua error, so left uncaught in a walked section it ends the run with [run error kind](04-how-a-prompt-runs.md#the-run-result-and-outcomes) `Lua`.
+The run fails with an error containing `{{ item }} is nil`. Reading `{{ item }}` where no item is seeded, such as in a walked section like this one, in a section entered through `call`, or in a later section the same chain enters, fails with substitution kind `NilItem` and the message `{{ item }} is nil (no item is seeded into this section)`. The read of `prose` raises it as an ordinary Lua error, so left uncaught in a walked section it ends the run with [error code](16-limits-and-errors.md#run-error-codes) `substitution`.
 
 ## Inserting Lua globals by bare name
 
@@ -869,7 +869,7 @@ runvil: 0
 
 ```lua
 style = 'terse'
-return require '## house_style'
+return require '/house_style'
 ```
 
 ## house_style
@@ -891,7 +891,7 @@ Write in a terse voice for readers.
 
 ### Defaults through a `_G` metatable
 
-A bare name with no global of its own resolves through your `_G` metatable (see [Giving `_G` a metatable](05-lua-environment.md#giving-_g-a-metatable)), so an `__index` default renders in prose. When `tone` exists only in the `__index` defaults table, `Tone: {{ tone }}.` renders `Tone: friendly.` The metatable can come from a library: a Lua block that runs `require '## defaults'`, which sets `defaults` and an `__index` metatable on `_G`, and then reads `prose` renders `Tone: {{ tone }}.` as `Tone: friendly.`
+A bare name with no global of its own resolves through your `_G` metatable (see [Giving `_G` a metatable](05-lua-environment.md#giving-_g-a-metatable)), so an `__index` default renders in prose. When `tone` exists only in the `__index` defaults table, `Tone: {{ tone }}.` renders `Tone: friendly.` The metatable can come from a library: a Lua block that runs `require '/defaults'`, which sets `defaults` and an `__index` metatable on `_G`, and then reads `prose` renders `Tone: {{ tone }}.` as `Tone: friendly.`
 
 ### When a bare name fails
 
@@ -921,11 +921,17 @@ return prose
 ```
 ````
 
-The run fails with an error containing `global 'f' in {{ f }} is not JSON data`. The message does not name the Lua type, so when you see it, check what the global holds. The error text holds only the message, the substitution kind, and the byte offset, in the form `{message} [Serialize at byte {offset}]`.
+The run fails with this message, which gives the substitution's own text in the form `{message} [Serialize at byte {offset}]`, then the reason the lookup gave, then the placeholder's line:
+
+````text
+global 'f' in {{ f }} is not JSON data [Serialize at byte 5]: global `f` is a function; bare globals in prose must be JSON data (at not_data.md:15)
+````
+
+A caught error value names neither the Lua type nor the lookup's reason, so when `tostring(err)` says `is not JSON data`, check what the global holds.
 
 The section entry's `messages` list, and each [message record](11-conversations.md#message-records) read from it, are userdata, so a bare name whose global holds one fails under the same rule. After `messages:user('u')`, with `list = messages` and `record = messages[1]`, both `{{ list }}` and `{{ record }}` fail with substitution kind `Serialize`. A global holding `json.null` fails with substitution kind `NullValue` instead, as [Which values a bare global can hold](#which-values-a-bare-global-can-hold) describes. Under a strict `_G` metatable whose `__index` raises an error for unknown names, a bare name with no global fails at the `prose` read with substitution kind `Serialize` and the `is not JSON data` message, not `UnknownNamespace`, because the raised error comes back as a failed lookup.
 
-Both bare-global failures, substitution kinds `UnknownNamespace` and `Serialize`, are raised at the `prose` read inside the section's Lua as ordinary Lua errors that [`pcall`](05-lua-environment.md#raising-and-catching-errors) can catch. Uncaught, they fail the run with run error kind `Lua`, as the prose `{{ ghost }} here.` does.
+Both bare-global failures, substitution kinds `UnknownNamespace` and `Serialize`, are raised at the `prose` read inside the section's Lua as ordinary Lua errors that [`pcall`](05-lua-environment.md#raising-and-catching-errors) can catch. Uncaught, they fail the run with error code `substitution`, as the prose `{{ ghost }} here.` does.
 
 ## How values render
 
@@ -1020,7 +1026,7 @@ Placeholders in the [pending prose](03-blocks-and-prose.md#pending-prose-and-the
 
 ### Render once
 
-Every placeholder in a block's `prose` renders at most once, on the first read of `prose` during the run, and the result is kept for every later read in that block. This is called render once. With this section in place of `## Main` in the `lazy` prompt, the assertion passes and the run result is `The word is one.`:
+Every placeholder in a block's `prose` renders at most once, on the first read of `prose` during the run, and the result is kept for every later read in that block. This is called render once. With this section in place of `Main` in the `lazy` prompt, the assertion passes and the run result is `The word is one.`:
 
 ````markdown
 ## Main
@@ -1081,7 +1087,7 @@ The second fence's `prose` is `First: one.`, which `var.first` keeps, and the th
 
 ### Errors appear at the read
 
-Because rendering happens at the read, a bad placeholder costs nothing until the `prose` read that renders it. A substitution error is raised where your code touches `prose`, such as at `return prose`, not when the file is parsed and not when the section starts. When `return prose` is a block's only Lua, a placeholder such as `{{ reply }}` with no `reply` global fails right at that read. The prose `Missing: {{ var.missing }}.` with `return prose` fails the run with `missing {{ var.missing }}`, while the same kind of bad placeholder above a block that only does `return 'ok'` yields `ok`. Since the block starts normally, it can also catch the failure: `pcall(function() return prose end)` catches the `{{ var.missing }}` error, and the block can go on to return `caught`.
+Because rendering happens at the read, a bad placeholder costs nothing until the `prose` read that renders it. A substitution error is raised where your code touches `prose`, such as at `return prose`, not when the file is parsed and not when the section starts, and its location still names the placeholder's own line (see [What the error value holds](#what-the-error-value-holds)). When `return prose` is a block's only Lua, a placeholder such as `{{ reply }}` with no `reply` global fails right at that read. The prose `Missing: {{ var.missing }}.` with `return prose` fails the run with `missing {{ var.missing }}`, while the same kind of bad placeholder above a block that only does `return 'ok'` yields `ok`. Since the block starts normally, it can also catch the failure: `pcall(function() return prose end)` catches the `{{ var.missing }}` error, and the block can go on to return `caught`.
 
 ### Prose that is never read
 
@@ -1155,9 +1161,9 @@ Prose in the H1 body, the blocks under the prompt's title, is substituted the sa
 
 ### Library prose under `require`
 
-A library's prose renders when the library's Lua block reads `prose` while `require` loads it, using the `var` values and globals the calling section set before the `require` call. A Lua block that runs `var.x = 'seven'` and then `local seen = require '## lib'` sees `seven` in the library's rendered prose, and the `style` prompt in [Inserting Lua globals by bare name](#inserting-lua-globals-by-bare-name) works the same way with a global.
+A library's prose renders when the library's Lua block reads `prose` while `require` loads it, using the `var` values and globals the calling section set before the `require` call. A Lua block that runs `var.x = 'seven'` and then `local seen = require '/lib'` sees `seven` in the library's rendered prose, and the `style` prompt in [Inserting Lua globals by bare name](#inserting-lua-globals-by-bare-name) works the same way with a global.
 
-A `require` leaves the calling section's `prose` alone. Text the calling block already read stays the same, and prose it has not read yet still renders from its own placeholders at its first read, even after a library that raised an error. A block that reads `prose` as `caller saw one`, requires a library whose prose renders `lib text`, and reads `prose` again joins the three as `caller saw one|lib text|caller saw one`, and after `pcall(require, '## bad')` fails, the block's `prose` still reads `caller text`.
+A `require` leaves the calling section's `prose` alone. Text the calling block already read stays the same, and prose it has not read yet still renders from its own placeholders at its first read, even after a library that raised an error. A block that reads `prose` as `caller saw one`, requires a library whose prose renders `lib text`, and reads `prose` again joins the three as `caller saw one|lib text|caller saw one`, and after `pcall(require, '/bad')` fails, the block's `prose` still reads `caller text`.
 
 ## Escapes and literal braces
 
@@ -1289,7 +1295,7 @@ A substitution kind classifies a substitution failure, and every failure has exa
 | `MissingKey` | An absent key under `var`, `sys`, `argv`, or a global, as in `{{ sys.bogus }}` | `missing {{ {path} }}` |
 | `NullValue` | A path that lands on JSON null, under every root except `item` | `missing {{ {path} }}` |
 | `NilItem` | `{{ item }}` where no item is seeded | `{{ item }} is nil (no item is seeded into this section)` |
-| `NilArgv` | Any `argv` placeholder while `argv` is nil | `{{ {path} }} is nil (the args string is not JSON)` |
+| `NilArgv` | Any `argv` placeholder while `argv` is nil | `{{ {path} }} is nil (argv holds no value)` |
 | `Serialize` | A global that is not JSON data, and `{{ prose }}` | `global '{name}' in {{ {path} }} is not JSON data` |
 
 In the messages, `{path}` stands for the placeholder's path, `{name}` for the global's name, and `{namespace}` for the root you wrote.
@@ -1341,7 +1347,7 @@ The run result is:
 false
 ````
 
-The read of `prose` fails at the point where Lua reads it, with substitution kind `Serialize` and the message `global 'prose' in {{ prose }} is not JSON data`, because `prose` is not a substitution source. The message names `prose`, so `tostring(err):match('prose')` succeeds on the caught error, and the message does not include the underlying recursion refusal.
+The read of `prose` fails at the point where Lua reads it, with substitution kind `Serialize` and the message `global 'prose' in {{ prose }} is not JSON data`, because `prose` is not a substitution source. The caught error's message names `prose`, so `tostring(err):match('prose')` succeeds, and it does not include the underlying recursion refusal, which only the run's failure message carries when the read goes uncaught.
 
 ## Catching and reading substitution errors
 
@@ -1373,7 +1379,7 @@ The run succeeds, and the run result is:
 caught
 ````
 
-A placeholder that cannot render raises an ordinary Lua error at the moment the section's Lua reads `prose`, and the error's message says what went wrong, most often by quoting the placeholder. Because it is an ordinary Lua error raised at the read, not a separate kind of run failure, you can catch it with [`pcall`](05-lua-environment.md#raising-and-catching-errors). Wrap the read itself: `local ok, err = pcall(function() return prose end)` leaves `ok` false and the [error value](05-lua-environment.md#error-values) in `err`, and the Lua block goes on.
+A placeholder that cannot render raises an ordinary Lua error at the moment the section's Lua reads `prose`, and the error's message says what went wrong, most often by quoting the placeholder. Because it is an ordinary Lua error raised at the read, whose code `substitution` is one of the Lua codes, you can catch it with [`pcall`](05-lua-environment.md#raising-and-catching-errors). Wrap the read itself: `local ok, err = pcall(function() return prose end)` leaves `ok` false and the [error value](05-lua-environment.md#error-values) in `err`, and the Lua block goes on.
 
 ### What the error value holds
 
@@ -1387,18 +1393,18 @@ return err.kind .. ' | ' .. err.message
 The run result is:
 
 ````text
-lua | missing {{ var.missing }} [MissingKey at byte 9]
+lua | caught.md:11: missing {{ var.missing }}. A placeholder in the section's prose could not be filled. Fix the placeholder, or set the value it reads before the prose is read.
 ````
 
-A caught substitution failure gives an error value whose error kind, its `kind` field, is always `lua`, whatever its substitution kind, so the substitution kind, here `MissingKey`, shows only in the text. The error value's `message` field holds that text, and `tostring(err)` returns the same string, so over the prose `Missing: {{ var.missing }}.`, `ok` is `false`, `err.kind` is `lua`, and `tostring(err)` is `missing {{ var.missing }} [MissingKey at byte 9]`. The error value has no fields beyond `kind` and `message`, so nothing but the text names the failing placeholder, path, or offset.
+A caught substitution failure gives an error value whose error kind, its `kind` field, is always `lua`, whatever its substitution kind. Its `message` field, which `tostring(err)` also returns, starts with the file and line of the failing placeholder, here `caught.md:11`, the line of `Missing: {{ var.missing }}.` rather than the line of the `prose` read (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). It goes on to name what failed and ends with the fixed prose for a failed substitution. It leaves out the substitution kind, here `MissingKey`, and the byte offset, which only the run's failure message shows (see [The error text](#the-error-text)), and the error value has no field for the substitution kind, the path, or the offset. Its `code` is `substitution` whatever the substitution kind.
 
 ### The error text
 
-Every substitution failure's text has the form `{message} [{Kind} at byte {offset}]`, such as `missing {{ var.x }} [MissingKey at byte 42]`. That same text is what `tostring(err)` returns under `pcall`, and what the run's failure message contains when the failure goes uncaught.
+Every substitution failure's own text has the form `{message} [{Kind} at byte {offset}]`, such as `missing {{ var.x }} [MissingKey at byte 42]`. When the failure goes uncaught, the run's failure message is that text followed by the location of the failing placeholder, as in `missing {{ var.x }} [MissingKey at byte 42] (at {file}:{line})`, and a `Serialize` failure puts the reason its lookup gave, after a colon, ahead of the location. Under `pcall`, `tostring(err)` gives `{file}:{line}: {message}.` followed by the fixed prose for a failed substitution instead, as [What the error value holds](#what-the-error-value-holds) shows, so the caught text never holds the kind or the offset.
 
 ### The byte offset
 
-The byte offset is the position of the failing placeholder's opening `{{`, counted in bytes from the start of the prose being substituted. In `Missing: {{ var.missing }}.` nine bytes come before the `{{`, so the offset is 9. That prose is the pending prose the Lua block read, trimmed of surrounding blank lines and starting after the nearest preceding heading, `lua` fence, or [thematic break](03-blocks-and-prose.md#thematic-breaks-and-setext-headings), so the offset is not a position in the file:
+The byte offset is the position of the failing placeholder's opening `{{`, counted in bytes from the start of the prose being substituted. In `Missing: {{ var.missing }}.` nine bytes come before the `{{`, so the offset is 9. That prose is the pending prose the Lua block read, trimmed of surrounding blank lines and starting after the nearest preceding heading, `lua` fence, or [thematic break](03-blocks-and-prose.md#thematic-breaks-and-setext-headings), so the offset is not a position in the file. The run's failure message shows the offset, with the file line after it:
 
 ````markdown
 ---
@@ -1418,18 +1424,17 @@ Draft notes.
 prefix {{ ghost.x }}
 
 ```lua
-local ok, err = pcall(function() return prose end)
-return tostring(err)
+return prose
 ```
 ````
 
-The run result is:
+The run fails with this message:
 
 ````text
-unknown namespace or global 'ghost' in {{ ghost.x }} [UnknownNamespace at byte 7]
+unknown namespace or global 'ghost' in {{ ghost.x }} [UnknownNamespace at byte 7] (at offset.md:15)
 ````
 
-The thematic break starts fresh pending prose, so `Draft notes.` is not counted, and the offset is 7, just past `prefix `. A body of `Draft notes.`, a `---` break, and `Ask the question.` before a fence leaves pending prose of exactly `Ask the question.` in the same way.
+The thematic break starts fresh pending prose, so `Draft notes.` is not counted, and the offset is 7, just past `prefix `, while the line, 15, counts from the top of the file. A body of `Draft notes.`, a `---` break, and `Ask the question.` before a fence leaves pending prose of exactly `Ask the question.` in the same way.
 
 ### How messages quote a path
 
@@ -1437,7 +1442,7 @@ When a substitution error message quotes the placeholder, it prints the path tri
 
 ### When a failure goes uncaught
 
-An uncaught substitution failure raised by reading `prose` fails the run with run error kind `Lua`. The run's error message contains the substitution's own text, so it names the failing placeholder, such as `missing {{ var.missing }}` for a Lua block that runs `return prose` over `Missing: {{ var.missing }}.` In the H1 pass, an uncaught substitution failure ends the run with run error kind `RequirementsUnmet` instead of `Lua`:
+An uncaught substitution failure raised by reading `prose` fails the run with error code `substitution`. The run's error message is the substitution's own text, which names the failing placeholder, followed by the placeholder's location, so with `return prose` in place of the block in the `caught` prompt, the run fails with `missing {{ var.missing }} [MissingKey at byte 9] (at caught.md:11)`. The H1 pass is no exception, because a failed substitution never counts as a failed [H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate):
 
 ````markdown
 ---
@@ -1461,11 +1466,10 @@ return var.text
 ```
 ````
 
-The run's message starts with the [requirements notice](04-how-a-prompt-runs.md#the-requirements-notice):
+The run fails with error code `substitution` and this message, which points at the placeholder's line in the H1 body:
 
 ````text
-the environment cannot satisfy this prompt:
-- the H1 gate failed
+missing {{ var.missing }} [MissingKey at byte 9] (at gate.md:9)
 ````
 
-The substitution failure follows the notice as its cause, after a colon and a space, so the message goes on to contain `missing {{ var.missing }} [MissingKey at byte 9]`. An uncaught substitution failure ends the run as run error kind `Lua`, or as run error kind `RequirementsUnmet` in the H1 pass.
+Unlike a failed H1 gate, the message has no [requirements notice](04-how-a-prompt-runs.md#the-requirements-notice) in front. An uncaught substitution failure ends the run with `substitution` wherever the `prose` read happens.

@@ -11,8 +11,6 @@ Here you add one `user` record to the section entry's `messages` list, run it wi
 name: first-chat
 description: Says hello to a model and returns its reply.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # First chat
@@ -20,19 +18,17 @@ models:
 ## Chat
 
 ```lua
-models.use('writer')
 messages:user('hello')
 models.loop()
 return messages[#messages].content
 ```
 ````
 
-The run result is the model's reply to `hello`. The block does four things:
+The run result is the model's reply to `hello`. The block does three things:
 
-1. `models.use('writer')` selects the `writer` model role for the section entry (see [Selecting a role per section entry with `models.use`](10-models.md#selecting-a-role-per-section-entry-with-modelsuse)).
-2. `messages` is the section entry's conversation, a message list the Engine creates empty when the entry starts. A message list is the ordered list of message records a conversation sends to the model, and a message record is one message in it, written as a Lua table holding a `role` and a `content` (see [Message records](#message-records)).
-3. `messages:user('hello')` appends the user record `{ role = 'user', content = 'hello' }` at the end of the list, so `#messages` is 1 and `messages[1].role` is `'user'`. When `models.loop` runs, the first message the model receives has the `user` message role and `hello` as its content.
-4. `models.loop()` sends the list to the model and appends the model's text reply to the same list as a new `assistant` record. That record is the terminal record, the model's final reply, which the loop always leaves last in the list, so `return messages[#messages].content` reads its text.
+1. `messages` is the section entry's conversation, a message list the Engine creates empty when the entry starts. A message list is the ordered list of message records a conversation sends to the model, and a message record is one message in it, written as a Lua table holding a `role` and a `content` (see [Message records](#message-records)).
+2. `messages:user('hello')` appends the user record `{ role = 'user', content = 'hello' }` at the end of the list, so `#messages` is 1 and `messages[1].role` is `'user'`. When `models.loop` runs, the first message the model receives has the `user` message role and `hello` as its content.
+3. `models.loop()` sends the list to the chain's current model and appends the model's text reply to the same list as a new `assistant` record. No `models.use` call has changed the current model, so it is the model the Host gave the `default` role (see [The current model](10-models.md#the-current-model)). The reply record is the terminal record, the model's final reply, which the loop always leaves last in the list, so `return messages[#messages].content` reads its text.
 
 This is the shortest loop pattern: add a user message, run the loop, and return the last record's content.
 
@@ -42,7 +38,7 @@ This is the shortest loop pattern: add a user message, run the loop, and return 
 
 ### `messages` is the section entry's conversation
 
-`messages` is an Engine global, so a prompt's Lua uses it with no import or declaration (see [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals)). It holds the section entry's conversation, a message list the Engine creates with the entry's VM, and that one list is what `models.loop` and `handle:loop` run over. You fill it with builder methods, the list methods that append records, such as `messages:system(...)` and `messages:user(...)`.
+`messages` is an Engine global, so a prompt's Lua uses it with no import or declaration (see [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals)). It holds the section entry's conversation, a message list the Engine creates with the entry's VM, and that one list is what every `models.loop` call runs over. You fill it with builder methods, the list methods that append records, such as `messages:system(...)` and `messages:user(...)`.
 
 Every section entry gets a fresh, empty list, because every entry gets a fresh VM: each walked section, each `jump` target, each section a `call` chain runs, each task chain, and each fan-out arm. The H1 body's blocks get one too during [the H1 pass](04-how-a-prompt-runs.md#the-h1-pass), and that list drops with the H1 VM when the pass ends. A library loaded with `require` (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)) runs in the requiring section entry's VM, so it sees that entry's list. Two sections show the fresh start:
 
@@ -73,7 +69,7 @@ return var.first .. '|' .. #messages .. '|' .. type(messages)
 1|0|userdata
 ````
 
-`## First` leaves one record in its list, and `## Second` starts with an empty one. History clears with the section by design, so a conversation that must reach a later section travels as data, such as text kept in `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)). To start over without leaving the section, call `models.compact(compactors.clear, reason)` (see [`compactors.clear`](#compactorsclear)). The list is a userdata value, so `type(messages)` reports `'userdata'` rather than `'table'`.
+`First` leaves one record in its list, and `Second` starts with an empty one. History clears with the section by design, so a conversation that must reach a later section travels as data, such as text kept in `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)). To start over without leaving the section, call `models.compact(compactors.clear, reason)` (see [`compactors.clear`](#compactorsclear)). The list is a userdata value, so `type(messages)` reports `'userdata'` rather than `'table'`.
 
 `messages` keeps its identity for the section entry's whole life, compactions included, so a value read from it earlier, such as `local same = messages`, is still the same list later. The list has no fields other than its methods and its records, so a key such as `new` reads `nil`, like any other key that is neither a method name nor a record position.
 
@@ -91,7 +87,7 @@ messages cannot be assigned to by index; add records with append(record), or rew
 
 [Building a message list](#building-a-message-list) covers `append`, and [Editing a list with `replace`](#editing-a-list-with-replace) covers how a compaction rewrites history.
 
-Assigning the list to another variable, or passing it along, shares the one list rather than copying it. Put this block in the `## Second` section of `fresh-lists` in place of its block:
+Assigning the list to another variable, or passing it along, shares the one list rather than copying it. Put this block in the `Second` section of `fresh-lists` in place of its block:
 
 ````lua
 messages:system('be terse'):user('hi')
@@ -110,17 +106,15 @@ The list and its records work inside [the sandbox](05-lua-environment.md#the-san
 
 ### Running the list with `models.loop`
 
-`models.loop(compactor?)` is a plain function that runs the section entry's `messages` list and takes one optional argument, a compactor. `models.loop()` passes nothing, which selects the default compactor, `compactors.fail`. [Choosing a compactor for a call](#choosing-a-compactor-for-a-call) covers the argument, and [Compactors and context exhaustion](#compactors-and-context-exhaustion) explains what a compactor does.
+`models.loop(compactor?)` is a plain function that runs the section entry's `messages` list on the chain's current model and takes one optional argument, a compactor. `models.loop()` passes nothing, which selects the default compactor, `compactors.fail`. [Choosing a compactor for a call](#choosing-a-compactor-for-a-call) covers the argument, and [Compactors and context exhaustion](#compactors-and-context-exhaustion) explains what a compactor does. A second form, `models.loop(model, compactor?)`, runs the same list on a model handle's model, as [Running on a model handle](#running-on-a-model-handle) shows.
 
-`models.loop()` returns `nil`. What it produces is the records it appends to `messages`. This version of the `## Chat` block in `first-chat` checks both:
+`models.loop()` returns `nil`. What it produces is the records it appends to `messages`. This version of the `Chat` block in `first-chat` checks both:
 
 ````markdown
 ---
 name: first-chat
 description: Says hello to a model and returns its reply.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # First chat
@@ -128,7 +122,6 @@ models:
 ## Chat
 
 ```lua
-models.use('writer')
 messages:user('hello')
 local result = models.loop()
 return tostring(result) .. '|' .. #messages .. '|' .. messages[2].role
@@ -143,10 +136,9 @@ nil|2|assistant
 
 The one-record list grows to two records, `messages[2].role` is `'assistant'`, and `messages[2].content` holds the reply.
 
-To continue the conversation, add to the list and run the loop again. With this block in the `## Chat` section of `first-chat`, the model answers twice:
+To continue the conversation, add to the list and run the loop again. With this block in the `Chat` section of `first-chat`, the model answers twice:
 
 ````lua
-models.use('writer')
 messages:user('first question')
 models.loop()
 messages:user('second question')
@@ -175,8 +167,6 @@ The single-shot research shape fills the list from the section's prose, runs it,
 name: summarize
 description: Summarizes a person in one conversation.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Summarize
@@ -186,7 +176,6 @@ models:
 Summarize the person.
 
 ```lua
-models.use('writer')
 messages:user(prose)
 models.loop()
 return messages[#messages].content
@@ -202,8 +191,6 @@ One section can make a single model round while a later section holds a conversa
 name: draft-and-refine
 description: Drafts with one round, then refines the draft in a conversation.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Draft and refine
@@ -213,14 +200,12 @@ models:
 Write a short paragraph about the sea.
 
 ```lua
-models.use('writer')
 var.draft = models.infer(prose)
 ```
 
 ## Refine
 
 ```lua
-models.use('writer')
 messages:system('You refine drafts.')
 messages:user(var.draft)
 models.loop()
@@ -228,12 +213,11 @@ return messages[#messages].content
 ```
 ````
 
-`## Draft` runs one round with `models.infer` (see [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer)) and keeps the reply in `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)). `models.infer` never reads or changes `messages`. `## Refine` starts with its own empty list, fills it from that draft, and runs it, so the loop sends the system record first and the draft as the user message after it. The run result is the refined paragraph.
+`Draft` runs one round with `models.infer` (see [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer)) and keeps the reply in `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)). `models.infer` never reads or changes `messages`. `Refine` starts with its own empty list, fills it from that draft, and runs it, so the loop sends the system record first and the draft as the user message after it. The run result is the refined paragraph.
 
-A chat keeps the one list for the whole conversation and adds to it before each loop. With this block in the `## Chat` section of `first-chat`, two user messages from a Lua array each get a reply, and each loop call is guarded with `pcall` (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)):
+A chat keeps the one list for the whole conversation and adds to it before each loop. With this block in the `Chat` section of `first-chat`, two user messages from a Lua array each get a reply, and each loop call is guarded with `pcall` (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)):
 
 ````lua
-models.use('writer')
 for _, text in ipairs({ 'first question', 'second question' }) do
   messages:user(text)
   local ok, err = pcall(models.loop)
@@ -248,7 +232,7 @@ When the model answers `first reply` and then `second reply`, the run result is:
 4|first reply|second reply
 ````
 
-Each request carries every record the earlier loops left in the list, so the second request's messages are `first question`, `first reply`, and `second question`, and the two loops leave 4 records. Wrapping a call in `pcall` runs the loop normally and still appends the reply, so the chat can guard each call against errors. The chat prompt built into Workshop has this shape: inside `while true do`, it calls `messages:user(text)` with each chat turn's text and then `pcall(function() return models.loop(compact) end)`, where `compact` is a compactor that summarizes older turns when a turn overflows the model's context window (see [Writing your own compactor](#writing-your-own-compactor)). A failed loop ends only that turn, and a failed compaction (see [When a compaction fails](#when-a-compaction-fails)) also leaves `messages` as it was before the compaction.
+Each request carries every record the earlier loops left in the list, so the second request's messages are `first question`, `first reply`, and `second question`, and the two loops leave 4 records. Wrapping a call in `pcall` runs the loop normally and still appends the reply, so the chat can guard each call against errors. The chat prompt built into Workshop has this shape: inside `while true do`, it calls `messages:user(tasks.receive())`, which waits for the operator's next message (see [Asking the operator](05-lua-environment.md#asking-the-operator)), and then `pcall(function() return models.loop(compact) end)`, where `compact` is a compactor that summarizes older turns when a turn overflows the model's context window (see [Writing your own compactor](#writing-your-own-compactor)). A failed loop ends only that turn, and a failed compaction (see [When a compaction fails](#when-a-compaction-fails)) also leaves `messages` as it was before the compaction, except that a message the loop appended after the compaction stays when a second overflow restores the list. A stop raises `canceled` inside the `pcall`, which ends only that turn too, and a message the operator sends meanwhile stays queued for the next `tasks.receive()`.
 
 ## Message records
 
@@ -311,7 +295,7 @@ A plain message has only a message role and its content, as in `{ "role": "syste
 
 ### Content parts
 
-A content part is one piece of a record's content when the content is an array instead of a string. One record can mix text parts and image parts. Put this block in the `## Build` section of `records` in place of the first one:
+A content part is one piece of a record's content when the content is an array instead of a string. One record can mix text parts and image parts. Put this block in the `Build` section of `records` in place of the first one:
 
 ````lua
 messages:user({
@@ -341,7 +325,7 @@ A parts `content` is an array of part tables even when it holds one part, as in 
 
 ### Tool calls
 
-A tool call is one request from the model to run a tool, and an `assistant` record holds its calls in a `tool_calls` array next to its string `content`. Put this block in the `## Build` section of `records`:
+A tool call is one request from the model to run a tool, and an `assistant` record holds its calls in a `tool_calls` array next to its string `content`. Put this block in the `Build` section of `records`:
 
 ````lua
 messages:append({ role = 'user', content = 'What is the weather in Paris, and the time?' })
@@ -375,7 +359,7 @@ One `assistant` record can carry visible reply text in `content` together with s
 
 `tool_calls` is optional, and leaving it out means the record carries no tool calls. A record the loop writes holds calls only when the model asked for tools in that reply. After such a reply, `messages[2].tool_calls[1]` is the first call the model made, so `messages[2].tool_calls[1].id` reads its id, such as `'call_1'`, and `messages[2].tool_calls[1].name` reads the tool it called, such as `'web_search'`. Reading one entry with `local call = messages[2].tool_calls[1]` gives you `call.id`, `call.name`, and `call.arguments`, the call id, the name the model called, and the parsed arguments table. A model that sends `{"query":"one"}` gives `messages[2].tool_calls[1].arguments.query == 'one'`.
 
-Put `tool_calls` only on `assistant` records. Adding a record of another message role with `tool_calls` succeeds, because adding does not check the message role against `tool_calls`, but the next model call over the list fails with `messages[{index}] sets tool_calls but is not an assistant message`, such as `messages[1] sets tool_calls but is not an assistant message` for a user record at position 1 (see [Cross-record errors](#cross-record-errors)).
+Put `tool_calls` only on `assistant` records. A record of another message role with `tool_calls` is refused at the `append` or `replace` call that adds it, with `messages[{index}] sets tool_calls but is not an assistant message`, such as `messages[1] sets tool_calls but is not an assistant message` for a user record at position 1, and the list stays as it was (see [Record error messages](#record-error-messages)).
 
 ### Tool results
 
@@ -406,7 +390,7 @@ System records appear only in the leading system block, the unbroken run of syst
 
 ### Record metadata with `meta`
 
-A record's `meta` field holds your own data about a message, such as where it came from or whether it is a summary, and the model never sees it. Put this block in the `## Build` section of `records`:
+A record's `meta` field holds your own data about a message, such as where it came from or whether it is a summary, and the model never sees it. Put this block in the `Build` section of `records`:
 
 ````lua
 messages:user('hi', { source = 'form', id = 7 })
@@ -429,7 +413,7 @@ A value too large is refused with `messages[{index}] meta is {size} bytes as JSO
 
 ### Fields a record keeps
 
-A message record has no fields other than `role`, `content`, `tool_calls`, `tool_call_id`, and `meta`, with `role` and `content` always present and the other three only when they apply. Any other field you set is silently dropped when the record is added. Put this block in the `## Build` section of `records`:
+A message record has no fields other than `role`, `content`, `tool_calls`, `tool_call_id`, and `meta`, with `role` and `content` always present and the other three only when they apply. Any other field you set is silently dropped when the record is added. Put this block in the `Build` section of `records`:
 
 ````lua
 messages:user('u1'):append({ role = 'user', content = 'u2', extra = 1 })
@@ -492,7 +476,7 @@ A builder method is a list method that appends one record at the end of the list
 
 The list methods are colon methods, so the list itself is the first argument: you write `messages:user("hi")`, and the colon passes `messages` in. Each of the four builders named after a message role sets the new record's `role` from the method you called, `system`, `user`, `assistant`, or `tool`, and leaves out any field you pass as `nil`, so a record built without `tool_calls` or `meta` has no such field. Each builder takes the record's [`meta`](#record-metadata-with-meta) as its optional last argument.
 
-Message lists and model handles are the only Engine values with colon-call methods. A model handle's methods run rounds on its model, as in `h:infer(prompt)` and `h:loop()` (see [Model handles](10-models.md#model-handles), and [How the loop runs](#how-the-loop-runs) for `h:loop`), and no other Engine handle has methods.
+Message lists are the only Engine values with colon-call methods. A model handle holds read-only fields and no methods, and you run a round on its model by passing it first to `models.infer(h, prompt)` or `models.loop(h, compactor?)` (see [Model handles](10-models.md#model-handles), and [Running on a model handle](#running-on-a-model-handle) for `models.loop`).
 
 ### Adding user and system records
 
@@ -512,7 +496,7 @@ A table in the second place is always read as `tool_calls`, so for a plain reply
 
 `messages:tool(content, tool_call_id, meta?)` appends the tool record `{ role = "tool", content = content, tool_call_id = tool_call_id }`, taking the result text first and the id of the earlier tool call it answers second, and returns the same list.
 
-Together they write an earlier tool call and its result into the list: `:assistant` carrying the call, followed by `:tool` with the matching id. Put this block in the `## Build` section of `builders` in place of the first one:
+Together they write an earlier tool call and its result into the list: `:assistant` carrying the call, followed by `:tool` with the matching id. Put this block in the `Build` section of `builders` in place of the first one:
 
 ````lua
 messages:user('What is the weather in Paris?')
@@ -560,8 +544,6 @@ Chaining also puts worked examples, such as a user record followed by an assista
 name: translate
 description: Translates a phrase after one worked example.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Translate
@@ -571,7 +553,6 @@ models:
 good night
 
 ```lua
-models.use('writer')
 messages:system('Translate each phrase into French.')
   :user('good morning')
   :assistant('bonjour')
@@ -609,10 +590,10 @@ return tostring(ok) .. '|' .. err.kind .. '|' .. #messages
 false|lua|3
 ````
 
-The error value (see [Error values](05-lua-environment.md#error-values)) has kind `lua`, and the list still holds its three records. Its message names the position the record would take, `messages[4]`:
+The error value (see [Error values](05-lua-environment.md#error-values)) has kind `lua`, and the list still holds its three records. Its message points at the line of the refused call and names the position the record would take, `messages[4]`:
 
 ````text
-messages[4] is a system message after a non-system message; system messages lead the list, and only a compactor can change the leading block
+system-first.md:13: messages[4] is a system message after a non-system message; system messages lead the list, and only a compactor can change the leading block. The Lua code failed at runtime. Fix the code at this location.
 ````
 
 `messages:append(record)` with a system record after a non-system record raises the same error. Any builder, `append`, or `replace` call that would leave a system record after a record of another message role fails, names the position of the first such record, and leaves the list unchanged. To change the leading block itself, call `replace` inside a compactor (see [Editing the leading system block](#editing-the-leading-system-block)).
@@ -623,7 +604,7 @@ Each builder checks the record it adds, including the record's own fields, their
 
 A list checks each record's own fields, and system placement, once, when you add the record. It leaves the rules about how records relate to each other, such as unique tool call ids and pairing each call with its result, until the model call (see [What the model receives](#what-the-model-receives)).
 
-Every record a list edit refuses raises a `lua`-kind error value at your call, which `pcall` catches (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)), and the list stays exactly as it was before the call. A value refused for JSON conversion leaves the list unchanged too. The error's message is the refusal text itself, exactly as [Record error messages](#record-error-messages) shows it, with no prefix, and only the first broken rule is reported.
+Every record a list edit refuses raises a `lua`-kind error value at your call, which `pcall` catches (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)), and the list stays exactly as it was before the call. A value refused for JSON conversion leaves the list unchanged too. The error's message is `{file}:{line}: {refusal}. The Lua code failed at runtime. Fix the code at this location.`, where `{refusal}` is the refusal text exactly as [Record error messages](#record-error-messages) shows it and `{line}` is the line of the call that made the edit (see [Where an error points](16-limits-and-errors.md#where-an-error-points)), and only the first broken rule is reported.
 
 ### Positions in a record error
 
@@ -644,14 +625,14 @@ A record's rules run in a fixed order, so you see the first rule the record brea
 4. Content, including each content part.
 5. The type of `tool_call_id`. This check is reported ahead of the check that only tool records carry a `tool_call_id`, so a record with a non-string `tool_call_id` reports the type message, even on a `user` record, and a tool record with a non-string `tool_call_id` reports the type message too.
 6. Whether the message role and `tool_call_id` go together.
-7. `tool_calls`, and within each call, `id` before `name`, so a call missing both reports the `id` message.
+7. `tool_calls`, within each call `id` before `name`, so a call missing both reports the `id` message, and then whether the record's message role is `assistant`.
 8. The size of `meta`.
 
 A record that passes these rules then joins the list only if it keeps the system records leading.
 
 ### Record error messages
 
-Every message below is the full text of a `lua`-kind error value. `{index}`, `{part_index}`, and `{call_index}` are the positions [Positions in a record error](#positions-in-a-record-error) describes, and the other parts in braces are filled in as each entry says.
+Every message below is the refusal text of a `lua`-kind error value, which the error value's message holds between the edit's location and the Lua runtime prose, as [When records are checked](#when-records-are-checked) shows. `{index}`, `{part_index}`, and `{call_index}` are the positions [Positions in a record error](#positions-in-a-record-error) describes, and the other parts in braces are filled in as each entry says.
 
 JSON form:
 
@@ -695,6 +676,7 @@ Tool calls:
 - `messages[{index}] tool_calls[{call_index}] must set a string id` comes from a call without a string `id`, such as `messages[2] tool_calls[1] must set a string id`.
 - `messages[{index}] tool_calls[{call_index}] must set a string name` comes from a call without a string `name`, such as `messages[1] tool_calls[1] must set a string name`.
 - `messages[{index}] tool_calls[{call_index}] arguments must be a table` comes from `arguments` that is anything other than a keyed table, a string or a non-empty sequence included.
+- `messages[{index}] sets tool_calls but is not an assistant message` comes from a `system`, `user`, or `tool` record that sets `tool_calls`, such as `messages[1] sets tool_calls but is not an assistant message` for a user record added to an empty list.
 
 Metadata:
 
@@ -703,8 +685,6 @@ Metadata:
 System placement:
 
 - `messages[{index}] is a system message after a non-system message; system messages lead the list, and only a compactor can change the leading block` comes from a system record added after any non-system record, where `{index}` is the new record's position.
-
-One rule spans records, so the edit that adds a record does not check it: only `assistant` records carry `tool_calls`, and a `tool_calls` array on a record of another message role fails at the `models.loop` call instead, with the message [Cross-record errors](#cross-record-errors) lists.
 
 ## Reading records
 
@@ -760,7 +740,7 @@ You read a single record from the list by its 1-based index with `messages[i]`, 
 
 Because `#messages` gives the number of records, it names the position of the last one, so `messages[#messages]` is the latest message, such as the reply `models.loop` just appended. A block ending with `models.loop()` and then `return messages[#messages].content` returns the model's reply, such as `pong`. The same position works in other calls: after `messages:system('s'):user('u'):assistant('a')`, the call `messages:replace(#messages, #messages)` inside a compactor targets the third record (see [Editing a list with `replace`](#editing-a-list-with-replace)). `messages[i]` also works inside a numeric `for` loop, as in `for i = 3, 6 do ids[#ids + 1] = messages[i].tool_call_id end`.
 
-A position outside the list reads `nil` instead of raising an error. Put this block in the `## Read` section of `read-records` in place of the first one:
+A position outside the list reads `nil` instead of raising an error. Put this block in the `Read` section of `read-records` in place of the first one:
 
 ````lua
 messages:user('u1'):assistant('a1')
@@ -775,7 +755,7 @@ On this two-record list, position 0, a negative index, and an index past the las
 
 ### Reading a record's fields
 
-Each record you read gives you its `role`, `content`, `tool_calls`, `tool_call_id`, and `meta`. Put this block in the `## Read` section of `read-records`:
+Each record you read gives you its `role`, `content`, `tool_calls`, `tool_call_id`, and `meta`. Put this block in the `Read` section of `read-records`:
 
 ````lua
 messages:user('say hi')
@@ -812,7 +792,7 @@ A counted loop, `ipairs`, and `pairs` all visit the list's records in order, eac
 
 The list's length, its numeric indexes, and a `pairs` walk over it cover only its records, never its methods, so `pairs(messages)` over three records visits exactly positions 1, 2, and 3. Iterating an empty list with `pairs`, `ipairs`, or a counted loop visits nothing.
 
-The two iterators differ when the loop edits the list. `pairs(messages)` stops at the record count the list had when the walk began, as the sandbox `pairs` fixes a table's keys at its start, so a loop that appends on every pass still ends. Put this block in the `## Read` section of `read-records`:
+The two iterators differ when the loop edits the list. `pairs(messages)` stops at the record count the list had when the walk began, as the sandbox `pairs` fixes a table's keys at its start, so a loop that appends on every pass still ends. Put this block in the `Read` section of `read-records`:
 
 ````lua
 messages:user('u1'):assistant('a1'):user('u2')
@@ -855,7 +835,7 @@ The walk reads the replaced record at position 3 as `u2b` and stops at the three
 
 ### What a record view allows
 
-A record view is what `messages[i]` returns: a read-only view of the record at 1-based position `i`, whose fields you read through metamethods, and `pairs` and `ipairs` hand out the same views. Put this block in the `## Read` section of `read-records`:
+A record view is what `messages[i]` returns: a read-only view of the record at 1-based position `i`, whose fields you read through metamethods, and `pairs` and `ipairs` hand out the same views. Put this block in the `Read` section of `read-records`:
 
 ````lua
 messages:user('say hi')
@@ -883,7 +863,7 @@ Any other key reads `nil` instead of raising an error. An unknown field such as 
 
 A view holds its own reference to the record it was read from, so it keeps showing that record's fields rather than looking the record up in the list again. It keeps showing them even after a later `replace` or compaction changes that position, because an edit puts new records into the list instead of changing records already handed out.
 
-`pairs(view)` visits only the fields the record has, in the fixed order `role`, `content`, `tool_calls`, `tool_call_id`, `meta`, the same order on every run, skipping absent fields and ending after the last present one. It yields each field name as the key and the same value that dot access returns, including a fresh table for a table field. Put this block in the `## Read` section of `read-records`:
+`pairs(view)` visits only the fields the record has, in the fixed order `role`, `content`, `tool_calls`, `tool_call_id`, `meta`, the same order on every run, skipping absent fields and ending after the last present one. It yields each field name as the key and the same value that dot access returns, including a fresh table for a table field. Put this block in the `Read` section of `read-records`:
 
 ````lua
 messages:user('say hi')
@@ -903,7 +883,7 @@ role,content,tool_calls|role,content,tool_call_id,meta
 
 ### Using a view as a record
 
-A view's fields are plain Lua values, so to keep or reshape records, copy the fields you need into plain Lua tables. Put this block in the `## Read` section of `read-records`:
+A view's fields are plain Lua values, so to keep or reshape records, copy the fields you need into plain Lua tables. Put this block in the `Read` section of `read-records`:
 
 ````lua
 messages:system('s'):user('u')
@@ -990,10 +970,9 @@ u1 a2
 
 `messages:replace(first, last)` with no records removes records `first` through `last` and keeps every record before `first` and after `last`. Passing fewer records than the range holds shrinks the list the same way, so replacing four records with two leaves a two-record list.
 
-`messages:replace(#messages, #messages)` with no records removes the last record, such as a trailing assistant reply, and every earlier record stays in place. The loop always leaves its terminal record in the list, so this is how you drop that record when you do not want it kept. Put this block in the `## Chat` section of `first-chat`:
+`messages:replace(#messages, #messages)` with no records removes the last record, such as a trailing assistant reply, and every earlier record stays in place. The loop always leaves its terminal record in the list, so this is how you drop that record when you do not want it kept. Put this block in the `Chat` section of `first-chat`:
 
 ````lua
-models.use('writer')
 messages:user('hello')
 models.loop()
 models.compact(function(reason) messages:replace(#messages, #messages) end, "drop the failed reply")
@@ -1036,7 +1015,7 @@ Replacing a range with a single record merges the range. On a list whose records
 
 ### Editing the leading system block
 
-`replace` inside a compactor is how you change or remove the [leading system block](#the-leading-system-block), the system records at the front of the list. A replace may rewrite or grow that block, as long as every system record stays ahead of the first non-system record. Put this block in the `## Edit` section of `edit-list` in place of the first one:
+`replace` inside a compactor is how you change or remove the [leading system block](#the-leading-system-block), the system records at the front of the list. A replace may rewrite or grow that block, as long as every system record stays ahead of the first non-system record. Put this block in the `Edit` section of `edit-list` in place of the first one:
 
 ````lua
 messages:append({ role = 'system', content = 's1' })
@@ -1074,10 +1053,9 @@ You can compact the list after a loop has sent it, and the next request uses the
 
 ### Editing a record through its view
 
-A [record view](#reading-records), the value `messages[i]` reads, is read-only, so you change a record by rewriting it in the list with `replace` inside a compactor, building the new record from the view's fields. Put this block in the `## Chat` section of `first-chat`:
+A [record view](#reading-records), the value `messages[i]` reads, is read-only, so you change a record by rewriting it in the list with `replace` inside a compactor, building the new record from the view's fields. Put this block in the `Chat` section of `first-chat`:
 
 ````lua
-models.use('writer')
 messages:user('hello')
 models.loop()
 models.compact(function(reason)
@@ -1119,7 +1097,7 @@ A bound can be an integer or a float with no fractional part, which works as its
 
 ### When `replace` refuses an edit
 
-A refused `replace` raises a `lua`-kind [error value](05-lua-environment.md#error-values) at the call and leaves the list unchanged. `replace` applies all of its records or none, so one bad record in the call leaves the list untouched. It checks that a compactor is running first, then `first`, then `last`, then the range, before it looks at any record, so a bad range is reported even when the records are also bad. Inside a compactor, a refusal the compactor does not catch with `pcall` fails the compaction, which puts the records back as they were before the compactor ran and raises the same error (see [When a compaction fails](#when-a-compaction-fails)).
+A refused `replace` raises a `lua`-kind [error value](05-lua-environment.md#error-values) at the call and leaves the list unchanged. Its message holds the refusal text shown below between the `replace` line and the Lua runtime prose, as [When records are checked](#when-records-are-checked) describes. `replace` applies all of its records or none, so one bad record in the call leaves the list untouched. It checks that a compactor is running first, then `first`, then `last`, then the range, before it looks at any record, so a bad range is reported even when the records are also bad. Inside a compactor, a refusal the compactor does not catch with `pcall` fails the compaction, which puts the records back as they were before the compactor ran and raises the same error (see [When a compaction fails](#when-a-compaction-fails)).
 
 A bound that is not a whole number fails with `replace first must be an integer, got ...`, or the same message naming `last`. A number with a fraction shows its value, and any other value shows its Lua type:
 
@@ -1164,10 +1142,9 @@ The second new record takes position 2 and has no `content`, so the call is refu
 
 ## How the loop runs
 
-Here you follow one `models.loop` call round by round, run a conversation on a chosen model with `handle:loop`, and see what the loop returns and what each round reports. Put this block in the `## Chat` section of `first-chat`:
+Here you follow one `models.loop` call round by round, run a conversation on a chosen model with `models.loop(model)`, and see what the loop returns and what each round reports. Put this block in the `Chat` section of `first-chat`:
 
 ````lua
-models.use('writer')
 messages:user('hello')
 models.loop()
 return #messages .. ': ' .. messages[1].role .. ', ' .. messages[2].role
@@ -1190,10 +1167,9 @@ When the model asks for tools instead, the loop runs them and sends another roun
 
 When the model gives a non-empty text reply with no tool calls, the loop sends one request and appends `{ role = "assistant", content = reply }`, with no tool calls, as the one terminal record. The terminal record comes after the records of every tool round, and its `content` holds the model's reply text verbatim, so the loop's final reply is always `messages[#messages].content`. Every record the loop adds has plain text `content` and no `meta`.
 
-A round like this ends `models.loop` normally and hands control back to the block, which goes on with its next statement. `models.loop` and `handle:loop` return `nil` when the loop ends normally, so you read the model's final reply and the rest of the outcome from the list the loop has updated. Each returns exactly one value:
+A round like this ends `models.loop` normally and hands control back to the block, which goes on with its next statement. `models.loop` returns `nil` when the loop ends normally, with or without a model handle, so you read the model's final reply and the rest of the outcome from the list the loop has updated. It returns exactly one value:
 
 ````lua
-models.use('writer')
 messages:user('hello')
 return select('#', models.loop()) .. '|' .. #messages
 ````
@@ -1204,7 +1180,7 @@ return select('#', models.loop()) .. '|' .. #messages
 
 ### The loop appends to `messages`
 
-`models.loop` and `handle:loop` always run over the section entry's `messages` list, and that list is the one each round's request sends as its messages. The loop works on the list itself rather than a copy. It appends every record it makes, model replies and tool replies alike, to that list in place, so after the call you read every record of the conversation from `messages`.
+`models.loop` always runs over the section entry's `messages` list, with or without a model handle, and that list is the one each round's request sends as its messages. The loop works on the list itself rather than a copy. It appends every record it makes, model replies and tool replies alike, to that list in place, so after the call you read every record of the conversation from `messages`.
 
 Every record added during `models.loop` appears in the list: assistant replies and tool results.
 
@@ -1214,9 +1190,40 @@ Each round is one stateless, tool-capable model request over the whole message l
 
 A loop round is the same request a nested `infer` makes (see [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer)), only sent over your conversation together with the section entry's tool list. The first loop round in the section entry that builds its tools freezes the entry's Static Set and Dynamic Set from every offer made so far (see [Tool scope](12-tools.md#tool-scope)), and both stay fixed for the rest of the section entry. A section entered again with `jump`, a fanout arm, a task, and a section run with `call` are each a new entry, with their own offers and their own freeze. When those offers name a catalog tool, that round first asks each offered Pack to render its tools for the section entry and the round's model (see [The five kinds of Harness work](01-what-a-prompt-is.md#the-five-kinds-of-harness-work)), and the model sees what the Packs return, the tools as offered for a Pack that does not render (see [What a Pack's render can change](12-tools.md#what-a-packs-render-can-change)). The freeze happens before the round's list is checked and before the context precheck, so a first round the precheck refuses still fixes the sets. Every later round, a compacted round's retry and rounds on another model included, sends the same tool schemas, and once the sets are frozen, `tools.offer` and `tools.offer_dynamic` raise (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)). `tools.adhoc` still defines a tool after the freeze (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)), but the Static Set never gains it. A round refused before the freeze freezes nothing: one over an empty list, one with no model to run on, and one whose freeze fails. [When an offer takes effect](12-tools.md#when-an-offer-takes-effect) covers the rule.
 
-The model's sampling options (see [Sampling options on `models.use`](10-models.md#sampling-options-on-modelsuse)), such as `temperature` and `max_tokens`, apply to every round of the loop. Each round is sent with the options of the model it runs on, the conversation so far, and the Static Set.
+The model's sampling options (see [Sampling options on `models.use`](10-models.md#sampling-options-on-modelsuse)), such as `temperature` and `max_tokens`, apply to every round of the loop. Each round is sent with the options of the model it runs on, the conversation so far, and the Static Set. The options a `models.use` call set belong to the chain's current model, so they reach every round of a `models.loop` call that names no handle, and a call with a handle sends its rounds with the handle's own options.
 
 Before every round, the loop checks the whole list again against the [cross-record rules](#checking-and-composing-before-each-request), such as no duplicate tool-call id, no orphan tool record, and no assistant tool call without a result. It then builds the request from the records the list holds at that moment, so a list you edit between calls is checked each time. The per-record checks that a builder method such as `messages:user` runs when it adds a record do not run again.
+
+### Messages that arrive while the loop runs
+
+A message can reach a chain while its `models.loop` runs: the operator's message on the main chain (see [Asking the operator](05-lua-environment.md#asking-the-operator)), or the owner's [`tasks.send`](15-tasks.md#sending-with-taskssend) in a task. The loop reads the chain's inbox at every request, so the model sees each message at its next request, and how the message gets there depends on what the round is doing when it arrives:
+
+- A message already queued when a round would go out is appended first, so the request holds it. The loop appends every queued message, oldest first, each as its own `user` record.
+- A message that arrives while the round's model request has no answer yet, the reply still streaming included, withdraws that request. The loop appends the message and sends the request again. Nothing of the withdrawn request reaches `messages`, no error reaches Lua, and the withdrawn request counts toward neither the [round cap](#tool-rounds-and-the-round-cap) nor the [round counter](#the-round-counter-and-what-each-round-reports).
+- A message that arrives while the round's tool calls run, or while its tools render, withdraws nothing. Every call finishes and records its real result, and the loop appends the message before its next request.
+- After the final reply, the loop reads the inbox once more. A message it finds there is appended after the reply and starts another round, which counts toward the round cap. When the final reply came in the last round the cap allows, the loop returns without that read, and a message that arrives then waits for the chain's next reader: `tasks.receive()`, `tasks.reply`, or the next `models.loop`.
+
+Each message the loop appends starts with a line that says it arrived while the model was working, then a blank line, then the text as sent. On the main chain, the record for `shorter please` holds:
+
+````text
+This message arrived while you were working:
+
+shorter please
+````
+
+In a task the line reads `The task that started you sent this message while you were working:` instead. Only the loop adds the line: a message a prompt reads itself, with `tasks.receive()` or `tasks.reply`, comes back exactly as sent.
+
+Two messages that arrive before one request stay two `user` records in `messages`, each with its own line. The request joins consecutive user records into one provider message, with a blank line between them (see [Same-role merging](#same-role-merging)), so the model reads them as one message. With this block in the `Chat` section of `first-chat`, an operator who sends `one` and then `two` before the loop's request goes out, and a model that answers `ok`, give the run result `user user user assistant`:
+
+````lua
+messages:user('hi')
+models.loop()
+local roles = {}
+for i = 1, #messages do roles[i] = messages[i].role end
+return table.concat(roles, ' ')
+````
+
+A stop is not a message. A stop that lands while a round waits raises `canceled` at the `models.loop` call, as [Stopping the round in flight](16-limits-and-errors.md#stopping-the-round-in-flight) describes, and when the Host stops the round and then sends, the stop comes first: the loop raises `canceled`, and the message stays queued for the chain's next read.
 
 ### How the loop judges an answer
 
@@ -1227,9 +1234,9 @@ Each round that returns an answer ends in exactly one of four outcomes the loop 
 3. A non-empty text reply, which the loop appends as the terminal record before it returns.
 4. The clean exit: an empty reply that finishes with `stop` after at least one answered tool call (see [Empty replies and finish reasons](#empty-replies-and-finish-reasons)).
 
-Any other answer raises an `empty_model_reply` error. Two more rules shape every call: `models.loop` and `handle:loop` stop at the round cap (see [Setting the round cap](#setting-the-round-cap)), and they use `compactors.fail` when no compactor is passed (see [Choosing a compactor for a call](#choosing-a-compactor-for-a-call)).
+Any other answer raises an `empty_model_reply` error. Two more rules shape every call: `models.loop` stops at the round cap (see [Setting the round cap](#setting-the-round-cap)), and it uses `compactors.fail` when no compactor is passed (see [Choosing a compactor for a call](#choosing-a-compactor-for-a-call)). After a text reply or the clean exit, the loop reads its chain's inbox once more before it returns, unless its round cap is spent, and a message it finds there starts another round (see [Messages that arrive while the loop runs](#messages-that-arrive-while-the-loop-runs)).
 
-While the run is being cancelled, an error that an adhoc tool handler or a compactor raises is raised again at once, unchanged, so the cancellation ends the conversation. A handler that returns normally during the cancellation still has its result reported.
+While the run is being canceled, an error that an adhoc tool handler or a compactor raises is raised again at once, unchanged, so the cancellation ends the conversation. A handler that returns normally during the cancellation still has its result reported.
 
 ### Running the loop again on the same list
 
@@ -1241,16 +1248,13 @@ When every reply is plain text with no tool calls, each `models.loop` call makes
 
 ### Which model a loop round runs on
 
-`models.loop(compactor?)`, called with no model handle, runs each round on the section entry's current model. That is the model role selected with `models.use` (see [Selecting a role per section entry with `models.use`](10-models.md#selecting-a-role-per-section-entry-with-modelsuse)), or else the prompt-wide default set with `models.default` (see [The prompt-wide default with `models.default`](10-models.md#the-prompt-wide-default-with-modelsdefault)). The loop looks the entry's current model up again each time it sends a round, and the list survives a model change, so one conversation can move between models:
+`models.loop(compactor?)`, called with no model handle, runs each round on the chain's current model. A prompt's H1 pass starts on the model the Host gave the `default` role, and the walk continues on the model the pass ended on, so a prompt with no H1 pass starts its walk on `default` (see [Where a chain starts](10-models.md#where-a-chain-starts)). `models.use` changes the model from there (see [The current model](10-models.md#the-current-model) and [Selecting a role with `models.use`](10-models.md#selecting-a-role-with-modelsuse)). The current model belongs to the chain, so a `models.use` call lasts across sections until the next one. The loop reads the current model again each time it sends a round, the retry after a compaction included, so a compactor that calls `models.use` moves the retry to the model it selects. The list survives a model change, so one conversation can move between models:
 
 ````markdown
 ---
 name: second-opinion
 description: Drafts with one model role and reviews the draft with another.
 runvil: 0
-models:
-  writer: {}
-  reviewer: {}
 ---
 
 # Second opinion
@@ -1259,38 +1263,33 @@ models:
 
 ```lua
 messages:user('Write a short paragraph about the sea.')
-models.use('writer')
+models.use('fast')
 models.loop()
 messages:user('Point out the weakest sentence in your paragraph.')
-models.use('reviewer')
+models.use('strong')
 models.loop()
 return messages[#messages].content
 ```
 ````
 
-The first loop's round runs on the model bound to `writer`, and the second loop's round runs on the model bound to `reviewer`, because `models.use('reviewer')` changes the section entry's current model before the second call sends its round. The second request includes the first reply, so the reviewer sees the paragraph it comments on, and the run result is the reviewer's reply. The Static Set stays the same across the change too, so both models are offered the same tools.
+On a Host whose role map gives `fast` and `strong` their own models, the first loop's round runs on the model filling `fast`, and the second loop's round runs on the model filling `strong`, because `models.use('strong')` changes the chain's current model before the second call sends its round. With a one-model map, both roles are filled by the same model, so both rounds run on it. The second request includes the first reply, so the second model sees the paragraph it comments on, and the run result is the second model's reply. The Static Set stays the same across the change too, so both models are offered the same tools.
 
-`models.loop()` runs on the section entry's current model even when other model handles are in scope, such as one from `local other = models.get('reviewer')`. With neither `models.use` nor `models.default` in effect, `models.loop` fails with the same missing-model error that `models.infer` raises (see [Infer errors and the missing-model error](10-models.md#infer-errors-and-the-missing-model-error)), because both pick the entry's current model the same way.
+The switch also outlasts the section. A section that comes after `Chat` in the same chain starts on `strong`, so its `models.loop()` runs there unless that section calls `models.use` itself. A `call` child, a task, and a fanout arm each start on a copy of the model their parent has when it dispatches them (see [Children and fanout arms](10-models.md#children-and-fanout-arms)).
 
-### Running on a model handle with `handle:loop`
+`models.loop()` runs on the chain's current model even when other model handles are in scope, such as one from `local other = models.get('fast')`. When the Host gave no model, `models.loop` fails with the same missing-model error that `models.infer` raises (see [Infer errors and the missing-model error](10-models.md#infer-errors-and-the-missing-model-error)), because both read the chain's current model the same way.
 
-To run a conversation on one chosen model, call `loop` on a model handle (see [Getting handles with `models.get`](10-models.md#getting-handles-with-modelsget)). This version of `second-opinion` sets a prompt-wide default in its H1 body and runs its review on a handle:
+### Running on a model handle
+
+To run a conversation on one chosen model without changing the chain's current model, pass a model handle to `models.loop` as its first argument (see [Getting handles with `models.get`](10-models.md#getting-handles-with-modelsget)). This version of `second-opinion` drafts on the chain's current model and runs its review on a handle:
 
 ````markdown
 ---
 name: second-opinion
 description: Drafts with one model role and reviews the draft with another.
 runvil: 0
-models:
-  writer: {}
-  reviewer: {}
 ---
 
 # Second opinion
-
-```lua
-models.default('writer')
-```
 
 ## Draft
 
@@ -1304,25 +1303,25 @@ var.draft = messages[#messages].content
 
 ```lua
 messages:user('Point out the weakest sentence in this paragraph: ' .. var.draft)
-models.get('reviewer'):loop()
+models.loop(models.get('strong'))
 return messages[#messages].content
 ```
 ````
 
-`## Draft` runs on the prompt-wide default, `writer`, and keeps the draft in `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)). `## Review` starts with its own empty list and calls `h:loop(compactor?)` on the handle that `models.get('reviewer')` returns, so every round of that call runs on the `reviewer` model, and the run result is the review.
+`Draft` runs on the chain's current model, the model the Host gave the `default` role, and keeps the draft in `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)). `Review` starts with its own empty list and passes the handle that `models.get('strong')` returns to `models.loop`, so every round of that call runs on the model that fills `strong`, and the run result is the review. On a Host whose role map gives `strong` its own model, the draft and the review come from different models. With a one-model map both come from the same model.
 
-A model handle (see [Model handles](10-models.md#model-handles)) has a `loop` method that runs the loop on that handle's model. You call it as `handle:loop(compactor?)`, or as `handle.loop(handle, compactor?)` with the handle passed first. `handle:loop` uses the same `messages` list that `models.loop` uses. Every round of a `handle:loop` call, at any point in the section entry, runs on the handle's own fixed model instead of the entry's current model that `models.loop` uses. Every request `handle:loop` sends names that model handle, while `models.loop` sends its rounds with no handle, and both send the entry's message list.
+`models.loop(model, compactor?)` takes a model handle (see [Model handles](10-models.md#model-handles)) as its first argument. It uses the same `messages` list that `models.loop(compactor?)` uses. Every round of the call, at any point in the section entry and including the retry after a compaction, runs on the handle's own frozen binding instead of the chain's current model. The call does not change the chain's current model, so a `models.loop()` or `models.infer(prose)` after it still runs on the model the chain was on before it.
 
-The compactor is optional in both forms and follows the same rules on a handle, where it sets what happens when a round overflows the model's context window (see [Choosing a compactor for a call](#choosing-a-compactor-for-a-call)). Pass it as the one argument, as in `handle:loop(compactor)` or `other:loop(compactors.fail)`, or pass an explicit `nil`, as in `handle:loop(nil)`, for the default.
+The compactor is optional in both forms and follows the same rules with a handle, where it sets what happens when a round overflows the model's context window (see [Choosing a compactor for a call](#choosing-a-compactor-for-a-call)). With a handle, pass it as the second argument, as in `models.loop(handle, compactor)` or `models.loop(other, compactors.fail)`. Leaving it out, or passing an explicit `nil` after the handle, as in `models.loop(handle, nil)`, selects the default.
 
-You can keep using the list after a loop returns, appending another user record and running the loop again, even on a different model, and each `handle:loop` call appends its own terminal record. Put this block in the `## Review` section of `second-opinion`:
+You can keep using the list after a loop returns, appending another user record and running the loop again, even on a different model, and each `models.loop` call appends its own terminal record. Put this block in the `Review` section of `second-opinion`:
 
 ````lua
-local other = models.get('reviewer')
+local other = models.get('strong')
 messages:user('first')
 models.loop()
 messages:user('second')
-other:loop()
+models.loop(other)
 return #messages
 ````
 
@@ -1330,11 +1329,11 @@ return #messages
 4
 ````
 
-`models.loop()` runs its round on the prompt-wide default, `other:loop()` runs its round on `reviewer`, and each call adds one terminal record to the same list. Both entries also work as function values: `pcall(models.loop, compactor)` passes the compactor, and `pcall(writer.loop, writer, compactor)`, where `writer` holds a model handle, supplies the handle as the first argument for the method form.
+`models.loop()` runs its round on the chain's current model, `models.loop(other)` runs its round on `strong`, and each call adds one terminal record to the same list. `models.loop` also works as a function value: `pcall(models.loop, compactor)` passes the compactor, and `pcall(models.loop, other, compactor)` passes a handle first and the compactor second.
 
 ### The round counter and what each round reports
 
-Each round that returns a reply advances the run's round counter by one, whether the reply is text, a batch of tool calls, or an empty reply. A round refused for context overflow, and a round that fails, leave the count unchanged. The records a loop reports hold this number in `turn`, so one `models.loop` call with two tool rounds and a final reply reports the `turn` values 1, 2, and 3.
+Each round that returns a reply advances the run's round counter by one, whether the reply is text, a batch of tool calls, or an empty reply. A round refused for context overflow, a round that fails, and a request a message withdrew (see [Messages that arrive while the loop runs](#messages-that-arrive-while-the-loop-runs)) leave the count unchanged. The records a loop reports hold this number in `turn`, so one `models.loop` call with two tool rounds and a final reply reports the `turn` values 1, 2, and 3.
 
 Each round reports a model-turn observation, completed, failed, or truncated, and each tool call reports a succeeded or failed observation, in order (see [Run events and records](04-how-a-prompt-runs.md#run-events-and-records)). A text reply that ends the loop takes one round, and the run reports one model-turn-completed event for it under the section that runs the loop. A failed round is reported as a model-turn-failed event before the error propagates, and the events for a failed round leave out the backend's response body and the messages you send.
 
@@ -1353,10 +1352,9 @@ Each content event from a loop round is stamped with the round's id and the chat
 
 ## Loop arguments and errors
 
-Here you pass `models.loop` and `handle:loop` the arguments they take, catch any loop failure with one `pcall`, and branch on its error kind. Put this block in the `## Chat` section of `first-chat`:
+Here you pass `models.loop` the arguments it takes, catch any loop failure with one `pcall`, and branch on its error kind. Put this block in the `Chat` section of `first-chat`:
 
 ````lua
-models.use('writer')
 messages:user('hello')
 local ok, err = pcall(models.loop)
 if not ok then
@@ -1370,62 +1368,47 @@ end
 return messages[#messages].content
 ````
 
-When the round succeeds, `pcall` returns `true`, and the run result is the reply. Every failure of `models.loop` is raised at the call, so one `pcall` around the call catches them all (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)). A failure that the loop or the Engine raises is an [error value](05-lua-environment.md#error-values) with a `kind` field, extra fields for that kind, and a readable message through `tostring(err)`. After a failed loop you branch on `err.kind`, here on `tool_loop_exhausted` (see [Tool rounds and the round cap](#tool-rounds-and-the-round-cap)) and `context_exhausted` (see [Compactors and context exhaustion](#compactors-and-context-exhaustion)), and raise any error you do not handle again with `error(err)`.
+When the round succeeds, `pcall` returns `true`, and the run result is the reply. Every failure of `models.loop` is raised at the call, so one `pcall` around the call catches them all (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)). A failure that the loop or the Engine raises is an [error value](05-lua-environment.md#error-values) with a `kind` field, extra fields for that kind, and a readable message through `tostring(err)`, which starts with the prompt file and line it points at (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). After a failed loop you branch on `err.kind`, here on `tool_loop_exhausted` (see [Tool rounds and the round cap](#tool-rounds-and-the-round-cap)) and `context_exhausted` (see [Compactors and context exhaustion](#compactors-and-context-exhaustion)), and raise any error you do not handle again with `error(err)`.
 
 Without a `pcall`, a failed `models.loop` ends the block at the call, and the rest of the block after it does not run.
 
 ### The loop's arguments
 
-`models.loop(compactor?)` takes at most one argument:
+`models.loop` takes two optional arguments, in this order:
 
+- `model`, optional: a model handle, which runs every round of the call on the handle's frozen binding (see [Running on a model handle](#running-on-a-model-handle)). Without it, the loop runs on the chain's current model.
 - `compactor`, optional: a function, which the loop uses as given, or `nil` for `compactors.fail` (see [Choosing a compactor for a call](#choosing-a-compactor-for-a-call)).
 
-`handle:loop(compactor?)` takes the same one argument after the handle, which the colon supplies. Both run over the section entry's `messages`.
+So the two forms are `models.loop(compactor?)` and `models.loop(model, compactor?)`, and both run over the section entry's `messages`.
 
-A call that breaks these rules is refused with a `lua`-kind error value whose message is the refusal text, raised at the call, so a `pcall` around the call catches it. A refused call raises before the loop starts, so no model request is sent for it, and it leaves the list unchanged: `#messages` reports the same length after the refusal as before it.
+A call that breaks these rules is refused with a `lua`-kind error value raised at the call, so a `pcall` around the call catches it. Its message is `{file}:{line}: {refusal}. The Lua code failed at runtime. Fix the code at this location.`, where `{line}` is the line of the `models.loop` call and `{refusal}` is one of the refusal texts below. A refused call raises before the loop starts, so no model request is sent for it, and it leaves the list unchanged: `#messages` reports the same length after the refusal as before it.
 
 ### Argument errors
 
-Each loop entry checks its arguments in a fixed order and reports only the first failure:
+`models.loop` checks its arguments in a fixed order and reports only the first failure:
 
-1. `models.loop` refuses a model handle as its argument, and `handle:loop` refuses a call with no model handle as its receiver.
-2. Both check the argument count.
-3. Both check the compactor's type.
-4. Both check whether a loop or a compactor is already running in the section entry.
+1. The first argument is read first. A model handle there is the `model` argument, and any other value is in the compactor position.
+2. The argument count: at most one argument may follow the optional model handle.
+3. The compactor's type.
+4. Whether a loop or a compactor is already running in the section entry.
 
 So `models.loop(1, 5)` reports the count error, and `models.loop(1)` reports the compactor error, even when another loop is running.
 
-`models.loop` takes no model handle. A model handle as its argument raises this before any round is sent:
+`models.loop` takes at most one argument after the optional model handle, and every value passed counts, trailing `nil`s included. So `models.loop(nil, nil)` raises this, and so does `models.loop(other, nil, nil)` when `other` holds a model handle. No round runs:
 
 ````text
-models.loop takes (compactor?); call handle:loop(compactor?) to run on a model handle
+models.loop takes (compactor?) or (model, compactor?)
 ````
 
-`handle:loop` needs the handle as its receiver, which the colon supplies. Calling it with a dot, as in `handle.loop()`, or taking it off the handle and calling it bare, as in `local run = handle.loop; run()`, leaves no model handle as the receiver and fails before any round with:
+`models.loop(nil)` and `models.loop(other, nil)` start the loop with the default compactor.
 
-````text
-call loop on a model handle with a colon: handle:loop(compactor?)
-````
-
-`models.loop` takes at most one argument, and every value passed counts, trailing `nil`s included. So `models.loop(nil, nil)` raises this, and no round runs:
-
-````text
-models.loop takes (compactor?)
-````
-
-`handle:loop` takes at most one argument after the handle, with trailing `nil`s counted the same way. `handle:loop(nil)` starts the loop, while `handle:loop(nil, nil)` raises:
-
-````text
-handle:loop takes (compactor?)
-````
-
-A compactor that is neither a function nor `nil`, passed to `models.loop` or to a handle's `loop`, raises an error naming the Lua type passed, before any request is sent:
+A compactor that is neither a function nor `nil` raises an error naming the Lua type passed, before any request is sent:
 
 ````text
 compactor must be a function, got integer
 ````
 
-The message names an integer `integer` and every other value by Lua's `type()` name. A float reads `number`, a string reads `string`, and a table reads `table`. Any userdata reads `userdata`, including `messages` itself, a record view, and `json.null`, the JSON null that a tool result holds. A model handle reads `userdata` only as the compactor of `handle:loop`, as in `handle:loop(other_handle)`, because `models.loop(handle)` raises the model-handle refusal shown above first.
+The message names an integer `integer` and every other value by Lua's `type()` name. A float reads `number`, a string reads `string`, and a table reads `table`. Any userdata reads `userdata`, including `messages` itself, a record view, and `json.null`, the JSON null that a tool result holds. A model handle reads `userdata` only in the compactor position after a leading handle, as in `models.loop(other, another_handle)`, because a handle in the first position is the `model` argument and never reaches the compactor check.
 
 A loop runs to its end before another can start in the same section. A loop started while a loop or a compactor runs there raises this, whether it starts in an adhoc tool's handler (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)), in a compactor the loop called for an overflow, or in a compactor `models.compact` runs:
 
@@ -1436,7 +1419,6 @@ a loop or a compactor is already running in this section; ask a side question wi
 `models.infer` and `tools.call` stay allowed inside handlers and compactors, so a handler that needs a model's answer asks with `models.infer` instead. In this block, the model calls an adhoc tool whose handler tries to start a loop:
 
 ````lua
-models.use('writer')
 tools.offer(tools.adhoc({ name = 'nested', description = 'Starts another loop' }, function()
   local ok, err = pcall(models.loop)
   return tostring(err)
@@ -1446,7 +1428,13 @@ models.loop()
 return messages[3].content
 ````
 
-When the model calls `nested` and then answers `done`, the run result is the refusal text above, which the handler returned as its tool result. The outer loop keeps running, and a loop called after it returns, or after an earlier loop raised, runs normally. The refusal raises even after you rebind the global `error` to a function that does nothing, because `models.loop` does not rely on your globals to raise.
+When the model calls `nested` and then answers `done`, the run result is the handler's `tostring(err)`, which it returned as its tool result, with the line of the handler's `pcall`:
+
+````text
+{file}:{line}: a loop or a compactor is already running in this section; ask a side question with models.infer(prompt). The Lua code failed at runtime. Fix the code at this location.
+````
+
+The outer loop keeps running, and a loop called after it returns, or after an earlier loop raised, runs normally. The refusal raises even after you rebind the global `error` to a function that does nothing, because `models.loop` does not rely on your globals to raise.
 
 ### Errors while a round runs
 
@@ -1460,13 +1448,13 @@ A round refused this way freezes no tool list, so offers still work after it.
 
 Any failure while the loop prepares a round is raised at the `models.loop` call, where your `pcall` catches it like any other call error. That covers choosing the model, reading the section entry's tools, checking the list, the empty-list check among them, turning the list into the request, and reaching the model's provider.
 
-An error from a model request or a tool call inside the loop reaches you as the Engine's own error value, unchanged. When the model request itself fails, the loop raises that request's error unchanged. A request failure other than a context-window rejection or an empty reply, such as a backend or transport error, is raised as the `models.loop` call's error without calling the compactor.
+An error from a model request or a tool call inside the loop reaches you as the Engine's own error value, with its kind, fields, and prose unchanged and the line it points at in front of its message. When the model request itself fails, the loop raises that request's error the same way, pointing at the `models.loop` line. A request failure other than a context-window rejection or an empty reply, such as a backend or transport error, is raised as the `models.loop` call's error without calling the compactor.
 
-A failure that the loop's rules decide to raise reaches your block as that same value, with no position prefix added. A string or table that your own compactor or adhoc tool handler raises with `error` reaches the `models.loop` caller unchanged: a string stays that string, and a table is the very same table, with no metatable added.
+A failure that the loop's rules decide to raise, such as `tool_loop_exhausted` or `empty_model_reply`, reaches your block as an error value whose message starts with the `models.loop` line, as `{file}:{line}: `. A string or table that your own compactor or adhoc tool handler raises with `error` reaches the `models.loop` caller unchanged: a string stays that string, and a table is the very same table, with no metatable added.
 
 A round refused for context overflow adds no records to the list, and records from rounds that have already completed stay in the list. A failed compaction puts back the records it started from (see [When a compaction fails](#when-a-compaction-fails)).
 
-`models.loop` raises kind `lua` when an argument or the message list breaks a rule, or when a loop or a compactor is already running. Left uncaught, a `lua`-kind loop error ends the run with run error kind `Lua` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)), and the run's message holds the error text and your prompt line, such as ``section `Only` prologue:14: in`` (see [Error line numbers and locations](05-lua-environment.md#error-line-numbers-and-locations)).
+`models.loop` raises kind `lua` when an argument or the message list breaks a rule, or when a loop or a compactor is already running. Left uncaught, a `lua`-kind loop error ends the run with the error code `lua_runtime` (see [Run error codes](16-limits-and-errors.md#run-error-codes)), and the run's message holds the error text and ends with ` (at {file}:{line})`, the prompt file and the line of the `models.loop` call. An argument error's message also holds Lua's own ``section `{section}` prologue:{line}:`` tags and a stack traceback before that ending (see [Error line numbers and locations](05-lua-environment.md#error-line-numbers-and-locations) and [Where an error points](16-limits-and-errors.md#where-an-error-points)).
 
 ## Tool rounds and the round cap
 
@@ -1479,8 +1467,6 @@ description: Lets a model search the web before it answers.
 runvil: 0
 uses:
   - web
-models:
-  writer: {}
 ---
 
 # Search chat
@@ -1488,7 +1474,6 @@ models:
 ## Ask
 
 ```lua
-models.use('writer')
 tools.offer('web/search')
 messages:user('Find the tallest building in Paris, then answer in one sentence.')
 models.loop()
@@ -1517,7 +1502,7 @@ After a tool round is answered, the loop starts the next round with a new reques
 
 ### The records a tool round adds
 
-Put these lines in the `## Ask` block of `search-chat` in place of its last three lines:
+Put these lines in the `Ask` block of `search-chat` in place of its last three lines:
 
 ````lua
 local call = messages[2].tool_calls[1]
@@ -1563,7 +1548,7 @@ When a bound tool fails during the loop, the loop does not stop. The tool's fail
 Some failures end the loop partway through a round, and then none of that round's records land on the list:
 
 - An adhoc tool handler that raises ends `models.loop` with no further round. Neither the assistant tool-call record nor the results of calls that have already returned land on the list.
-- When a tool call the model issues is dropped instead of answered, `models.loop` raises `cancelled` at the call and leaves the list as it was before the round, with no assistant or `tool` record appended.
+- When a tool call the model issues is dropped instead of answered, `models.loop` raises `canceled` at the call and leaves the list as it was before the round, with no assistant or `tool` record appended.
 - When the model calls a tool outside the section entry's tool scope (see [Tool scope](12-tools.md#tool-scope)), `models.loop` fails and appends nothing to the list.
 
 You catch such a failure with `pcall` and read `err.kind` and `err.name`, for example to tell which tool was out of scope. An out-of-scope call to `web_fetch` gives `err.kind` as `out_of_scope_tool` and `err.name` as `web_fetch`, and a list that held one user record before the call still holds just that record.
@@ -1582,8 +1567,6 @@ runvil: 0
 max_tool_iterations: 2
 uses:
   - web
-models:
-  writer: {}
 ---
 
 # Search chat
@@ -1591,7 +1574,6 @@ models:
 ## Ask
 
 ```lua
-models.use('writer')
 tools.offer('web/search')
 messages:user('Find the tallest building in Paris, then answer in one sentence.')
 local ok, err = pcall(models.loop)
@@ -1608,7 +1590,7 @@ return messages[#messages].content
 When the model keeps calling the search tool and never replies with text, the run result is:
 
 ````text
-tool-call loop did not converge after 5 records
+search-chat.md:17: The tool-call limit was reached before a final reply. Stop calling tools and reply with what you have. after 5 records
 ````
 
 When the model answers with text within its two rounds, the run result is that reply.
@@ -1626,19 +1608,21 @@ The cap counts how many times the model is asked within one `models.loop` call, 
 
 ### Reaching the round cap
 
-With `max_tool_iterations` set to N, a model that never stops calling tools gets exactly N rounds: when the Nth tool round is answered, `models.loop` raises `tool_loop_exhausted` without sending another request, so `max_tool_iterations: 1` allows one round. The error's message is:
+With `max_tool_iterations` set to N, a model that never stops calling tools gets exactly N rounds: when the Nth tool round is answered, `models.loop` raises `tool_loop_exhausted` without sending another request, so `max_tool_iterations: 1` allows one round. Caught, the error value's message is the cap's prose after the `models.loop` line:
 
 ````text
-tool-call loop did not converge
+{file}:{line}: The tool-call limit was reached before a final reply. Stop calling tools and reply with what you have.
 ````
 
 A model that keeps calling a failing bound tool reaches the cap the same way, because each failure is answered with failure text and the model never gives a text reply.
 
+A final reply in the last round the cap allows ends the loop normally, with no `tool_loop_exhausted`. The loop returns that reply without reading its inbox again, so a message that arrives then stays queued for the chain's next `tasks.receive()`, `tasks.reply`, or `models.loop` (see [Messages that arrive while the loop runs](#messages-that-arrive-while-the-loop-runs)).
+
 When `tool_loop_exhausted` is raised, the last allowed round's assistant tool-call record and its `tool` records are already on the list, and they stay there. The list holds only complete rounds, each with its assistant tool-call record and a `tool` record for each call, so one user record with `max_tool_iterations: 2` leaves 5 records, as in `search-chat`.
 
-The error value has its `kind` field set to `tool_loop_exhausted`, and it has only its kind and message, with no extra fields. `tostring(err)` gives `tool-call loop did not converge`. You catch it at the call site with `pcall(models.loop)`, which returns `false` and that error value.
+The error value has its `kind` field set to `tool_loop_exhausted`, and it has only its kind, its `code`, also `tool_loop_exhausted`, and its message, with no extra fields. `tostring(err)` gives that message, which in `search-chat` reads `search-chat.md:17: The tool-call limit was reached before a final reply. Stop calling tools and reply with what you have.` You catch it at the call site with `pcall(models.loop)`, which returns `false` and that error value.
 
-Left uncaught, the `tool_loop_exhausted` error ends the block, so the section's later code never runs, and it fails the run with run error kind `Tool` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)) and the message `tool-call loop did not converge`. When the section has spawned a task that is still live, that task is abandoned, and abandoning it does not replace the `tool_loop_exhausted` error.
+Left uncaught, the `tool_loop_exhausted` error ends the block, so the section's later code never runs, and it fails the run with the error code `tool_loop_exhausted` (see [Run error codes](16-limits-and-errors.md#run-error-codes)) and the message `tool-call loop did not converge (at {file}:{line})`, pointing at the `models.loop` call. When the section has spawned a task that is still live, that task is abandoned, and abandoning it does not replace the `tool_loop_exhausted` error.
 
 ### Valid `max_tool_iterations` values
 
@@ -1660,8 +1644,6 @@ Here you learn how the loop checks your message list and composes it into the co
 name: first-chat
 description: Says hello to a model and returns its reply.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # First chat
@@ -1669,7 +1651,6 @@ models:
 ## Chat
 
 ```lua
-models.use('writer')
 messages:system('You are terse.')
 messages:system('Answer in French.')
 messages:user('Hello.')
@@ -1698,14 +1679,13 @@ The two leading system records compose into one system message, and the two user
 
 Right before each request leaves, the loop takes whatever records the list holds at that moment and does two things with them. First it checks the cross-record rules, the rules about how records relate to one another rather than about one record's own fields:
 
-- `tool_calls` appears only on `assistant` records.
 - Every tool call id is unique across the whole list.
 - Every tool call is paired with exactly one tool record that answers it.
 - When two or more `system` records lead the list, each of them is plain text.
 
 Then it composes what the model receives from those records, merging runs of records so the message roles alternate as a provider requires.
 
-Builder methods do not check the cross-record rules when they add a record, and `models.loop` does not check a record's own fields again (see [When records are checked](#when-records-are-checked)). The cross-record rules run on every round, right before that round is sent, so records you append between calls and records the loop appends between its own rounds meet the same rules, and a list you edit between calls is checked and composed again on the next call.
+Builder methods do not check the cross-record rules when they add a record, and `models.loop` does not check a record's own fields again (see [When records are checked](#when-records-are-checked)). That only `assistant` records hold `tool_calls` is one of a record's own rules, so the `append` or `replace` call that adds a record of another message role with `tool_calls` refuses it, and `models.loop` does not check it (see [Record error messages](#record-error-messages)). The cross-record rules run on every round, right before that round is sent, so records you append between calls and records the loop appends between its own rounds meet the same rules, and a list you edit between calls is checked and composed again on the next call.
 
 When the list breaks a cross-record rule, the round fails. The run reports a `model_turn_failed` event (see [Run events and records](04-how-a-prompt-runs.md#run-events-and-records)), and the `models.loop` call raises a Lua error and sends nothing to the model. [Cross-record errors](#cross-record-errors) lists every message.
 
@@ -1767,14 +1747,13 @@ messages[{index}] is a system message with content parts; only plain text system
 
 Sending a list never changes it. Composing system records and merging same-role records happen on a copy and change only what the model receives. The list keeps its own records, count, and order, so `#messages` counts the records as you appended them rather than the merged messages the model receives, and the list stays the conversation's continuity state. In the first example the model received two messages, yet `#messages` read 5.
 
-Each round composes the list again for whichever model that round runs on, so the same list can go to different models on later calls. One `models.loop` call can run on the default model, and a later call on the same list can run after `models.use('other')` selects another model role (see [Selecting a role per section entry with `models.use`](10-models.md#selecting-a-role-per-section-entry-with-modelsuse)).
+Each round composes the list again for whichever model that round runs on, so the same list can go to different models on later calls. One `models.loop` call can run on the `default` role's model, and a later call on the same list can run after `models.use('strong')` selects another role (see [Selecting a role with `models.use`](10-models.md#selecting-a-role-with-modelsuse)), or with a model handle as its first argument (see [Running on a model handle](#running-on-a-model-handle)).
 
 ### Tool exchanges in a request
 
-Put this block in the `## Chat` section of `first-chat` to send a list that already holds a finished tool exchange:
+Put this block in the `Chat` section of `first-chat` to send a list that already holds a finished tool exchange:
 
 ````lua
-models.use('writer')
 messages:user('Read the notes.')
 messages:append({ role = 'assistant', content = '', tool_calls = {
   { id = 'call_1', name = 'read', arguments = { path = 'notes.txt', limit = 3 } },
@@ -1800,10 +1779,9 @@ Content parts keep their order and their type on the way to the model. A record 
 
 ### Cross-record errors
 
-A list that breaks a cross-record rule fails at the `models.loop` call with a Lua error whose message names the offending record by its 1-based position as `messages[{index}]`. Put this block in the `## Chat` section of `first-chat` to see one:
+A list that breaks a cross-record rule fails at the `models.loop` call with a Lua error whose message names the offending record by its 1-based position as `messages[{index}]`. Put this block in the `Chat` section of `first-chat` to see one:
 
 ````lua
-models.use('writer')
 messages:user('hi')
 messages:append({ role = 'assistant', content = '', tool_calls = {
   { id = 'call_1', name = 'read', arguments = { path = 'notes.txt' } },
@@ -1813,15 +1791,14 @@ return tostring(err)
 ````
 
 ````text
-messages[2] tool call "call_1" has no tool result
+{file}:{line}: messages[2] tool call "call_1" has no tool result. The Lua code failed at runtime. Fix the code at this location.
 ````
 
-The list ends while the assistant record at position 2 still has an unanswered call, so the call fails before anything is sent, and the message names that record and the call's id. Ids always print in double quotes. These are the five messages:
+The list ends while the assistant record at position 2 still has an unanswered call, so the call fails before anything is sent, and the message points at the `models.loop` line and names that record and the call's id. Ids always print in double quotes. These are the four messages:
 
 | Message | Names |
 |---|---|
 | `messages[{index}] is a system message with content parts; only plain text system messages can be composed` | The first record with content parts in a leading block of two or more system records |
-| `messages[{index}] sets tool_calls but is not an assistant message` | The `system`, `user`, or `tool` record that sets `tool_calls` |
 | `messages[{index}] tool call id "{id}" duplicates an earlier tool call` | The assistant record that repeats the id, and the id |
 | `messages[{index}] tool call "{id}" has no tool result` | The assistant record with an unanswered call, and its first unanswered call in call order |
 | `messages[{index}] is an orphan tool record: no pending assistant tool call with id "{id}"` | The tool record, and the `tool_call_id` it gives |
@@ -1829,7 +1806,6 @@ The list ends while the assistant record at position 2 still has an unanswered c
 Each rule has its own triggers:
 
 - Content parts in the leading block: any record of a leading block of two or more system records uses content parts, and the message names the first such record.
-- `tool_calls` placement: only assistant records hold `tool_calls`. Adding a `system`, `user`, or `tool` record that sets `tool_calls` with `append` succeeds, because a record's own fields allow it, but the next `models.loop` call fails naming that record. A compaction checks these same rules when its compactor returns, so a `replace` that breaks one fails the compaction instead (see [The rules a compaction must pass](#the-rules-a-compaction-must-pass)).
 - Duplicate ids: reusing a tool call id from any earlier record, or using one id twice in one assistant record, fails naming the assistant record that repeats it. This holds even after the first call was answered, and it includes a model that repeats an id from an earlier round, which fails at the next request. Two calls with id `call_1` in the first record give `messages[1] tool call id "call_1" duplicates an earlier tool call`, and a later assistant record at position 3 that reuses `call_1` gives `messages[3] tool call id "call_1" duplicates an earlier tool call`.
 - Missing results: a call gets no tool record before a record of another message role arrives, before a new assistant record with `tool_calls` starts, or before the list ends. The message names the assistant record holding the unanswered call. When that record at position 1 has calls `call_1` and `call_2`, and only `call_1` is answered before a user record, the message is `messages[1] tool call "call_2" has no tool result`.
 - Orphan tool records: a tool record does not answer a still-pending call from the open assistant record exactly once. That covers a tool record with no assistant tool call before it, a `tool_call_id` that is not among the open calls, a second answer to a call that already has its result, and an answer to a call whose assistant record is already fully answered. A tool record at position 2 answering `call_9` right after a user record gives `messages[2] is an orphan tool record: no pending assistant tool call with id "call_9"`.
@@ -1837,7 +1813,7 @@ Each rule has its own triggers:
 The rules run in a fixed order, and only the first broken rule is reported:
 
 1. The plain-text check on a leading block of two or more system records. It runs before every other cross-record rule, so it is the error reported even when later records also break another rule.
-2. Each record in list order, with the `tool_calls` placement rule checked before the rules for that record's own message role.
+2. Each record in list order, checked against the rules for its own message role.
 3. The check for an assistant record whose calls are still open at the end of the list.
 
 ## Empty replies and finish reasons
@@ -1849,8 +1825,6 @@ Here you learn how the loop judges a round that comes back with nothing in it, s
 name: first-chat
 description: Says hello to a model and returns its reply.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # First chat
@@ -1858,7 +1832,6 @@ models:
 ## Chat
 
 ```lua
-models.use('writer')
 messages:user('hello')
 local ok, err = pcall(models.loop)
 if ok then return messages[#messages].content end
@@ -1869,10 +1842,10 @@ return err.kind .. '|' .. tostring(err.finish_reason) .. '|' .. tostring(err) ..
 When the model replies with no text and no tool calls, and the provider gives the finish reason `stop`, the run result is:
 
 ````text
-empty_model_reply|stop|the model replied with no text and no tool calls|1
+empty_model_reply|stop|first-chat.md:13: the model replied with no text and no tool calls|1
 ````
 
-The round produced nothing, and no tool call came before it, so `models.loop` raises an error value of kind `empty_model_reply`. `pcall` catches it, returning `false` and the error value (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)). `err.finish_reason` holds the provider's finish reason, `tostring(err)` gives the message, and `#messages` is still 1 because the empty reply was not appended.
+The round produced nothing, and no tool call came before it, so `models.loop` raises an error value of kind `empty_model_reply`. `pcall` catches it, returning `false` and the error value (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)). `err.finish_reason` holds the provider's finish reason, `tostring(err)` gives the message, which points at the `models.loop` line, and `#messages` is still 1 because the empty reply was not appended.
 
 ### Finish reasons
 
@@ -1908,7 +1881,6 @@ After at least one answered tool call, only the finish reason `stop` ends cleanl
 The clean exit is how a model ends a conversation on purpose after doing its work through tools: an empty reply with finish reason `stop`, after at least one answered tool call in the same `models.loop` call. In a section that offers the model a tool (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)), this block reads the list after the loop:
 
 ````lua
-models.use('writer')
 messages:user('hello')
 local result = models.loop()
 return tostring(result) .. '|' .. #messages .. '|' .. messages[3].role .. '|' .. messages[4].role .. ':' .. messages[4].content
@@ -1934,21 +1906,21 @@ Its error value (see [Error values](05-lua-environment.md#error-values)) holds:
 
 - `kind`: `empty_model_reply`.
 - `finish_reason`: the finish reason the provider reported for the empty round, such as `stop` or `length`, read as `err.finish_reason`. It is always a string, never a number. When the provider reports no finish reason, the error value has no `finish_reason` field at all, so `err.finish_reason` reads `nil`.
-- The message, which `tostring(err)` returns.
+- The message, which `tostring(err)` returns: the `models.loop` line and then the empty-reply phrase, as `{file}:{line}: {phrase}`.
 
-The message for an empty reply read from a model is the fixed phrase:
+The phrase for an empty reply read from a model is fixed:
 
 ````text
 the model replied with no text and no tool calls
 ````
 
-When the empty reply held reasoning content that was ignored, the message extends that phrase after a colon:
+When the empty reply held reasoning content that was ignored, the phrase extends after a colon:
 
 ````text
 the model replied with no text and no tool calls: reasoning content was present but ignored
 ````
 
-Every reply read from a model backend names its empty-reply phrase, and that phrase becomes the `empty_model_reply` message, so you see the same text the failed reply itself gives. When an empty round reaches the loop without such a phrase, as an empty text reply that the Host builds itself does, the message falls back to:
+Every reply read from a model backend names its empty-reply phrase, and that phrase becomes the `empty_model_reply` message after the location, so you see the same text the failed reply itself gives. When an empty round reaches the loop without such a phrase, as an empty text reply that the Host builds itself does, the phrase falls back to:
 
 ````text
 empty model reply
@@ -1960,10 +1932,9 @@ empty model reply
 
 ### Replies cut short for length
 
-A text reply that the provider cut short for length, with finish reason `"length"`, is accepted as the terminal record. It still ends `models.loop`, and its partial text becomes the terminal record. With this block in the `## Chat` section of `first-chat`:
+A text reply that the provider cut short for length, with finish reason `"length"`, is accepted as the terminal record. It still ends `models.loop`, and its partial text becomes the terminal record. With this block in the `Chat` section of `first-chat`:
 
 ````lua
-models.use('writer')
 messages:user('hello')
 models.loop()
 return #messages .. '|' .. messages[#messages].content
@@ -1977,7 +1948,7 @@ a reply of `partial answer` with finish reason `length` gives:
 
 A text reply that finishes with reason `length` emits a truncation observation alongside its `assistant_reply` report: the run reports a `model_turn_truncated` event right after the `model_turn_completed` event.
 
-A tool round is different. A tool-call round that the provider cuts short with finish reason `length` or `content_filter` fails as a model failure whose message names the truncation, so its partial arguments never run. `pcall` catches that failure as an error value of kind `model_failure`, and left uncaught it ends the run with run error kind `Completion` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)).
+A tool round is different. A tool-call round that the provider cuts short with finish reason `length` or `content_filter` fails as a model failure whose message names the truncation, so its partial arguments never run. `pcall` catches that failure as an error value of kind `model_failure`, and left uncaught it ends the run with the error code `malformed_response` (see [Run error codes](16-limits-and-errors.md#run-error-codes)).
 
 ### Events for an empty round
 
@@ -1985,7 +1956,7 @@ An empty model reply still completes its round. It advances the round count and 
 
 ### When `empty_model_reply` goes uncaught
 
-An `empty_model_reply` that the prompt does not catch ends the block as that same typed `empty_model_reply` error, and it fails the run with run error kind `Completion`. The run's `Completion` failure keeps the message you would have seen and the `finish_reason` field, which is there only when the provider gave one. The clean exit, by contrast, returns normally and fails nothing.
+An `empty_model_reply` that the prompt does not catch ends the block as that same typed `empty_model_reply` error, and it fails the run with the error code `empty_reply`. The run's `empty_reply` failure message is the empty-reply phrase followed by ` (at {file}:{line})` for the `models.loop` line, and the failure keeps the `finish_reason` field, which is there only when the provider gave one. The clean exit, by contrast, returns normally and fails nothing.
 
 ## The context precheck
 
@@ -1996,8 +1967,6 @@ Here you learn how the loop decides, before each request leaves, whether the con
 name: long-notes
 description: Sends notes far longer than the model's context window.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Long notes
@@ -2005,7 +1974,6 @@ models:
 ## Send
 
 ```lua
-models.use('writer')
 messages:user(string.rep('x', 100000))
 local ok, err = pcall(models.loop)
 if ok then return 'sent' end
@@ -2013,7 +1981,7 @@ return err.kind .. ': ' .. tostring(err.reason)
 ```
 ````
 
-When the model bound to `writer` has a 4096-token context window, the run result is:
+When the chain's current model, the model the Host gave the `default` role, has a 4096-token context window, the run result is:
 
 ````text
 context_exhausted: precheck
@@ -2027,7 +1995,7 @@ The context precheck is Runvil's own check, before each request leaves, that the
 
 The precheck runs on every `models.loop` call and before every round. A list that grows past the window between calls is refused before the next request leaves, and the precheck also guards the first request of a list, refusing it before any round runs when the list is already too large.
 
-The precheck uses the context window and `max_tokens` of the model the round goes to. When the round comes from `h:loop`, that is the handle's own (see [Model handles](10-models.md#model-handles)). Otherwise it is the section entry's current model (see [How prepare binds and checks roles](10-models.md#how-prepare-binds-and-checks-roles)). A handle that `models.get` returns for a raw model id, rather than a declared model role, has a context window of 8192 tokens for the precheck, visible as `h.context`, so `models.get('qwen/qwen3-8b').context` reads `8192` (see [Getting handles with `models.get`](10-models.md#getting-handles-with-modelsget)).
+The precheck uses the context window and `max_tokens` of the model the round goes to. When the round comes from `models.loop(h)`, that is the handle's own (see [Model handles](10-models.md#model-handles)). Otherwise it is the chain's current model, which the Host fills from its role map (see [How the Host fills and checks roles](10-models.md#how-the-host-fills-and-checks-roles)). A handle that `models.get` returns for a raw model id, rather than one of the five model roles, has a context window of 8192 tokens for the precheck, visible as `h.context`. On a Host that passes a Host-state snapshot, `models.get('qwen/qwen3-8b').context` reads `8192`, and on a Host that does not, that call raises an error because the name is not a model role (see [Raw model ids and the Host-state snapshot](10-models.md#raw-model-ids-and-the-host-state-snapshot)).
 
 ### The output reserve
 
@@ -2109,6 +2077,7 @@ When a round extends the previous measured round and goes to the same model, the
 
 - After `models.use` switches to a different model, the next request's precheck uses the estimate, because the remembered total is the first model's own token count, and another model's tokenizer count does not apply.
 - Returning to an earlier model after another model served a round counts by the estimate, because only the latest round's measurement is kept.
+- A `models.loop(h)` round on a handle for a different model counts by the estimate in the same way.
 - Switching with `models.use` to another model role that names the same model keeps the anchor, even when that role has different settings such as thinking.
 
 ### Overflow reasons
@@ -2160,10 +2129,9 @@ A precheck refusal is reported as a `model_turn_failed` event, the same way a fa
 
 ### Sending again after a refusal
 
-Because a refused send appends nothing, the message that was too large stays where you left it. Under the default compactor the loop raises, so you can catch the refusal, compact the list with `models.compact` (see [Compacting on demand with `models.compact`](#compacting-on-demand-with-modelscompact)), and run the loop again. Put this block in the `## Send` section of `long-notes`:
+Because a refused send appends nothing, the message that was too large stays where you left it. Under the default compactor the loop raises, so you can catch the refusal, compact the list with `models.compact` (see [Compacting on demand with `models.compact`](#compacting-on-demand-with-modelscompact)), and run the loop again. Put this block in the `Send` section of `long-notes`:
 
 ````lua
-models.use('writer')
 messages:user(string.rep('x', 100000))
 local ok, err = pcall(models.loop)
 if not ok and err.reason == 'precheck' then
@@ -2188,8 +2156,6 @@ Here you learn how a compactor rewrites `messages` in place when a round overflo
 name: long-notes
 description: Sends notes far longer than the model's context window.
 runvil: 0
-models:
-  writer: {}
 ---
 
 # Long notes
@@ -2197,7 +2163,6 @@ models:
 ## Send
 
 ```lua
-models.use('writer')
 messages:user(string.rep('x', 100000))
 local seen
 models.loop(function(reason)
@@ -2226,10 +2191,9 @@ The function passed to `models.loop` is the compactor for this call. The call go
 
 ### Trimming the list after an overflow
 
-A compactor that trims drops the oldest records and keeps the newest turn. This one keeps the leading system block and the newest user record with everything after it, and drops the records between them. Put this block in the `## Send` section of `long-notes`:
+A compactor that trims drops the oldest records and keeps the newest turn. This one keeps the leading system block and the newest user record with everything after it, and drops the records between them. Put this block in the `Send` section of `long-notes`:
 
 ````lua
-models.use('writer')
 local function trim(reason)
   local first = 1
   while messages[first] and messages[first].role == 'system' do
@@ -2269,7 +2233,9 @@ The compactor edits `messages` in place:
 - It may add records with the builders and `append`, and empty the list with `compactors.clear`.
 - It may call `models.infer` and `tools.call`, which suspend and resume inside the compaction like any other suspending call.
 
-`models.loop`, `handle:loop`, and `models.compact` raise inside a compactor, because a compactor is running in the section entry (see [Argument errors](#argument-errors)). Whatever the compactor returns is ignored: what counts is the list it leaves.
+A compactor runs as ordinary section Lua, so its `models.infer(prompt)` runs on the chain's current model. That holds when the compaction belongs to `models.loop(h, compactor)` too: the handle `h` sets the model of the loop's own rounds, and the compactor's `models.infer(prompt)` still runs on the chain's current model. To write the summary on the handle's model, call `models.infer(h, prompt)` inside the compactor, with `h` in scope. `models.compact` has no model argument and runs no round of its own, so a compactor it runs reaches a model only through its own `models.infer` calls, which follow the same rule.
+
+`models.loop` and `models.compact` raise inside a compactor, because a compactor is running in the section entry (see [Argument errors](#argument-errors)). Whatever the compactor returns is ignored: what counts is the list it leaves.
 
 ### The rules a compaction must pass
 
@@ -2278,10 +2244,9 @@ When the compactor returns, the list it left is checked before anything else hap
 - The structural rules always apply: each tool-call batch is answered right after it, call ids are unique, no tool record is an orphan, system records lead, and a composed system block holds only text. These are the rules [Checking and composing before each request](#checking-and-composing-before-each-request) describes, and a broken one raises its message from [Cross-record errors](#cross-record-errors), such as `messages[2] tool call "call_1" has no tool result`. An empty list passes them.
 - After an overflow, the size rules apply too. The estimate (see [How the estimate counts tokens](#how-the-estimate-counts-tokens)) of the compacted list must be smaller than the estimate of the list the round overflowed with, and the retried round must pass the precheck. A list that did not shrink raises `context_exhausted` with the overflow's reason.
 
-Any failure restores the records first, so the list reads as it did before the compactor ran. After an overflow, a compaction that passes is kept, and the round retries once without counting against `max_tool_iterations`. A retry that overflows again, at the precheck or at the provider, restores the records from before the compaction and raises `context_exhausted` with the retry's reason. A retry that fails another way keeps the compacted records, so with this block in the `## Send` section of `long-notes`:
+Any failure restores the records first, so the list reads as it did before the compactor ran. After an overflow, a compaction that passes is kept, and the round retries once without counting against `max_tool_iterations`. A retry that overflows again, at the precheck or at the provider, restores the records from before the compaction and raises `context_exhausted` with the retry's reason, and a message the loop appended after the compaction stays after those records, so the restore never loses it. A retry that fails another way keeps the compacted records, so with this block in the `Send` section of `long-notes`:
 
 ````lua
-models.use('writer')
 messages:user(string.rep('x', 100000))
 local ok, err = pcall(models.loop, compactors.clear)
 return tostring(ok) .. '|' .. err.kind .. ':' .. tostring(err) .. '|' .. #messages
@@ -2290,17 +2255,16 @@ return tostring(ok) .. '|' .. err.kind .. ':' .. tostring(err) .. '|' .. #messag
 the run result is:
 
 ````text
-false|lua:messages must not be empty|0
+false|lua:{file}:{line}: messages must not be empty. The Lua code failed at runtime. Fix the code at this location.|0
 ````
 
-`compactors.clear` empties the list, which passes the rules, and the retried round fails on the empty list before any request is sent, leaving the list empty.
+`compactors.clear` empties the list, which passes the rules, and the retried round fails on the empty list before any request is sent, leaving the list empty. The failure points at the `models.loop` line.
 
 ### When a compaction fails
 
-When the compactor raises, the records are restored and its failure is raised from the call that ran it, `models.loop`, `handle:loop`, or `models.compact`. Put this block in the `## Send` section of `long-notes`:
+When the compactor raises, the records are restored and its failure is raised from the call that ran it, `models.loop` or `models.compact`. Put this block in the `Send` section of `long-notes`:
 
 ````lua
-models.use('writer')
 messages:user(string.rep('x', 100000))
 local ok, err = pcall(models.loop, function(reason)
   messages:replace(1, 1, { role = 'user', content = 'short' })
@@ -2321,33 +2285,32 @@ A prompt's Lua reads the `compactors` global, a table of the shipped compactor p
 
 ### Choosing a compactor for a call
 
-The compactor for a call is the optional argument of `models.loop`, and of `handle:loop` (see [How the loop runs](#how-the-loop-runs)):
+The compactor for a call is the optional last argument of `models.loop`, with or without a model handle before it (see [How the loop runs](#how-the-loop-runs)):
 
-- Leaving the argument out selects `compactors.fail`, so `models.loop()` and `models.loop(compactors.fail)` behave the same, and the same holds for `handle:loop`.
+- Leaving the argument out selects `compactors.fail`, so `models.loop()` and `models.loop(compactors.fail)` behave the same, and the same holds with a handle: `models.loop(other)` and `models.loop(other, compactors.fail)` behave the same.
 - Passing `nil` selects the default just as leaving the argument out does.
-- Passing `compactors.fail` explicitly works on either loop entry, as in `models.loop(compactors.fail)` or `other:loop(compactors.fail)`, and a normal round runs as usual.
+- Passing `compactors.fail` explicitly works in either form, as in `models.loop(compactors.fail)` or `models.loop(other, compactors.fail)`, and a normal round runs as usual.
 - Passing any Lua function makes it the compactor, used as given.
 
 The loop invokes the compactor only when an overflow happens. When a round's request cannot fit the model's context window, the loop calls the selected compactor with the overflow reason tag instead of handling a reply. The compactor also runs after a sent round comes back as a provider context overflow, so for a provider overflow it runs after exactly one request was sent and rejected.
 
 The default is the `fail` field of the `compactors` table the Engine installed, so `models.loop()` on an oversized list fails with a `context_exhausted` error whose reason is `precheck`, and assigning another table to the `compactors` global does not change the default. [Replacing the default compactor](#replacing-the-default-compactor) shows when the loop reads that field.
 
-An explicit compactor argument must be a function or `nil`. Any other value makes `models.loop` or `handle:loop` raise the `lua`-kind `compactor must be a function, got {type}` error before any request is sent, as [Argument errors](#argument-errors) shows. The default read from `compactors.fail` is not checked this way.
+An explicit compactor argument must be a function or `nil`. Any other value makes `models.loop` raise the `lua`-kind `compactor must be a function, got {type}` error before any request is sent, as [Argument errors](#argument-errors) shows. The default read from `compactors.fail` is not checked this way.
 
 ### `compactors.fail`
 
 `compactors.fail(reason)` never compacts: it always raises a `context_exhausted` error value whose `reason` is the string it was given, and it never returns normally. As the loop's compactor it receives `precheck` or `provider`, so under it an overflowing round raises `context_exhausted` with that reason. It accepts any reason string, so you can also call it from your own Lua, as in `compactors.fail('precheck')`, or pass it to `models.compact` with a reason of your own.
 
-Whether a `models.loop` round overflows under it or your Lua calls `compactors.fail(reason)`, a `pcall` around that call catches the same kind of value: a `context_exhausted` error value with the message `context exhausted: {detail}` and the field `reason` set to the reason. The detail is the reason in words for `precheck` and `provider`, and the reason itself for any other string, so `pcall(compactors.fail, 'the notes are too long')` catches the message `context exhausted: the notes are too long`. The caught value keeps its kind and reason, never flattened to plain text. Under the loop the error surfaces at the `models.loop` call site, and from a direct call it surfaces at that call. Left uncaught, the two end the run alike, with run error kind `ContextExhausted` and the reason in its message, as [When context exhaustion goes uncaught](#when-context-exhaustion-goes-uncaught) shows.
+Whether a `models.loop` round overflows under it or your Lua calls `compactors.fail(reason)`, a `pcall` around that call catches the same kind of value: a `context_exhausted` error value with the field `reason` set to the reason and the message `{file}:{line}: The conversation no longer fits the model's context window and could not be shortened. Finish with what you have.`, the same for every reason. The caught value keeps its kind and reason, never flattened to plain text, so you tell reasons apart by `err.reason`. Under the loop the error surfaces at the `models.loop` call site, and from a direct call it surfaces at that call, and `{line}` is that call's line. Left uncaught, the two end the run alike, with the error code `context_exhausted` and the message `context exhausted: {detail} (at {file}:{line})`, where the detail is the reason in words for `precheck` and `provider` and the reason itself for any other string, so an uncaught `compactors.fail('the notes are too long')` names `context exhausted: the notes are too long`, as [When context exhaustion goes uncaught](#when-context-exhaustion-goes-uncaught) shows.
 
 When the provider rejects a sent request for exceeding its context, for example with status 400 and `This model's maximum context length is 4096 tokens.`, `compactors.fail` raises `context_exhausted` with the reason `provider`, instead of the request failing as an ordinary model failure.
 
 ### `compactors.clear`
 
-`compactors.clear(reason)` removes every record from `messages` and leaves the Static Set attached. It works only inside a compactor, so `models.compact(compactors.clear, reason)` starts the conversation over without leaving the section. Put this block in the `## Chat` section of `first-chat`:
+`compactors.clear(reason)` removes every record from `messages` and leaves the Static Set attached. It works only inside a compactor, so `models.compact(compactors.clear, reason)` starts the conversation over without leaving the section. Put this block in the `Chat` section of `first-chat`:
 
 ````lua
-models.use('writer')
 messages:user('first topic')
 models.loop()
 models.compact(compactors.clear, 'new topic')
@@ -2392,21 +2355,27 @@ A refused call leaves the list unchanged.
 
 Every `context_exhausted` error holds its reason in a string `reason` field. After an overflow, the reason is the overflow reason that triggered it, the same tag the compactor received, so `err.reason` reads `precheck` or `provider`. When your own Lua calls `compactors.fail` with another reason, such as `manual`, `err.reason` reads that string.
 
-The message, which `tostring(err)` returns, begins with `context exhausted: ` and continues with the detail: the reason in words for the two overflow reasons, and the reason itself for any other string:
+The message, which `tostring(err)` returns, is the same for every reason: the location of the call that raised it and the prose for a context that could not be shortened.
 
 ````text
-context exhausted: the request precheck overflowed the model's context window
-context exhausted: the provider rejected the request as exceeding the model's context window
-context exhausted: manual
+{file}:{line}: The conversation no longer fits the model's context window and could not be shortened. Finish with what you have.
 ````
 
-The two overflow reasons render different messages, so you can tell a `precheck` exhaustion from a `provider` exhaustion by the text as well as by `err.reason`.
+The caught message never names the reason, which you read from `err.reason`. The run's message does, when the error goes uncaught: it begins with `context exhausted: `, continues with the detail, the reason in words for the two overflow reasons and the reason itself for any other string, and ends with the location:
+
+````text
+context exhausted: the request precheck overflowed the model's context window (at {file}:{line})
+context exhausted: the provider rejected the request as exceeding the model's context window (at {file}:{line})
+context exhausted: manual (at {file}:{line})
+````
+
+The two overflow reasons render different run messages, so a run that fails this way tells a `precheck` exhaustion from a `provider` exhaustion by its text, while caught Lua reads `err.reason`.
 
 Context exhaustion is not limited to `models.loop`: when `models.infer` fails because the context window is exhausted, the caught error also has kind `context_exhausted` and a `reason` field, such as `provider` (see [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer)).
 
 ### Writing your own compactor
 
-Any Lua function is accepted as a custom compactor for `models.loop`, `handle:loop`, or `models.compact`. This one keeps the leading system block and the last two user turns, and summarizes everything between them into one user record, using `models.infer` to write the summary:
+Any Lua function is accepted as a custom compactor for `models.loop`, with or without a model handle, or for `models.compact`. This one keeps the leading system block and the last two user turns, and summarizes everything between them into one user record, using `models.infer` to write the summary:
 
 ````lua
 local function compact(reason)
@@ -2437,12 +2406,12 @@ end
 models.loop(compact)
 ````
 
-Put it in a section after `models.use` selects a model and records have been added to `messages`. When a round overflows, `compact` works like this:
+Put it in a section after records have been added to `messages`. When a round overflows, `compact` works like this:
 
 1. It skips the leading system block, so `first` is the position of the first record after it.
 2. It walks back from the end to the second user record from the end and cuts there, so the last two user turns and everything after them stay whole. Cutting on a user record never splits a tool-call batch from its results.
 3. With fewer than two user turns, `cut` stays one past the end, so it summarizes everything after the system block. When the cut falls right at `first`, there is nothing to summarize, and it hands the overflow to `compactors.fail`, which raises `context_exhausted`.
-4. It asks `models.infer` for a summary of the records it cuts, with each record's content encoded as JSON text. `models.infer` sends no tools and never reads `messages`, and it suspends and resumes inside the compaction like any other suspending call.
+4. It asks `models.infer` for a summary of the records it cuts, with each record's content encoded as JSON text. `models.infer(prompt)` runs on the chain's current model, sends no tools, and never reads `messages`, and it suspends and resumes inside the compaction like any other suspending call.
 5. It replaces the cut records with one user record holding the summary, marked with `meta = { summary = true }`, which your Lua can read later and the model never sees.
 
 The loop then checks that the estimate shrank and retries the round. In the run log, the summarizing `models.infer` logs the old turns once, as its prompt, and the retried round logs the compacted records once.
@@ -2456,14 +2425,13 @@ When the compactor raises, `models.loop` raises that failure after normalizing i
 - An Engine failure, such as the `context_exhausted` error `compactors.fail` raises, arrives as the same error value `pcall` would give, with its `kind` and fields, such as `kind = "context_exhausted"` with `reason = "precheck"`.
 - A string or a table the compactor raises reaches the caller unchanged, as [Errors while a round runs](#errors-while-a-round-runs) describes. You can embed the reason tag in your own message, so `error('custom failure: ' .. reason, 0)` arrives as the bare string `custom failure: provider`. With `own = { reason = 'mine' }` and `error(own)` in the compactor, `err == own` is true and `getmetatable(err)` is `nil`.
 
-When the run is being cancelled while the compactor runs, and the compactor raises, `models.loop` raises the compactor's failure raw, unchanged, without normalizing it.
+When the run is being canceled while the compactor runs, and the compactor raises, `models.loop` raises the compactor's failure raw, unchanged, without normalizing it.
 
 ### Replacing the default compactor
 
-You can assign your own function to `compactors.fail`, and later `models.loop` calls with no explicit compactor use it as the default. With this block in the `## Send` section of `long-notes`:
+You can assign your own function to `compactors.fail`, and later `models.loop` calls with no explicit compactor use it as the default. With this block in the `Send` section of `long-notes`:
 
 ````lua
-models.use('writer')
 compactors.fail = function(reason) error('replaced: ' .. reason, 0) end
 messages:user(string.rep('x', 100000))
 local ok, err = pcall(models.loop)
@@ -2486,6 +2454,6 @@ attempt to call a number value
 
 ### When context exhaustion goes uncaught
 
-Context exhaustion raises at the `models.loop` call site. Left uncaught, it fails the section, so code after the call never runs, and it ends the run with run error kind `ContextExhausted` (see [Run error kinds](16-limits-and-errors.md#run-error-kinds)) and a message of the form `context exhausted: {detail}`, with the reason in that message. An uncaught `context_exhausted` error ends the block as that same `context_exhausted` error, with its fields, including `reason`, kept. A `context_exhausted` error value that escapes a block ends the run as a `ContextExhausted` failure with the same `reason`, whether `models.loop` raised it, a direct `compactors.fail(reason)` call outside any loop raised it and went uncaught, or your Lua caught it with `pcall` and raised it again with `error(err)`. That holds for a reason of your own as well: a compactor that calls `compactors.fail('manual')` inside a loop, left uncaught, ends the run as `ContextExhausted` with `manual` in its message.
+Context exhaustion raises at the `models.loop` call site. Left uncaught, it fails the section, so code after the call never runs, and it ends the run with the error code `context_exhausted` (see [Run error codes](16-limits-and-errors.md#run-error-codes)) and a message of the form `context exhausted: {detail} (at {file}:{line})`, with the reason in that message and the line of the call that raised it. An uncaught `context_exhausted` error ends the block as that same `context_exhausted` error, with its fields, including `reason`, kept. A `context_exhausted` error value that escapes a block ends the run as a `context_exhausted` failure with the same `reason`, whether `models.loop` raised it, a direct `compactors.fail(reason)` call outside any loop raised it and went uncaught, or your Lua caught it with `pcall` and raised it again with `error(err)`. That holds for a reason of your own as well: a compactor that calls `compactors.fail('manual')` inside a loop, left uncaught, ends the run with `context_exhausted` and `manual` in its message.
 
-A compactor's own error takes a different path. An uncaught string raised by a compactor fails the section as an ordinary Lua runtime error holding the compactor's message, and the code after the call never runs. Left uncaught in a walked section, that error ends the run with run error kind `Lua`, with the compactor's error text in the message.
+A compactor's own error takes a different path. An uncaught string raised by a compactor fails the section as an ordinary Lua runtime error holding the compactor's message, and the code after the call never runs. Left uncaught in a walked section, that error ends the run with the error code `lua_runtime`, with the compactor's error text in the message.
