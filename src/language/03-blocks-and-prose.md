@@ -1390,8 +1390,9 @@ A read performs no effect and moves nothing. It does not consume the pending pro
 | `'fence ""'` | a fence with no language | `lang`, `info`, `text` |
 | `'list'` | a bulleted or numbered list | `ordered`, `items` |
 | `'rule'` | a thematic break | none |
+| `'*'` | a block of any kind | the fields of its kind |
 
-The block comes back as a plain Lua table built for the call, and you read its fields by name, as `prompt.section('Template', 'fence markdown').text` does in the first prompt. Every block also has `kind`, the kind's name as a string, and `line`, the line of the prompt file the block starts on. These are the blocks [`markdown.parse`](05-lua-environment.md#parsing-markdown-with-markdown) produces, and that section gives the full rules for each kind.
+The block comes back as a plain Lua table built for the call, and you read its fields by name, as `prompt.section('Template', 'fence markdown').text` does in the first prompt. Every block also has `kind`, the kind's name as a string, `line`, the line of the prompt file the block starts on, and `source`, the block's lines exactly as the section holds them, with the blank lines after them. These are the blocks [`markdown.parse`](05-lua-environment.md#parsing-markdown-with-markdown) produces, and that section gives the full rules for each kind and for [`source`](05-lua-environment.md#the-source-of-a-block).
 
 A fence's `text` is the lines between its two fence lines, without the final line ending. Its `info` is the text after the opening fence, and `lang` is the first word of `info`, or `''` when the fence has none. The language is compared exactly and case-sensitively. A `lua` fence is a fence like any other: its `lang` is `lua` and its `text` is the source, which the read does not run.
 
@@ -1442,6 +1443,8 @@ json|yaml|{ "ok": true }|plain text|23
 ````text
 prompt.section: selector "fence" matches 3 blocks, at lines 23, 27, and 31; add an index, such as 1 for the first
 ````
+
+`'*'` matches a block of any kind, so with an index it picks a block by its position: `prompt.section('Samples', '*', 1)` is the prose block, and `prompt.section('Samples', '*', 2).lang` is `'json'`. The sources of a section's blocks, joined in order, are the text `prompt.section('Samples')` returns.
 
 A selector looks only at the section's own content. A block inside a child section belongs to the child, and you read it by the child's path. The kinds `section` and `frontmatter` exist for `markdown.parse` and are refused here, because a section's own content never holds either.
 
@@ -1663,7 +1666,7 @@ Each row below raises a Lua error that [`pcall`](05-lua-environment.md#raising-a
 | `prompt.section(42)` | `section target must be a string, got integer` |
 | `prompt.section('Kid/Grand')` | `section path "Kid/Grand" has more than one name; a relative path is a child's name, or "../" and a sibling's name`, and the other messages in [Malformed section paths](02-file-structure.md#malformed-section-paths) |
 | `prompt.section('Samples', 42)` | `prompt.section: selector must be a string, got integer` |
-| `prompt.section('Samples', 'fences')` | `prompt.section: unknown kind "fences"; kinds are frontmatter, section, prose, fence, list, rule` |
+| `prompt.section('Samples', 'fences')` | `prompt.section: unknown kind "fences"; kinds are frontmatter, section, prose, fence, list, rule, and * selects every block` |
 | `prompt.section('Samples', 'list lua')` | `prompt.section: only a fence selector takes a language, got "list lua"` |
 | `prompt.section('Samples', 'fence a b')` | `prompt.section: a fence selector takes one language, got "fence a b"` |
 | `prompt.section('Samples', 'section')` | `prompt.section: a section's own content has no subsections; name a subsection by its own path` |

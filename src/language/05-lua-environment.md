@@ -1709,8 +1709,8 @@ The run result is:
 - `markdown.parse(text)` parses Markdown text into a list of blocks.
 - `markdown.section(blocks, path)` finds one section, and `markdown.section(blocks, path, selector, n?)` finds one block of that section. Both raise when what they name is not there.
 - `markdown.section_or` takes the same arguments and returns `nil` when the section or the block is not there.
-- `markdown.select(blocks, selector)` collects every block of one kind, at any depth.
-- `markdown.render(blocks)` writes a list of blocks back as Markdown text.
+- `markdown.select(blocks, selector)` collects every block of one kind, at any depth, or every block of any kind.
+- `markdown.render(blocks)` writes a list of blocks back as Markdown text. For a parsed document, that is the text it was parsed from.
 
 `markdown` is in every section VM, the H1 pass, fanout arms, spawned tasks, and libraries loaded with `require` included, so you never import it. It takes text and never a file name: you read a file with [`store.read`](09-the-store.md#writing-and-reading-files) and parse what it returns. Every function is pure. The same input gives the same result, and none of them performs an effect or suspends. Nothing in the text is run or substituted, so a `{{ name }}` placeholder comes back as written.
 
@@ -1718,7 +1718,7 @@ Every error a `markdown` function raises is an [error value](#error-values) of k
 
 ### The blocks `markdown.parse` returns
 
-A parsed document is a list of blocks. A block is a plain table with a `kind`, the `line` it starts on, and the fields of its kind:
+A parsed document is a list of blocks. A block is a plain table with a `kind`, the `line` it starts on, the `source` it was read from, and the fields of its kind:
 
 | `kind` | Fields | What it is |
 | --- | --- | --- |
@@ -1787,6 +1787,7 @@ md[1].kind                       --> 'frontmatter'
 md[1].data.title                 --> 'Notes'
 md[1].data.tags[2]               --> 'b'
 md[2].text                       --> 'Preface paragraph.'
+md[2].source                     --> 'Preface paragraph.\n\n'
 md[2].line                       --> 6
 md[4]                            --> nil
 
@@ -1794,20 +1795,23 @@ local guide = md[3]
 guide.kind                       --> 'section'
 guide.level                      --> 1
 guide.title                      --> 'Guide'
+guide.source                     --> '# Guide\n\n'
 #guide.blocks                    --> 4
 guide.blocks[1].text             --> 'Intro text\non two lines.'
 guide.blocks[2].items[1]         --> 'alpha'
 guide.blocks[2].ordered          --> false
+guide.blocks[2].source           --> '- alpha\n- beta\n\n'
 
 local templates = guide.blocks[3]
 templates.title                  --> 'Templates'
 templates.line                   --> 16
 templates.blocks[2].lang         --> 'lua'
+templates.blocks[2].source       --> '```lua\nreturn 1\n```\n\n'
 templates.blocks[5].lang         --> 'json'
 templates.blocks[5].info         --> 'json strict'
 templates.blocks[5].text         --> '{ "ok": true }'
 templates.blocks[6].title        --> 'Extras'
-templates.blocks[6].blocks[1]    --> { kind = 'rule', line = 36 }
+templates.blocks[6].blocks[1]    --> { kind = 'rule', line = 36, source = '---\n\n' }
 templates.blocks[2].title        --> nil
 ````
 
@@ -1816,24 +1820,69 @@ The result is plain data, with a few fixed shapes:
 - Every value is a string, a number, a boolean, or a table, and no table has methods. A table is either a list or a record with named fields, never both, which is why a section keeps its members in `blocks`. So a parse result passes [`json.encode`](#encoding-values-with-jsonencode), can be stored in [`var`](#keeping-state-in-var), and can be a [`tasks.fanout` collection](14-fanout.md#collections-and-member-order).
 - The document, every `blocks`, and every `items` are marked lists (see [Keeping empty lists with `json.array`](#keeping-empty-lists-with-jsonarray)), so an empty one encodes as `[]`.
 - A field that a kind does not have reads as `nil`, as `templates.blocks[2].title` does for a fence.
-- `title`, a fence's `text`, and an item can be the empty string. A prose `text` never is.
+- `title`, a fence's `text`, and an item can be the empty string. A prose `text` never is, and neither is the `source` of a parsed block.
 - No block points at its parent or its neighbors.
 
 `line` is 1-based and counts lines of the text given to `markdown.parse`, frontmatter lines included. It is the heading line for a section, the opening fence line for a fence, the first marker line for a list, and the first non-blank line for prose. It is stored when the text is parsed, and no lookup changes it.
+
+### The `source` of a block
+
+Every block holds `source`, the lines it was read from, exactly as written and each with its line ending. These rules decide which lines a block holds:
+
+- A block's `source` runs from its first line to the first line of the next block, so the blank lines after a block are in its `source`. A blank line holds only spaces and tabs.
+- A section's `source` is its heading and the blank lines after it. The blocks under the heading hold their own lines, so no line is in two sources.
+- Blank lines at the very top of the text are in the first block's `source`, above its own lines. The block's `line` is still the line of its own first line.
+
+Take this text, with a blank line between each two blocks:
+
+````markdown
+# Fruit
+
+Some words.
+
+- apples
+- pears
+
+## Citrus
+
+### Lemon
+````
+
+It parses to one section, and these are the sources of its blocks:
+
+````lua
+local fruit = markdown.parse(text)[1]
+fruit.source                         --> '# Fruit\n\n'
+fruit.blocks[1].source               --> 'Some words.\n\n'
+fruit.blocks[2].source               --> '- apples\n- pears\n\n'
+fruit.blocks[3].source               --> '## Citrus\n\n'
+fruit.blocks[3].blocks[1].source     --> '### Lemon\n'
+````
+
+No block is made for blank lines, so `Lemon` is the first block of `Citrus`. Every character of the text is in the `source` of exactly one block, so the sources, joined in the order the blocks appear, are the text. That is what [`markdown.render`](#writing-blocks-with-markdownrender) writes. Text that holds nothing but blank lines is the one exception: it has no block to hold them, so it parses to an empty list.
+
+`source` holds what the other fields leave out. A list's `items` have no markers and no numbers, a section's `title` has no markup, and a frontmatter's `data` has no comments, and all of those are in `source`:
+
+````lua
+markdown.parse('3) x\n4) y\n')[1].items                    --> { 'x', 'y' }
+markdown.parse('3) x\n4) y\n')[1].source                   --> '3) x\n4) y\n'
+markdown.parse('See [API](x) *now*\n===\n')[1].title       --> 'See API now'
+markdown.parse('See [API](x) *now*\n===\n')[1].source      --> 'See [API](x) *now*\n===\n'
+````
 
 ### How text becomes blocks
 
 `markdown.parse` reads the text as CommonMark with no extensions, the same reading the prompt parser gives a prompt, so a heading or a fence means the same thing in a prompt and in parsed text. Tables, task lists, and footnotes are not parsed as such, and they stay in prose or in an item's string. These rules decide the blocks:
 
 - Only top-level constructs become blocks. A heading, fence, list, or thematic break inside a block quote stays in the surrounding prose, and one inside a list item stays in that item's string.
-- Nothing is dropped. Every non-blank line of the text belongs to exactly one block, counting a heading line as part of its section.
+- Nothing is dropped. Every non-blank line of the text belongs to exactly one block, counting a heading line as part of its section, and every line, blank or not, is in the `source` of exactly one block.
 - Frontmatter is recognized only at the very start: the first line is `---`, a later line is `---`, and the lines between parse as a YAML mapping. In `data`, a mapping is a record, a sequence is a marked list, and a YAML null is [`json.null`](#null-values-and-jsonnull). When any of that fails there is no frontmatter, and those lines are ordinary Markdown, so the first line is a `rule`.
 - A heading opens a section, which ends at the next heading of the same or a smaller level. A deeper heading opens a subsection inside it, even when it skips levels, so an H4 directly under an H2 is a member of the H2's `blocks` with `level` 4. `title` is the heading's text with inline markup removed, so ``## The *big* `foo` API`` has the title `The big foo API`.
 - Prose is a maximal run. Two paragraphs separated by a blank line are one block, and a second prose block exists only when a fence, list, or rule sits between it and the first. `text` is the source as written, with leading blank lines and trailing whitespace removed.
 - Backtick fences and tilde fences both count. `info` is the info string, `lang` is its first word, or `''` when the fence has none, and `text` is the lines between the two fence lines without the final line ending. A `#` line inside a fence is not a heading. A fence with no closing line runs to the end of the text.
-- Each list is one block, and a change of marker, such as `-` then `*`, starts a new list. `ordered` is `true` for a numbered list. An item is its source with the marker removed. An item that spans lines or holds nested content keeps it as raw Markdown, such as `'a\n- a1\n- a2'`, so `markdown.parse(item)` recovers its structure. A marker with no content is the item `''`.
+- Each list is one block, and a change of marker, such as `-` then `*`, starts a new list. `ordered` is `true` for a numbered list. An item is its source with the marker removed. An item that spans lines or holds nested content keeps it as raw Markdown, such as `'a\n- a1\n- a2'`, so `markdown.parse(item)` recovers its structure. A marker with no content is the item `''`. A list ends with its last item, so a link definition right after a list is prose.
 
-Parsing does not fail on content. Any UTF-8 text within the size limit is a document: skipped levels, repeated titles, and an unclosed fence are all accepted, and empty text gives an empty list. This is looser than the prompt parser on purpose, because `markdown` reads text you do not control, such as a model reply. A byte-order mark at the very start is dropped, and `\r\n` and a lone `\r` are read as `\n`, so every string in the result uses `\n` only.
+Parsing does not fail on content. Any UTF-8 text within the size limit is a document: skipped levels, repeated titles, and an unclosed fence are all accepted, and empty text gives an empty list, as does text that holds only blank lines. This is looser than the prompt parser on purpose, because `markdown` reads text you do not control, such as a model reply. A byte-order mark at the very start is dropped, and `\r\n` and a lone `\r` are read as `\n`, so every string in the result uses `\n` only, each `source` included.
 
 `markdown.parse` takes a string of at most 8,388,608 bytes, the limit [`json.decode`](#decoding-json-text-with-jsondecode) has, and raises three errors:
 
@@ -1888,7 +1937,7 @@ A few more rules round out the path:
 
 The `blocks` argument is a list of blocks: the value `markdown.parse` returned, any section's `blocks`, or a list you built. A lookup sees only the list it is given, so passing `guide.blocks` searches inside `Guide` and nowhere else, which is why `'/Usage'` finds a section there that `'/Usage'` over `md` would not. A section is not a list. Passing the section table itself raises, and the message points at its `blocks` field.
 
-A lookup returns the table that is already inside the list it was given, not a copy, so `markdown.section(md, '/Guide') == md[3]` is `true`. An edit made through a lookup's result is therefore an edit of `md`, and a later `markdown.render(md)` writes it. The selector forms of `prompt.section` are the opposite: they build a new table on every call.
+A lookup returns the table that is already inside the list it was given, not a copy, so `markdown.section(md, '/Guide') == md[3]` is `true`. An edit made through a lookup's result is therefore an edit of `md`. A later `markdown.render(md)` writes each block's `source`, so it writes an edit of `source` and no edit of another field. The selector forms of `prompt.section` are the opposite: they build a new table on every call.
 
 ### Picking a block with a selector
 
@@ -1899,6 +1948,7 @@ A lookup returns the table that is already inside the list it was given, not a c
 | `'frontmatter'`, `'section'`, `'prose'`, `'fence'`, `'list'`, `'rule'` | a block of that kind |
 | `'fence markdown'` | a fence whose `lang` is `markdown`, compared exactly and case-sensitively, and likewise for any other language |
 | `'fence ""'` | a fence with no language, the one whose `lang` is `''` |
+| `'*'` | a block of any kind |
 
 Without an index, the selector must match exactly one block. With an index, it may match any number, and the index picks among them: `1` is the first match and `-1` is the last.
 
@@ -1910,12 +1960,14 @@ markdown.section(md, '/Guide', 'list').items[2]                   --> 'beta'
 markdown.section(md, '/Guide/Templates', 'fence', 3).text         --> '{ "ok": true }'
 markdown.section(md, '/Guide/Templates', 'fence', -1).lang        --> 'json'
 markdown.section(md, '/Guide/Templates', 'prose', 2).text         --> 'Then the fallback:'
+markdown.section(md, '/Guide/Templates', '*', 2).lang             --> 'lua'
+markdown.section(md, '/Guide/Usage', '*').ordered                 --> true
 markdown.section(md, '/Guide/Templates', 'list')                  --> raises
 markdown.section(md, '/Guide/Templates', 'fence')                 --> raises
 markdown.section(md, '/Guide/Templates', 'fence', 4)              --> raises
 ````
 
-`'fence lua'` matches one fence in `Templates`, because the other `lua` fence is in its subsection `Extras`. The last three lines raise for three different reasons: `Templates` holds no list, it holds three fences and the call gives no index, and it has no fourth fence. To take every direct member of one kind, loop over the section's `blocks` with `ipairs` and test `kind`.
+`'fence lua'` matches one fence in `Templates`, because the other `lua` fence is in its subsection `Extras`. `'*'` with an index picks a block by its position, whatever its kind, and without one it needs a section with one block, as `Usage` is. The last three lines raise for three different reasons: `Templates` holds no list, it holds three fences and the call gives no index, and it has no fourth fence. To take every direct member of one kind, loop over the section's `blocks` with `ipairs` and test `kind`.
 
 `markdown.section` and `markdown.section_or` take the same arguments and find the same thing. They differ only when it is not there:
 
@@ -1953,34 +2005,42 @@ markdown.select(templates.blocks, 'prose')[1].text   --> 'Use these.'
 
 The four sections are `Guide`, `Templates`, `Extras`, and `Usage`. Like the lookups, `markdown.select` searches only the list it is given, so the last line looks inside `Templates` alone. It is the function to reach for when the text's shape is not known ahead of time, as with a model reply: `markdown.select(markdown.parse(reply), 'fence json')[1]` is the first `json` fence wherever the reply put it, or `nil`.
 
-### Writing blocks with `markdown.render`
-
-`markdown.render(blocks)` writes a list of blocks back as Markdown, each block in one fixed style. Blocks are joined by one blank line, the result has no trailing newline, and an empty list gives the empty string:
+With `'*'` it collects every block, which gives you the document as one flat list with no nesting:
 
 ````lua
-markdown.render(guide.blocks[4].blocks)   --> '1. first\n2. second'
-markdown.render({ guide.blocks[4] })      --> '## Usage\n\n1. first\n2. second'
+local flat = markdown.select(md, '*')
+#flat                                     --> 16
+flat[3] == md[3]                          --> true
+flat[4] == md[3].blocks[1]                --> true
+#markdown.select(templates.blocks, '*')   --> 8
+
+local parts = {}
+for i, block in ipairs(flat) do
+  parts[i] = block.source
+end
+table.concat(parts) == text               --> true
 ````
 
-A section's `blocks` render without its heading, and wrapping the section in a list renders the heading too. Each kind is written like this:
+The list is new, and the tables in it are the document's own blocks, `Guide` at position 3 and the first block under it at position 4. Joining their sources gives the text that was parsed. Do not pass a flat list to `markdown.render`: it goes into each section itself, so it would write the blocks under each section twice.
 
-| Block | Written as |
-| --- | --- |
-| `frontmatter` | `---`, the data as YAML with its keys sorted, then `---` |
-| `section` | `#` repeated `level` times, a space and the title when the title is not empty, then its `blocks` |
-| `prose` | `text`, unchanged |
-| `fence` | a backtick fence of at least three backticks and one longer than the longest run of backticks in `text`, then `info`, or `lang` when there is no `info`, then `text`, then the closing fence. A tilde fence is used instead when the info string holds a backtick. |
-| `list` | `- item` for each item, or `1. item` numbered from 1, with the later lines of an item indented to sit under its first. A list right after a list of the same type is written with `*`, or with `1)`, so the two stay separate lists. |
-| `rule` | `---`, or `***` when the rule is the first block, so the output never opens with a line that could start frontmatter |
+### Writing blocks with `markdown.render`
 
-`markdown.render` does not escape, so text that came from a parse is written back as it was read. For blocks that `markdown.parse` produced, parsing the output gives the same blocks apart from `line`. The one exception is a title whose text Markdown reads as markup: a heading written `## \*x\*` has the title `*x*`, which is written as `## *x*` and reads back as `x`.
+`markdown.render(blocks)` writes the [`source`](#the-source-of-a-block) of every block in the list, at any depth and in the order the blocks appear, a section's before those of the blocks under it. It rebuilds nothing from a block's other fields, so a parsed document is written back as the text it was parsed from, and an empty list gives the empty string:
 
-The blocks need not come from a parse. You can edit a parsed document in place, or build a list by hand, and render it:
+````lua
+markdown.render(md) == text               --> true
+markdown.render(guide.blocks[4].blocks)   --> '1. first\n2. second\n'
+markdown.render({ guide.blocks[4] })      --> '## Usage\n\n1. first\n2. second\n'
+````
+
+A section's `blocks` render without its heading, and wrapping the section in a list renders the heading too. A block is written with the blank lines that followed it in the text, so `markdown.render(section.blocks)` is the section's body from its first line of content to the line above the next heading. Nothing is changed on the way: a list keeps its numbers and its markers, a fence its own characters, a heading the way it was written, and a frontmatter its comments. A byte-order mark is not written back, and every line ending is written as `\n`, because that is how the text was read.
+
+`markdown.render` reads three fields of a block. `source` is what it writes. `kind` and `blocks` tell it what comes next: only a section's `blocks` are written, and a section with no `blocks` field holds nothing. So an edit of `source` changes what is written, and an edit of `title`, `text`, `items`, or any other field does not. To change a document, replace a block, or write the block's `source`:
 
 ````lua
 local usage = markdown.section(md, '/Guide/Usage')
-usage.title = 'How to use it'
-table.insert(usage.blocks, { kind = 'prose', text = 'Done.' })
+usage.source = '## How to use it\n\n'
+table.insert(usage.blocks, { kind = 'prose', source = '\nDone.\n' })
 return markdown.render({ usage })
 ````
 
@@ -1993,29 +2053,63 @@ return markdown.render({ usage })
 Done.
 ````
 
-`markdown.render` checks every field of every block it writes, and it raises for a block it cannot write. The message names the block by its place, such as `blocks[2].text`:
+The heading's new `source` ends with the blank line the old one had, because blank lines after a heading are part of its `source`. The block added by hand has a `source` and a `kind` and needs nothing else. Its `source` starts with a blank line of its own, because the list before it is the last block of the text and has none after it.
+
+To replace everything under a heading, give the section a new list of blocks. With `log` parsed from `# Log`, then `## Entry` over the paragraph `first`, then a second `## Entry` over `second`:
+
+````lua
+local entry = markdown.section(log, '/Log/Entry[1]')
+entry.blocks = { { kind = 'prose', source = 'changed\n\n' } }
+markdown.render(log)   --> '# Log\n\n## Entry\n\nchanged\n\n## Entry\n\nsecond\n'
+````
+
+Every other line of the document is written as it was read.
+
+#### The line endings `markdown.render` adds
+
+Blocks from different texts, or blocks whose `source` you wrote, may not fit together as written. `markdown.render` adds a line ending of its own in two cases, and neither occurs between two blocks of one parse:
+
+- Every block starts on a new line. When the text so far does not end with a line ending, one is written before the next block. The last block of a text has none when the text has none.
+- A blank line sits between two prose blocks. When a prose block follows a prose block, and neither the text so far ends with a blank line nor the block starts with one, a blank line is written, so the two stay separate paragraphs.
+
+````lua
+local one, two = markdown.parse('# A\nlast'), markdown.parse('# B\n\n- x')
+markdown.render({ one[1], two[1] })   --> '# A\nlast\n# B\n\n- x'
+
+markdown.render({
+  { kind = 'prose', source = 'one\n' },
+  { kind = 'prose', source = 'two\n' },
+})                                    --> 'one\n\ntwo\n'
+````
+
+Without the first, the result would hold the line `last# B`. Without the second, `one` and `two` would be one paragraph.
+
+`markdown.render` adds nothing between any other two blocks, because whether they need a blank line depends on their text. A paragraph directly above `- a` is fine as written. Directly above `2. b` it takes the list into itself, and directly above `---` it becomes a heading. So when you write a `source` yourself, keep the blank line a block needs: before a `---` rule, before a list that does not start at 1, and after a list. Two lists with the same marker read as one list even with a blank line between them.
+
+`markdown.render` raises for a value that is not a list of blocks, and for a block with no `source` to write. The message names the block by its place, such as `blocks[2].source`:
 
 | When | Message |
 | --- | --- |
 | The value is a section, not a list of blocks | `markdown.render: blocks must be a list of blocks, got a section; pass its blocks field` |
-| A field is missing or of the wrong type | `markdown.render: blocks[1].text must be a string, got nil` |
-| The `kind` is unknown | `markdown.render: blocks[1].kind must be one of frontmatter, section, prose, fence, list, rule, got "table"` |
-| A `list` has no items | `markdown.render: blocks[1].items must hold at least one item` |
+| A block has no `source` | `markdown.render: blocks[1].source must be a string, got nil` |
+| A block under a section has none | `markdown.render: blocks[1].blocks[2].source must be a string, got nil` |
+| A `source` is not a string | `markdown.render: blocks[1].source must be a string, got integer` |
+| A section's `blocks` is not a list | `markdown.render: blocks[1].blocks must be a list of blocks, got integer` |
 
-A `level` that is not an integer from 1 to 6, a `title`, `info`, or `lang` that holds a line break, a `frontmatter` that is not the first block, and a `frontmatter` whose `data` is not a record raise the same way. `line` is never required.
+No other field is checked, and `kind` and `line` are never required.
 
 ### Keeping parsed blocks
 
 Every section entry gets a fresh section VM, so a parse result does not survive a fall-through or a `jump`. Two things can carry it:
 
-- `var.doc = md` stores a deep copy as JSON, and reading it back gives [guarded views](#reading-arrays-and-other-tables-from-var). The `markdown` functions read through them, so `markdown.section(var.doc, '/Guide/Usage', 'list').items[1]` is `'first'` in a later section.
+- `var.doc = md` stores a deep copy as JSON, and reading it back gives [guarded views](#reading-arrays-and-other-tables-from-var). The `markdown` functions read through them, so `markdown.section(var.doc, '/Guide/Usage', 'list').items[1]` is `'first'` in a later section. The copy holds every `source`, so `markdown.render(var.doc)` is still the text that was parsed.
 - A fanout collection gives each arm one block as its `item`, as in `tasks.fanout('Worker', markdown.select(md, 'section'))`.
 
 Carrying the text, or the name of a store file, and parsing it where it is needed is usually cheaper than carrying the tables.
 
 `line` always counts lines of the text that was parsed, never lines of a part of it, so `markdown.section(guide.blocks, '/Templates', 'fence', 3).line` is still `30`. A new parse counts from 1: `markdown.parse(templates.blocks[3].text)[1].line` is `1`, and `markdown.parse(prompt.section(path))` counts from the first line of that section's text. The selector forms of `prompt.section` count lines of the prompt file instead.
 
-The lookups read only the fields they need, `kind`, `title`, `blocks`, and `lang`, and a block whose `kind` they do not know matches nothing. A list nested more than 127 levels deep, or a list that contains itself, raises.
+The lookups read only the fields they need, `kind`, `title`, `blocks`, and `lang`, and a block whose `kind` they do not know matches no selector but `'*'`. A list nested more than 127 levels deep, or a list that contains itself, raises.
 
 ### Errors from the lookups
 
@@ -2032,7 +2126,7 @@ The lookups check the call before they search. Each row raises from `markdown.se
 | `markdown.section(md, [[/a\b]])` | `markdown.section: path "/a\b" has an unknown escape "\b"; the escapes are "\/", "\\", and "\["` |
 | `markdown.section(md, '/Guide[0]')` | `markdown.section: path "/Guide[0]" has index 0; an index is a nonzero integer` |
 | `markdown.section(log, '/Log/Entry')` | `markdown.section: path "/Log/Entry" is ambiguous; it matches 2 sections, at lines 3 and 7; add an index such as "/Log/Entry[1]"` |
-| `markdown.section(md, '/Guide', 'fences')` | `markdown.section: unknown kind "fences"; kinds are frontmatter, section, prose, fence, list, rule` |
+| `markdown.section(md, '/Guide', 'fences')` | `markdown.section: unknown kind "fences"; kinds are frontmatter, section, prose, fence, list, rule, and * selects every block` |
 | `markdown.section(md, '/Guide', 'list lua')` | `markdown.section: only a fence selector takes a language, got "list lua"` |
 | `markdown.section(md, '/Guide', nil, 1)` | `markdown.section: an index needs a selector before it` |
 | `markdown.section(md, '/Guide', 'fence', 0)` | `markdown.section: index must be a nonzero integer, got 0` |
@@ -2058,6 +2152,10 @@ local summary = findings and markdown.render(findings.blocks) or ''
 -- one section of a stored document, as text for a model; it raises when the document has no Abstract
 local paper = markdown.parse(store.read('paper.md'))
 local abstract = markdown.render(markdown.section(paper, '//Abstract').blocks)
+
+-- that document with the body of one section replaced, and every other line written back as it was
+markdown.section(paper, '//Abstract').blocks = { { kind = 'prose', source = 'A new abstract.\n\n' } }
+store.write('paper.md', markdown.render(paper))
 
 -- each top-level section of that document
 for _, block in ipairs(paper) do

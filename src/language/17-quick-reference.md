@@ -104,12 +104,12 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `loadstring` | removed | Reads nil; no loading code from a string | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `log` | function | Records one single-line checkpoint of at most 256 characters | [Logging and lifecycle reports](05-lua-environment.md#logging-and-lifecycle-reports) |
 | `markdown` | global | Table of Markdown functions: `parse`, `section`, `section_or`, `select`, `render` | [Parsing Markdown with `markdown`](05-lua-environment.md#parsing-markdown-with-markdown) |
-| `markdown.parse` | function | Parses Markdown text into a list of blocks, plain tables with a `kind`, a `line`, and the fields of the kind | [Parsing Markdown with `markdown`](05-lua-environment.md#parsing-markdown-with-markdown) |
-| `markdown.render` | function | Writes a list of blocks back as Markdown text | [Parsing Markdown with `markdown`](05-lua-environment.md#parsing-markdown-with-markdown) |
+| `markdown.parse` | function | Parses Markdown text into a list of blocks, plain tables with a `kind`, a `line`, the `source` text of the block, and the fields of the kind | [Parsing Markdown with `markdown`](05-lua-environment.md#parsing-markdown-with-markdown) |
+| `markdown.render` | function | Writes the `source` of each block of a list back as one text; a parsed document comes back as the text it was parsed from | [Parsing Markdown with `markdown`](05-lua-environment.md#parsing-markdown-with-markdown) |
 | `markdown.section` | function | Returns the one section that a path such as `/Guide/Setup` names in a list of blocks; raises when there is none | [Parsing Markdown with `markdown`](05-lua-environment.md#parsing-markdown-with-markdown) |
 | `markdown.section (blocks, path, selector, n)` | form | Returns one block of that section, picked by a selector such as `fence json` and an optional index; raises when there is none | [Parsing Markdown with `markdown`](05-lua-environment.md#parsing-markdown-with-markdown) |
 | `markdown.section_or` | function | The same lookup as `markdown.section`, in both forms; returns `nil` when the section or the block is not there | [Parsing Markdown with `markdown`](05-lua-environment.md#parsing-markdown-with-markdown) |
-| `markdown.select` | function | Returns a new list of every block that matches a selector, at any depth | [Parsing Markdown with `markdown`](05-lua-environment.md#parsing-markdown-with-markdown) |
+| `markdown.select` | function | Returns a new list of every block that matches a selector, at any depth; the selector `*` matches every block | [Parsing Markdown with `markdown`](05-lua-environment.md#parsing-markdown-with-markdown) |
 | `math` | global | Standard `math` library, as in Lua 5.5 | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `messages` | global | The section entry's conversation, a message list created empty at each entry; cannot be reassigned | [`messages` is the section entry's conversation](11-conversations.md#messages-is-the-section-entrys-conversation) |
 | `#messages` | method | Number of records in the message list | [Reading records](11-conversations.md#reading-records) |
