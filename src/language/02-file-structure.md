@@ -870,7 +870,7 @@ The title text can be any phrase, including spaces and capitals, such as `# Shor
 
 The H1 title is free text, separate from the frontmatter `name` key, and it need not match it. `name: hello` can sit above `# Hello World`, and `name: greeter` with `# Greeter` gives the name `greeter` and the title `Greeter`.
 
-A `##` section can have the same text as the H1 title, as in `# Self` with a `## Self` section, and the prompt still parses and runs. When that `## Self` section calls `jump('## Self')`, the call fails with `not found` at heading resolution (see [Resolving heading references](08-jump-and-call.md#resolving-heading-references)), which has nothing to do with the shared text.
+A `##` section can have the same text as the H1 title, as in `# Self` with a `## Self` section, and the prompt still parses and runs. When that `## Self` section calls `jump('../Self')`, the call fails with `not found`, because a section is not its own sibling (see [The visible set](08-jump-and-call.md#the-visible-set)). That has nothing to do with the shared text.
 
 A `#` heading inside a block quote or a list item is not an H1. It never becomes the title and does not count toward the one-H1 rule, and quoted or listed headings such as `> ## Quoted` and `- ## Listed` stay in the surrounding prose.
 
@@ -1102,7 +1102,7 @@ runvil: 0
 ## B
 ````
 
-Here `## A` holds `### X` and `### Y`, `### X` holds `#### P` and `#### Q`, and `## B` is a sibling of `## A`. Lua names section B with the heading reference `'## B'` (see [Heading references](#heading-references)).
+Here `## A` holds `### X` and `### Y`, `### X` holds `#### P` and `#### Q`, and `## B` is a sibling of `## A`. Lua written in section A names section B with the section path `'../B'`, and it names A's child X with `'X'` (see [Section paths](#section-paths)).
 
 The rule behind this shape is that a heading deeper than the current section becomes its child, and a heading at the same or a shallower level ends that section and belongs to an ancestor. So each H2 after the H1 starts a new top-level section, including an H2 that follows a nested H3 child. Top-level sections keep their file order without counting nested `###` sections, so `## First`, `### Child`, `## Second` gives two top-level sections, First and Second.
 
@@ -1142,7 +1142,7 @@ The name keeps only the visible text of the heading:
 
 Headings are read as plain CommonMark with no Markdown extensions, so extension syntax such as a trailing `{#id}` stays part of the section name.
 
-A section's name is how the section is found at run time: jumps, lookups, and fanout find the section by its heading level together with that name (see [Resolving heading references](08-jump-and-call.md#resolving-heading-references)).
+A section's name is how the section is found at run time: jumps, calls, reads, and fanout name a section by a section path, which is made of section names (see [Section paths](#section-paths)).
 
 ### What each section owns
 
@@ -1222,7 +1222,7 @@ an H2 section heading must not be empty
 
 ## Sibling name uniqueness
 
-After this section you can name sibling sections so that every heading reference finds exactly one target.
+After this section you can name sibling sections so that every section path finds exactly one target.
 
 ````markdown
 ---
@@ -1279,7 +1279,7 @@ This file has no `runvil:` key, which is fine for showing a parse error, because
 
 ### How sibling names are compared
 
-Sibling names are compared exactly as written, so names that differ only in letter case or inner spacing count as different sections. Within one set of siblings, each section's heading level and name together are unique, so a heading names at most one section among its siblings.
+Sibling names are compared exactly as written, so names that differ only in letter case or inner spacing count as different sections. Within one set of siblings each section name is unique, so a section path names at most one section.
 
 The comparison uses section names, not raw heading lines. Because emphasis, link, and code-span markers add nothing to a name (see [Section names](#section-names)), sibling headings that differ only in Markdown markup share one name. So ``## Run `fetch` `` and `## Run fetch` under the same parent fail as duplicate siblings.
 
@@ -1291,74 +1291,117 @@ Sibling names are unique, and a section's children sit exactly one heading level
 - A heading more than one level deeper than its parent is rejected as an orphan.
 - A repeated sibling name is rejected.
 
-When a section has several problems, the parse reports the first one it meets. For each section it checks the heading level, then the name, then the section's blocks, then its child sections, then its list items, and only then a duplicate sibling name. A `lua` fence rule break anywhere in the body fails with parse error kind `Fence` before any of these section checks run.
+When a section has several problems, the parse reports the first one it meets. For each section it checks the heading level, then the name, then the section's blocks, then its child sections, and only then a duplicate sibling name. A `lua` fence rule break anywhere in the body fails with parse error kind `Fence` before any of these section checks run.
 
-## Heading references
+## Section paths
 
-After this section you can name any section from Lua with a heading reference string.
+After this section you can name any section from Lua with a section path.
 
 ````markdown
 ---
-name: require_library
-description: Exercise a required library section and nested author prose
+name: paths
+description: Names a child, a sibling, and a section from the top.
 runvil: 0
 ---
 
-# Require Library
-
-The helper library is available to each section that requires it.
+# Paths
 
 ## Prepare
 
 ```lua
-require '## helpers'
+local shout = require '/helpers'
+var.note = shout(prompt.section('Author note'))
+jump('../Finish')
+```
+
+### Author note
+
+Keep the subject short.
+
+## Skipped
+
+```lua
+return 'skipped'
+```
+
+## Finish
+
+```lua
+return var.note
 ```
 
 ## helpers
 
 ```lua
-local greeting = 'hello'
+return function(text) return text:upper() end
 ```
 ````
 
-In this file, the string `'## helpers'` names the H2 section whose name is `helpers`. A heading reference is a section heading's `#` markers, a space, and the section name, written as a Lua string. So `'## loader'` names the H2 section named `loader`, and `'### Worker'` names an H3 section named `Worker`.
+````text
+KEEP THE SUBJECT SHORT.
+````
 
-### Writing a heading reference
+The block in `Prepare` names three sections, each with a section path. `'/helpers'` starts at the top of the prompt and names the top-level section `helpers`. `'Author note'` names `Prepare`'s own child, and `'../Finish'` names its sibling `Finish`. A section path is one or more section names separated by `/`, written as a Lua string.
 
-You write one `#` marker per heading level, then the section name, such as `'### Worker'` for an H3 or `'## Arm'` for an H2. The number of markers is the target's heading level at whatever depth the section sits, so `'## Help'` names an H2 and `'##### Child'` names an H5. A section name can contain an underscore, such as `house_style`, and still be reached by a heading reference like `'## house_style'`.
+### Writing a section path
 
-You use this same form with every call that names a section, whether the Lua sits in a section or in the H1 body:
+A section path has three forms:
 
-| Call | Example |
-|---|---|
-| `tasks.fanout` | `tasks.fanout('### Worker', topics)` |
-| `tasks.spawn` | `tasks.spawn('## Arm', { item = 'a' })` |
-| `call` | `call('## Sub')` |
-| `jump` | `jump('## C')` |
-| `require` | `require '## helpers'` |
-| `prompt.list` | `prompt.list('### Items')` |
-| `prompt.section` | `prompt.section('## house_style')` |
+- `name` names the direct child with that section name. In the H1 body the top-level sections are the children, so `call('Prepare')` written there runs `Prepare`.
+- `../name` names the sibling with that section name, which is another section under the same parent. A top-level section's siblings are the other top-level sections. The H1 has no siblings.
+- `/a/b` starts at the top of the prompt and names one section per level, so `'/Prepare/Author note'` names the section `Author note` under the top-level section `Prepare`. The H1 title is not part of the path. A path from the top names the same section wherever it is written.
 
-[Resolving heading references](08-jump-and-call.md#resolving-heading-references) explains which sections each call can reach.
+The first two forms are relative paths. A relative path starts at the section its code is written in, and it names a neighbor of that section. The heading level plays no part in any path. A section is found by where it sits, so moving a section and its neighbors to another depth changes none of the paths between them.
+
+Which forms a call takes depends on what the call does:
+
+| Call | Forms | Example |
+|---|---|---|
+| `call` | relative | `call('Sub')` |
+| `jump` | relative | `jump('../C')` |
+| `tasks.spawn` | relative | `tasks.spawn('Arm', { item = 'a' })` |
+| `tasks.fanout` | relative | `tasks.fanout('Worker', topics)` |
+| `prompt.section`, `prompt.section_or` | relative, or from the top | `prompt.section('/house_style')` |
+| `require` | from the top | `require '/helpers'` |
+
+The four calls that run a section take only the relative forms, so each of them reaches only a neighbor of the section it starts from (see [The visible set](08-jump-and-call.md#the-visible-set)). The prompt reads and `require` leave the walk where it is, and they can name any section in the prompt. [Resolving section paths](08-jump-and-call.md#resolving-section-paths) explains where each call starts and what it does when a path names no section.
 
 ### Exact matching
 
-A heading reference matches its target by exact level and name together, case-sensitively. So `'## Worker'` never finds the section `### Worker`, because the levels differ.
+Each name in a path matches a section name exactly and case-sensitively, so `'worker'` never finds the section `Worker`. A section name can contain spaces, underscores, and punctuation, such as `Author note` or `house_style`, and the path writes it as it is.
 
-A heading reference is one or more `#` markers, then whitespace, then the section's non-empty name. Within that shape, whitespace works like this:
+Whitespace works like this:
 
-- Whitespace around the whole heading reference is ignored, so `'  ## Rules  '` names `## Rules`.
-- Any whitespace, such as several spaces or a tab, can separate the markers from the name, so `'###    Worker'` names `### Worker`.
-- Whitespace inside the name part is kept and must match the section's name exactly.
+- Whitespace around the whole path and around each name is ignored, so `'  ../Rules  '` and `' .. / Rules '` both name the sibling `Rules`.
+- Whitespace inside a name is kept and must match the section name exactly.
 
-### Malformed heading references
+Three characters need a backslash in front of them when they are part of a name:
 
-A malformed heading reference is never silently reinterpreted. It raises a Lua error instead (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)), and each message ends with the reference trimmed of its surrounding whitespace, shown as `{stripped}` here:
+- A slash is written `\/`, because a bare slash separates two names.
+- A backslash is written `\\`.
+- The bracket of a name that ends in a bracketed whole number, such as `Appendix [2]`, is written `\[`, because a path over parsed text reads that ending as an index (see [Parsing Markdown with `markdown`](05-lua-environment.md#parsing-markdown-with-markdown)).
+
+A quoted Lua string doubles each backslash, so the section named `Input/Output` is `'Input\\/Output'`. A long-bracket string needs no doubling, as in `[[Input\/Output]]`.
+
+A section whose name is exactly `..` cannot be named by a path.
+
+### Malformed section paths
+
+A malformed section path is never silently reinterpreted. It raises a Lua error instead (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)), and the message quotes the path, shown as `{path}` here:
 
 | Problem | Message |
 |---|---|
-| No `#` markers | `section heading must include ### markers, got bare name: {stripped}` |
-| No whitespace after the markers | `section heading must have whitespace after the {markers} markers: {stripped}` |
-| Markers only, with or without whitespace after them | `section heading has no name: {stripped}` |
+| The path is not a string | `section target must be a string, got {type}` |
+| An empty name, as in `''`, `'Kid/'`, or `'../'` | `section path "{path}" has an empty step` |
+| A relative path with more than one name, as in `'Kid/Grand'` or `'../../Top'` | `section path "{path}" has more than one name; a relative path is a child's name, or "../" and a sibling's name` |
+| `'..'` with no name after it | `section path "{path}" needs a name after ".."` |
+| `..` in a path from the top, as in `'/Main/../Nums'` | `section path "{path}" uses ".."; a path from the top takes none` |
+| A name that ends in an index, as in `'Kid[1]'` | `section path "{path}" has an index; a path in a prompt takes none` |
+| A backslash before any other character, as in `[[a\b]]` | `section path "{path}" has an unknown escape "\b"; the escapes are "\/", "\\", and "\["` |
+| A backslash at the end of the path | `section path "{path}" ends in a backslash` |
+| A path from the top given to `call`, `jump`, `tasks.spawn`, or `tasks.fanout` | `section path "{path}" starts with "/"; only require, prompt.section, and prompt.section_or take a path from the top` |
+| A relative path given to `require` | `section path "{path}" does not start with "/"; require takes a path from the top, such as "/helpers"` |
 
-In the second message, `{markers}` is the run of `#` marks you wrote. So the bare name `'Nums'` reports `got bare name: Nums`, the reference `'##Nums'` reports `must have whitespace after the ## markers`, and `'###'` or `'### '` reports `section heading has no name`.
+`require` has its own message for a path that is not a string: `require takes a section path such as '/helpers', got {type}`.
+
+A well-formed path that names no section is not malformed. It is a miss, and [The not-found error](08-jump-and-call.md#the-not-found-error) covers what each call does with one.

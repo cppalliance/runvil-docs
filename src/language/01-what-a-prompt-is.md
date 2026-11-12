@@ -405,7 +405,7 @@ The block writes `hello` to `note.md` in the store, selects the `fast` role with
 
 ### A helper section and a nested section
 
-One prompt can combine a section that other sections load, prose in the H1 body, several `##` sections, and a nested section. In a prompt titled `# Require Library`, the H1 body holds prose and a `## helpers` section defines a function named `normalize`. The `## Prepare` and `## Finish` sections each load it with `require '## helpers'` (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)) and call `normalize`. A `### Author note` section of prose nests under `## Prepare`, so the prompt has three `##` sections and `## Prepare` holds one nested section.
+One prompt can combine a section that other sections load, prose in the H1 body, several `##` sections, and a nested section. In a prompt titled `# Require Library`, the H1 body holds prose and a `## helpers` section defines a function named `normalize`. The `## Prepare` and `## Finish` sections each load it with `require '/helpers'` (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)) and call `normalize`. A `### Author note` section of prose nests under `## Prepare`, so the prompt has three `##` sections and `## Prepare` holds one nested section.
 
 ### Sections that run in sequence
 
