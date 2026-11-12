@@ -1,6 +1,6 @@
 # Blocks and prose
 
-The H1 body and every section body of a prompt are made of two kinds of blocks that alternate in file order: Lua blocks, which hold the prompt's logic, and prose blocks, which hold Markdown text. This chapter shows how you write each kind, which prose a Lua block can read, how [list sections](#list-sections) hand a list to Lua, and how a library shares its code through [`require`](#sharing-code-with-require). Knowing where each block starts and ends tells you exactly which Lua runs and which text can reach a model.
+The H1 body and every section body of a prompt are made of two kinds of blocks that alternate in file order: Lua blocks, which hold the prompt's logic, and prose blocks, which hold Markdown text. This chapter shows how you write each kind, which prose a Lua block can read, how [`prompt.section`](#reading-sections-with-promptsection-and-promptsection_or) reads another section's text, a list, or a fenced template, and how a library shares its code through [`require`](#sharing-code-with-require). Knowing where each block starts and ends tells you exactly which Lua runs and which text can reach a model.
 
 ## Lua fences and prose blocks
 
@@ -30,7 +30,7 @@ After.
 hello
 ````
 
-The section `## Main` holds three blocks in file order: a prose block `Before.`, a Lua block, and a prose block `After.`. The Lua block returns `hello`, which becomes the run result (see [Returning values](04-how-a-prompt-runs.md#returning-values)), and neither prose block runs anything or calls a model.
+The section `Main` holds three blocks in file order: a prose block `Before.`, a Lua block, and a prose block `After.`. The Lua block returns `hello`, which becomes the run result (see [Returning values](04-how-a-prompt-runs.md#returning-values)), and neither prose block runs anything or calls a model.
 
 A Lua fence is a fenced block that opens with a line of three backticks followed by `lua` and closes with a line of three backticks, and you usually place one under a section heading. A Lua block is the code one Lua fence holds, run as one unit (see [A Markdown file that is a program](01-what-a-prompt-is.md#a-markdown-file-that-is-a-program)). A prose block is a run of Markdown text outside the fences: before the first fence, between two fences, or after the last one.
 
@@ -94,7 +94,7 @@ A Lua block's source is exactly the text between its opening and closing fence l
 
 ### Prose blocks
 
-You write a section's instruction as plain prose under its heading, such as `Say "Hello, world!"` under `## Greet`. Double quotes, commas, and exclamation marks go in verbatim, without escaping, and a paragraph may wrap across several source lines.
+You write a section's instruction as plain prose under its heading, such as `Say "Hello, world!"` under `Greet`. Double quotes, commas, and exclamation marks go in verbatim, without escaping, and a paragraph may wrap across several source lines.
 
 Which text becomes a prose block follows a few rules:
 
@@ -128,7 +128,7 @@ return 'greeted'
 ```
 ````
 
-This prompt loads cleanly. When the run reaches `## Fallback`, the section runs no Lua and makes no model call.
+This prompt loads cleanly. When the run reaches `Fallback`, the section runs no Lua and makes no model call.
 
 ### When Lua blocks compile and run
 
@@ -184,7 +184,7 @@ return models.infer(prose)
 ```
 ````
 
-In `## Explain`, the first fence is the section's prologue, the prose after it is the section prose, and the second fence is the epilog, so the block sequence is exactly Lua, prose, Lua. The prompt has no `models:` block, so the epilog's `models.infer` runs on the model of the `default` role, which is the model the Host supplies (see [The current model](10-models.md#the-current-model)). The model is asked `Explain tides in one sentence.`, and its reply is the run result.
+In `Explain`, the first fence is the section's prologue, the prose after it is the section prose, and the second fence is the epilog, so the block sequence is exactly Lua, prose, Lua. The prompt has no `models:` block, so the epilog's `models.infer` runs on the model of the `default` role, which is the model the Host supplies (see [The current model](10-models.md#the-current-model)). The model is asked `Explain tides in one sentence.`, and its reply is the run result.
 
 This is the common section shape. The prologue runs before the prose and stores a value in `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)). The prose uses that value through a `{{ var.topic }}` placeholder. The epilog runs after the prose, reads the pending prose through `prose`, and sends the finished prose to a model with `return models.infer(prose)` (see [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer)).
 
@@ -379,7 +379,7 @@ Error messages name each Lua block with a location label that says where the blo
 | Any of those three section blocks, when another section heading has the same section name | ``section `{name}` (line {heading_abs_line}) prologue``, ``section `{name}` (line {heading_abs_line}) epilog``, or ``section `{name}` (line {heading_abs_line}) lua {ordinal}`` |
 | Any block in the H1 body | ``H1 `{title}` lua`` |
 
-`{name}` is the section name, the heading text without the `#` marks, `{heading_abs_line}` is the file line of the section's own heading (see [Sections that share a section name](05-lua-environment.md#sections-that-share-a-section-name)), and `{title}` is the H1 title. `{ordinal}` is the block's 1-based place among the section's Lua blocks, counting the prologue as 1, so the third Lua block of `## lib` is ``section `lib` lua 3``, as in the library error in [Where a library error points](#where-a-library-error-points). In a section of just two back-to-back fences, the second fence is labeled `epilog`, because the empty prose between them counts as prose. A malformed epilog makes the prompt fail to parse with parse error kind `Lua` and a message that names the section and its epilog, as in ``section `Transform` epilog`` in [When Lua blocks compile and run](#when-lua-blocks-compile-and-run).
+`{name}` is the section name, the heading text without the `#` marks, `{heading_abs_line}` is the file line of the section's own heading (see [Sections that share a section name](05-lua-environment.md#sections-that-share-a-section-name)), and `{title}` is the H1 title. `{ordinal}` is the block's 1-based place among the section's Lua blocks, counting the prologue as 1, so the third Lua block of `lib` is ``section `lib` lua 3``, as in the library error in [Where a library error points](#where-a-library-error-points). In a section of just two back-to-back fences, the second fence is labeled `epilog`, because the empty prose between them counts as prose. A malformed epilog makes the prompt fail to parse with parse error kind `Lua` and a message that names the section and its epilog, as in ``section `Transform` epilog`` in [When Lua blocks compile and run](#when-lua-blocks-compile-and-run).
 
 ## Pending prose and the `prose` global
 
@@ -506,7 +506,7 @@ return models.infer(prose)
 ```
 ````
 
-The prompt asks `Name one planet.` first, during the H1 pass, and then `Name one ocean.` from `## Answer`, and the result is the ocean reply. The H1 pass and each section keep separate pending prose buffers, so each reads only its own prose through `prose`, and prose written between `lua` fences in the H1 body collects into a buffer that `prose` reads the same way. H1 prose never drives inference on its own: on a Host that supplies no model, a prompt whose H1 prose stays unread still runs, while an H1 block running `return models.infer(prose)` fails there because the chain has no model (see [When a section has no model](10-models.md#when-a-section-has-no-model)).
+The prompt asks `Name one planet.` first, during the H1 pass, and then `Name one ocean.` from `Answer`, and the result is the ocean reply. The H1 pass and each section keep separate pending prose buffers, so each reads only its own prose through `prose`, and prose written between `lua` fences in the H1 body collects into a buffer that `prose` reads the same way. H1 prose never drives inference on its own: on a Host that supplies no model, a prompt whose H1 prose stays unread still runs, while an H1 block running `return models.infer(prose)` fails there because the chain has no model (see [When a section has no model](10-models.md#when-a-section-has-no-model)).
 
 ### What resets pending prose
 
@@ -850,7 +850,7 @@ Below the break.
 
 A `lua` fence below a break is still part of its section's content and stays live, because a break resets prose capture only and makes nothing reader-only, and prose below a break is ordinary pending Markdown. You can put a `---` break as a section's first content, as here, and the section runs like any other. A section body that holds a break followed by a `lua` fence still runs that fence when the section is called with `call` (see [Calling a section](08-jump-and-call.md#calling-a-section)), and a break inside a fanout worker section (see [Choosing the worker section](14-fanout.md#choosing-the-worker-section)) only resets its pending prose, as in any section. A heading below a break still starts a new section.
 
-A break stays in its section's raw Markdown and never ends the section, so [`prompt.section`](#reading-sections-with-promptsection-and-promptlist) returns the `---` line and the text on both sides of it verbatim, even though prose capture drops what sits above it. In a [list section](#list-sections), a break resets list capture as well as prose, so only the markers below the last break become items, as [Thematic breaks in a list section](#thematic-breaks-in-a-list-section) shows.
+A break stays in its section's raw Markdown and never ends the section, so [`prompt.section`](#reading-sections-with-promptsection-and-promptsection_or) returns the `---` line and the text on both sides of it verbatim, even though prose capture drops what sits above it. A [selector read](#reading-one-block-with-a-selector) sees the break as a block of its own, of kind `rule`.
 
 ### A break below the H1 title
 
@@ -933,7 +933,7 @@ Some prose
 More prose
 ````
 
-The fragment holds two sections: `## S`, and an H2 named `Some prose` whose prose is `More prose`. A `---` line directly under a text line is a setext heading underline rather than a thematic break, so it is never a reset point, and the text line above it becomes a heading instead.
+The fragment holds two sections: `S`, and an H2 named `Some prose` whose prose is `More prose`. A `---` line directly under a text line is a setext heading underline rather than a thematic break, so it is never a reset point, and the text line above it becomes a heading instead.
 
 A break needs a blank line before it. With a blank line between `Some prose` and the `---`, the `---` is an ordinary break:
 
@@ -947,7 +947,7 @@ Some prose
 More prose
 ````
 
-Now `## S` is one section, and its pending prose is `More prose`.
+Now `S` is one section, and its pending prose is `More prose`.
 
 A line of text underlined with `===` is a second H1, and a prompt must contain exactly one H1 title (see [The H1 title and H1 body](02-file-structure.md#the-h1-title-and-h1-body)), so it fails the parse with parse error kind `Structure`:
 
@@ -1247,338 +1247,84 @@ section `{section}` epilog `lua` fence is not closed
 
 An unclosed `lua` fence under the H1 uses the same section wording with the H1 title as `{section}`, so under the H1 `# Open` it reads ``section `Open` prologue `lua` fence is not closed``. A backtick line indented by four spaces, or three backticks followed by other text, cannot close a `lua` fence, so the fence stays open and the parse fails with the not-closed message. An unclosed fence error names its section and phase in the message, and like a rule error it points at a line, at column 1: the line where the fence opens, so `unclosed` reports line 11.
 
-## List sections
+## Reading sections with `prompt.section` and `prompt.section_or`
 
-You can write a list section, predict exactly which items it holds, and fix the one parse error a list section can raise.
-
-````markdown
----
-name: topic_list
-description: Reads the items of a list section.
-runvil: 0
----
-
-# Topic list
-
-## Main
-
-```lua
-return table.concat(prompt.list('## Topics'), ', ')
-```
-
-## Topics
-
-- alpha
-- beta
-- gamma
-````
-
-````text
-alpha, beta, gamma
-````
-
-`## Topics` is a list section. You build one from a heading followed by a bulleted list, writing one item per line, each line starting with a `- ` marker followed by the item text. A heading whose body is only a bullet list is a list section, and the parser treats it as a construct of its own. You fill its body with bullet items that each have text.
-
-When the prompt file is parsed, the parser strips the marker from each line of a list section and keeps the remaining text as the section's items, in source order, one item per bullet line. Every other section has no items. `prompt.list` hands a section's items to Lua, as [Reading sections with `prompt.section` and `prompt.list`](#reading-sections-with-promptsection-and-promptlist) explains, and here it lets `## Main` return them joined with commas.
-
-### Writing list markers
-
-Each item line starts with one of four markers, and each marker includes its space:
-
-- `- `, a dash and a space, as in `- item`
-- `* `, an asterisk and a space, as in `* item`
-- `N. `, digits, a period, and a space, as in `1. item`
-- `N) `, digits, a closing parenthesis, and a space, as in `1) item`
-
-In the two ordered markers, `N` is one or more digits. Every marker is stripped from the item text, so each of the four example lines gives the item `item`.
-
-````markdown
----
-name: mixed_markers
-description: Mixes all four list markers in one list section.
-runvil: 0
----
-
-# Mixed markers
-
-## Main
-
-```lua
-return table.concat(prompt.list('## Steps'), ', ')
-```
-
-## Steps
-
-- alpha
-* beta
-7. gamma
-3) delta
-````
-
-````text
-alpha, beta, gamma, delta
-````
-
-One list can mix all four markers, so unordered bullets and ordered numbered markers sit side by side in one list section. Item numbers are never checked for order or starting value. Any run of ASCII digits works as the marker number, so ordered items need not start at 1 or run in sequence, and `7.` followed by `3)` is a fine list.
-
-Only `-`, `*`, or a run of ASCII digits can open a list marker. A line that opens with any other character is prose, and that one line keeps its section from being a list section.
-
-### How a line becomes item text
-
-The parser trims each line's leading indentation and trailing whitespace before it checks for a marker, so an indented bullet still counts as a marker. An item's text is the rest of the line after the marker and its one separating space, so `- item` and `1. item` both give `item`.
-
-````markdown
----
-name: item_text
-description: Shows how list lines turn into item text.
-runvil: 0
----
-
-# Item text
-
-## Main
-
-```lua
-return '[' .. table.concat(prompt.list('## Notes'), '][') .. ']'
-```
-
-## Notes
-
-- first
-  - looks nested
-
--   wide
-- 1. step
-````
-
-````text
-[first][looks nested][  wide][1. step]
-````
-
-Each line in `## Notes` shows one rule:
-
-- Indentation never nests list items. The indented `- looks nested` line is one more item in a single flat list.
-- Blank lines and whitespace-only lines between items are ignored and produce no items.
-- Only the first space after the marker is removed. Any extra spaces stay at the start of the item text, so `-   wide` gives an item that starts with two spaces.
-- The marker is stripped once. An item whose text itself starts with another marker keeps that marker as text, so `- 1. step` gives the item `1. step`.
-
-A marker needs a literal space between it and the item text. Each of these lines is ordinary prose, and any one of them in a section keeps that section from being a list section:
-
-| Line | Why it is prose |
-|---|---|
-| `-item` | no space after the dash |
-| `1.foo` | no space after the period |
-| a marker followed by a tab, as in `-<tab>item` or `1.<tab>item` | a tab is not a space |
-| `2026 was busy` | the digits are not followed by a period or a closing parenthesis |
-
-### Which sections are list sections
-
-A section is a list section exactly when it has no Lua blocks and every nonblank line of its prose is a list marker line. The same marker rules decide both whether a section is a list and what its items are, so a section detected as a list never fails because the two disagree about a marker.
-
-List sections live under H2 through H6 headings. Their items are parsed when the prompt loads, before any code runs, at any heading depth, so Lua can read them by heading. A list H3 under an H2 works the same way as a top-level list, and its parent H2 can have its own prose before the list heading:
-
-````markdown
----
-name: kid_list
-description: Reads a list H3 that has a child section of its own.
-runvil: 0
----
-
-# Kid list
-
-## Main
-
-Main reads the list in its child section.
-
-```lua
-return table.concat(prompt.list('### Kid'), ', ')
-```
-
-### Kid
-
-- kid-one
-- kid-two
-
-#### Grand
-
-- grand-item
-````
-
-````text
-kid-one, kid-two
-````
-
-You fill a list H3 like `### Kid` with list marker lines only, with no other content. A list section can also have [child sections](02-file-structure.md#section-headings-and-nesting) of its own. Their content is not part of its body, so `### Kid` stays a list, and its items leave out the `- grand-item` bullet of its child `#### Grand`.
-
-Every other section is a prose section with no items:
-
-- A section whose body is ordinary prose with one incidental bullet line stays a prose section with no list items. Any other line keeps the whole section as prose, and the bullet line stays part of that section's prose text. The same holds for a section that mixes prose with a few bullets.
-- A section that contains any Lua block is never a list section, however its prose looks. Adding a `lua` fence to a section that would otherwise be all bullets makes it an ordinary section that keeps its bullets as ordinary prose. A [worker section](14-fanout.md#choosing-the-worker-section) is ordinary in the same way: a `### Worker` holding a fence with `return item` and the line `Do work on {{ item }}.` has no items.
-- A section whose prose is empty or only whitespace is an empty prose section, not a list section.
-- The [H1 body](02-file-structure.md#the-h1-title-and-h1-body) is never a list section and has no items, so bullets there stay ordinary H1 prose.
-
-Added to the previous prompt, this section is a prose section, bullet included:
-
-````markdown
-## Context
-
-Here is context.
-- one incidental bullet
-More prose follows.
-````
-
-### Thematic breaks in a list section
-
-A [thematic break](#thematic-breaks-and-setext-headings) resets list item capture, just as it resets pending prose. Marker lines above the last break are commentary, and only the marker lines below the last break become items:
-
-````markdown
----
-name: list_break
-description: Keeps commentary out of a list with a thematic break.
-runvil: 0
----
-
-# List break
-
-## Main
-
-```lua
-return table.concat(prompt.list('## Items'), ', ')
-```
-
-## Items
-
-Draft notes about this list.
-
-- alpha
-
----
-
-- beta
-- gamma
-````
-
-````text
-beta, gamma
-````
-
-The every-line-is-a-marker rule applies only to the lines below the last break, because those are the only lines the section captures as prose. The prose line and the bullet above the break in `## Items` don't stop it from being a list section. A list that opens with a break, such as `---` followed by `- alpha` and `- beta`, keeps every marker line below the break as items, here `alpha` and `beta`, and still counts as a list section.
-
-### The empty item error
-
-A list section fails to load only when one of its items has no text:
-
-````markdown
----
-name: empty_item
-description: A list H3 with an empty item between two good ones.
-runvil: 0
----
-
-# Empty item
-
-## Parent
-
-Parent prose.
-
-### Items
-
-- alpha
--
-- gamma
-````
-
-The parse fails with kind `List` and this message, and the error points at the empty marker, line 16, column 1:
-
-````text
-empty bullet item in list section `Items`
-````
-
-A bare marker with no text, such as `-`, `*`, `1.`, or `1)`, is an empty marker, and so is a marker followed only by whitespace, such as `1. ` or a `- ` line with nothing after it. A section made only of marker lines that includes an empty one is still a list section, so the parser reports the empty marker instead of quietly turning the section into prose. The message is `` empty bullet item in list section `{section}` `` whatever the section is named, with its name in place of `{section}`.
-
-A prose line never causes this error, because a prose line makes the section ordinary prose instead. Parsing stops at the first empty item, so you see only the first one in a section. Because a list section's bullets are parsed into items when the prompt loads, an empty item stops the prompt before any of it runs.
-
-### List sections at run time
-
-The [section walk](04-how-a-prompt-runs.md#the-section-walk) still reaches a list section like any other section, and with no Lua in it, nothing runs there. A list section also never has to run for another section to read its items, because the items were parsed when the prompt loaded. In the first example, `## Main` returns before the walk ever reaches `## Topics`, yet it reads all three items.
-
-A list section cannot be a [worker section](14-fanout.md#choosing-the-worker-section), so naming one as the worker section fails with a message that names it:
-
-````text
-section `Items` is a list section, not a worker template
-````
-
-## Reading sections with `prompt.section` and `prompt.list`
-
-You can read another section's list items or raw Markdown from Lua, and know what each read returns when the section isn't there.
+You can read another section's raw Markdown, or one block of it such as a list or a fenced template, and know what each read does when the section or the block isn't there.
 
 ````markdown
 ---
 name: prompt_reads
-description: Reads a sibling list section and a child list section.
+description: Reads a child's text, a fenced template, and a list.
 runvil: 0
 ---
 
 # Prompt reads
 
-## Main
+## Write
 
 ```lua
-local nums = prompt.list('## Nums')
-local kids = prompt.list('### Kid')
-return table.concat(nums, ',') .. '|' .. table.concat(kids, ',')
+local style = prompt.section('house_style')
+local template = prompt.section('Template', 'fence markdown').text
+local topics = prompt.section('Topics', 'list').items
+return style .. '|' .. template .. '|' .. table.concat(topics, ',')
 ```
 
-### Kid
+### house_style
 
-- kid-one
-- kid-two
+Short sentences. No hype.
 
-#### Grand
+### Template
 
-- grand-item
+Fill in this outline.
 
-## Nums
+```markdown
+# Title
+```
 
-1. one
-2. two
-3. three
+### Topics
+
+- allocators
+- coroutines
 ````
 
 ````text
-one,two,three|kid-one,kid-two
+Short sentences. No hype.|# Title|allocators,coroutines
 ````
 
-You read other sections through the `prompt` global, a table that holds two functions, `prompt.section` and `prompt.list`. The Engine installs `prompt` in every section's Lua and in the H1's Lua. Each read names its target with a [heading reference](02-file-structure.md#heading-references) made of the target's `#` markers, a space, and its name, such as `'### Kid'` for a level-3 section or `'## Nums'` for a level-2 section.
+You read other sections through the `prompt` global, a table that holds two functions, `prompt.section` and `prompt.section_or`. The Engine installs `prompt` in every section's Lua and in the H1's Lua. Each read names its target with a [section path](02-file-structure.md#section-paths): a relative path for a neighbor, such as `'Topics'` for a child or `'../Review'` for a sibling, or a path from the top for any section, such as `'/Write/Template'`.
 
-### Reading list items with `prompt.list`
+Each function has two forms:
 
-`prompt.list(heading)` returns a list section's items as a Lua sequence of strings in document order. The items were already parsed into separate strings when the prompt loaded, so the read hands them over as they are. A section that is not a list has no items.
+| Call | Returns |
+|---|---|
+| `prompt.section(path)` | the section's own raw Markdown, as a string |
+| `prompt.section(path, selector, n?)` | one block of the section, as a table |
+| `prompt.section_or(path)` | the same string, or `nil` when no section has the path |
+| `prompt.section_or(path, selector, n?)` | the same block, or `nil` when the section or the block is not there |
 
-`prompt.list` strips the marker from each item. It removes the `- ` from each item of a bulleted list, so `- kid-one` and `- kid-two` read as `'kid-one'` and `'kid-two'`, and it removes the number marker such as `1. ` from each item of a numbered list, so `1. one`, `2. two`, and `3. three` read as `'one'`, `'two'`, and `'three'`. In the example, `prompt.list('## Nums')` returns `{'one', 'two', 'three'}` and `prompt.list('### Kid')` returns `{'kid-one', 'kid-two'}`.
-
-The list `prompt.list` returns is a plain Lua table, so `#`, indexing, and `table.concat` work on it, as in `#kids == 2 and kids[1] == 'kid-one'`. It holds only the section's own items and leaves out items in its child sections, so `### Kid` gives two items even though its child `#### Grand` holds `- grand-item`.
-
-Because the result is an ordinary sequence of strings, `tasks.fanout` accepts it as its [collection](14-fanout.md#collections-and-member-order), as in `tasks.fanout("### Worker", prompt.list("### Topics"))`. Inside a fanout [arm](14-fanout.md#what-an-arm-sees), `prompt.list` reads a list section's items the same way, so a section whose prose is `- x` and `- y` reads as `{'x', 'y'}`.
+The two functions take the same arguments and find the same thing. They differ only when it is not there: `prompt.section` raises, and `prompt.section_or` returns `nil`.
 
 ### Reading raw Markdown with `prompt.section`
 
-`prompt.section(heading)` returns a visible section's own raw Markdown body as a string. Replace the block of `## Main` in the previous prompt with this one:
+`prompt.section(path)` returns a section's own raw Markdown body as a string. Replace the block of `Write` in the previous prompt with this one:
 
 ````markdown
-## Main
+## Write
 
 ```lua
-return prompt.section('### Kid')
+return prompt.section('Template')
 ```
 ````
 
 ````text
-- kid-one
-- kid-two
+Fill in this outline.
+
+```markdown
+# Title
+```
 ````
 
-A section's own raw Markdown runs from just after its heading line to the next heading of any level. It leaves out the section's own heading line and its child sections, headings and content alike, and it trims leading blank lines and trailing whitespace. That is why `### Kid` reads as `'- kid-one\n- kid-two'`, with no heading text and nothing from its child `#### Grand`. On a list section, `prompt.section` returns the raw list Markdown with its markers, so `prompt.section('## Nums')` returns `'1. one\n2. two\n3. three'`.
+A section's own raw Markdown runs from just after its heading line to the next heading of any level. It leaves out the section's own heading line and its child sections, headings and content alike, and it trims leading blank lines and trailing whitespace. A child section is a section of its own, read by its own path, so `prompt.section('/Write')` returns only the `lua` fence of `Write`, with nothing from `house_style`, `Template`, or `Topics`. A `#` line inside a fence is not a heading, so the `# Title` line stays part of `Template`.
 
 Apart from that trimming, the body comes back byte for byte, and nothing in it runs or renders:
 
@@ -1594,7 +1340,7 @@ runvil: 0
 ## Main
 
 ```lua
-return prompt.section('## Rules')
+return prompt.section('../Rules')
 ```
 
 ## Rules
@@ -1626,30 +1372,149 @@ var.never = 'run'
 Closing line with {{ args }}.
 ````
 
-The result keeps the first line's leading indentation and the blank lines inside the body, and drops only the blank lines that separate the body from its heading and from the next heading. Inline Markdown such as `**bold**` and backtick code comes back raw, not rendered. The `lua` fence comes back as text, and the read does not run it. The `{{ args }}` [placeholder](07-substitution.md#placeholders-in-prose) comes back literally, without substitution. The thematic break stays in the Markdown too, even though the break resets the section's prose and list capture, as [A break never ends a section](#a-break-never-ends-a-section) explains.
+The result keeps the first line's leading indentation and the blank lines inside the body, and drops only the blank lines that separate the body from its heading and from the next heading. Inline Markdown such as `**bold**` and backtick code comes back raw, not rendered. The `lua` fence comes back as text, and the read does not run it. The `{{ args }}` [placeholder](07-substitution.md#placeholders-in-prose) comes back literally, without substitution. The thematic break stays in the Markdown too, even though the break resets the section's prose, as [A break never ends a section](#a-break-never-ends-a-section) explains.
 
-The result is a Lua string that string methods work on, such as `text:find('Mine text.', 1, true)`.
+The result is a Lua string that string methods work on, such as `text:find('Mine text.', 1, true)`. A section with nothing under its heading reads as the empty string `''`.
 
-### Which sections a read can see
+A read performs no effect and moves nothing. It does not consume the pending prose of the section it reads, and the walk continues where it was.
 
-A read searches only the caller's visible set, which is the caller's siblings, minus the caller itself, plus its own direct children. `prompt.section` and `prompt.list` find their target with the same heading lookup that other heading-taking features share, and [Resolving heading references](08-jump-and-call.md#resolving-heading-references) gives the full visible set rules.
+### Reading one block with a selector
+
+`prompt.section(path, selector)` reads one block of a section instead of its whole text. A block is one top-level piece of the section's own Markdown, and a selector is a string that names a kind of block:
+
+| Selector | Picks | Fields of the block |
+|---|---|---|
+| `'prose'` | a run of ordinary Markdown: paragraphs, block quotes, and anything that is no other kind | `text` |
+| `'fence'` | a fenced code block | `lang`, `info`, `text` |
+| `'fence markdown'` | a fence whose language is `markdown`, and likewise for any other language | `lang`, `info`, `text` |
+| `'fence ""'` | a fence with no language | `lang`, `info`, `text` |
+| `'list'` | a bulleted or numbered list | `ordered`, `items` |
+| `'rule'` | a thematic break | none |
+
+The block comes back as a plain Lua table built for the call, and you read its fields by name, as `prompt.section('Template', 'fence markdown').text` does in the first prompt. Every block also has `kind`, the kind's name as a string, and `line`, the line of the prompt file the block starts on. These are the blocks [`markdown.parse`](05-lua-environment.md#parsing-markdown-with-markdown) produces, and that section gives the full rules for each kind.
+
+A fence's `text` is the lines between its two fence lines, without the final line ending. Its `info` is the text after the opening fence, and `lang` is the first word of `info`, or `''` when the fence has none. The language is compared exactly and case-sensitively. A `lua` fence is a fence like any other: its `lang` is `lua` and its `text` is the source, which the read does not run.
+
+With no index, the selector must match exactly one of the section's own blocks. When it matches several, pass an index as the third argument, where `1` is the first match and `-1` is the last:
 
 ````markdown
 ---
-name: visible_reads
-description: Shows which sections Main can read.
+name: selectors
+description: Picks blocks of a section by kind, language, and index.
 runvil: 0
 ---
 
-# Visible reads
+# Selectors
+
+## Main
+
+```lua
+local first = prompt.section('Samples', 'fence', 1)
+local last = prompt.section('Samples', 'fence', -1)
+local data = prompt.section('Samples', 'fence json')
+local plain = prompt.section('Samples', 'fence ""')
+return first.lang .. '|' .. last.lang .. '|' .. data.text .. '|' .. plain.text .. '|' .. data.line
+```
+
+### Samples
+
+Three samples.
+
+```json
+{ "ok": true }
+```
+
+```
+plain text
+```
+
+```yaml
+ok: true
+```
+````
+
+````text
+json|yaml|{ "ok": true }|plain text|23
+````
+
+`Samples` holds one prose block and three fences. `'fence json'` and `'fence ""'` each match one fence, so they need no index, and `data.line` is 23, the line of the prompt file where the `json` fence opens. `'fence'` alone matches all three, so it needs the index. Without one, the read raises and says how many blocks matched and where:
+
+````text
+prompt.section: selector "fence" matches 3 blocks, at lines 23, 27, and 31; add an index, such as 1 for the first
+````
+
+A selector looks only at the section's own content. A block inside a child section belongs to the child, and you read it by the child's path. The kinds `section` and `frontmatter` exist for `markdown.parse` and are refused here, because a section's own content never holds either.
+
+### Reading a list
+
+A list is a `list` block, wherever it sits in a section, and the language has no other notion of a list. `prompt.section(path, 'list').items` gives the items as a Lua sequence of strings in document order, as `prompt.section('Topics', 'list').items` gives `{'allocators', 'coroutines'}` in the first prompt.
+
+````markdown
+---
+name: list_items
+description: Reads the items of two lists in one section.
+runvil: 0
+---
+
+# List items
+
+## Main
+
+```lua
+local bullets = prompt.section('Notes', 'list', 1)
+local steps = prompt.section('Notes', 'list', 2)
+return json.encode(bullets.items) .. '|' .. tostring(bullets.ordered) .. '|'
+  .. json.encode(steps.items) .. '|' .. tostring(steps.ordered)
+```
+
+### Notes
+
+Keep these in mind.
+
+- first
+  - nested
+-
+- last
+
+1. draft
+2. review
+````
+
+````text
+["first\n- nested","","last"]|false|["draft","review"]|true
+````
+
+Each part of that result is one rule:
+
+- The marker is removed from each item. A bulleted list and a numbered list read the same way, and the block's `ordered` field is `true` for a numbered one.
+- A nested bullet stays in its parent's item. An item that spans lines or holds nested content keeps it as raw Markdown in one string, so `- first` with `- nested` indented under it is the single item `'first\n- nested'`.
+- A bullet with no content is the item `''`.
+- A change of marker starts a new list, so the bullets and the numbered steps are two lists, and a section with two lists needs an index.
+- The list sits beside the prose line `Keep these in mind.` and is still found, because the selector picks the list and not the section.
+
+The `items` table is a plain Lua table, so `#`, indexing, and `table.concat` work on it. It is an ordinary sequence of strings, so `tasks.fanout` accepts it as its [collection](14-fanout.md#collections-and-member-order), as in `tasks.fanout('Worker', prompt.section('Topics', 'list').items)`.
+
+A section that holds only a list is an ordinary section. The [section walk](04-how-a-prompt-runs.md#the-section-walk) reaches it like any other section, and with no Lua in it, nothing runs there. It never has to run for another section to read its list: in the first prompt, `Write` returns before the walk reaches any other section, yet it reads both topics.
+
+### Which sections a read can name
+
+A read can name any section in the prompt. A relative path names a neighbor of the section the read is written in, and a path from the top names any section, the same one from everywhere:
+
+````markdown
+---
+name: read_paths
+description: Shows which paths name a section from Main.
+runvil: 0
+---
+
+# Read paths
 
 ## Main
 
 ```lua
 local seen = {}
-for _, heading in ipairs({ '### Kid', '## Nums', '#### Grand', '### Niece', '## Main', '## Kid' }) do
-  local text = prompt.section(heading)
-  seen[#seen + 1] = heading .. ': ' .. (text and 'found' or 'nil')
+for _, path in ipairs({ 'Kid', '../Nums', 'Grand', '/Main/Kid/Grand', '/Other/Niece', '/Main', '../Main' }) do
+  seen[#seen + 1] = path .. ': ' .. (prompt.section_or(path) and 'found' or 'nil')
 end
 return table.concat(seen, '\n')
 ```
@@ -1679,24 +1544,27 @@ Other prose.
 ````
 
 ````text
-### Kid: found
-## Nums: found
-#### Grand: nil
-### Niece: nil
-## Main: nil
-## Kid: nil
+Kid: found
+../Nums: found
+Grand: nil
+/Main/Kid/Grand: found
+/Other/Niece: found
+/Main: found
+../Main: nil
 ````
 
-From `## Main`, a sibling section and a direct child section are both visible, so the sibling `## Nums` and the child `### Kid` both return content. Everything else reads as `nil`, from `prompt.list` as well as from `prompt.section`:
+From `Main`:
 
-- `#### Grand` is a grandchild, a child of `### Kid`.
-- `### Niece` is a niece, meaning a child of a sibling, here of `## Other`. The read returns `nil` without raising, so a `pcall` around it returns ok.
-- `## Main` is the caller's own heading.
-- `## Kid` names the visible child `### Kid` at the wrong level. A read matches both the marker count and the name.
+- `Kid` is a direct child and `Nums` is a sibling, so each relative path finds its section.
+- `Grand` is a grandchild. `Main` has no child of that name, so the relative path `'Grand'` names nothing, and the path from the top `'/Main/Kid/Grand'` reads it.
+- `Niece` is a child of the sibling `Other`, and `'/Other/Niece'` reads it.
+- `'/Main'` is the running section itself. A section can read its own text, and its ancestors', by a path from the top. `'../Main'` names nothing, because a section is not its own sibling.
+
+A read is not held to the [visible set](08-jump-and-call.md#the-visible-set) that `call` and `jump` are, because a read runs nothing and leaves the walk where it is. A shared section therefore has one path at every depth: a worker nested anywhere reads a top-level `Templates` section as `prompt.section('/Templates', 'fence markdown')`. `prompt` has no read for the H1 body or the frontmatter.
 
 ### Reads from the H1 and from libraries
 
-Both reads work in the H1 body too, where the visible set is every top-level section and no child section:
+Both reads work in the H1 body too. There a relative path names a top-level section, since those are the H1's children, and a path from the top names any section:
 
 ````markdown
 ---
@@ -1708,21 +1576,21 @@ runvil: 0
 # H1 reads
 
 ```lua
-var.nums = table.concat(prompt.list('## Nums'), ',')
-var.main = tostring(prompt.section('## Main') ~= nil)
-var.kid = tostring(prompt.section('### Kid'))
+var.nums = table.concat(prompt.section('Nums', 'list').items, ',')
+var.main = tostring(prompt.section_or('Main') ~= nil)
+var.kid = tostring(prompt.section_or('Kid'))
+var.deep = prompt.section('/Main/Kid')
 ```
 
 ## Main
 
 ```lua
-return var.nums .. '|' .. var.main .. '|' .. var.kid
+return var.nums .. '|' .. var.main .. '|' .. var.kid .. '|' .. var.deep
 ```
 
 ### Kid
 
-- kid-one
-- kid-two
+Kid notes.
 
 ## Nums
 
@@ -1732,63 +1600,23 @@ return var.nums .. '|' .. var.main .. '|' .. var.kid
 ````
 
 ````text
-one,two,three|true|nil
+one,two,three|true|nil|Kid notes.
 ````
 
-From the H1, `prompt.list` reads the top-level list section `## Nums`, `prompt.section('## Main')` returns a top-level section's text, and `prompt.section('### Kid')` returns `nil` for a child section. The H1 keeps what it found in [`var`](05-lua-environment.md#keeping-state-in-var), and `## Main` reads it from there.
+From the H1, `prompt.section('Nums', 'list')` reads the list in the top-level section `Nums`, and `prompt.section_or('Main')` finds a top-level section. `prompt.section_or('Kid')` returns `nil`, because `Kid` is not a child of the H1, and the path from the top `'/Main/Kid'` reads it. The H1 keeps what it found in [`var`](05-lua-environment.md#keeping-state-in-var), and `Main` reads it from there.
 
-A read inside a [library](#sharing-code-with-require) section resolves over the visible set of the section that runs it. That holds both when the library loads and when a caller later calls a function the library defined:
+A `prompt.section` read in the H1 body doubles as a check that the prompt has the sections it needs, made before any section runs: an uncaught miss there fails the [H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate).
 
-````markdown
----
-name: kid_reader
-description: Reads a child list through a library from the H1 and from Main.
-runvil: 0
----
+A read written in a [library](#sharing-code-with-require) section starts at the library, not at the section that is using it, so a library reads its own children and siblings by relative paths. [A library names its own sections](#a-library-names-its-own-sections) covers the rule.
 
-# Kid reader
+### What a read does on a miss
 
-```lua
-require '## kid_reader'
-var.h1 = tostring(kids_at_load) .. '|' .. tostring(kid_items())
-```
-
-## Main
-
-```lua
-require '## kid_reader'
-return var.h1 .. '|' .. table.concat(kids_at_load, ',') .. '|' .. table.concat(kid_items(), ',')
-```
-
-### Kid
-
-- kid-one
-- kid-two
-
-## kid_reader
-
-```lua
-kids_at_load = prompt.list('### Kid')
-function kid_items()
-  return prompt.list('### Kid')
-end
-```
-````
-
-````text
-nil|nil|kid-one,kid-two|kid-one,kid-two
-````
-
-`## kid_reader` calls `prompt.list('### Kid')` once while it loads and again inside `kid_items()`. Used from the H1, which sees no child section, both calls read `nil`. Used from `## Main`, the parent of `### Kid`, both read the items `kid-one` and `kid-two`.
-
-### What a read returns for a miss
-
-A read of a well-formed heading that names no visible section returns `nil` instead of raising a not-found error:
+When its path names no section, `prompt.section` raises the [not-found error](08-jump-and-call.md#the-not-found-error), the same error `call` raises for the same path. `prompt.section_or` returns `nil` instead:
 
 ````markdown
 ---
 name: read_misses
-description: Shows that a missed read returns nil while a missed call raises.
+description: Shows what each read does when no section has the path.
 runvil: 0
 ---
 
@@ -1797,67 +1625,58 @@ runvil: 0
 ## Main
 
 ```lua
-local found = {}
-for _, read in ipairs({ prompt.section, prompt.list }) do
-  local ok, value = pcall(read, '## Missing')
-  found[#found + 1] = tostring(ok) .. ':' .. tostring(value)
-end
-local call_ok = pcall(call, '## Missing')
-return table.concat(found, ',') .. '|' .. tostring(call_ok)
+local strict_ok = pcall(prompt.section, '../Missing')
+local lenient_ok, value = pcall(prompt.section_or, '../Missing')
+local call_ok = pcall(call, '../Missing')
+local style = prompt.section_or('/house_style') or 'Plain sentences.'
+return tostring(strict_ok) .. '|' .. tostring(lenient_ok) .. ':' .. tostring(value) .. '|' .. tostring(call_ok) .. '|' .. style
 ```
 ````
 
 ````text
-true:nil,true:nil|false
+false|true:nil|false|Plain sentences.
 ````
 
-`prompt.section` and `prompt.list` are plain functions, so you can store them in a table and pass them to `pcall` with a target argument, as this loop does. A heading that no section has, such as `'## Missing'`, reads as `nil` from both reads without raising, because a missing heading and a heading outside the visible set are not treated as mistakes.
+`prompt.section` and `prompt.section_or` are plain functions, so you can pass them to `pcall` with their arguments, as this block does. The strict read fails at the line of the read, with a message that says what is missing, here ``section `../Missing` not found: `/Main` has no sibling `Missing` ``. That is the text `call('../Missing')` raises from the same section. Reach for `prompt.section_or` when a section is optional, and give it a default with `or`, as the `style` line does.
 
-A section outside the caller's visible set reads as `nil` the same way. A sibling of the caller's parent is one such section, so from a `### Worker` under `## Research`, the call `prompt.section('## house_style')` returns `nil`. `prompt.list` likewise returns `nil` instead of raising when no section text is found for the target.
+The selector forms treat a missing block the same way:
 
-This is where the reads differ from [`call`](08-jump-and-call.md#calling-a-section). `call` raises a not-found error when no visible section has the heading, so `pcall(call, '## Missing')` fails while `pcall(read, '## Missing')` returns ok with `nil`. [`jump`](08-jump-and-call.md#jumping-to-a-section) treats a miss the same way `call` does.
+| Outcome | `prompt.section` | `prompt.section_or` |
+|---|---|---|
+| The path names no section | raises | `nil` |
+| The selector matches no block, or fewer blocks than the index asks for | raises | `nil` |
+| The selector matches several blocks and no index is given | raises | raises |
+| The path, selector, or index is malformed | raises | raises |
 
-Because `prompt.list` returns `nil` when no visible section has the heading, passing its result straight to `tasks.fanout` raises the collection error, whose message says `use prompt.list(heading), which returns nil when no visible section has that heading`.
+The first two rows are things that are absent. The last two are a choice that only an index can make and a mistake in the call, and both functions raise for them. So an optional block reads as `local fence = prompt.section_or('Extras', 'fence json')`, which is `nil` when `Extras` is missing and when it has no `json` fence. An index that runs past the last match is an absence too, so a loop can count upward with `prompt.section_or(path, 'fence', n)` until it returns `nil`.
+
+A name built at run time can act as a key: `prompt.section_or('/Vendors/' .. vendor)` is `nil` for a vendor with no section. The name is a path step like any other, so a `/` or a `\` in it must be escaped, and an empty name makes the path malformed, which raises.
 
 ### Errors a read raises
 
-An empty section is not a miss. It reads differently through each function:
+An empty section is not a miss. `prompt.section` on it returns the empty string `''`, and a selector finds no block in it.
 
-````markdown
----
-name: empty_reads
-description: Reads an empty section both ways.
-runvil: 0
----
+Each row below raises a Lua error that [`pcall`](05-lua-environment.md#raising-and-catching-errors) can catch. The last two are misses, which only `prompt.section` raises. Every other row raises from `prompt.section_or` too, with `prompt.section_or` in place of `prompt.section` at the start of the message:
 
-# Empty reads
+| Call | Message |
+|---|---|
+| `prompt.section(42)` | `section target must be a string, got integer` |
+| `prompt.section('Kid/Grand')` | `section path "Kid/Grand" has more than one name; a relative path is a child's name, or "../" and a sibling's name`, and the other messages in [Malformed section paths](02-file-structure.md#malformed-section-paths) |
+| `prompt.section('Samples', 42)` | `prompt.section: selector must be a string, got integer` |
+| `prompt.section('Samples', 'fences')` | `prompt.section: unknown kind "fences"; kinds are frontmatter, section, prose, fence, list, rule` |
+| `prompt.section('Samples', 'list lua')` | `prompt.section: only a fence selector takes a language, got "list lua"` |
+| `prompt.section('Samples', 'fence a b')` | `prompt.section: a fence selector takes one language, got "fence a b"` |
+| `prompt.section('Samples', 'section')` | `prompt.section: a section's own content has no subsections; name a subsection by its own path` |
+| `prompt.section('Samples', 'frontmatter')` | `prompt.section: a section's own content has no frontmatter` |
+| `prompt.section('Samples', 'fence')`, with three fences | `prompt.section: selector "fence" matches 3 blocks, at lines 23, 27, and 31; add an index, such as 1 for the first` |
+| `prompt.section('Samples', 'fence', 0)` | `prompt.section: index must be a nonzero integer, got 0` |
+| `prompt.section('Samples', nil, 1)` | `prompt.section: an index needs a selector before it` |
+| `prompt.section('Samples', 'list')`, with no list | ``prompt.section: no block in section `Samples` matches selector "list"`` |
+| `prompt.section('Samples', 'fence', 4)`, with three fences | ``prompt.section: selector "fence" matches 3 blocks in section `Samples`; there is no block 4`` |
 
-## Main
+The selector and the index are checked before the path is looked up, so a malformed one raises whether or not the section is there. A message names the section by the path you wrote, with its surrounding whitespace trimmed.
 
-```lua
-local text = prompt.section('## Empty')
-local ok = pcall(prompt.list, '## Empty')
-return '[' .. text .. ']|' .. tostring(ok)
-```
-
-## Empty
-````
-
-````text
-[]|false
-````
-
-`prompt.section` on an empty section returns the empty string `''`, which differs from the `nil` a miss returns. `prompt.list` on the same section raises an error whose message is `` section `## Empty` has no pre-parsed items ``.
-
-A read raises only when the call itself is wrong: a target that is not a string, a malformed heading, or `prompt.list` on a section without pre-parsed items. Each raises a Lua error that [`pcall`](05-lua-environment.md#raising-and-catching-errors) can catch:
-
-- A target that is not a string raises an error whose message names the type it received, such as `section target must be a string, got integer` for a number passed to either read.
-- A malformed heading raises an error. Malformed means a bare name with no `#` markers, a run of `#` markers with no name, or markers with no whitespace after them. A bare name gives a message that names the target, such as one containing `got bare name: Nums`, and markers with no whitespace after them give a message containing `must have whitespace after the ## markers`.
-- `prompt.list` on a visible section that has no pre-parsed list items raises an error that names the section's trimmed heading, in the form `` section `{heading}` has no pre-parsed items ``.
-
-A read trims surrounding whitespace from the target heading, so `prompt.list('  ## Rules  ')` resolves to `## Rules`, and its error message names the trimmed heading. When the Engine's section read fails inside `prompt.section` or `prompt.list`, the call raises a Lua error carrying the read's message.
-
-`prompt.section` reads a section that `prompt.list` refuses. The `## Rules` section from earlier holds a bullet, a `lua` fence, a thematic break, and prose, so `prompt.list('## Rules')` raises `` section `## Rules` has no pre-parsed items ``, and after that `prompt.section('## Rules')` still returns its text.
+`prompt` holds these two functions and nothing else. The read returns text or one block and never runs anything: reading a `lua` fence gives its source as a string, and the [sandbox](05-lua-environment.md#the-sandbox) has no way to load code from a string. To run a section's Lua, use [`call`](08-jump-and-call.md#calling-a-section) or [`require`](#sharing-code-with-require).
 
 ## Sharing code with `require`
 
@@ -1875,7 +1694,7 @@ runvil: 0
 ## Main
 
 ```lua
-require '## helpers'
+require '/helpers'
 return greet('main')
 ```
 
@@ -1892,19 +1711,19 @@ end
 hello main
 ````
 
-`## helpers` is a library: an ordinary section that other sections pull in with `require`. Nothing in the file marks it as a library. `require '## helpers'` runs the named section's Lua in the current block, and the globals it defines, such as the function `greet`, are callable in the requiring section right after the call.
+`helpers` is a library: an ordinary section that other sections pull in with `require`. Nothing in the file marks it as a library. `require '/helpers'` runs the named section's Lua in the current block, and the globals it defines, such as the function `greet`, are callable in the requiring section right after the call.
 
-A typical library section holds only a `lua` fence of global function definitions and sits after the section that returns the run result, as `## helpers` does here. A library section can sit later in the file than the H1 or the sections that require it. When the [section walk](04-how-a-prompt-runs.md#the-section-walk) does reach a library in document order, it runs it under the normal section rules, as [Libraries on the section walk](#libraries-on-the-section-walk) shows.
+A typical library section holds only a `lua` fence of global function definitions and sits after the section that returns the run result, as `helpers` does here. A library section can sit later in the file than the H1 or the sections that require it. When the [section walk](04-how-a-prompt-runs.md#the-section-walk) does reach a library in document order, it runs it under the normal section rules, as [Libraries on the section walk](#libraries-on-the-section-walk) shows.
 
 ### Calling `require`
 
-`require` names its library by the section's [heading reference](02-file-structure.md#heading-references), written exactly as the heading appears with its `#` marks included, as in `require '## helpers'` or `require '### helpers'`. Lua's string-call form without parentheses works, and so do `require('## helpers')` and `pcall(require, '## a')`. You can call `require` from the H1 body's block and from any section's block.
+`require` names its library by a [section path](02-file-structure.md#section-paths) from the top of the prompt, as in `require '/helpers'` for a top-level section or `require '/Main/helpers'` for a section nested under `Main`. Lua's string-call form without parentheses works, and so do `require('/helpers')` and `pcall(require, '/a')`. You can call `require` from the H1 body's block and from any section's block.
 
 Any section with a Lua block can serve as a library, whether it holds only Lua or prose followed by a Lua block. `require` loads every `lua` fence of the named section and runs them one after another in document order.
 
-`require` takes the heading of a library section within reach in the prompt. It loads sections only, never a file from disk or native code, and it reads its argument as a section heading every time, so Lua's `os` and `package` tables stay `nil` however you call it.
+`require` takes the path of a section in the prompt. It loads sections only, never a file from disk or native code, and it reads its argument as a section path every time, so Lua's `os` and `package` tables stay `nil` however you call it.
 
-When a library section returns nothing, you call `require` as a bare statement purely for its effects. A `## setup` library that only runs [`models.use('strong')`](10-models.md#selecting-a-role-with-modelsuse) works this way. The choice belongs to the chain, so the block that called `require` and every later section of that chain make their model rounds on the `strong` role until the next `models.use`.
+When a library section returns nothing, you call `require` as a bare statement purely for its effects. A `setup` library that only runs [`models.use('strong')`](10-models.md#selecting-a-role-with-modelsuse) works this way. The choice belongs to the chain, so the block that called `require` and every later section of that chain make their model rounds on the `strong` role until the next `models.use`.
 
 ### What `require` returns
 
@@ -1922,7 +1741,7 @@ runvil: 0
 ## Main
 
 ```lua
-local search = require '## search_tools'
+local search = require '/search_tools'
 return search.search_all(argv.prose)
 ```
 
@@ -1943,7 +1762,7 @@ Run it with the argument string `rust`, which arrives as [`argv.prose`](06-argum
 searched rust everywhere
 ````
 
-`require` returns the value the library's code returns, whatever its type: a table, a function, a string, or `false`. A section can require a library that returns a scalar, such as a string, without failing. You can index the result in place, as in `(require '## lib').name`, and `return require '## loader'` makes the library's return value the caller's return value. Only the first value a library block returns becomes the library's value, and any extra return values are dropped.
+`require` returns the value the library's code returns, whatever its type: a table, a function, a string, or `false`. A section can require a library that returns a scalar, such as a string, without failing. You can index the result in place, as in `(require '/lib').name`, and `return require '/loader'` makes the library's return value the caller's return value. Only the first value a library block returns becomes the library's value, and any extra return values are dropped.
 
 A library's top-level statements run once, at the point it is required, and functions it defines can return values computed at that moment. A library table can mix a value computed at load time with a function that computes its result when called later, as in `lib.helped .. '|' .. lib.later()`.
 
@@ -1961,7 +1780,7 @@ runvil: 0
 ## Main
 
 ```lua
-return require '## later'
+return require '/later'
 ```
 
 ## later
@@ -1983,9 +1802,9 @@ return first .. ' then third'
 ran then third
 ````
 
-A block that returns `nil` lets the next block run, and the blocks after the one that returns a value do not run. A block that returns `false` ends the library, and `require` returns `false`, because only `nil` falls through to the next block. A library whose blocks all fall through without returning a value gives `true` to `require`, so a `## silent` section with the blocks `quiet = 1` and `return nil` makes `tostring(require '## silent')` read `true`.
+A block that returns `nil` lets the next block run, and the blocks after the one that returns a value do not run. A block that returns `false` ends the library, and `require` returns `false`, because only `nil` falls through to the next block. A library whose blocks all fall through without returning a value gives `true` to `require`, so a `silent` section with the blocks `quiet = 1` and `return nil` makes `tostring(require '/silent')` read `true`.
 
-A library loads successfully whether its code ends in a `return` value or is plain code with no `return`, such as `loaded = true`. Either way the run records `Lua library load succeeded: ## lib` for a library named `## lib`.
+A library loads successfully whether its code ends in a `return` value or is plain code with no `return`, such as `loaded = true`. Either way the run records `Lua library load succeeded: /lib` for a top-level library named `lib`.
 
 ### Library code runs in the caller's environment
 
@@ -2004,7 +1823,7 @@ runvil: 0
 
 ```lua
 style = 'terse'
-require '## lib'
+require '/lib'
 return exported .. '|' .. tostring(hidden) .. '|' .. seen_style .. '|' .. var.note
 ```
 
@@ -2028,7 +1847,7 @@ Everything in that result follows from the shared environment:
 - A library's code runs at the point of the `require` call and reads globals that the requiring block set before the call, as `seen_style` picks up `style`.
 - Library code reads and writes the caller's [`var`](05-lua-environment.md#keeping-state-in-var) table, and its writes are visible to the caller after `require` returns.
 - A library's `lua` blocks run one after another in file order when it loads, so a later block reads globals an earlier block set.
-- A section reached only through `require` can set the metatable of `_G` for the code that required it, so one library sets up global defaults or strict checks once. A `## defaults` library that runs `setmetatable(_G, { __index = { tone = 'plain' } })` gives every section that requires it the same defaults.
+- A section reached only through `require` can set the metatable of `_G` for the code that required it, so one library sets up global defaults or strict checks once. A `defaults` library that runs `setmetatable(_G, { __index = { tone = 'plain' } })` gives every section that requires it the same defaults.
 
 Global functions defined by a required section stay callable for the rest of the requiring section, in its prologue and in its epilog alike:
 
@@ -2044,7 +1863,7 @@ runvil: 0
 ## Main
 
 ```lua
-require '## helpers'
+require '/helpers'
 first = decorate('prologue')
 ```
 
@@ -2095,7 +1914,7 @@ runvil: 0
 ## Result
 
 ```lua
-require '## helpers'
+require '/helpers'
 return read_args()
 ```
 
@@ -2114,9 +1933,88 @@ Run it with the argument string `later canned value`:
 later canned value
 ````
 
-The heading-taking functions follow the same rule. A library function resolves `call`, `prompt.section`, and `require` from whichever section calls it, not from where the library is defined, so a library function called later reads the caller's child section through `prompt.section`. A prompt read in a library's load-time code resolves over the requiring section's visible set too. When more than one section requires the same library, each requiring section's load runs its prompt reads over that section's own visible set. The `## kid_reader` library in [Reads from the H1 and from libraries](#reads-from-the-h1-and-from-libraries) shows each of these, and [Requires made while a library loads](#requires-made-while-a-library-loads) shows how `require` itself resolves inside a library.
+A library function that calls [`jump`](08-jump-and-call.md#jumping-to-a-section), when the caller calls it after the load finishes, transfers control for the caller's section. A library that defines `function go() jump '../next' end` lets a caller that runs `require '/a'` and then `go()` move its walk to `next`.
 
-A library function that calls [`jump`](08-jump-and-call.md#jumping-to-a-section), when the caller calls it after the load finishes, transfers control for the caller's section. A library that defines `function go() jump '## next' end` lets a caller that runs `require '## a'` and then `go()` move its walk to `## next`.
+The other functions that take a section path do not follow this rule. They resolve from the library, as the next section explains.
+
+### A library names its own sections
+
+A relative [section path](02-file-structure.md#section-paths) written in a library starts at the library section, not at the section that is using the library. That holds while the library loads and when its functions run later, so each line of a library means the same thing for every section that requires it. A library can therefore keep its own templates and workers as child sections and name them by their bare names:
+
+````markdown
+---
+name: library_sections
+description: A library reads its own template and runs its own worker.
+runvil: 0
+---
+
+# Library sections
+
+## Research
+
+```lua
+local kit = require '/kit'
+var.research = kit.template .. '|' .. kit.shout('research') .. '|' .. kit.topics()
+```
+
+### Topics
+
+- allocators
+- coroutines
+
+## Review
+
+```lua
+local kit = require '/kit'
+return var.research .. '\n' .. kit.template .. '|' .. kit.shout('review') .. '|' .. kit.topics()
+```
+
+## kit
+
+```lua
+return {
+  template = prompt.section('Template', 'fence markdown').text,
+  shout = function(text)
+    return call('Shout', text)
+  end,
+  topics = function()
+    local list = _G.prompt.section_or('Topics', 'list')
+    return list and table.concat(list.items, ',') or 'none'
+  end,
+}
+```
+
+### Template
+
+```markdown
+# Title
+```
+
+### Shout
+
+```lua
+return args:upper()
+```
+````
+
+````text
+# Title|RESEARCH|allocators,coroutines
+# Title|REVIEW|none
+````
+
+`kit` reads `Template` while it loads and calls `Shout` from a function that runs later, and both paths name `kit`'s own children whether `Research` or `Review` is using the library. Neither of those sections has a `Template` or a `Shout`, and neither needs one.
+
+The rule covers every function that takes a relative path, with one exception:
+
+- `call`, `tasks.spawn`, `tasks.fanout`, `prompt.section`, and `prompt.section_or` written in a library start at the library section.
+- `jump` starts at the section that is running. A library has no walk of its own, and `jump` moves the walk of the running section, so its path names a neighbor of that section.
+- `require` takes only a path from the top, which names the same section from everywhere.
+
+A name is resolved where it is used, not where it came from. A section that passes the string `'Worker'` to a function of a library gets the library's `Worker`, and when the library has none, the [not-found error](08-jump-and-call.md#the-not-found-error) names the library: ``section `Worker` not found: `/kit` has no child `Worker` ``. A function keeps the place it was written in, though. A function that a section passes to a library still names the section's own neighbors, and an [adhoc tool](12-tools.md#how-adhoc-tool-handlers-run) handler written in a library names the library's.
+
+Inside a library, the `_G` table still holds the running section's own functions. `_G.prompt`, `_G.call`, and `_G.tasks` resolve from whichever section is using the library, which is how `kit.topics` reads the `Topics` list of `Research` and finds none under `Review`. The `_G` at the call shows a reader that the line depends on the user. A library that does this relies on its user to have that section, so it reads with `_G.prompt.section_or` when the section is optional. `_G.prompt.section('Topics')` in its place raises and names the user: ``section `Topics` not found: `/Review` has no child `Topics` ``. In a section's own blocks, a plain name and its `_G` name are the same function.
+
+The chain a library's `call` starts, and the tasks its `tasks.spawn` and `tasks.fanout` start, still belong to the section that is running, as [Effects a library makes belong to the caller](#effects-a-library-makes-belong-to-the-caller) describes. Only the place a path starts from is the library's.
 
 ### Prose inside a library
 
@@ -2137,7 +2035,7 @@ First one.
 
 ```lua
 style = 'terse'
-local text = require '## house_style'
+local text = require '/house_style'
 return text .. '|' .. prose
 ```
 
@@ -2154,7 +2052,7 @@ return prose
 Write in a terse voice.|First one.
 ````
 
-While a library block runs, the [`prose` global](#pending-prose-and-the-prose-global) reads that library block's own prose, not the caller's. The caller's `prose` is back in place once the library block finishes, which is why `## Main` still reads `First one.` after the `require`.
+While a library block runs, the [`prose` global](#pending-prose-and-the-prose-global) reads that library block's own prose, not the caller's. The caller's `prose` is back in place once the library block finishes, which is why `Main` still reads `First one.` after the `require`.
 
 Each Lua block in a library section pairs with the prose block right before it, and that Markdown is what the block's `prose` renders from:
 
@@ -2163,7 +2061,7 @@ Each Lua block in a library section pairs with the prose block right before it, 
 
 A library block's `prose` is lazy. It renders from that block's own prose when the block first reads it, at most once, against the live `sys` values at that moment, and prose with no placeholders reads back verbatim. Its [placeholders](07-substitution.md#placeholders-in-prose) render from the calling section's state, meaning its `var`, its live `sys` values, and its globals, never from a separate library state:
 
-- `{{ style }}` in the example renders the global `style` that `## Main` set before calling `require`.
+- `{{ style }}` in the example renders the global `style` that `Main` set before calling `require`.
 - `{{ var.x }}` in a library's prose renders the caller's `var.x`.
 - When a fanout [arm](14-fanout.md#what-an-arm-sees) requires a library, the library's prose renders with that arm's `item`, so each arm gets its own text.
 
@@ -2189,7 +2087,7 @@ runvil: 0
 Caller prose.
 
 ```lua
-local lib = require '## labeler'
+local lib = require '/labeler'
 return lib.label('alpha') .. '|' .. lib.late()
 ```
 
@@ -2210,7 +2108,7 @@ return {
 alpha: Library prose.|Caller prose.
 ````
 
-`label` uses the copy it took while the library loaded, while `late` reads `prose` when `## Main` calls it and gets `## Main`'s own prose.
+`label` uses the copy it took while the library loaded, while `late` reads `prose` when `Main` calls it and gets `Main`'s own prose.
 
 ### The caller's `prose` after a `require`
 
@@ -2232,7 +2130,7 @@ Mood is {{ var.mood }}.
 ```lua
 var.mood = 'calm'
 local before = prose
-require '## bump'
+require '/bump'
 return before .. '|' .. prose
 ```
 
@@ -2247,7 +2145,7 @@ var.mood = 'bright'
 Mood is calm.|Mood is calm.
 ````
 
-The caller's `prose` is lazy and renders once, on its first read. `## Main` read it before the `require`, so the read after the `require` gets back the text it already rendered, without rendering again, even though the library changed `var.mood`. Now move the first read after the `require` by replacing the block of `## Main` with this one:
+The caller's `prose` is lazy and renders once, on its first read. `Main` read it before the `require`, so the read after the `require` gets back the text it already rendered, without rendering again, even though the library changed `var.mood`. Now move the first read after the `require` by replacing the block of `Main` with this one:
 
 ````markdown
 ## Main
@@ -2256,7 +2154,7 @@ Mood is {{ var.mood }}.
 
 ```lua
 var.mood = 'calm'
-require '## bump'
+require '/bump'
 return prose
 ```
 ````
@@ -2277,12 +2175,12 @@ Because `require` is reserved as one of the Engine's own globals, a [Pack prelud
 
 ## How `require` finds and caches libraries
 
-You can predict which section a `require` names, which sections it can reach, and when a library's code runs again.
+You can predict which section a `require` names from any place in the prompt, and when a library's code runs again.
 
 ````markdown
 ---
 name: require_reach
-description: A called child section requires its parent's sibling.
+description: A called child section requires the library its parent uses.
 runvil: 0
 ---
 
@@ -2291,17 +2189,16 @@ runvil: 0
 ## Parent
 
 ```lua
-require '## lib'
-return call('### Child')
+require '/lib'
+return call('Child')
 ```
 
 ### Child
 
 ```lua
-local read = tostring(prompt.section('## lib'))
 local before = tostring(greet)
-require '## lib'
-return read .. '|' .. before .. '|' .. greet('child')
+require '/lib'
+return before .. '|' .. greet('child')
 ```
 
 ## lib
@@ -2314,20 +2211,28 @@ end
 ````
 
 ````text
-nil|nil|hello child
+nil|hello child
 ````
 
-`### Child` cannot read `## lib` with `prompt.section`, because `## lib` is outside its visible set, yet `require '## lib'` reaches it. `### Child` also starts without the `greet` its parent loaded, so it calls `require` itself. What follows explains both: how far `require` reaches, and which `require` calls share a saved library.
+`Child` names the library by the same path its parent uses, `'/lib'`, because a path from the top names the same section from every depth. `Child` also starts without the `greet` its parent loaded, so it calls `require` itself. What follows explains both: which section a `require` names, and which `require` calls share a saved library.
 
-### Matching the heading exactly
+### One path for each library
 
-`require` finds a library by its heading exactly as written, with the same number of `#` markers and the same name, following the same heading rules as the other heading surfaces. A reachable section named with the wrong number of `#` markers does not resolve. `require '### lib'` loads an H3 subsection by its heading level and name, so a section can require its own nested subsection.
+`require` takes only a [section path](02-file-structure.md#section-paths) from the top of the prompt: `'/lib'` for a top-level section, and one more name per level for a nested one, such as `'/Main/helpers'`. Each name in the path matches a section name exactly. The H1 title is not part of the path.
 
-An exact heading string names at most one reachable section, because each part of the reach sits at its own heading level and [sibling section names must be unique](02-file-structure.md#sibling-name-uniqueness). A prompt with two same-named siblings fails to parse with a message that starts `` duplicate sibling section name `{name}` `` and says that sibling section names must be unique.
+A library therefore has one spelling in the H1 body, in a top-level section, and in a nested worker section. The same `require` names the same library on every line of the prompt, inside another library included, so nesting a section deeper, or moving its code to another section, changes none of its `require` calls. The [library-load events](#library-load-events) and the [require cycle error](#the-require-cycle-error) print a library by the same path, so one search finds every place that requires it.
 
-### Which sections `require` can reach
+A relative path given to `require` raises, and the message says what `require` takes. `require 'lib'` fails with this message, and `require '../lib'` fails the same way with its own path in the quotes:
 
-From a section the walk runs, `require` reaches that section's direct children, its siblings, and the siblings of each of its ancestors up to the top-level `##` sections. Take this section tree, seen from `#### Self`:
+````text
+section path "lib" does not start with "/"; require takes a path from the top, such as "/helpers"
+````
+
+A path names at most one section, because [sibling section names must be unique](02-file-structure.md#sibling-name-uniqueness). A prompt with two same-named siblings fails to parse with a message that starts `` duplicate sibling section name `{name}` `` and says that sibling section names must be unique.
+
+### Which sections `require` can name
+
+`require` can name any section in the prompt. Take this section tree:
 
 ````text
 ## Top
@@ -2343,81 +2248,29 @@ From a section the walk runs, `require` reaches that section's direct children, 
 ## Last
 ````
 
-| Heading | Reached from `#### Self` | Relationship |
+From `Self`, and from everywhere else, these paths name these sections:
+
+| Path | Section | Relationship to `Self` |
 |---|---|---|
-| `#### Sibling` | yes | a sibling |
-| `##### Child` | yes | a direct child |
-| `### Uncle` | yes | a sibling of the parent |
-| `## Top`, `## Last` | yes | siblings of the grandparent, which are the top-level sections |
-| `#### Self` | no | the caller itself |
-| `### Parent`, `## Grand` | no | ancestors |
-| `###### Grandchild` | no | a grandchild |
-| `##### Niece` | no | a sibling's child |
-| `#### Cousin` | no | a child of an ancestor's sibling |
+| `/Top`, `/Last` | `Top`, `Last` | top-level sections |
+| `/Grand/Uncle` | `Uncle` | a sibling of the parent |
+| `/Grand/Uncle/Cousin` | `Cousin` | a child of an ancestor's sibling |
+| `/Grand/Parent/Sibling` | `Sibling` | a sibling |
+| `/Grand/Parent/Sibling/Niece` | `Niece` | a sibling's child |
+| `/Grand/Parent/Self/Child` | `Child` | a direct child |
+| `/Grand/Parent/Self/Child/Grandchild` | `Grandchild` | a grandchild |
+| `/Grand/Parent`, `/Grand` | `Parent`, `Grand` | ancestors |
+| `/Grand/Parent/Self` | `Self` | the section itself |
 
-`require` cannot name the calling section itself or any of its ancestors, because the reach skips the caller and each ancestor. It does not reach below those levels either: not the current section's grandchildren or anything deeper, not a sibling's children, and not the children of an ancestor's sibling.
+`require` is not held to the [visible set](08-jump-and-call.md#the-visible-set) that `call` and `jump` are, because it loads a section's Lua into the running section entry and leaves the walk where it is. A `Worker` nested under `Research`, including one running as a fanout arm, requires a top-level `helpers` as `require '/helpers'`, the same line the H1 body writes.
 
-That reach is wider than the one `prompt.section`, `call`, and `jump` share, because `require` also reaches the siblings of each ancestor. From `#### Self`, those three cannot name `### Uncle`, but `require` can. A `require` from a nested section, including a fanout arm's worker section, can name any top-level section other than its own top-level ancestor, even one outside its own subtree, since the top-level sections are the siblings of its outermost ancestor. A `### Worker` under `## Research` can require a top-level `## helpers`, for example.
+Nothing is excluded, and nothing guards against an odd `require`. A section may require its own ancestor, whose blocks then run as any library's do. A section that requires itself, and two sections that require each other, meet [the require cycle error](#the-require-cycle-error).
 
-From the H1, `require` reaches every top-level `##` section. It cannot reach any nested section from the H1, and the lookup fails.
+A library kept under the section that uses it is named through that section, as in `require '/Main/helpers'`. Renaming or moving `Main` breaks that path, and a copy of `Main` keeps requiring the original's library until its path is edited. A library that several sections share is simplest as a top-level section.
 
 ### Requires made while a library loads
 
-A `require` made while a library is loading resolves its heading from that library's position, not from the section that required the library. Outside any library load, `require` resolves from the calling section's position:
-
-````markdown
----
-name: require_position
-description: Shows where a require inside a library resolves from.
-runvil: 0
----
-
-# Require position
-
-## Main
-
-```lua
-local lib = require '## lib'
-return lib.helped .. '|' .. lib.later()
-```
-
-### mine
-
-Mine text.
-
-```lua
-return 'mine'
-```
-
-## lib
-
-```lua
-local helped = require '### helper'
-return {
-  helped = helped,
-  later = function()
-    local text = prompt.section('### mine')
-    local found = text ~= nil and text:find('Mine text.', 1, true) ~= nil
-    local reached = pcall(require, '### helper')
-    return table.concat({ require '### mine', call('### mine'), tostring(found), tostring(reached) }, ',')
-  end,
-}
-```
-
-### helper
-
-```lua
-return 'helped'
-```
-````
-
-````text
-helped|mine,mine,true,false
-````
-
-While `## lib` loads, its `require '### helper'` resolves from the position of `## lib` and reaches its child `### helper`. Later, `## Main` calls `lib.later()` after the load has finished, so every lookup inside it resolves from `## Main`. `require '### mine'` and `call('### mine')` both reach the child of `## Main` and return `mine`, `prompt.section('### mine')` finds `Mine text.`, and `pcall(require, '### helper')` returns `false` because the library's own child is no longer within reach.
-
-So a library can reach its own child sections, and its helpers load the same way wherever it is required from. Two libraries that each require a nested `### helpers` each get their own helper:
+A `require` written in a library means what it means everywhere else, because its path starts at the top of the prompt. A library that keeps a helper library under itself names the helper through its own path. Two libraries that each keep a nested `helpers` each get their own:
 
 ````markdown
 ---
@@ -2431,13 +2284,13 @@ runvil: 0
 ## Main
 
 ```lua
-return require('## a') .. '|' .. require('## b')
+return require('/a') .. '|' .. require('/b')
 ```
 
 ## a
 
 ```lua
-return require '### helpers'
+return require '/a/helpers'
 ```
 
 ### helpers
@@ -2449,7 +2302,7 @@ return 'helper of a'
 ## b
 
 ```lua
-return require '### helpers'
+return require '/b/helpers'
 ```
 
 ### helpers
@@ -2463,16 +2316,18 @@ return 'helper of b'
 helper of a|helper of b
 ````
 
-Because a library's load resolves from the library's own position, a required library cannot `require` its own ancestor section, even when the code that loaded the library could reach that section.
+`require '/a/helpers'` is the one line in `a` that names `a`. Its helper loads the same way whichever section requires `a`, and the inner library finishes loading before the outer one does.
+
+The other functions that take a section path start at the library when they are written in one, so a library names its own child sections by their bare names in `call` and the prompt reads (see [A library names its own sections](#a-library-names-its-own-sections)).
 
 ### When `require` cannot find a section
 
-A `require` heading that is malformed or does not resolve from the current position does not fail parsing. The prompt parses and runs, and `require` raises the error as a Lua error when the call runs, which [`pcall`](05-lua-environment.md#raising-and-catching-errors) can catch:
+A `require` path that is malformed or names no section does not fail parsing. The prompt parses and runs, and `require` raises the error as a Lua error when the call runs, which [`pcall`](05-lua-environment.md#raising-and-catching-errors) can catch:
 
 ````markdown
 ---
 name: require_miss
-description: Catches a require of a section outside the reach.
+description: Catches a require whose path names no section.
 runvil: 0
 ---
 
@@ -2481,7 +2336,7 @@ runvil: 0
 ## Main
 
 ```lua
-local ok = pcall(require, '### deep')
+local ok = pcall(require, '/deep')
 return tostring(ok)
 ```
 
@@ -2508,20 +2363,20 @@ end
 false
 ````
 
-`### deep` is a sibling's child, so it is out of reach from `## Main`. A well-formed `require` heading that matches no reachable section fails with a Lua error that names the trimmed heading and lists the reachable sections. Here the error's text is:
+`deep` sits under `other`, so its path is `/other/deep`, and no top-level section is named `deep`. A well-formed `require` path that names no section fails with the [not-found error](08-jump-and-call.md#the-not-found-error), which names the path and the step where the lookup stopped. Here the error's text is:
 
 ````text
-section heading `### deep` not found; available sections: ## other, ## helpers
+section `/deep` not found: the top level has no section `deep`
 ````
 
 Caught as it is here, the error value's message holds that text after `require_miss.md:12: `, the line of the `pcall`, and before the default text for a Lua failure (see [Where a caught error's message points](16-limits-and-errors.md#where-a-caught-errors-message-points)).
 
-The list holds only the reachable sections, in search order: siblings, then children, then each ancestor's siblings moving outward to the top level, with the current section left out. `## other` is listed even though it holds only prose, while `## Main` and `### deep` are not. From `#### Self` in the tree above, a miss on `## Missing` gives `` section heading `## Missing` not found; available sections: #### Sibling, ##### Child, ### Uncle, ## Top, ## Last ``.
+A miss below the top level names the section that was searched. From anywhere in the tree above, `require '/Grand/Missing'` gives `` section `/Grand/Missing` not found: `/Grand` has no child `Missing` ``. The message lists no other section.
 
 Passing anything other than a string to `require` raises a Lua runtime error that names the argument's Lua type, and no section lookup happens. For a number, the error's text is:
 
 ````text
-require takes a section heading string such as '## helpers', got integer
+require takes a section path such as '/helpers', got integer
 ````
 
 ### The library cache
@@ -2540,8 +2395,8 @@ runvil: 0
 ## Main
 
 ```lua
-local first = require '## counter'
-local second = require '## counter'
+local first = require '/counter'
+local second = require '/counter'
 return tostring(first == second) .. ':' .. loads
 ```
 
@@ -2561,15 +2416,15 @@ Every `require` of one library within a section entry gets the same saved value,
 
 A library's saved value lasts as long as the [section VM](#one-section-vm-per-section-entry) of the section entry that loaded it, so every `require` in that entry shares one cache. That includes the requires a library makes while it loads, so a library that the entry or another library already loaded hands back its saved value without rerunning or reporting, whichever of the two loaded it first. A library's own code can call `require` to load another library, and the inner library finishes loading before the outer one does.
 
-`require` keys each library by its section's position in the document, never by heading text. The same heading written from two places can name two different sections, and each position loads as its own library that runs once and keeps its own saved value, as the two `### helpers` sections in the earlier example do.
+`require` keys each library by its section's position in the document. Two sections with the same name under different parents are two libraries, and each one runs once and keeps its own saved value, as the two `helpers` sections in the earlier example do.
 
 ### Each section loads its own libraries
 
 A library saved in one section entry is not reused by a later entry, the same section entered again included. Each section entry that requires the library runs it again on its first `require`, repeating its top-level calls and recording a new library-load start and success. Several places in one run, such as the H1, a parent section and its child, a section entered with `call`, a fanout arm's section, or a later section, can each `require` the same library section without error, and each section that uses the library calls `require` for it itself.
 
-Global functions a library defines exist only in the sections that ran it, so a later section that never required the library sees them as `nil`. A child section entered with [`call`](08-jump-and-call.md#calling-a-section) starts without its parent's libraries and loads them itself with its own `require`. That is why `### Child` in the `require_reach` prompt reads `greet` as `nil` until its own `require '## lib'` runs.
+Global functions a library defines exist only in the sections that ran it, so a later section that never required the library sees them as `nil`. A child section entered with [`call`](08-jump-and-call.md#calling-a-section) starts without its parent's libraries and loads them itself with its own `require`. That is why `Child` in the `require_reach` prompt reads `greet` as `nil` until its own `require '/lib'` runs.
 
-Each fanout [arm](14-fanout.md#what-an-arm-sees) loads a required library in its own section VM, so the library load runs once per arm instead of being shared across arms, and each arm records its own load entry, such as `Lua library load succeeded: ## helpers`. A library's top-level code runs under each requiring arm's own identity, so its load-time effects count as that arm's. A library that writes the same store file at load time with `store.write`, required by two arms, fails the run because two arms wrote the same store file, even when the library wraps the write in `pcall`.
+Each fanout [arm](14-fanout.md#what-an-arm-sees) loads a required library in its own section VM, so the library load runs once per arm instead of being shared across arms, and each arm records its own load entry, such as `Lua library load succeeded: /helpers`. A library's top-level code runs under each requiring arm's own identity, so its load-time effects count as that arm's. A library that writes the same store file at load time with `store.write`, required by two arms, fails the run because two arms wrote the same store file, even when the library wraps the write in `pcall`.
 
 ### Libraries on the section walk
 
@@ -2587,7 +2442,7 @@ runvil: 0
 ## Main
 
 ```lua
-require '## helpers'
+require '/helpers'
 var.greeting = greet('main')
 ```
 
@@ -2610,14 +2465,14 @@ return var.greeting .. '|' .. tostring(greet)
 hello main|nil
 ````
 
-`## Main` requires `## helpers` and falls through, the walk then runs `## helpers` as a section, and `## Last` runs in a section VM that never required the library, so `greet` is `nil` there.
+`Main` requires `helpers` and falls through, the walk then runs `helpers` as a section, and `Last` runs in a section VM that never required the library, so `greet` is `nil` there.
 
 A library that returns something follows the same rules as any section that returns, which [Returning values](04-how-a-prompt-runs.md#returning-values) covers:
 
 - When the walk reaches a library that returns a scalar, that scalar becomes the run result, and later sections never run.
 - When the walk reaches a library that returns a table, the run fails with a Lua error whose message contains `cannot return a table as a result`.
 
-Requiring a table-returning library from inside a section succeeds, because that return rule applies only when the walk runs the library as a section. You keep a returning library off the walk in one of two ways. You can place it after a section that returns, since the walk ends at that return before it reaches the library, as `## search_tools` sits after `## Main` in [What `require` returns](#what-require-returns). Or you can nest it as a subsection under the section that requires it:
+Requiring a table-returning library from inside a section succeeds, because that return rule applies only when the walk runs the library as a section. You keep a returning library off the walk in one of two ways. You can place it after a section that returns, since the walk ends at that return before it reaches the library, as `search_tools` sits after `Main` in [What `require` returns](#what-require-returns). Or you can nest it as a subsection under the section that requires it:
 
 ````markdown
 ---
@@ -2631,7 +2486,7 @@ runvil: 0
 ## Main
 
 ```lua
-var.name = (require '### lib').name
+var.name = (require '/Main/lib').name
 ```
 
 ### lib
@@ -2651,7 +2506,7 @@ return var.name
 nested
 ````
 
-The same section can be used with both `require` and `call`, and each returns that section's block value, as `### mine` gave `mine` to both in [Requires made while a library loads](#requires-made-while-a-library-loads).
+The same section can be used with both `require` and `call`, and each returns that section's block value.
 
 ## Library errors, cycles, and load events
 
@@ -2670,8 +2525,8 @@ runvil: 0
 
 ```lua
 var.attempts = 0
-local first_ok = pcall(require, '## flaky')
-local second = require '## flaky'
+local first_ok = pcall(require, '/flaky')
+local second = require '/flaky'
 return tostring(first_ok) .. '|' .. second .. '|' .. var.attempts
 ```
 
@@ -2695,16 +2550,16 @@ false|loaded|2
 A `require` fails in one of five ways, and each one raises a Lua error in the requiring block:
 
 - The argument is not a string. [When `require` cannot find a section](#when-require-cannot-find-a-section) gives the message.
-- The heading is malformed or names no section within reach, which gives the not-found message described in the same place.
+- The path is malformed, is not a path from the top, or names no section. The same place gives the not-found message, and [One path for each library](#one-path-for-each-library) gives the message for a relative path.
 - The library's code raises an error while it loads.
 - The library's code calls `jump` while it loads.
 - The library is already loading, which makes a require cycle.
 
 ### Catching a failed load
 
-An error that library code raises while loading travels out of `require` into the block that required it. You catch it with `pcall(require, heading)`, which returns `false` along with the error, and the section keeps running and can still return normally, such as with `return 'done'`. The error reaches the caller as the same value, unchanged, whether the library raised a string or a table.
+An error that library code raises while loading travels out of `require` into the block that required it. You catch it with `pcall(require, path)`, which returns `false` along with the error, and the section keeps running and can still return normally, such as with `return 'done'`. The error reaches the caller as the same value, unchanged, whether the library raised a string or a table.
 
-A library load that raises is not saved, so every later `require` of that library runs its code again from the top and raises again if the fault remains. Once the fault is gone, the retry returns the library's value, and the library's code has run twice. In the example, `## flaky` fails only while `var.attempts` is `1`, so the caught first load and the successful retry give `false|loaded|2`.
+A library load that raises is not saved, so every later `require` of that library runs its code again from the top and raises again if the fault remains. Once the fault is gone, the retry returns the library's value, and the library's code has run twice. In the example, `flaky` fails only while `var.attempts` is `1`, so the caught first load and the successful retry give `false|loaded|2`.
 
 What a failed load already did stays done:
 
@@ -2729,7 +2584,7 @@ runvil: 0
 ## Main
 
 ```lua
-local ok, err = pcall(require, '## lib')
+local ok, err = pcall(require, '/lib')
 return tostring(err)
 ```
 
@@ -2744,15 +2599,15 @@ error('load fault')
 [string "line 19"]:1: load fault
 ````
 
-A library error caught with `pcall(require, heading)` comes back in standard Lua form, `[string "line {source_line}"]:{k}: {message}`. `{source_line}` is the prompt line of the library block's first Lua line, here line 19, and `{k}` is the line within that block, here its first. For an `error` call on the third line of a block that starts at prompt line 100, the caught error reads `[string "line 100"]:3: library fault`.
+A library error caught with `pcall(require, path)` comes back in standard Lua form, `[string "line {source_line}"]:{k}: {message}`. `{source_line}` is the prompt line of the library block's first Lua line, here line 19, and `{k}` is the line within that block, here its first. For an `error` call on the third line of a block that starts at prompt line 100, the caught error reads `[string "line 100"]:3: library fault`.
 
-Only an uncaught failure is rewritten to the library's location and prompt line. Replace the block of `## Main` with one that calls `require` without `pcall`, keeping the same number of lines:
+Only an uncaught failure is rewritten to the library's location and prompt line. Replace the block of `Main` with one that calls `require` without `pcall`, keeping the same number of lines:
 
 ````markdown
 ## Main
 
 ```lua
-require '## lib'
+require '/lib'
 return 'done'
 ```
 ````
@@ -2779,7 +2634,7 @@ runvil: 0
 ## Main
 
 ```lua
-require '## lib'
+require '/lib'
 boom()
 ```
 
@@ -2799,7 +2654,7 @@ section `lib` prologue:20: later fault
 section `Main` prologue:13:
 ````
 
-The library's line 20 is where `error` runs, and it is the line the message ends with. The caller's own frames in the traceback map to the caller's location and prompt lines as well, each frame mapped once with no raw `[string "..."]` marker left, so the message also shows line 13 of `## Main`, the caller's `boom()` line.
+The library's line 20 is where `error` runs, and it is the line the message ends with. The caller's own frames in the traceback map to the caller's location and prompt lines as well, each frame mapped once with no raw `[string "..."]` marker left, so the message also shows line 13 of `Main`, the caller's `boom()` line.
 
 ### `jump` during a library load
 
@@ -2809,7 +2664,7 @@ Load code cannot transfer control. Calling [`jump`](08-jump-and-call.md#jumping-
 jump is unavailable while a library loads: return a value from the library and call jump from the section after require returns
 ````
 
-The refusal ends with the load, so a caller that catches the failed load with `pcall` can still `jump` afterward, as in `pcall(require, '## a')` followed by `jump '## after'`. A library function that calls `jump` after the load has finished transfers control normally, as [Library functions resolve names when called](#library-functions-resolve-names-when-called) shows.
+The refusal ends with the load, so a caller that catches the failed load with `pcall` can still `jump` afterward, as in `pcall(require, '/a')` followed by `jump '../after'`. A library function that calls `jump` after the load has finished transfers control normally, as [Library functions resolve names when called](#library-functions-resolve-names-when-called) shows.
 
 ### The require cycle error
 
@@ -2827,50 +2682,50 @@ runvil: 0
 ## Main
 
 ```lua
-local ok, err = pcall(require, '## a')
+local ok, err = pcall(require, '/a')
 return err.kind .. '|' .. tostring(err)
 ```
 
 ## a
 
 ```lua
-require '## b'
+require '/b'
 ```
 
 ## b
 
 ```lua
-require '## a'
+require '/a'
 ```
 ````
 
 ````text
-lua|require cycle: ## a -> ## b -> ## a
+lua|require cycle: /a -> /b -> /a
 ````
 
-The cycle can come from the library's own blocks or through other libraries it requires, as here, where `## a` requires `## b` and `## b` requires `## a`. The message starts with `require cycle:` and a space, followed by the library headings with their markers in load order, joined by `->` with a space on each side and ending with the heading required again. It starts at the repeated library's own load and lists only loads from there inward, leaving out outer libraries that started loading earlier.
+The cycle can come from the library's own blocks or through other libraries it requires, as here, where `a` requires `b` and `b` requires `a`. The message starts with `require cycle:` and a space, followed by each library's path from the top in load order, joined by `->` with a space on each side and ending with the path required again. It starts at the repeated library's own load and lists only loads from there inward, leaving out outer libraries that started loading earlier. A section that requires itself is the shortest cycle: `require '/Main'` written in `Main` gives `require cycle: /Main -> /Main`.
 
 The require cycle error is a structured [error value](05-lua-environment.md#raising-and-catching-errors) with kind `lua` and a `message` field holding the cycle text, which `tostring(err)` also returns.
 
 ### Library-load events
 
-The first `require` of a library emits a `lua_library_load_started` report as the load begins, before the library's code runs, and a `lua_library_load_succeeded` report when that code finishes without error, in that order, each naming the heading loaded. In readable form they appear as:
+The first `require` of a library emits a `lua_library_load_started` report as the load begins, before the library's code runs, and a `lua_library_load_succeeded` report when that code finishes without error, in that order, each naming the library loaded. In readable form they appear as:
 
 ````text
-Lua library load started: ## helpers
-Lua library load succeeded: ## helpers
+Lua library load started: /helpers
+Lua library load succeeded: /helpers
 ````
 
-Each phase of a library load is its own event, of kind `lua_library_load_started`, `lua_library_load_succeeded`, or `lua_library_load_failed`. Each event carries the requiring section in `section` and the library heading in `library`:
+Each phase of a library load is its own event, of kind `lua_library_load_started`, `lua_library_load_succeeded`, or `lua_library_load_failed`. Each event carries the requiring section in `section` and the library in `library`:
 
-- `section` is the name of the section running the load, without `#` markers, such as `Worker` for `### Worker`.
-- `library` is the library section's own heading in canonical form, the `#` markers, one space, then the name, such as `## helpers`. It is rebuilt from the section rather than copied from the string you passed to `require`.
+- `section` is the name of the section running the load, such as `Worker`.
+- `library` is the library section's path from the top of the prompt, such as `/helpers`. It is rebuilt from the section rather than copied from the string you passed to `require`.
 
-A library whose code raises during its load emits `lua_library_load_started` and then `lua_library_load_failed`, even when the caller catches the error with `pcall`, and every retry of a failing library emits a fresh pair. A load counts as succeeded only when all its blocks finish. The `flaky_library` prompt reports these four events, each with `section` set to `Main` and `library` set to `## flaky`:
+A library whose code raises during its load emits `lua_library_load_started` and then `lua_library_load_failed`, even when the caller catches the error with `pcall`, and every retry of a failing library emits a fresh pair. A load counts as succeeded only when all its blocks finish. The `flaky_library` prompt reports these four events, each with `section` set to `Main` and `library` set to `flaky`:
 
 1. `lua_library_load_started`
 2. `lua_library_load_failed`
 3. `lua_library_load_started`
 4. `lua_library_load_succeeded`
 
-Because the `section` field names the section running the load, the same library loaded by two sections reports once under each, such as once under `First` and once under `Second`. A child section that requires a library its parent already loaded runs its own load, with its own started and succeeded events under the child's section name, so `Parent` events for `## lib` are followed by `Child` events. A `require` answered from the cache reports nothing.
+Because the `section` field names the section running the load, the same library loaded by two sections reports once under each, such as once under `First` and once under `Second`. A child section that requires a library its parent already loaded runs its own load, with its own started and succeeded events under the child's section name, so `Parent` events for `lib` are followed by `Child` events. A `require` answered from the cache reports nothing.
