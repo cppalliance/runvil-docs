@@ -26,7 +26,7 @@ return 'hello'
 hello
 ````
 
-This run is as short as a run gets. The start checks find nothing missing, because the frontmatter declares no Packs and no model requirements. The H1 body under `# Hello` is empty, so there is no H1 pass. The walk enters `## Main`, the block returns `hello`, and the run ends in success with `hello` as its run result. A block that only returns a literal value asks the Harness for no work at all, so this run finishes without waiting on anything outside the prompt.
+This run is as short as a run gets. The start checks find nothing missing, because the frontmatter declares no Packs and no model requirements. The H1 body under `# Hello` is empty, so there is no H1 pass. The walk enters `Main`, the block returns `hello`, and the run ends in success with `hello` as its run result. A block that only returns a literal value asks the Harness for no work at all, so this run finishes without waiting on anything outside the prompt.
 
 ### The stages in order
 
@@ -103,7 +103,7 @@ return store.read('default.txt')
 stock
 ````
 
-Neither section creates or passes a store handle: `store` is ready when the first block runs, and `## Second` reads back what `## First` wrote. Because each run has its own store, two runs that both write `paper.md` each read back their own copy. On a Host that supplies a model, the five model roles are likewise already filled when the first block runs, so `models.use('strong')` reaches the model directly, and a `models.infer` call before any `models.use` runs on the `default` role.
+Neither section creates or passes a store handle: `store` is ready when the first block runs, and `Second` reads back what `First` wrote. Because each run has its own store, two runs that both write `paper.md` each read back their own copy. On a Host that supplies a model, the five model roles are likewise already filled when the first block runs, so `models.use('strong')` reaches the model directly, and a `models.infer` call before any `models.use` runs on the `default` role.
 
 ### The work the Harness does
 
@@ -160,7 +160,7 @@ Each check stops the prompt before the next one starts, so the order of failures
 
 ### Lua blocks compile in source order
 
-Compiling is part of parsing: the parse compiles every Lua block, without running it, in source order. The H1 body's blocks come first, then each section's blocks in the order the file holds them. A section with a prologue and an epilog (see [Prologue, prose, and epilog](03-blocks-and-prose.md#prologue-prose-and-epilog)) holds two blocks, and its prologue compiles first. Replace `## S` in the prompt above with this section:
+Compiling is part of parsing: the parse compiles every Lua block, without running it, in source order. The H1 body's blocks come first, then each section's blocks in the order the file holds them. A section with a prologue and an epilog (see [Prologue, prose, and epilog](03-blocks-and-prose.md#prologue-prose-and-epilog)) holds two blocks, and its prologue compiles first. Replace `S` in the prompt above with this section:
 
 ````markdown
 ## S
@@ -624,11 +624,11 @@ return var.from_a .. var.from_b
 ab
 ````
 
-The H1 body under `# Walk` is empty, so the run moves straight into the first `##` section, `## A`. Its block sets `var.from_a` and ends without `return`, so the walk falls through to `## B`. `## B` sees the value `## A` left on `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)), sets `var.from_b`, and falls through to `## C`. `## C` returns `ab`, and that return value becomes the run result (see [Returning values](#returning-values)).
+The H1 body under `# Walk` is empty, so the run moves straight into the first `##` section, `A`. Its block sets `var.from_a` and ends without `return`, so the walk falls through to `B`. `B` sees the value `A` left on `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)), sets `var.from_b`, and falls through to `C`. `C` returns `ab`, and that return value becomes the run result (see [Returning values](#returning-values)).
 
 ### The main walk and the entry section
 
-A Lua block placed under a named `##` section, such as `## Greet`, runs when the section walk reaches that section. Without `jump` or `call`, a prompt's top-level `##` sections run one after another in file order, top to bottom, each finishing before the next one starts. The main walk is this walk over the top-level sections, the walk the run itself begins. It starts at the entry section: the first top-level `##` section in file order, whatever its name.
+A Lua block placed under a named `##` section, such as `Greet`, runs when the section walk reaches that section. Without `jump` or `call`, a prompt's top-level `##` sections run one after another in file order, top to bottom, each finishing before the next one starts. The main walk is this walk over the top-level sections, the walk the run itself begins. It starts at the entry section: the first top-level `##` section in file order, whatever its name.
 
 ````markdown
 ---
@@ -656,7 +656,7 @@ return 'main'
 zebra
 ````
 
-You choose the starting section by placing it first. With `## Zebra` written before `## Main`, the walk starts at `Zebra`, and because `## Zebra` returns, `## Main` never runs. Naming a section `Main` gives it no special role, so a `## Main` written after another `##` section is not the entry section.
+You choose the starting section by placing it first. With `Zebra` written before `Main`, the walk starts at `Zebra`, and because `Zebra` returns, `Main` never runs. Naming a section `Main` gives it no special role, so a `Main` written after another `##` section is not the entry section.
 
 When the H1 title has no Lua block under it, the run moves into the first `##` section and runs its `lua` block, and that section's `return` value becomes the run result. A prompt can also have no `##` section at all (see [Section headings and nesting](02-file-structure.md#section-headings-and-nesting)): such an H1-only prompt still parses, but it has no entry section.
 
@@ -693,7 +693,7 @@ return 'ok'
 ok
 ````
 
-Each section entry starts with its own section VM, the fresh Lua instance a section's blocks run in (see [Prologue, prose, and epilog](03-blocks-and-prose.md#prologue-prose-and-epilog)). The move between sections tears down the old section VM and clears its state, so a plain global such as `reply`, or a function such as `greet` defined in a `## helpers` section, is `nil` in a later section. Each section entry runs in its own frame, built when the section is entered and torn down when the entry ends. What a section leaves on `var`, and what it writes with `store`, outlives the move: `## C` in the `walk` prompt reads both values set before it, and `## Second` in the `handoff` prompt reads the file `## First` wrote.
+Each section entry starts with its own section VM, the fresh Lua instance a section's blocks run in (see [Prologue, prose, and epilog](03-blocks-and-prose.md#prologue-prose-and-epilog)). The move between sections tears down the old section VM and clears its state, so a plain global such as `reply`, or a function such as `greet` defined in a `helpers` section, is `nil` in a later section. Each section entry runs in its own frame, built when the section is entered and torn down when the entry ends. What a section leaves on `var`, and what it writes with `store`, outlives the move: `C` in the `walk` prompt reads both values set before it, and `Second` in the `handoff` prompt reads the file `First` wrote.
 
 Prose that a section leaves unconsumed at its end is discarded without being evaluated, and it never reaches the next section:
 
@@ -721,7 +721,7 @@ return 'ok'
 ok
 ````
 
-The `{{ var.missing }}` in `## First` is never evaluated, so it cannot fail the run, and `## First` holds only prose, so the walk continues to `## Second`.
+The `{{ var.missing }}` in `First` is never evaluated, so it cannot fail the run, and `First` holds only prose, so the walk continues to `Second`.
 
 ### Child sections stay off the walk
 
@@ -759,13 +759,13 @@ return var.seen .. 'B'
 AB
 ````
 
-The walk goes from `## A` straight to `## B` and passes over `### Child`, so its `error` never runs and the run succeeds. The walk never enters a child section on its own: it skips the subsections nested under a walked section and moves on to the next sibling at the same heading level. A child section runs only when something names it with a heading reference, such as `jump` (see [Jumping to a section](08-jump-and-call.md#jumping-to-a-section)), `call` (see [Calling a section](08-jump-and-call.md#calling-a-section)), or a task started with `tasks.spawn('### Arm')` (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn)). A child section that holds only prose, such as `### Author note`, works as a note for people reading the file, because the walk never enters it.
+The walk goes from `A` straight to `B` and passes over `Child`, so its `error` never runs and the run succeeds. The walk never enters a child section on its own: it skips the subsections nested under a walked section and moves on to the next sibling at the same heading level. A child section runs only when something names it with a section path, such as `jump` (see [Jumping to a section](08-jump-and-call.md#jumping-to-a-section)), `call` (see [Calling a section](08-jump-and-call.md#calling-a-section)), or a task started with `tasks.spawn('Arm')` (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn)). A child section that holds only prose, such as `Author note`, works as a note for people reading the file, because the walk never enters it.
 
 ### Every top-level section is on the main walk
 
-Every top-level section is on the main walk, and no syntax takes a section out of it. The walk runs each top-level section it reaches, unless the run has already ended or a `jump` such as `jump('## C')` has moved the walk past it. A top-level section the walk reaches runs under the section rules, even when you meant it only as a library for `require`, so a top-level `## lib` that returns a table and that the walk reaches fails the run with `cannot return a table as a result`.
+Every top-level section is on the main walk, and no syntax takes a section out of it. The walk runs each top-level section it reaches, unless the run has already ended or a `jump` such as `jump('../C')` has moved the walk past it. A top-level section the walk reaches runs under the section rules, even when you meant it only as a library for `require`, so a top-level `lib` that returns a table and that the walk reaches fails the run with `cannot return a table as a result`.
 
-A section that should run only when something names it, such as a helper library, stays off the walk in either of two placements: nested under the section that uses it, or placed after a section that returns. Here `### lib` is nested under `## Main`:
+A section that should run only when something names it, such as a helper library, stays off the walk in either of two placements: nested under the section that uses it, or placed after a section that returns. Here `lib` is nested under `Main`:
 
 ````markdown
 ---
@@ -779,7 +779,7 @@ runvil: 0
 ## Main
 
 ```lua
-var.name = (require '### lib').name
+var.name = (require '/Main/lib').name
 ```
 
 ### lib
@@ -799,7 +799,7 @@ return var.name
 nested
 ````
 
-`## Main` loads the library and falls through, and the walk goes from `## Main` straight to `## Last`. It never reaches `### lib`, so its table return never meets the section rules, and the run succeeds with `nested`. Placing a `## lib` after a `## Main` whose block returns keeps it off the walk the same way, because the walk ends before it gets there.
+`Main` loads the library and falls through, and the walk goes from `Main` straight to `Last`. It never reaches `lib`, so its table return never meets the section rules, and the run succeeds with `nested`. Placing a `lib` after a `Main` whose block returns keeps it off the walk the same way, because the walk ends before it gets there.
 
 ### The main walk as a chain
 
@@ -817,7 +817,7 @@ runvil: 0
 ## Main
 
 ```lua
-return call('### Sub')
+return call('Sub')
 ```
 
 ### Sub
@@ -837,7 +837,7 @@ return 'after-reply'
 after-reply
 ````
 
-`call('### Sub')` walks from `### Sub`, falls through to the next sibling, `### After`, and hands that chain's final reply back to the caller. Fall-through works the same way in every chain, which is why it moves the walk or chain a section belongs to.
+`call('Sub')` walks from `Sub`, falls through to the next sibling, `After`, and hands that chain's final reply back to the caller. Fall-through works the same way in every chain, which is why it moves the walk or chain a section belongs to.
 
 When a walk runs past the last section at its level with no outer level waiting to resume, the chain finishes with no result value. A main walk that ends this way gives the run the generic completion text `done`:
 
@@ -887,18 +887,18 @@ return 'hello'
 hello
 ````
 
-The block ends with `return 'hello'`, so the string `hello` becomes the section's result. Because `## Greet` is on the [main walk](#the-section-walk), that return also ends the run, and `hello` is the run result.
+The block ends with `return 'hello'`, so the string `hello` becomes the section's result. Because `Greet` is on the [main walk](#the-section-walk), that return also ends the run, and `hello` is the run result.
 
 ### How a block ends
 
 A Lua block ends in exactly one of three ways: it returns, it jumps, or it fails with an error. When a block calls `jump` and then raises an error, the jump wins:
 
 ````lua
-jump('## Target')
+jump('../Target')
 error('unreachable')
 ````
 
-This block ends as a jump to `## Target`, not as a failure.
+This block ends as a jump to `Target`, not as a failure.
 
 ### The scalar return rule
 
@@ -978,7 +978,7 @@ return var.greeting .. ' world'
 hello world
 ````
 
-`## First` stores a value in [`var`](05-lua-environment.md#keeping-state-in-var) and ends with no `return`, so it produces no result. A block that returns `nil` or nothing lets the section go on to the prose and blocks that follow it. When the section has nothing left, the run keeps going with the next section, where a later `return` can set the result. Here `## Second` returns, and its value is the run result.
+`First` stores a value in [`var`](05-lua-environment.md#keeping-state-in-var) and ends with no `return`, so it produces no result. A block that returns `nil` or nothing lets the section go on to the prose and blocks that follow it. When the section has nothing left, the run keeps going with the next section, where a later `return` can set the result. Here `Second` returns, and its value is the run result.
 
 Returning an empty string is different from returning nothing. `return ''` sets a result, so it ends the chain the way any other string does, while no result moves on to the next block.
 
@@ -1012,7 +1012,7 @@ return 'unreached'
 first
 ````
 
-`## First` returns, so the walk never reaches its sibling `## Second`, even though it follows in the file. On the main walk, the run's result is the value returned by the last section that runs.
+`First` returns, so the walk never reaches its sibling `Second`, even though it follows in the file. On the main walk, the run's result is the value returned by the last section that runs.
 
 The same holds for a section the walk reached through [`jump`](08-jump-and-call.md#jumping-to-a-section). Replace the sections of `first_wins` with these three:
 
@@ -1020,7 +1020,7 @@ The same holds for a section the walk reached through [`jump`](08-jump-and-call.
 ## A
 
 ```lua
-jump('## B')
+jump('../B')
 ```
 
 ## B
@@ -1040,7 +1040,7 @@ return 'c-ran'
 b-ran
 ````
 
-`## B` returns, so its value becomes the run result, and the later section `## C` never runs, so its return value never replaces it.
+`B` returns, so its value becomes the run result, and the later section `C` never runs, so its return value never replaces it.
 
 A section reached through [`call`](08-jump-and-call.md#calling-a-section) runs in a chain of its own, so its return ends only that chain and hands the value back to the caller as the value of `call`:
 
@@ -1056,7 +1056,7 @@ runvil: 0
 ## Main
 
 ```lua
-local answer = call('## Research')
+local answer = call('../Research')
 return 'got: ' .. answer
 ```
 
@@ -1071,7 +1071,7 @@ return 'research-reply'
 got: research-reply
 ````
 
-`## Research` runs once, when `## Main` calls it. `## Main` then returns, which ends the run, so the walk never falls through into `## Research` a second time. A section after the one that returns runs only when something targets it: `require` (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)), `call`, and [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) can still reach it, but fall-through never does. This holds for any returning section, such as one that ends with `return 'done'` or one that returns after waiting on the tasks it started.
+`Research` runs once, when `Main` calls it. `Main` then returns, which ends the run, so the walk never falls through into `Research` a second time. A section after the one that returns runs only when something targets it: `require` (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)), `call`, and [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) can still reach it, but fall-through never does. This holds for any returning section, such as one that ends with `return 'done'` or one that returns after waiting on the tasks it started.
 
 ### Returning from the prologue or the epilog
 
@@ -1148,9 +1148,9 @@ return 'tone: ' .. var.tone
 tone: friendly
 ````
 
-The block directly under `# H1 tone` runs first, before `## Reply` is walked. That is the H1 pass: every Lua block in the [H1 body](02-file-structure.md#the-h1-title-and-h1-body), meaning under the `#` title and before the first `##` heading, runs first as section 0, before any section runs. To run a block ahead of every section, you put it there.
+The block directly under `# H1 tone` runs first, before `Reply` is walked. That is the H1 pass: every Lua block in the [H1 body](02-file-structure.md#the-h1-title-and-h1-body), meaning under the `#` title and before the first `##` heading, runs first as section 0, before any section runs. To run a block ahead of every section, you put it there.
 
-The H1 pass starts with an empty `var`. Its final `var` is read back when it ends, and the first top-level section starts from that `var`, so values the H1 blocks store in `var` become the starting state of the sections walked afterward. That is how `## Reply` reads `friendly`.
+The H1 pass starts with an empty `var`. Its final `var` is read back when it ends, and the first top-level section starts from that `var`, so values the H1 blocks store in `var` become the starting state of the sections walked afterward. That is how `Reply` reads `friendly`.
 
 ### What the H1 body holds
 
@@ -1190,7 +1190,7 @@ The H1 counts as section 0 of the prompt, and its blocks run once, together, as 
 
 ### What the H1 pass can do
 
-Lua in the H1 body can make the same Engine calls a section can, including model rounds, `require`, [`prompt.section` and `prompt.list`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptlist), `call`, `jump`, and [`tasks.fanout`](14-fanout.md#fanout-in-one-call). It can spawn tasks with `tasks.spawn`, and it can call the store functions, such as `store.read` and `store.write`, just as section code does. Because the H1 block runs before any `##` section, a `store.write` there is the run's first effect.
+Lua in the H1 body can make the same Engine calls a section can, including model rounds, `require`, [`prompt.section` and `prompt.section_or`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptsection_or), `call`, `jump`, and [`tasks.fanout`](14-fanout.md#fanout-in-one-call). It can spawn tasks with `tasks.spawn`, and it can call the store functions, such as `store.read` and `store.write`, just as section code does. Because the H1 block runs before any `##` section, a `store.write` there is the run's first effect.
 
 The model an H1 block selects stays in force for the walk, because the main walk starts on the model the H1 pass ended on (see [Where a chain starts](10-models.md#where-a-chain-starts)). That makes the H1 the place to move every section onto another role with [`models.use`](10-models.md#selecting-a-role-with-modelsuse):
 
@@ -1226,7 +1226,7 @@ runvil: 0
 # H1 jump
 
 ```lua
-jump('## Target')
+jump('Target')
 ```
 
 ## Skipped
@@ -1246,7 +1246,7 @@ return 'jumped'
 jumped
 ````
 
-Later H1 blocks never run, and the main walk starts at the top-level section the jump names, with the H1 pass's `var`, skipping every section before it. `## Skipped` never runs, so its `error` never fires.
+Later H1 blocks never run, and the main walk starts at the top-level section the jump names, with the H1 pass's `var`, skipping every section before it. `Skipped` never runs, so its `error` never fires.
 
 ### Returning from the H1 pass
 
@@ -1276,7 +1276,7 @@ error('the walk must not start after an H1 return')
 early
 ````
 
-The returned value becomes the run result, no `##` section runs, and the `error` inside the skipped section `## Never` never fires. Returning `models.infer(prose)` from the H1 pass works the same way: the model's reply becomes the run result, and the walk never starts.
+The returned value becomes the run result, no `##` section runs, and the `error` inside the skipped section `Never` never fires. Returning `models.infer(prose)` from the H1 pass works the same way: the model's reply becomes the run result, and the walk never starts.
 
 The final `var` is still read back on that early exit, as on every exit from the H1 pass. On the early exit the H1 pass is never reported as a finished section, and the run's section start and finish events never name the H1 title at all (see [Run events and records](#run-events-and-records)). Because of the read-back, an H1 block that replaces `var` itself with another value still fails the run even when it then returns a scalar, as [Failures outside the gate](#failures-outside-the-gate) explains.
 
@@ -1380,9 +1380,9 @@ the environment cannot satisfy this prompt:
 - the H1 gate failed: H1 `Gated` lua:10: runtime error: H1 `Gated` lua:10: the gate cannot hold
 ````
 
-The run fails with error code `requirements_unmet`, and its message opens with these two lines. After `- the H1 gate failed: ` comes the Lua error's own text. Its first line names the failing block and its line in the prompt file and then gives the `assert` message `the gate cannot hold`, and a Lua stack traceback follows on the next lines. After the traceback, the message ends with ` (at gated.md:10)`, the line of the failed `assert`. `## Work` never runs.
+The run fails with error code `requirements_unmet`, and its message opens with these two lines. After `- the H1 gate failed: ` comes the Lua error's own text. Its first line names the failing block and its line in the prompt file and then gives the `assert` message `the gate cannot hold`, and a Lua stack traceback follows on the next lines. After the traceback, the message ends with ` (at gated.md:10)`, the line of the failed `assert`. `Work` never runs.
 
-The Lua blocks under a prompt's H1 title are its hard gates. An `assert` there checks the prompt's arguments or prompt-wide settings, and when it fails, the run ends before any section is walked, with error code `requirements_unmet`. Move the same `assert` into the block under `## Work` and the run fails with error code `lua_runtime` instead, because the same uncaught Lua error in a block under a walked section is an ordinary `lua_runtime` failure.
+The Lua blocks under a prompt's H1 title are its hard gates. An `assert` there checks the prompt's arguments or prompt-wide settings, and when it fails, the run ends before any section is walked, with error code `requirements_unmet`. Move the same `assert` into the block under `Work` and the run fails with error code `lua_runtime` instead, because the same uncaught Lua error in a block under a walked section is an ordinary `lua_runtime` failure.
 
 Once the hard gate fails, the later blocks in the H1 body and every section never run, so a later H1 block's effects, such as a `store.write`, never happen. The failure still counts as the failing block's own: a `lua_chunk_failed` event is reported under the H1 title before the run ends.
 
@@ -1393,7 +1393,7 @@ Any ordinary Lua error left uncaught in an H1 block fails the hard gate, and the
 - An `error` or `assert` call.
 - A call to a function that does not exist.
 - Running out of Lua memory.
-- An `error(...)` inside a library that the H1 body loads with `require`. The library's raised message is kept as the cause, so a library section `## broken` that runs `error('library boom')` gives a cause containing `library boom`.
+- An `error(...)` inside a library that the H1 body loads with `require`. The library's raised message is kept as the cause, so a library section `broken` that runs `error('library boom')` gives a cause containing `library boom`.
 - A `call` that names no visible section.
 - A `tasks.fanout` error that would otherwise end the run with `lua_runtime`, such as a bad collection or an arm that failed with a `lua_runtime` error (see [When an arm fails](14-fanout.md#when-an-arm-fails)).
 
@@ -1402,11 +1402,11 @@ A `{{ }}` substitution that fails in the H1 body does not fail the gate: it keep
 Each case fails the gate only when it is left uncaught. A `call` that names no visible section raises its error at the call site, so you can catch it with `pcall`:
 
 ````lua
-local ok, err = pcall(call, '## Nope')
+local ok, err = pcall(call, '../Nope')
 return tostring(ok) .. ':' .. tostring(err)
 ````
 
-As the only block in an H1 body, this block returns text that starts with `false:`, followed by an error naming `## Nope`, and that text is the run result.
+As the only block in an H1 body, this block returns text that starts with `false:`, followed by an error naming `Nope`, and that text is the run result.
 
 Because `tasks.fanout` raises the failing arm's own error, an arm's tool or store failure keeps its own code instead of becoming `requirements_unmet`.
 
@@ -1503,11 +1503,11 @@ A completed run's result text comes only from a `return` in the H1 pass, a `retu
 - `return tools.call('web/fetch', { url = 'https://example.com' })` gives the tool's reply.
 - Values the block builds, such as `return var.answer`, `return r[1].text .. '|' .. r[2].text`, or `return err.kind .. '|' .. tostring(err)`.
 
-The rule holds at every heading level the main walk reaches: when the top-level chain ends with `return 'x-value'` in a section `### X`, the run's final text is `x-value`.
+The rule holds at every heading level the main walk reaches: when the top-level chain ends with `return 'x-value'` in a section `X`, the run's final text is `x-value`.
 
 A section's `return` value becomes the run result, not the model's last reply. A section that ends with `return 'ok'` after the model's final reply `done` gives the result `ok`. A section that calls a model without returning the reply adds nothing to the run's result, and only a reply that a block returns, such as `return models.infer(prose)` in the last block, becomes the result. Running [`models.loop`](11-conversations.md#starting-a-conversation) on the section entry's `messages` list and then returning `messages[#messages].content` makes the model's final text reply from the loop the run result, which is how the last block of the [shipped](01-what-a-prompt-is.md#shipped-example-prompts) `research-person` prompt ends.
 
-Returns from other chains go back to the code that started them instead. A value returned inside a section reached through `call('## S1')` goes back to the caller as the value of `call`. A section started with `tasks.spawn` hands its `return` value back as that task's result, and the section that started the tasks reads those values as `results[1].result` and `results[2].result`. When two `## Reply` tasks each return `hi there`, the run result is `hi there hi there` only because `## Greet`, the entry section, returns that text after waiting on both tasks. A called section or task that ends without returning gives back empty text, not `done`.
+Returns from other chains go back to the code that started them instead. A value returned inside a section reached through `call('../S1')` goes back to the caller as the value of `call`. A section started with `tasks.spawn` hands its `return` value back as that task's result, and the section that started the tasks reads those values as `results[1].result` and `results[2].result`. When two `Reply` tasks each return `hi there`, the run result is `hi there hi there` only because `Greet`, the entry section, returns that text after waiting on both tasks. A called section or task that ends without returning gives back empty text, not `done`.
 
 ### The `done` fallback
 
@@ -1655,9 +1655,9 @@ The H1 pass reports no `section_started` or `section_finished` of its own, becau
 
 Each walked section reports `section_started` when the walk enters it and `section_finished` when it completes, both under the section's name. At a fall-through, the section that ends reports `section_finished` before the next section reports `section_started`, so sections `One` and `Two` report One started, One finished, Two started, Two finished.
 
-A section that ends by jumping counts as completed too. It reports `section_finished` before the section the jump names reports `section_started`, the same as at a fall-through, so `## A` running `jump('## B')` reports A started, A finished, B started, B finished. A section whose `jump` names a heading that matches no visible section, or more than one, still reports `section_finished`, because the section completes before the heading is looked up. The run then fails on the unresolved heading, and for `jump('## Missing')` the error contains `not found`.
+A section that ends by jumping counts as completed too. It reports `section_finished` before the section the jump names reports `section_started`, the same as at a fall-through, so `A` running `jump('../B')` reports A started, A finished, B started, B finished. A section whose `jump` path names no section still reports `section_finished`, because the section completes before the path is looked up. The run then fails on the unresolved path, and for `jump('../Missing')` the error contains `not found`.
 
-A section that ends the walk with `return` still finishes normally, as at a fall-through: its final `var` is read back and it reports `section_finished`. So `## Two` doing `return 'two-ran'` gives the result `two-ran` and a final Two finished.
+A section that ends the walk with `return` still finishes normally, as at a fall-through: its final `var` is read back and it reports `section_finished`. So `Two` doing `return 'two-ran'` gives the result `two-ran` and a final Two finished.
 
 ### Events from a failing section
 

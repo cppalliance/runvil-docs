@@ -200,7 +200,7 @@ For a text resource that is not HTML, such as JSON, XML, or plain text, fetch re
 
 ### Limiting the text with `max_chars`
 
-The optional integer argument `max_chars` limits how many characters of text one fetch returns. This `## Fetch` section replaces the one in `fetch-page`:
+The optional integer argument `max_chars` limits how many characters of text one fetch returns. This `Fetch` section replaces the one in `fetch-page`:
 
 ````markdown
 ## Fetch
@@ -220,7 +220,7 @@ The ceiling it mentions is the 40,000 limit, and the flag is the `truncated: tru
 
 ### Rendering the whole page with `raw`
 
-The optional boolean argument `raw` skips readability extraction and renders the whole HTML document, which suits a page that is mostly a table or a list, where extraction would discard the content. This `## Fetch` section replaces the one in `fetch-page`:
+The optional boolean argument `raw` skips readability extraction and renders the whole HTML document, which suits a page that is mostly a table or a list, where extraction would discard the content. This `Fetch` section replaces the one in `fetch-page`:
 
 ````markdown
 ## Fetch
@@ -397,7 +397,7 @@ When that address answers with HTTP status 404, the call still completes, and th
 https://example.com/missing answered HTTP 404; try a different URL
 ````
 
-That is a soft failure: a failure that `web/fetch` returns as untrusted tool text instead of failing the call, so the model can read it and try a different URL. A hard failure fails the call instead of returning text, and every hard failure has a tool error kind, a name such as `InvalidArguments` that says what went wrong. This `## Fetch` section, in place of the one above, fails hard:
+That is a soft failure: a failure that `web/fetch` returns as untrusted tool text instead of failing the call, so the model can read it and try a different URL. A hard failure fails the call instead of returning text, and every hard failure has a tool error kind, a name such as `InvalidArguments` that says what went wrong. This `Fetch` section, in place of the one above, fails hard:
 
 ````markdown
 ## Fetch
@@ -558,7 +558,7 @@ A `tools.call` in your Lua reaches a web tool even when the section never offers
 
 ### Catching a hard failure
 
-A hard fetch failure raises an error value whose error kind, `err.kind`, is `tool`, and `pcall(tools.call, ...)` catches it (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)). This `## Fetch` section replaces the one in `fetch-page`:
+A hard fetch failure raises an error value whose error kind, `err.kind`, is `tool`, and `pcall(tools.call, ...)` catches it (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)). This `Fetch` section replaces the one in `fetch-page`:
 
 ````markdown
 ## Fetch
@@ -657,7 +657,7 @@ Inside `models.loop`, soft and hard fetch failures alike reach the model as the 
 
 ### Tool objects for the web tools
 
-`tools.get('web/fetch')` returns the fetch tool's Tool object (see [Finding a tool with `tools.get`](12-tools.md#finding-a-tool-with-toolsget)). This `## Fetch` section replaces the one in `fetch-page`:
+`tools.get('web/fetch')` returns the fetch tool's Tool object (see [Finding a tool with `tools.get`](12-tools.md#finding-a-tool-with-toolsget)). This `Fetch` section replaces the one in `fetch-page`:
 
 ````markdown
 ## Fetch
@@ -863,7 +863,7 @@ The sections after this one explain the rows: [URL admission rules](#url-admissi
 
 ### `max_chars` can only ask for less
 
-This `## Fetch` section replaces the one in `fetch-page`:
+This `Fetch` section replaces the one in `fetch-page`:
 
 ````markdown
 ## Fetch
@@ -930,7 +930,7 @@ Page text longer than the character limit is cut on a character boundary, and th
 
 ### Bodies over the byte cap
 
-This `## Fetch` section replaces the one in `fetch-short`:
+This `Fetch` section replaces the one in `fetch-short`:
 
 ````markdown
 ## Fetch
@@ -969,7 +969,7 @@ The header's `truncated:` line reads `true` when either the flat-text byte cap o
 
 ### Connect and request time limits
 
-This `## Fetch` section replaces the one in `fetch-short`:
+This `Fetch` section replaces the one in `fetch-short`:
 
 ````markdown
 ## Fetch
@@ -1038,7 +1038,7 @@ The `url` argument passes the parse check when it parses as an absolute URL, and
 
 ### The scheme check
 
-This `## Fetch` section replaces the one in `fetch-path`:
+This `Fetch` section replaces the one in `fetch-path`:
 
 ````markdown
 ## Fetch
@@ -1062,7 +1062,7 @@ A URL with an embedded `user:pass@` part, such as `https://user:pass@example.com
 
 ### The port check
 
-This `## Fetch` section replaces the one in `fetch-path`:
+This `Fetch` section replaces the one in `fetch-path`:
 
 ````markdown
 ## Fetch
@@ -1082,7 +1082,7 @@ The default fetch policy allows only ports 80 and 443, and `web/fetch` connects 
 
 ### The host check and IP literals
 
-This `## Fetch` section replaces the one in `fetch-path`:
+This `Fetch` section replaces the one in `fetch-path`:
 
 ````markdown
 ## Fetch
@@ -1139,7 +1139,7 @@ return tools.call('web/fetch', { url = 'https://example.com/' })
 ```
 ````
 
-When `example.com` resolves to both `93.184.216.34` and `127.0.0.1`, the fetch connects to `93.184.216.34` only, because `127.0.0.1` is a non-global address. A non-global address is any address in the built-in blocked table, such as a loopback or private-network address, and `web/fetch` never connects to one, no matter what host name the URL uses. Blocking these addresses is what keeps a fetch from being turned against internal systems, as [The fetch policy and anonymous requests](#the-fetch-policy-and-anonymous-requests) explains. This `## Fetch` section replaces the one in `fetch-page`:
+When `example.com` resolves to both `93.184.216.34` and `127.0.0.1`, the fetch connects to `93.184.216.34` only, because `127.0.0.1` is a non-global address. A non-global address is any address in the built-in blocked table, such as a loopback or private-network address, and `web/fetch` never connects to one, no matter what host name the URL uses. Blocking these addresses is what keeps a fetch from being turned against internal systems, as [The fetch policy and anonymous requests](#the-fetch-policy-and-anonymous-requests) explains. This `Fetch` section replaces the one in `fetch-page`:
 
 ````markdown
 ## Fetch
@@ -1254,7 +1254,7 @@ return tools.call('web/fetch', { url = 'https://example.com/' })
 
 When `https://example.com/` answers with a redirect to `https://example.com/next`, the fetch follows the hop with no action needed from the prompt and returns the response from `https://example.com/next`, which receives exactly one request. The status check, the messages about the received response, and the `url:` line of the provenance header all use that final URL.
 
-`web/fetch` follows HTTP redirects automatically, but it checks every hop again before following it. A refused hop comes back as soft text the model can act on, not as a failed call. This `## Fetch` section replaces the one in `fetch-page`:
+`web/fetch` follows HTTP redirects automatically, but it checks every hop again before following it. A refused hop comes back as soft text the model can act on, not as a failed call. This `Fetch` section replaces the one in `fetch-page`:
 
 ````markdown
 ## Fetch
@@ -1351,7 +1351,7 @@ return tools.call('web/search', {
 ```
 ````
 
-These arguments pass every check, so the call reaches the search provider, and `country` and `search_lang` reach it unchanged as `us` and `en`. `web/search` checks its arguments before it runs any search, and only a call that passes every check reaches the search provider. A call with an invalid argument fails with tool error kind `InvalidArguments` and never reaches the provider. This `## Search` section replaces the one in `search-web`:
+These arguments pass every check, so the call reaches the search provider, and `country` and `search_lang` reach it unchanged as `us` and `en`. `web/search` checks its arguments before it runs any search, and only a call that passes every check reaches the search provider. A call with an invalid argument fails with tool error kind `InvalidArguments` and never reaches the provider. This `Search` section replaces the one in `search-web`:
 
 ````markdown
 ## Search

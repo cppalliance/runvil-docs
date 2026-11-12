@@ -49,7 +49,7 @@ The same section gives the defaults of the two request limits the gateway client
 
 A failure belongs to one of four failure families, and each family has its own vocabulary:
 
-- A parse failure is found before anything runs, and it has a parse error kind: `Frontmatter`, `Structure`, `Fence`, `List`, or `Lua`, plus `Internal` for a fault in the parser itself. See [Parse errors and their kinds](#parse-errors-and-their-kinds).
+- A parse failure is found before anything runs, and it has a parse error kind: `Frontmatter`, `Structure`, `Fence`, or `Lua`, plus `Internal` for a fault in the parser itself. See [Parse errors and their kinds](#parse-errors-and-their-kinds).
 - A failure inside Lua is an [error value](05-lua-environment.md#error-values), the table an Engine failure raises in Lua, whose `kind` is one of sixteen lowercase error kinds, such as `lua`, `tool_loop_exhausted`, or `model_failure`, and whose `code` names the exact failure. See [Error kinds in Lua and the run error they become](#error-kinds-in-lua-and-the-run-error-they-become).
 - A failed run ends with an error whose [error code](04-how-a-prompt-runs.md#the-run-result) is the stable name of what failed, such as `lua_runtime` or `not_found`. See [Run error codes](#run-error-codes).
 - A Host cancel ends the run with the canceled error, whose code is `canceled`, and Workshop's run log records it as `canceled`, not `failed`. See [Cancellation and stops](#cancellation-and-stops).
@@ -62,13 +62,13 @@ A run that fails ends with a run error, the error that ended it. A run error is 
 
 A run error carries nothing else. Whether a failure is retryable, meaning it may be transient so that running the prompt again could succeed, follows from its code: only the model codes for transient transport or backend problems, such as `overloaded` and `timeout`, are retryable. [Retryable failures](#retryable-failures) lists which failures count.
 
-A failed run's message is its error's located message, so where a failure points at a place, its message says so. A `structure_invalid`, `fence_invalid`, or `list_empty_item` failure ends its message with ` (prompt {name}, line {line}, column {column})`, a `frontmatter_invalid` failure ends it with ` (line {line}, column {column})`, and every other located failure ends it with ` (at {file}:{line})`, the prompt file and line, or for an `internal` fault the Engine source file and line. [Where an error points](#where-an-error-points) covers each form, the location a caught error value's message starts with, and the location fields a parse error itself reports.
+A failed run's message is its error's located message, so where a failure points at a place, its message says so. A `structure_invalid` or `fence_invalid` failure ends its message with ` (prompt {name}, line {line}, column {column})`, a `frontmatter_invalid` failure ends it with ` (line {line}, column {column})`, and every other located failure ends it with ` (at {file}:{line})`, the prompt file and line, or for an `internal` fault the Engine source file and line. [Where an error points](#where-an-error-points) covers each form, the location a caught error value's message starts with, and the location fields a parse error itself reports.
 
 ### Branching on a failure
 
 Each part of a run error has its own job. Use the code to branch on what failed, and the message to show a reader what happened and where. A block that catches the failure sees the same code as `err.code`.
 
-The [Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host) decides how it shows the code and the message to the person running the prompt, and how it shows a parse error's location fields. Workshop's own prompt check, which parses a prompt outside any run, reports a parse failure under a code named by its parse error kind, one of `parse_frontmatter`, `parse_structure`, `parse_fence`, `parse_list`, `parse_lua`, or `parse_internal`, and it prefixes `line {line}: ` to the message of every located parse failure except an `Internal` one. The Harness hands the Host each run's result, and Workshop's run log stores each run's status, `completed`, `failed`, or `canceled`, with the code tag and the located message of the error that ended it.
+The [Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host) decides how it shows the code and the message to the person running the prompt, and how it shows a parse error's location fields. Workshop's own prompt check, which parses a prompt outside any run, reports a parse failure under a code named by its parse error kind, one of `parse_frontmatter`, `parse_structure`, `parse_fence`, `parse_lua`, or `parse_internal`, and it prefixes `line {line}: ` to the message of every located parse failure except an `Internal` one. The Harness hands the Host each run's result, and Workshop's run log stores each run's status, `completed`, `failed`, or `canceled`, with the code tag and the located message of the error that ended it.
 
 ## Run limits and their defaults
 
@@ -107,7 +107,7 @@ tool_loop_exhausted: capped.md:17: The tool-call limit was reached before a fina
 
 When the model answers with text within its three rounds, the run result is that reply.
 
-The `max_tool_iterations: 3` line sets this prompt's round cap to 3, so the [`models.loop`](11-conversations.md#starting-a-conversation) call in `## Ask` takes at most three model rounds. Reaching the round cap fails the loop call with an error value whose `kind` is `tool_loop_exhausted`, and the block catches it with [`pcall`](05-lua-environment.md#raising-and-catching-errors) and returns its kind and its message. The message starts with `capped.md:17: `, the line of the loop call, followed by the failure's prose (see [Where an error points](#where-an-error-points)).
+The `max_tool_iterations: 3` line sets this prompt's round cap to 3, so the [`models.loop`](11-conversations.md#starting-a-conversation) call in `Ask` takes at most three model rounds. Reaching the round cap fails the loop call with an error value whose `kind` is `tool_loop_exhausted`, and the block catches it with [`pcall`](05-lua-environment.md#raising-and-catching-errors) and returns its kind and its message. The message starts with `capped.md:17: `, the line of the loop call, followed by the failure's prose (see [Where an error points](#where-an-error-points)).
 
 ### The five run limits
 
@@ -353,24 +353,23 @@ lua compilation error at section `Transform` epilog (line 20): {message}
 
 Here line 20 is the file line where the block's Lua starts, and `{message}` is `syntax error: ` followed by the Lua compiler's own text. The parse error also points at line 20, the line the compiler's diagnostic names, and names the prompt `transform` (see [Lua compile failure positions](#lua-compile-failure-positions)).
 
-The whole prompt file is checked before anything runs. The parser validates the frontmatter, the headings, the fences, and the sections, and it compiles every Lua block in the H1 body and in every section, so a structural error or a Lua syntax error anywhere in the file, even in the last section, stops the prompt before any section runs. A parse error rejects the whole prompt file, even when every other section in it is valid, as `## Load` is here.
+The whole prompt file is checked before anything runs. The parser validates the frontmatter, the headings, the fences, and the sections, and it compiles every Lua block in the H1 body and in every section, so a structural error or a Lua syntax error anywhere in the file, even in the last section, stops the prompt before any section runs. A parse error rejects the whole prompt file, even when every other section in it is valid, as `Load` is here.
 
 A prompt file that fails to parse is rejected with a parse error, and that parse error carries a parse error kind, the stable name of the class of rule the file broke. A parse failure shows up when the prompt file is parsed, before any part of it runs, as one error with a stable kind and optional location fields, such as the line and column of the problem.
 
-### The six parse error kinds
+### The five parse error kinds
 
-Every parse failure has exactly one of six parse error kinds:
+Every parse failure has exactly one of five parse error kinds:
 
 | Parse error kind | What it means |
 |---|---|
 | `Frontmatter` | the frontmatter block is missing, unclosed, or not valid YAML, or the prompt contract rejects a key or value in it |
 | `Structure` | the H1 title or the heading tree is invalid |
 | `Fence` | a `lua` fence is left open, or a fence or line breaks the strict Lua fence rule |
-| `List` | a list section has an empty item |
 | `Lua` | a Lua block does not compile |
 | `Internal` | the parser fails through no fault of the prompt |
 
-Common mistakes land in predictable parse error kinds. Malformed YAML and a `max_tool_iterations` value outside 1 to 1000 give `Frontmatter`, two sibling headings with the same name give `Structure`, an empty list item gives `List`, and a Lua syntax error gives `Lua`. Every parse error carries a kind, and the kinds you run into while writing include `Structure`, `Fence`, `Lua`, and `List`.
+Common mistakes land in predictable parse error kinds. Malformed YAML and a `max_tool_iterations` value outside 1 to 1000 give `Frontmatter`, two sibling headings with the same name give `Structure`, and a Lua syntax error gives `Lua`. Every parse error carries a kind, and the kinds you run into while writing include `Structure`, `Fence`, and `Lua`.
 
 The set of parse error kinds is open, so a Host program that branches on a parse error's kind needs a catch-all case for kinds it does not know.
 
@@ -384,7 +383,6 @@ Parse error kind `Structure` means the [H1 title](02-file-structure.md#the-h1-ti
 
 Parse error kind `Fence` means a `lua` fence is left open, or a fence or line anywhere in the body breaks the strict Lua fence rule (see [Exact fence rules and fence errors](03-blocks-and-prose.md#exact-fence-rules-and-fence-errors)) through a bad label, a bad opening line, a bad closing line, or a lookalike line, and every such break reports `Fence`. A `lua` fence that never gets a closing line, or whose closing line is not exactly three backticks, fails the parse with `Fence`.
 
-Parse error kind `List` means a [list section](03-blocks-and-prose.md#list-sections) has an empty item: a marker such as `-` or `1.` with no text after it.
 
 Parse error kind `Lua` means a Lua block does not compile because of a syntax error, whether in the H1 body, a section block such as an epilog, or a `lua` fence between prose passages. It fails the whole parse before the prompt runs, with this message:
 
@@ -548,32 +546,6 @@ A bad label gives the first message, a bad opening line or a lookalike line give
 
 Lines inside the body of another fenced code block are never checked against the Lua fence rule. A longer fence, such as one opened with four backticks, can therefore show a `lua` fence as an example without a `Fence` error, and the inner fence stays prose.
 
-### List messages
-
-A list section with an empty item, one that has no text, fails with parse error kind `List` and a message that names the section:
-
-````markdown
----
-name: steps
-description: Lists three steps, one of them empty.
-runvil: 0
----
-
-# Steps
-
-## Plan
-
-- alpha
--
-- gamma
-````
-
-````text
-empty bullet item in list section `Plan`
-````
-
-The `List` kind is reported the same way whatever the section is named, including sections named `frontmatter` or `fence`. A section counts as a list section only when it has no Lua and every nonblank line is a list marker, so a section that mixes prose with bullet lines is ordinary prose and raises no `List` error.
-
 ### Internal parser faults
 
 Parse error kind `Internal` means the parser fails through no fault of the prompt: one of its own internal checks breaks, or the Lua compiler cannot start. When the compiler cannot start, compiling a block fails with `Internal` instead of `Lua`.
@@ -656,7 +628,7 @@ First.
 Second.
 ````
 
-The first `## S` is on line 9 and the second is on line 13, so the parse fails with parse error kind `Structure` and this message:
+The first `S` is on line 9 and the second is on line 13, so the parse fails with parse error kind `Structure` and this message:
 
 ````text
 duplicate sibling section name `S`: first declared at line 9, again at line 13; sibling section names must be unique
@@ -697,7 +669,7 @@ The `dup` prompt shows the whole case: parse error kind `Structure`, name `dup`,
 
 A run error has an optional location of its own, and a failed run's message is the error's located message: the failure's own text with the text of its causes, then where the failure happened:
 
-- A `structure_invalid`, `fence_invalid`, or `list_empty_item` failure, the code of a `Structure`, `Fence`, or `List` parse failure, ends with ` (prompt {name}, line {line}, column {column})`, each part only when it is known.
+- A `structure_invalid` or `fence_invalid` failure, the code of a `Structure` or `Fence` parse failure, ends with ` (prompt {name}, line {line}, column {column})`, each part only when it is known.
 - A `frontmatter_invalid` failure, the code of a `Frontmatter` parse failure, ends with ` (line {line}, column {column})`, with no prompt name.
 - Every other located failure ends with ` (at {file}:{line})`: the prompt file and line, or for an `internal` fault the Engine source file and line of the broken invariant.
 
@@ -768,9 +740,9 @@ A Pack id declared twice under `uses:`, as in `twice`, or a Pack id the Engine r
 
 Any other parse failure's location comes from the offending region in the body: its line and column are where the region starts, and its end line and end column are just past where the region ends. A structural failure's line is the 1-based line in the whole file where the region starts, counting the frontmatter lines above the body.
 
-A duplicate sibling heading error reports the 1-based line of the offending heading, counted from the top of the file including the frontmatter, so with frontmatter on lines 1 to 4 and the second `## S` on line 12, the error is at line 12. Its column is the 1-based column of the offending heading, which is column 1. Its location covers that whole heading line and ends at column 1 of the next line, as `dup` shows.
+A duplicate sibling heading error reports the 1-based line of the offending heading, counted from the top of the file including the frontmatter, so with frontmatter on lines 1 to 4 and the second `S` on line 12, the error is at line 12. Its column is the 1-based column of the offending heading, which is column 1. Its location covers that whole heading line and ends at column 1 of the next line, as `dup` shows.
 
-Line numbers inside heading error messages also count from the first line of the file, frontmatter included. With frontmatter on lines 1 to 4, H1 titles on lines 6, 12, and 16 give the message `prompt must contain exactly one H1 title, found 3 at lines 6, 12, 16`, and a repeated `## S` whose first copy is on line 8 gives a message containing `first declared at line 8` and `again at line 12`.
+Line numbers inside heading error messages also count from the first line of the file, frontmatter included. With frontmatter on lines 1 to 4, H1 titles on lines 6, 12, and 16 give the message `prompt must contain exactly one H1 title, found 3 at lines 6, 12, 16`, and a repeated `S` whose first copy is on line 8 gives a message containing `first declared at line 8` and `again at line 12`.
 
 Orphan and empty heading errors report the heading's file-absolute line, column 1, and cover the heading line, the same as a duplicate sibling heading. Every heading `Structure` error, for an orphan, empty, or duplicate sibling heading, points at the heading itself. A repeated H1 title points at the line of the second H1, so the file with H1 titles on lines 6, 12, and 16 reports line 12, and an empty H1 title points at its own line, each at column 1.
 
@@ -825,7 +797,6 @@ The error is at line 12, column 1, with the opening-line message:
 `lua` fence opening line must be exactly ```lua
 ````
 
-An empty list item points at its marker, so the bare `-` in the `steps` prompt is reported at line 12, column 1, and an indented marker's column is that of the marker itself, past its indent. The `List` message names the section as well (see [List messages](#list-messages)).
 
 A Lua compile failure points at the line its compiler diagnostic names, as [Lua compile failure positions](#lua-compile-failure-positions) shows.
 
@@ -889,7 +860,7 @@ Every code also has a number, and the number's hundreds place the code in one of
 
 | Code family | Codes | What causes them |
 |---|---|---|
-| Parse codes (1xx) | `frontmatter_invalid`, `structure_invalid`, `fence_invalid`, `list_empty_item`, `unsupported_version`, `invalid_value` | the prompt fails to parse, the `runvil:` key is missing or declares a major version other than `0`, or a value is missing or not valid |
+| Parse codes (1xx) | `frontmatter_invalid`, `structure_invalid`, `fence_invalid`, `unsupported_version`, `invalid_value` | the prompt fails to parse, the `runvil:` key is missing or declares a major version other than `0`, or a value is missing or not valid |
 | Lua codes (2xx) | `lua_runtime`, `lua_compile`, `lua_quota`, `call_depth_exceeded`, `substitution` | a section's Lua fails at run time or returns an unusable value, a Pack prelude cannot install, a Lua block does not compile, a log quota runs out, a call nests past the call depth cap, or a `{{ }}` substitution fails |
 | Task codes (3xx) | `tasks_live`, `task_not_owned`, `task_consumed`, `task_canceled` | a chain ends with tasks still running and not idle, reaches for a task it does not own, or waits on a result twice, or a canceled task's error value is raised again |
 | Model codes (4xx) | `context_overflow`, `rate_limited`, `quota_exhausted`, `overloaded`, `refused`, `timeout`, `transport`, `server_error`, `rejected`, `malformed_response`, `empty_reply`, `unavailable`, `invalid_parts`, `context_exhausted`, `model_required` | a model call fails or gets an empty reply, the Harness cannot fetch the Host's list of models, a request overflows the model's context window and compaction does not make it fit, or a model round runs when the Host gave no model |
@@ -906,7 +877,7 @@ A failed run's message is its error's located message: the underlying error's ow
 
 ### Parse codes
 
-A prompt that fails to parse fails before any run starts, so before any section or code runs, before input staging, and before the wait for Packs, and its parse error kind decides the code. `Frontmatter` is `frontmatter_invalid`, `Structure` is `structure_invalid`, `Fence` is `fence_invalid`, and `List` is `list_empty_item`. A `Lua` parse failure, a block that does not compile, is `lua_compile`, a Lua code (see [Lua codes](#lua-codes)), and an `Internal` parser fault is `internal`, a run code. The failure message is the parse error followed by its chain of causes, then its location form, as [Where a run error's message points](#where-a-run-errors-message-points) describes.
+A prompt that fails to parse fails before any run starts, so before any section or code runs, before input staging, and before the wait for Packs, and its parse error kind decides the code. `Frontmatter` is `frontmatter_invalid`, `Structure` is `structure_invalid`, and `Fence` is `fence_invalid`. A `Lua` parse failure, a block that does not compile, is `lua_compile`, a Lua code (see [Lua codes](#lua-codes)), and an `Internal` parser fault is `internal`, a run code. The failure message is the parse error followed by its chain of causes, then its location form, as [Where a run error's message points](#where-a-run-errors-message-points) describes.
 
 A file with no `runvil:` key also fails with `structure_invalid`, but its prompt parses: the version check is the first start check on the run's first step, after input staging and the wait for Packs and before the store and requirements checks. So an input refusal comes first when one applies, and either way the run's record holds no events. The message is `not a runvil prompt: no runvil version (prompt {name})`, which ends with the prompt's frontmatter `name`.
 
@@ -1140,14 +1111,14 @@ Raised again later, after another suspending call, each error kind ends the run 
 
 Every kind but `lua` raised again later keeps its whole original error, its code, message, fields, and line included, so it ends the run as it would have uncaught, in the H1 pass too. A `lua` value raised again later is rebuilt as a plain Lua runtime error, code `lua_runtime`, that keeps its message and points at the `error` line. A `canceled` value from a canceled run or a stopped call, raised again later, ends the run with the canceled error, as [Cancellation and stops](#cancellation-and-stops) explains.
 
-### Task and heading errors
+### Task and section path errors
 
 When a task error ends the run uncaught, in any chain and in the H1 pass too, the run ends with its task code: `tasks_live` for a leaked task, `task_not_owned` for a task reached for by a chain that does not own it, `task_consumed` for a result waited on twice, and `task_canceled` for a canceled task's `canceled` value re-raised right after the wait (see [Ownership, leaked tasks, and abandonment](15-tasks.md#ownership-leaked-tasks-and-abandonment)).
 
-Left uncaught, a heading-not-found error or a malformed heading reference error ends the run with `lua_runtime`, or with `requirements_unmet` when it reaches the H1 body's own Lua (see [Resolving heading references](08-jump-and-call.md#resolving-heading-references)). The not-found error names the heading in this text, and the run's message ends with ` (at {file}:{line})`, the line of the `jump`, `call`, or `require` that named the heading:
+Left uncaught, a not-found error or a malformed section path error ends the run with `lua_runtime`, or with `requirements_unmet` when it reaches the H1 body's own Lua (see [Resolving section paths](08-jump-and-call.md#resolving-section-paths)). The not-found error names the path in this text, and the run's message ends with ` (at {file}:{line})`, the line of the `jump`, `call`, `require`, or other call that named the path:
 
 ````text
-section heading `{heading}` not found; available sections: {list}
+section `{path}` not found: {where}
 ````
 
 Only the H1 body's own Lua code remaps this way. The machinery around it, namely section setup, the final `var` read-back, and jump-target resolution, keeps its own code.

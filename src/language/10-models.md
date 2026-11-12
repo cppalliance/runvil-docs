@@ -24,7 +24,7 @@ return models.infer(prose)
 ```
 ````
 
-The frontmatter declares no model role, and the `## Greet` section sends its prose to the model with `return models.infer(prose)`, so the model's reply to `Say "Hello, world!"` becomes the run result. A prompt that only wants the Host's model needs nothing else: no `models:` key, no selection, and one `models.infer(prose)` call in a section. The bundled `hello.md` prompt is built this way, with no `models:` key in its frontmatter and `return models.infer(prose)` at the end of its `## Greet` section.
+The frontmatter declares no model role, and the `Greet` section sends its prose to the model with `return models.infer(prose)`, so the model's reply to `Say "Hello, world!"` becomes the run result. A prompt that only wants the Host's model needs nothing else: no `models:` key, no selection, and one `models.infer(prose)` call in a section. The bundled `hello.md` prompt is built this way, with no `models:` key in its frontmatter and `return models.infer(prose)` at the end of its `Greet` section.
 
 ### What a model role is
 
@@ -248,7 +248,7 @@ return models.infer(prose)
 ```
 ````
 
-The `fast` role declares `thinking: false`, so the run checks that the model filling `fast` can run with thinking turned off, and every round on `fast` asks for thinking off, including the round in `## Ask`. That round reaches `fast` through the `models.use('fast')` call in the H1 body, because the choice lasts for the rest of the chain (see [The current model](#the-current-model)).
+The `fast` role declares `thinking: false`, so the run checks that the model filling `fast` can run with thinking turned off, and every round on `fast` asks for thinking off, including the round in `Ask`. That round reaches `fast` through the `models.use('fast')` call in the H1 body, because the choice lasts for the rest of the chain (see [The current model](#the-current-model)).
 
 ### Thinking modes
 
@@ -270,7 +270,7 @@ The switch is fixed once per run from the role's declaration, when the run fills
 
 The switch takes effect on a model that can switch thinking per request. A fixed-mode model only ever runs with a matching switch, because `thinking: true` on a `never` model and `thinking: false` on an `always` model refuse the run on its first step.
 
-A role with `thinking: false` sends every request with thinking off, whether a section picks the role with `models.use` or the chain reaches it from an earlier section, and including when the model filling the role is `switchable`. In `boiling-point` above, the H1 body's `models.use('fast')` puts the chain on `fast`, and the round in `## Ask` runs there, yet it still asks for thinking off.
+A role with `thinking: false` sends every request with thinking off, whether a section picks the role with `models.use` or the chain reaches it from an earlier section, and including when the model filling the role is `switchable`. In `boiling-point` above, the H1 body's `models.use('fast')` puts the chain on `fast`, and the round in `Ask` runs there, yet it still asks for thinking off.
 
 ## How the Host fills and checks roles
 
@@ -484,7 +484,7 @@ return models.current().name
 strong
 ````
 
-The current model is the model a round runs on when the call names none, such as `models.infer(prose)`. `models.use` sets it and `models.current()` reads it. It belongs to a chain, not to a section: the H1 body's `models.use('strong')` set it, and `## Check`, a different section, still sees it.
+The current model is the model a round runs on when the call names none, such as `models.infer(prose)`. `models.use` sets it and `models.current()` reads it. It belongs to a chain, not to a section: the H1 body's `models.use('strong')` set it, and `Check`, a different section, still sees it.
 
 A chain is a walk with its own entries (see [The main walk as a chain](04-how-a-prompt-runs.md#the-main-walk-as-a-chain)). The main walk is one chain, a section run through `call` begins another, and each spawned task is a chain of its own.
 
@@ -546,7 +546,7 @@ runvil: 0
 
 ```lua
 models.use('strong')
-local report = call('### Child')
+local report = call('Child')
 return models.current().name .. '|' .. report
 ```
 
@@ -563,7 +563,7 @@ return start .. '>' .. models.current().name
 strong|strong>fast
 ````
 
-`### Child` starts on `strong`, the model its caller was on, switches to `fast`, and returns. The caller is still on `strong` afterwards.
+`Child` starts on `strong`, the model its caller was on, switches to `fast`, and returns. The caller is still on `strong` afterwards.
 
 A task that waits in the queue under a concurrency limit (see [Concurrency slots](15-tasks.md#concurrency-slots)) starts on the model its parent had when the task was spawned, not on the model the parent has when the scheduler admits it. If a parent spawns two tasks on `strong` and then switches to `fast`, the task still queued runs on `strong`. All the arms of one fanout start on the same model as one another.
 
@@ -607,11 +607,11 @@ return models.infer(prose)
 ```
 ````
 
-`## Draft` calls `models.use('creative')` in its first block, so the round in its last block runs on `creative`. `## Critique` calls `models.use('strong')`, so its round runs on `strong`, and the critique becomes the run result. A section that makes no `models.use` call of its own runs on whatever model its chain is on (see [The current model](#the-current-model)).
+`Draft` calls `models.use('creative')` in its first block, so the round in its last block runs on `creative`. `Critique` calls `models.use('strong')`, so its round runs on `strong`, and the critique becomes the run result. A section that makes no `models.use` call of its own runs on whatever model its chain is on (see [The current model](#the-current-model)).
 
 `models.use(target, options?)` selects a model for the rest of the chain and returns a model handle for it. The `target` is one of the five role names, written as a string, or a model handle. The selection becomes the chain's current model, together with any options passed with it. After `models.use`, the rounds that follow in the chain that name no model, such as `models.infer(prose)`, run on the selected model, in the same section and in every later section of the chain until the next `models.use`. So after `models.use('strong')`, the next `models.infer('ping')` goes to the model that fills `strong`.
 
-`models.use` takes effect as a plain statement, so you can write it alone in its own `lua` block before the prose and the round it governs, without keeping its return value, as `## Draft` and `## Critique` do. When you keep the handle, its `label` and `name` fields describe the role:
+`models.use` takes effect as a plain statement, so you can write it alone in its own `lua` block before the prose and the round it governs, without keeping its return value, as `Draft` and `Critique` do. When you keep the handle, its `label` and `name` fields describe the role:
 
 ````markdown
 ---
@@ -638,7 +638,7 @@ Roles are filled before a section's Lua runs, and `models.use` chooses among tho
 
 ### Changing the selection within a section
 
-Calling `models.use` again partway through a section succeeds and replaces the earlier selection, because the selection is read when each round starts. In `tagline`, this one section could replace `## Draft` and `## Critique`:
+Calling `models.use` again partway through a section succeeds and replaces the earlier selection, because the selection is read when each round starts. In `tagline`, this one section could replace `Draft` and `Critique`:
 
 ````markdown
 ## Review
@@ -767,7 +767,7 @@ The `temperature` and `max_tokens` keys are the sampling options: the two settin
 
 ### Reading sampling options back
 
-Replace the `## Write` section of `slogan` with this one:
+Replace the `Write` section of `slogan` with this one:
 
 ````markdown
 ## Write
@@ -951,7 +951,7 @@ return models.infer(models.get('strong'), 'ping')
 ```
 ````
 
-The chain starts on `default`, so a round in `## Check` that names no model would run on `default`. The round on the `strong` handle still sends its request to the model that fills `strong`.
+The chain starts on `default`, so a round in `Check` that names no model would run on `default`. The round on the `strong` handle still sends its request to the model that fills `strong`.
 
 A model handle holds a frozen binding: the model and settings fixed when the handle was made. Its fields report the values fixed then and read the same every time during the run. Its requests go to the model it was made for, so a handle for a `strong` role filled by `gateway/claude-sonnet-4-6` sends its requests to that model, naming it `claude-sonnet-4-6`. Later changes to the chain's current model never change which model a handle uses, and repeated rounds on one handle use the same model, as when two `models.loop(other)` calls both send their requests to the model `other` was made for.
 
@@ -983,7 +983,7 @@ return models.infer(models.get('strong'), 'ping')
 
 `models.get(name)` returns the model handle for one of the five roles, so you reach the model that fills a role by passing its role name. Here the handle runs one round on the `strong` role's model, and the reply is the run result. The call is nested without storing the handle, a common way to run one round on a role.
 
-`## Ask` has no `models.use` call, so the chain stays on `default`. The round still runs on `strong`, because a round given a handle runs on that handle's frozen binding rather than on the chain's current model.
+`Ask` has no `models.use` call, so the chain stays on `default`. The round still runs on `strong`, because a round given a handle runs on that handle's frozen binding rather than on the chain's current model.
 
 ### `models.get` keeps the selection
 
@@ -1150,13 +1150,13 @@ The handle form returns the reply as a plain Lua string, just as the one-argumen
 `models.infer` has two forms. `models.infer(prompt)` takes the prompt string and runs on the chain's current model, and `models.infer(model, prompt)` takes a model handle first and runs on that handle. Any other number of arguments is refused with `models.infer takes (prompt) or (model, prompt)` (see [Infer call-shape errors](#infer-call-shape-errors)). The prompt can be any Lua string: a literal such as `models.infer('hi')`, text read from the store such as `models.infer(store.read('note.md'))` (see [Writing and reading files](09-the-store.md#writing-and-reading-files)), or a string built from earlier results:
 
 ````lua
-local inner = call('## Inner')
+local inner = call('../Inner')
 return models.infer('outer saw: ' .. inner)
 ````
 
-Here `inner` holds the text that `call('## Inner')` returned, and the model receives `outer saw: ` followed by it.
+Here `inner` holds the text that `call('../Inner')` returned, and the model receives `outer saw: ` followed by it.
 
-The reply comes back as a plain Lua string, which the block can concatenate with `..`, compare, store in `var`, pass to `tostring`, or `return` as the section's or the run's result. Replace the `## Write` section of `bakery` with this one:
+The reply comes back as a plain Lua string, which the block can concatenate with `..`, compare, store in `var`, pass to `tostring`, or `return` as the section's or the run's result. Replace the `Write` section of `bakery` with this one:
 
 ````markdown
 ## Write
@@ -1191,7 +1191,7 @@ An infer round sends the prompt and returns the reply, and nothing more:
 
 ### Infer rounds in tasks and arms
 
-A section running as a spawned task (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn)) can call `models.infer` to make its own model request, such as `models.infer('child work')` in a `### Child` section, and return the reply as the task's result. A fanout arm (see [What an arm sees](14-fanout.md#what-an-arm-sees)) can call `models.infer` too, such as `models.infer(prose)`, and each call makes exactly one model round whose reply the arm can return. A task or an arm starts on a copy of its parent's current model, so a `models.infer(prompt)` call there runs on that model until the task or arm calls `models.use` itself (see [Children and fanout arms](#children-and-fanout-arms)).
+A section running as a spawned task (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn)) can call `models.infer` to make its own model request, such as `models.infer('child work')` in a `Child` section, and return the reply as the task's result. A fanout arm (see [What an arm sees](14-fanout.md#what-an-arm-sees)) can call `models.infer` too, such as `models.infer(prose)`, and each call makes exactly one model round whose reply the arm can return. A task or an arm starts on a copy of its parent's current model, so a `models.infer(prompt)` call there runs on that model until the task or arm calls `models.use` itself (see [Children and fanout arms](#children-and-fanout-arms)).
 
 ## Infer errors and the missing-model error
 
@@ -1287,7 +1287,7 @@ return models.infer('say hello')
 ```
 ````
 
-The block in `## Greet` reports these events, in this order:
+The block in `Greet` reports these events, in this order:
 
 1. `lua_chunk_started` for the block.
 2. `model_turn_completed` when the round's model call finishes.

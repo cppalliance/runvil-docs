@@ -69,7 +69,7 @@ return var.first .. '|' .. #messages .. '|' .. type(messages)
 1|0|userdata
 ````
 
-`## First` leaves one record in its list, and `## Second` starts with an empty one. History clears with the section by design, so a conversation that must reach a later section travels as data, such as text kept in `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)). To start over without leaving the section, call `models.compact(compactors.clear, reason)` (see [`compactors.clear`](#compactorsclear)). The list is a userdata value, so `type(messages)` reports `'userdata'` rather than `'table'`.
+`First` leaves one record in its list, and `Second` starts with an empty one. History clears with the section by design, so a conversation that must reach a later section travels as data, such as text kept in `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)). To start over without leaving the section, call `models.compact(compactors.clear, reason)` (see [`compactors.clear`](#compactorsclear)). The list is a userdata value, so `type(messages)` reports `'userdata'` rather than `'table'`.
 
 `messages` keeps its identity for the section entry's whole life, compactions included, so a value read from it earlier, such as `local same = messages`, is still the same list later. The list has no fields other than its methods and its records, so a key such as `new` reads `nil`, like any other key that is neither a method name nor a record position.
 
@@ -87,7 +87,7 @@ messages cannot be assigned to by index; add records with append(record), or rew
 
 [Building a message list](#building-a-message-list) covers `append`, and [Editing a list with `replace`](#editing-a-list-with-replace) covers how a compaction rewrites history.
 
-Assigning the list to another variable, or passing it along, shares the one list rather than copying it. Put this block in the `## Second` section of `fresh-lists` in place of its block:
+Assigning the list to another variable, or passing it along, shares the one list rather than copying it. Put this block in the `Second` section of `fresh-lists` in place of its block:
 
 ````lua
 messages:system('be terse'):user('hi')
@@ -108,7 +108,7 @@ The list and its records work inside [the sandbox](05-lua-environment.md#the-san
 
 `models.loop(compactor?)` is a plain function that runs the section entry's `messages` list on the chain's current model and takes one optional argument, a compactor. `models.loop()` passes nothing, which selects the default compactor, `compactors.fail`. [Choosing a compactor for a call](#choosing-a-compactor-for-a-call) covers the argument, and [Compactors and context exhaustion](#compactors-and-context-exhaustion) explains what a compactor does. A second form, `models.loop(model, compactor?)`, runs the same list on a model handle's model, as [Running on a model handle](#running-on-a-model-handle) shows.
 
-`models.loop()` returns `nil`. What it produces is the records it appends to `messages`. This version of the `## Chat` block in `first-chat` checks both:
+`models.loop()` returns `nil`. What it produces is the records it appends to `messages`. This version of the `Chat` block in `first-chat` checks both:
 
 ````markdown
 ---
@@ -136,7 +136,7 @@ nil|2|assistant
 
 The one-record list grows to two records, `messages[2].role` is `'assistant'`, and `messages[2].content` holds the reply.
 
-To continue the conversation, add to the list and run the loop again. With this block in the `## Chat` section of `first-chat`, the model answers twice:
+To continue the conversation, add to the list and run the loop again. With this block in the `Chat` section of `first-chat`, the model answers twice:
 
 ````lua
 messages:user('first question')
@@ -213,9 +213,9 @@ return messages[#messages].content
 ```
 ````
 
-`## Draft` runs one round with `models.infer` (see [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer)) and keeps the reply in `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)). `models.infer` never reads or changes `messages`. `## Refine` starts with its own empty list, fills it from that draft, and runs it, so the loop sends the system record first and the draft as the user message after it. The run result is the refined paragraph.
+`Draft` runs one round with `models.infer` (see [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer)) and keeps the reply in `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)). `models.infer` never reads or changes `messages`. `Refine` starts with its own empty list, fills it from that draft, and runs it, so the loop sends the system record first and the draft as the user message after it. The run result is the refined paragraph.
 
-A chat keeps the one list for the whole conversation and adds to it before each loop. With this block in the `## Chat` section of `first-chat`, two user messages from a Lua array each get a reply, and each loop call is guarded with `pcall` (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)):
+A chat keeps the one list for the whole conversation and adds to it before each loop. With this block in the `Chat` section of `first-chat`, two user messages from a Lua array each get a reply, and each loop call is guarded with `pcall` (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)):
 
 ````lua
 for _, text in ipairs({ 'first question', 'second question' }) do
@@ -295,7 +295,7 @@ A plain message has only a message role and its content, as in `{ "role": "syste
 
 ### Content parts
 
-A content part is one piece of a record's content when the content is an array instead of a string. One record can mix text parts and image parts. Put this block in the `## Build` section of `records` in place of the first one:
+A content part is one piece of a record's content when the content is an array instead of a string. One record can mix text parts and image parts. Put this block in the `Build` section of `records` in place of the first one:
 
 ````lua
 messages:user({
@@ -325,7 +325,7 @@ A parts `content` is an array of part tables even when it holds one part, as in 
 
 ### Tool calls
 
-A tool call is one request from the model to run a tool, and an `assistant` record holds its calls in a `tool_calls` array next to its string `content`. Put this block in the `## Build` section of `records`:
+A tool call is one request from the model to run a tool, and an `assistant` record holds its calls in a `tool_calls` array next to its string `content`. Put this block in the `Build` section of `records`:
 
 ````lua
 messages:append({ role = 'user', content = 'What is the weather in Paris, and the time?' })
@@ -390,7 +390,7 @@ System records appear only in the leading system block, the unbroken run of syst
 
 ### Record metadata with `meta`
 
-A record's `meta` field holds your own data about a message, such as where it came from or whether it is a summary, and the model never sees it. Put this block in the `## Build` section of `records`:
+A record's `meta` field holds your own data about a message, such as where it came from or whether it is a summary, and the model never sees it. Put this block in the `Build` section of `records`:
 
 ````lua
 messages:user('hi', { source = 'form', id = 7 })
@@ -413,7 +413,7 @@ A value too large is refused with `messages[{index}] meta is {size} bytes as JSO
 
 ### Fields a record keeps
 
-A message record has no fields other than `role`, `content`, `tool_calls`, `tool_call_id`, and `meta`, with `role` and `content` always present and the other three only when they apply. Any other field you set is silently dropped when the record is added. Put this block in the `## Build` section of `records`:
+A message record has no fields other than `role`, `content`, `tool_calls`, `tool_call_id`, and `meta`, with `role` and `content` always present and the other three only when they apply. Any other field you set is silently dropped when the record is added. Put this block in the `Build` section of `records`:
 
 ````lua
 messages:user('u1'):append({ role = 'user', content = 'u2', extra = 1 })
@@ -496,7 +496,7 @@ A table in the second place is always read as `tool_calls`, so for a plain reply
 
 `messages:tool(content, tool_call_id, meta?)` appends the tool record `{ role = "tool", content = content, tool_call_id = tool_call_id }`, taking the result text first and the id of the earlier tool call it answers second, and returns the same list.
 
-Together they write an earlier tool call and its result into the list: `:assistant` carrying the call, followed by `:tool` with the matching id. Put this block in the `## Build` section of `builders` in place of the first one:
+Together they write an earlier tool call and its result into the list: `:assistant` carrying the call, followed by `:tool` with the matching id. Put this block in the `Build` section of `builders` in place of the first one:
 
 ````lua
 messages:user('What is the weather in Paris?')
@@ -740,7 +740,7 @@ You read a single record from the list by its 1-based index with `messages[i]`, 
 
 Because `#messages` gives the number of records, it names the position of the last one, so `messages[#messages]` is the latest message, such as the reply `models.loop` just appended. A block ending with `models.loop()` and then `return messages[#messages].content` returns the model's reply, such as `pong`. The same position works in other calls: after `messages:system('s'):user('u'):assistant('a')`, the call `messages:replace(#messages, #messages)` inside a compactor targets the third record (see [Editing a list with `replace`](#editing-a-list-with-replace)). `messages[i]` also works inside a numeric `for` loop, as in `for i = 3, 6 do ids[#ids + 1] = messages[i].tool_call_id end`.
 
-A position outside the list reads `nil` instead of raising an error. Put this block in the `## Read` section of `read-records` in place of the first one:
+A position outside the list reads `nil` instead of raising an error. Put this block in the `Read` section of `read-records` in place of the first one:
 
 ````lua
 messages:user('u1'):assistant('a1')
@@ -755,7 +755,7 @@ On this two-record list, position 0, a negative index, and an index past the las
 
 ### Reading a record's fields
 
-Each record you read gives you its `role`, `content`, `tool_calls`, `tool_call_id`, and `meta`. Put this block in the `## Read` section of `read-records`:
+Each record you read gives you its `role`, `content`, `tool_calls`, `tool_call_id`, and `meta`. Put this block in the `Read` section of `read-records`:
 
 ````lua
 messages:user('say hi')
@@ -792,7 +792,7 @@ A counted loop, `ipairs`, and `pairs` all visit the list's records in order, eac
 
 The list's length, its numeric indexes, and a `pairs` walk over it cover only its records, never its methods, so `pairs(messages)` over three records visits exactly positions 1, 2, and 3. Iterating an empty list with `pairs`, `ipairs`, or a counted loop visits nothing.
 
-The two iterators differ when the loop edits the list. `pairs(messages)` stops at the record count the list had when the walk began, as the sandbox `pairs` fixes a table's keys at its start, so a loop that appends on every pass still ends. Put this block in the `## Read` section of `read-records`:
+The two iterators differ when the loop edits the list. `pairs(messages)` stops at the record count the list had when the walk began, as the sandbox `pairs` fixes a table's keys at its start, so a loop that appends on every pass still ends. Put this block in the `Read` section of `read-records`:
 
 ````lua
 messages:user('u1'):assistant('a1'):user('u2')
@@ -835,7 +835,7 @@ The walk reads the replaced record at position 3 as `u2b` and stops at the three
 
 ### What a record view allows
 
-A record view is what `messages[i]` returns: a read-only view of the record at 1-based position `i`, whose fields you read through metamethods, and `pairs` and `ipairs` hand out the same views. Put this block in the `## Read` section of `read-records`:
+A record view is what `messages[i]` returns: a read-only view of the record at 1-based position `i`, whose fields you read through metamethods, and `pairs` and `ipairs` hand out the same views. Put this block in the `Read` section of `read-records`:
 
 ````lua
 messages:user('say hi')
@@ -863,7 +863,7 @@ Any other key reads `nil` instead of raising an error. An unknown field such as 
 
 A view holds its own reference to the record it was read from, so it keeps showing that record's fields rather than looking the record up in the list again. It keeps showing them even after a later `replace` or compaction changes that position, because an edit puts new records into the list instead of changing records already handed out.
 
-`pairs(view)` visits only the fields the record has, in the fixed order `role`, `content`, `tool_calls`, `tool_call_id`, `meta`, the same order on every run, skipping absent fields and ending after the last present one. It yields each field name as the key and the same value that dot access returns, including a fresh table for a table field. Put this block in the `## Read` section of `read-records`:
+`pairs(view)` visits only the fields the record has, in the fixed order `role`, `content`, `tool_calls`, `tool_call_id`, `meta`, the same order on every run, skipping absent fields and ending after the last present one. It yields each field name as the key and the same value that dot access returns, including a fresh table for a table field. Put this block in the `Read` section of `read-records`:
 
 ````lua
 messages:user('say hi')
@@ -883,7 +883,7 @@ role,content,tool_calls|role,content,tool_call_id,meta
 
 ### Using a view as a record
 
-A view's fields are plain Lua values, so to keep or reshape records, copy the fields you need into plain Lua tables. Put this block in the `## Read` section of `read-records`:
+A view's fields are plain Lua values, so to keep or reshape records, copy the fields you need into plain Lua tables. Put this block in the `Read` section of `read-records`:
 
 ````lua
 messages:system('s'):user('u')
@@ -970,7 +970,7 @@ u1 a2
 
 `messages:replace(first, last)` with no records removes records `first` through `last` and keeps every record before `first` and after `last`. Passing fewer records than the range holds shrinks the list the same way, so replacing four records with two leaves a two-record list.
 
-`messages:replace(#messages, #messages)` with no records removes the last record, such as a trailing assistant reply, and every earlier record stays in place. The loop always leaves its terminal record in the list, so this is how you drop that record when you do not want it kept. Put this block in the `## Chat` section of `first-chat`:
+`messages:replace(#messages, #messages)` with no records removes the last record, such as a trailing assistant reply, and every earlier record stays in place. The loop always leaves its terminal record in the list, so this is how you drop that record when you do not want it kept. Put this block in the `Chat` section of `first-chat`:
 
 ````lua
 messages:user('hello')
@@ -1015,7 +1015,7 @@ Replacing a range with a single record merges the range. On a list whose records
 
 ### Editing the leading system block
 
-`replace` inside a compactor is how you change or remove the [leading system block](#the-leading-system-block), the system records at the front of the list. A replace may rewrite or grow that block, as long as every system record stays ahead of the first non-system record. Put this block in the `## Edit` section of `edit-list` in place of the first one:
+`replace` inside a compactor is how you change or remove the [leading system block](#the-leading-system-block), the system records at the front of the list. A replace may rewrite or grow that block, as long as every system record stays ahead of the first non-system record. Put this block in the `Edit` section of `edit-list` in place of the first one:
 
 ````lua
 messages:append({ role = 'system', content = 's1' })
@@ -1053,7 +1053,7 @@ You can compact the list after a loop has sent it, and the next request uses the
 
 ### Editing a record through its view
 
-A [record view](#reading-records), the value `messages[i]` reads, is read-only, so you change a record by rewriting it in the list with `replace` inside a compactor, building the new record from the view's fields. Put this block in the `## Chat` section of `first-chat`:
+A [record view](#reading-records), the value `messages[i]` reads, is read-only, so you change a record by rewriting it in the list with `replace` inside a compactor, building the new record from the view's fields. Put this block in the `Chat` section of `first-chat`:
 
 ````lua
 messages:user('hello')
@@ -1142,7 +1142,7 @@ The second new record takes position 2 and has no `content`, so the call is refu
 
 ## How the loop runs
 
-Here you follow one `models.loop` call round by round, run a conversation on a chosen model with `models.loop(model)`, and see what the loop returns and what each round reports. Put this block in the `## Chat` section of `first-chat`:
+Here you follow one `models.loop` call round by round, run a conversation on a chosen model with `models.loop(model)`, and see what the loop returns and what each round reports. Put this block in the `Chat` section of `first-chat`:
 
 ````lua
 messages:user('hello')
@@ -1213,7 +1213,7 @@ shorter please
 
 In a task the line reads `The task that started you sent this message while you were working:` instead. Only the loop adds the line: a message a prompt reads itself, with `tasks.receive()` or `tasks.reply`, comes back exactly as sent.
 
-Two messages that arrive before one request stay two `user` records in `messages`, each with its own line. The request joins consecutive user records into one provider message, with a blank line between them (see [Same-role merging](#same-role-merging)), so the model reads them as one message. With this block in the `## Chat` section of `first-chat`, an operator who sends `one` and then `two` before the loop's request goes out, and a model that answers `ok`, give the run result `user user user assistant`:
+Two messages that arrive before one request stay two `user` records in `messages`, each with its own line. The request joins consecutive user records into one provider message, with a blank line between them (see [Same-role merging](#same-role-merging)), so the model reads them as one message. With this block in the `Chat` section of `first-chat`, an operator who sends `one` and then `two` before the loop's request goes out, and a model that answers `ok`, give the run result `user user user assistant`:
 
 ````lua
 messages:user('hi')
@@ -1274,7 +1274,7 @@ return messages[#messages].content
 
 On a Host whose role map gives `fast` and `strong` their own models, the first loop's round runs on the model filling `fast`, and the second loop's round runs on the model filling `strong`, because `models.use('strong')` changes the chain's current model before the second call sends its round. With a one-model map, both roles are filled by the same model, so both rounds run on it. The second request includes the first reply, so the second model sees the paragraph it comments on, and the run result is the second model's reply. The Static Set stays the same across the change too, so both models are offered the same tools.
 
-The switch also outlasts the section. A section that comes after `## Chat` in the same chain starts on `strong`, so its `models.loop()` runs there unless that section calls `models.use` itself. A `call` child, a task, and a fanout arm each start on a copy of the model their parent has when it dispatches them (see [Children and fanout arms](10-models.md#children-and-fanout-arms)).
+The switch also outlasts the section. A section that comes after `Chat` in the same chain starts on `strong`, so its `models.loop()` runs there unless that section calls `models.use` itself. A `call` child, a task, and a fanout arm each start on a copy of the model their parent has when it dispatches them (see [Children and fanout arms](10-models.md#children-and-fanout-arms)).
 
 `models.loop()` runs on the chain's current model even when other model handles are in scope, such as one from `local other = models.get('fast')`. When the Host gave no model, `models.loop` fails with the same missing-model error that `models.infer` raises (see [Infer errors and the missing-model error](10-models.md#infer-errors-and-the-missing-model-error)), because both read the chain's current model the same way.
 
@@ -1308,13 +1308,13 @@ return messages[#messages].content
 ```
 ````
 
-`## Draft` runs on the chain's current model, the model the Host gave the `default` role, and keeps the draft in `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)). `## Review` starts with its own empty list and passes the handle that `models.get('strong')` returns to `models.loop`, so every round of that call runs on the model that fills `strong`, and the run result is the review. On a Host whose role map gives `strong` its own model, the draft and the review come from different models. With a one-model map both come from the same model.
+`Draft` runs on the chain's current model, the model the Host gave the `default` role, and keeps the draft in `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)). `Review` starts with its own empty list and passes the handle that `models.get('strong')` returns to `models.loop`, so every round of that call runs on the model that fills `strong`, and the run result is the review. On a Host whose role map gives `strong` its own model, the draft and the review come from different models. With a one-model map both come from the same model.
 
 `models.loop(model, compactor?)` takes a model handle (see [Model handles](10-models.md#model-handles)) as its first argument. It uses the same `messages` list that `models.loop(compactor?)` uses. Every round of the call, at any point in the section entry and including the retry after a compaction, runs on the handle's own frozen binding instead of the chain's current model. The call does not change the chain's current model, so a `models.loop()` or `models.infer(prose)` after it still runs on the model the chain was on before it.
 
 The compactor is optional in both forms and follows the same rules with a handle, where it sets what happens when a round overflows the model's context window (see [Choosing a compactor for a call](#choosing-a-compactor-for-a-call)). With a handle, pass it as the second argument, as in `models.loop(handle, compactor)` or `models.loop(other, compactors.fail)`. Leaving it out, or passing an explicit `nil` after the handle, as in `models.loop(handle, nil)`, selects the default.
 
-You can keep using the list after a loop returns, appending another user record and running the loop again, even on a different model, and each `models.loop` call appends its own terminal record. Put this block in the `## Review` section of `second-opinion`:
+You can keep using the list after a loop returns, appending another user record and running the loop again, even on a different model, and each `models.loop` call appends its own terminal record. Put this block in the `Review` section of `second-opinion`:
 
 ````lua
 local other = models.get('strong')
@@ -1352,7 +1352,7 @@ Each content event from a loop round is stamped with the round's id and the chat
 
 ## Loop arguments and errors
 
-Here you pass `models.loop` the arguments it takes, catch any loop failure with one `pcall`, and branch on its error kind. Put this block in the `## Chat` section of `first-chat`:
+Here you pass `models.loop` the arguments it takes, catch any loop failure with one `pcall`, and branch on its error kind. Put this block in the `Chat` section of `first-chat`:
 
 ````lua
 messages:user('hello')
@@ -1502,7 +1502,7 @@ After a tool round is answered, the loop starts the next round with a new reques
 
 ### The records a tool round adds
 
-Put these lines in the `## Ask` block of `search-chat` in place of its last three lines:
+Put these lines in the `Ask` block of `search-chat` in place of its last three lines:
 
 ````lua
 local call = messages[2].tool_calls[1]
@@ -1751,7 +1751,7 @@ Each round composes the list again for whichever model that round runs on, so th
 
 ### Tool exchanges in a request
 
-Put this block in the `## Chat` section of `first-chat` to send a list that already holds a finished tool exchange:
+Put this block in the `Chat` section of `first-chat` to send a list that already holds a finished tool exchange:
 
 ````lua
 messages:user('Read the notes.')
@@ -1779,7 +1779,7 @@ Content parts keep their order and their type on the way to the model. A record 
 
 ### Cross-record errors
 
-A list that breaks a cross-record rule fails at the `models.loop` call with a Lua error whose message names the offending record by its 1-based position as `messages[{index}]`. Put this block in the `## Chat` section of `first-chat` to see one:
+A list that breaks a cross-record rule fails at the `models.loop` call with a Lua error whose message names the offending record by its 1-based position as `messages[{index}]`. Put this block in the `Chat` section of `first-chat` to see one:
 
 ````lua
 messages:user('hi')
@@ -1932,7 +1932,7 @@ empty model reply
 
 ### Replies cut short for length
 
-A text reply that the provider cut short for length, with finish reason `"length"`, is accepted as the terminal record. It still ends `models.loop`, and its partial text becomes the terminal record. With this block in the `## Chat` section of `first-chat`:
+A text reply that the provider cut short for length, with finish reason `"length"`, is accepted as the terminal record. It still ends `models.loop`, and its partial text becomes the terminal record. With this block in the `Chat` section of `first-chat`:
 
 ````lua
 messages:user('hello')
@@ -2129,7 +2129,7 @@ A precheck refusal is reported as a `model_turn_failed` event, the same way a fa
 
 ### Sending again after a refusal
 
-Because a refused send appends nothing, the message that was too large stays where you left it. Under the default compactor the loop raises, so you can catch the refusal, compact the list with `models.compact` (see [Compacting on demand with `models.compact`](#compacting-on-demand-with-modelscompact)), and run the loop again. Put this block in the `## Send` section of `long-notes`:
+Because a refused send appends nothing, the message that was too large stays where you left it. Under the default compactor the loop raises, so you can catch the refusal, compact the list with `models.compact` (see [Compacting on demand with `models.compact`](#compacting-on-demand-with-modelscompact)), and run the loop again. Put this block in the `Send` section of `long-notes`:
 
 ````lua
 messages:user(string.rep('x', 100000))
@@ -2191,7 +2191,7 @@ The function passed to `models.loop` is the compactor for this call. The call go
 
 ### Trimming the list after an overflow
 
-A compactor that trims drops the oldest records and keeps the newest turn. This one keeps the leading system block and the newest user record with everything after it, and drops the records between them. Put this block in the `## Send` section of `long-notes`:
+A compactor that trims drops the oldest records and keeps the newest turn. This one keeps the leading system block and the newest user record with everything after it, and drops the records between them. Put this block in the `Send` section of `long-notes`:
 
 ````lua
 local function trim(reason)
@@ -2244,7 +2244,7 @@ When the compactor returns, the list it left is checked before anything else hap
 - The structural rules always apply: each tool-call batch is answered right after it, call ids are unique, no tool record is an orphan, system records lead, and a composed system block holds only text. These are the rules [Checking and composing before each request](#checking-and-composing-before-each-request) describes, and a broken one raises its message from [Cross-record errors](#cross-record-errors), such as `messages[2] tool call "call_1" has no tool result`. An empty list passes them.
 - After an overflow, the size rules apply too. The estimate (see [How the estimate counts tokens](#how-the-estimate-counts-tokens)) of the compacted list must be smaller than the estimate of the list the round overflowed with, and the retried round must pass the precheck. A list that did not shrink raises `context_exhausted` with the overflow's reason.
 
-Any failure restores the records first, so the list reads as it did before the compactor ran. After an overflow, a compaction that passes is kept, and the round retries once without counting against `max_tool_iterations`. A retry that overflows again, at the precheck or at the provider, restores the records from before the compaction and raises `context_exhausted` with the retry's reason, and a message the loop appended after the compaction stays after those records, so the restore never loses it. A retry that fails another way keeps the compacted records, so with this block in the `## Send` section of `long-notes`:
+Any failure restores the records first, so the list reads as it did before the compactor ran. After an overflow, a compaction that passes is kept, and the round retries once without counting against `max_tool_iterations`. A retry that overflows again, at the precheck or at the provider, restores the records from before the compaction and raises `context_exhausted` with the retry's reason, and a message the loop appended after the compaction stays after those records, so the restore never loses it. A retry that fails another way keeps the compacted records, so with this block in the `Send` section of `long-notes`:
 
 ````lua
 messages:user(string.rep('x', 100000))
@@ -2262,7 +2262,7 @@ false|lua:{file}:{line}: messages must not be empty. The Lua code failed at runt
 
 ### When a compaction fails
 
-When the compactor raises, the records are restored and its failure is raised from the call that ran it, `models.loop` or `models.compact`. Put this block in the `## Send` section of `long-notes`:
+When the compactor raises, the records are restored and its failure is raised from the call that ran it, `models.loop` or `models.compact`. Put this block in the `Send` section of `long-notes`:
 
 ````lua
 messages:user(string.rep('x', 100000))
@@ -2308,7 +2308,7 @@ When the provider rejects a sent request for exceeding its context, for example 
 
 ### `compactors.clear`
 
-`compactors.clear(reason)` removes every record from `messages` and leaves the Static Set attached. It works only inside a compactor, so `models.compact(compactors.clear, reason)` starts the conversation over without leaving the section. Put this block in the `## Chat` section of `first-chat`:
+`compactors.clear(reason)` removes every record from `messages` and leaves the Static Set attached. It works only inside a compactor, so `models.compact(compactors.clear, reason)` starts the conversation over without leaving the section. Put this block in the `Chat` section of `first-chat`:
 
 ````lua
 messages:user('first topic')
@@ -2429,7 +2429,7 @@ When the run is being canceled while the compactor runs, and the compactor raise
 
 ### Replacing the default compactor
 
-You can assign your own function to `compactors.fail`, and later `models.loop` calls with no explicit compactor use it as the default. With this block in the `## Send` section of `long-notes`:
+You can assign your own function to `compactors.fail`, and later `models.loop` calls with no explicit compactor use it as the default. With this block in the `Send` section of `long-notes`:
 
 ````lua
 compactors.fail = function(reason) error('replaced: ' .. reason, 0) end

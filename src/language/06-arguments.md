@@ -31,7 +31,7 @@ Run it with the argument string `{"query":"papers"}`:
 Results for papers
 ````
 
-The `args:` key declares one argument, `query`, of type `string`. The argument string `{"query":"papers"}` is parsed as JSON, and the `## Search` section reads its `query` field as `argv.query`. The rest of this section names each piece involved, and the later sections give the full rules for each one.
+The `args:` key declares one argument, `query`, of type `string`. The argument string `{"query":"papers"}` is parsed as JSON, and the `Search` section reads its `query` field as `argv.query`. The rest of this section names each piece involved, and the later sections give the full rules for each one.
 
 ### The argument string
 
@@ -100,7 +100,7 @@ Hello, world!
 
 A block that does `return args` echoes the argument string back unchanged.
 
-Every section's Lua also reads the `argv` global, the parsed form of the argument string, side by side with the raw `args`. Under the search prompt's declaration, the argument string `{"query":"papers"}` gives `argv.query == 'papers'`. In the greeter prompt, which has no `args:` key, the argument string `hello there` gives both `argv.prose == 'hello there'` and `args == 'hello there'` in the same section, so this block passes both checks and returns `hello there` when it replaces the block in `## Greet`:
+Every section's Lua also reads the `argv` global, the parsed form of the argument string, side by side with the raw `args`. Under the search prompt's declaration, the argument string `{"query":"papers"}` gives `argv.query == 'papers'`. In the greeter prompt, which has no `args:` key, the argument string `hello there` gives both `argv.prose == 'hello there'` and `args == 'hello there'` in the same section, so this block passes both checks and returns `hello there` when it replaces the block in `Greet`:
 
 ````lua
 assert(argv.prose == 'hello there')
@@ -652,7 +652,7 @@ runvil: 0
 ## Result
 
 ```lua
-require '## helpers'
+require '/helpers'
 return read_args()
 ```
 
@@ -754,7 +754,7 @@ Run it with the argument string `{"query":"papers","items":["a","b"]}`:
 papers: a, b
 ````
 
-Outside the H1 body, the length operator `#`, `pairs`, and `next` see an empty table on any `argv` table, because each frozen table is an empty stand-in that forwards reads to the data. So `#argv.items` is `0` in the `## List` section above, and `ipairs` or numeric indexing is how you read an array there. Inside the H1 body, `argv` is a plain table, and all three work normally.
+Outside the H1 body, the length operator `#`, `pairs`, and `next` see an empty table on any `argv` table, because each frozen table is an empty stand-in that forwards reads to the data. So `#argv.items` is `0` in the `List` section above, and `ipairs` or numeric indexing is how you read an array there. Inside the H1 body, `argv` is a plain table, and all three work normally.
 
 ### Strings, numbers, and booleans
 
@@ -902,7 +902,7 @@ runvil: 0
 ## Search
 
 ```lua
-require '## helpers'
+require '/helpers'
 return search_all(argv.prose)
 ```
 
@@ -1064,7 +1064,7 @@ Run it with the argument string `{"query":"papers"}`:
 Results for papers
 ````
 
-Run it with the argument string `{}`, and the check in the H1 body fails the run with an error that carries the message `query is required` and ends with ` (at search.md:13)`, the line of the `assert` (see [Where an error points](16-limits-and-errors.md#where-an-error-points)), so `## Search` never runs.
+Run it with the argument string `{}`, and the check in the H1 body fails the run with an error that carries the message `query is required` and ends with ` (at search.md:13)`, the line of the `assert` (see [Where an error points](16-limits-and-errors.md#where-an-error-points)), so `Search` never runs.
 
 ### Nothing checks values against the declaration
 
@@ -1074,7 +1074,7 @@ Nothing checks passed values against the `args:` declaration. A value whose shap
 
 Because the declaration advertises and documents the arguments but never enforces them, you check their shape and types in the prompt itself, usually in the Lua of the H1 body under the `#` title. A check such as `assert(argv and argv.query, 'query is required')` fails the run when the argument string is `{}`.
 
-The H1 pass runs before the walk, so a failing check stops the run with an error before any `##` section runs. In the prompt above, run with `{}`, the `## Search` section never runs.
+The H1 pass runs before the walk, so a failing check stops the run with an error before any `##` section runs. In the prompt above, run with `{}`, the `Search` section never runs.
 
 ### `argv` is writable in the H1 body
 
@@ -1237,9 +1237,9 @@ repaired
 
 The `argv` freeze happens when the H1 pass completes, before the walk starts: the Engine reads the value the H1 body left in `argv` back as JSON and freezes it for the rest of the run. So a repair the H1 body assigns to `argv` becomes the `argv` later sections see.
 
-Whatever `argv` holds when the H1 pass finishes, the parsed arguments or a repair, is the `argv` every walked section reads, both in Lua and in `{{ argv }}` and `{{ argv.field }}` placeholders. In the prompt above, `## First` and every section after it read `argv.query == 'repaired'`.
+Whatever `argv` holds when the H1 pass finishes, the parsed arguments or a repair, is the `argv` every walked section reads, both in Lua and in `{{ argv }}` and `{{ argv.field }}` placeholders. In the prompt above, `First` and every section after it read `argv.query == 'repaired'`.
 
-When the H1 body leaves `argv` untouched, later sections see the `argv` parsed from the argument string. An H1 body that only runs `require '## strict'` and never assigns `argv`, run with the argument string `{"query":"x"}`, leaves a later section reading `argv.query == 'x'`.
+When the H1 body leaves `argv` untouched, later sections see the `argv` parsed from the argument string. An H1 body that only runs `require '/strict'` and never assigns `argv`, run with the argument string `{"query":"x"}`, leaves a later section reading `argv.query == 'x'`.
 
 Outside the H1 pass, `argv` is never a raw global, and reading it returns its frozen value, which on the walk is the value the H1 body left behind. `argv` is frozen in every walked section after the H1 pass ends.
 
@@ -1330,8 +1330,8 @@ end
 ## Main
 
 ```lua
-local own = call('## Sub', '{"query":"chain"}')
-local inherited = call('## Sub')
+local own = call('../Sub', '{"query":"chain"}')
+local inherited = call('../Sub')
 return own .. ' ' .. inherited
 ```
 
@@ -1342,13 +1342,13 @@ return argv.query
 ```
 ````
 
-Run it with the argument string `broken json`. The first `call` gives `## Sub` the `argv.query` value `chain`, and the second gives it the repaired `argv.query` value `repaired`:
+Run it with the argument string `broken json`. The first `call` gives `Sub` the `argv.query` value `chain`, and the second gives it the repaired `argv.query` value `repaired`:
 
 ````text
 chain repaired
 ````
 
-In `## Sub`, a write to a field of `argv` still fails under either `call`, because the chain's `argv` is frozen.
+In `Sub`, a write to a field of `argv` still fails under either `call`, because the chain's `argv` is frozen.
 
 Every arm reads its caller's `args` and frozen `argv` unchanged, including an `argv` repaired in the H1 pass, because `tasks.fanout` passes no argument string of its own to the arms it spawns.
 

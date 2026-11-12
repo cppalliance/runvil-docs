@@ -357,13 +357,13 @@ return messages[#messages].content
 ```
 ````
 
-Each section runs one conversation over its own `messages` list, on the `default` model role, which is the model a chain starts on (see [Where a chain starts](10-models.md#where-a-chain-starts)). In `## Ask`, every model round of the loop offers the model one tool, `web_search`. `## Ask` returns nothing, so the walk falls through to `## Plain`, which offers nothing: its rounds go out with no tool list at all, and the run result is the model's reply there.
+Each section runs one conversation over its own `messages` list, on the `default` model role, which is the model a chain starts on (see [Where a chain starts](10-models.md#where-a-chain-starts)). In `Ask`, every model round of the loop offers the model one tool, `web_search`. `Ask` returns nothing, so the walk falls through to `Plain`, which offers nothing: its rounds go out with no tool list at all, and the run result is the model's reply there.
 
 A section entry's tool scope is the set of tools the model is offered in that entry's `models.loop` rounds. You fill it by calling `tools.offer` in that entry before its first loop round (see [Offering tools and Packs with `tools.offer`](#offering-tools-and-packs-with-toolsoffer)). The first loop round freezes the scope into the Static Set, which every round of the section entry then offers the model.
 
 ### Every section entry starts empty
 
-Every section entry starts with an empty tool scope, whether the section is walked into, entered again with `jump`, run with `call`, entered as a fanout arm or a task's first section, or is the H1 pass. Each entry runs in a fresh section VM (see [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals)) that shares only the run's tools and models, so calls to `tools.offer`, `tools.offer_dynamic`, and `tools.adhoc` never last from one section entry to the next. The entry's fresh `messages` holds no Static Set either, so its first loop round freezes its own. That is why `## Plain` sees none of the tools `## Ask` offered.
+Every section entry starts with an empty tool scope, whether the section is walked into, entered again with `jump`, run with `call`, entered as a fanout arm or a task's first section, or is the H1 pass. Each entry runs in a fresh section VM (see [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals)) that shares only the run's tools and models, so calls to `tools.offer`, `tools.offer_dynamic`, and `tools.adhoc` never last from one section entry to the next. The entry's fresh `messages` holds no Static Set either, so its first loop round freezes its own. That is why `Plain` sees none of the tools `Ask` offered.
 
 ### What the scope holds
 
@@ -456,7 +456,7 @@ tools.get takes a tool id, got nil
 
 ### Calling a tool through its object
 
-A Tool object has fields and no methods, as a model handle does (see [Model handles](10-models.md#model-handles)). Every operation on a tool goes through a `tools` function, such as `tools.call` or `tools.offer`, which takes either the Tool object or the tool's tool id string. Passed straight to `tools.call` as its first argument, a Tool object runs the tool exactly as the bare id string does. Put this block in the `## Read` section of `look-up` in place of the first one:
+A Tool object has fields and no methods, as a model handle does (see [Model handles](10-models.md#model-handles)). Every operation on a tool goes through a `tools` function, such as `tools.call` or `tools.offer`, which takes either the Tool object or the tool's tool id string. Passed straight to `tools.call` as its first argument, a Tool object runs the tool exactly as the bare id string does. Put this block in the `Read` section of `look-up` in place of the first one:
 
 ````lua
 local fetch = tools.get('web/fetch')
@@ -551,7 +551,7 @@ Pack objects are frozen: cannot assign field "name"
 
 ### Walking Packs with `tools.packs`
 
-`tools.packs` is a read-only table of every Pack object the section knows, the adhoc Pack included, in Pack id order. You walk it like an array: `tools.packs[i]` reads the `i`-th Pack object, `#tools.packs` counts them, and `ipairs` and `pairs` both visit them in name order. In a run with a user, on a Host whose only Pack with tools is the `web` Pack, with its tools `web/fetch` and `web/search`, put this block in the `## Read` section of `look-up`, which declares `web`:
+`tools.packs` is a read-only table of every Pack object the section knows, the adhoc Pack included, in Pack id order. You walk it like an array: `tools.packs[i]` reads the `i`-th Pack object, `#tools.packs` counts them, and `ipairs` and `pairs` both visit them in name order. In a run with a user, on a Host whose only Pack with tools is the `web` Pack, with its tools `web/fetch` and `web/search`, put this block in the `Read` section of `look-up`, which declares `web`:
 
 ````lua
 local names = {}
@@ -684,7 +684,7 @@ return messages[#messages].content
 ```
 ````
 
-The run result is the model's final reply. To offer a tool is to put it in the current section entry's [tool scope](#tool-scope) before the entry's first loop round, so the model can call it during `models.loop`. `tools.offer('web/search')` adds the `web` Pack's `search` tool to the scope of `## Ask`, so every model round of the loop that follows advertises the tool under its wire name `web_search`, and each call the model makes to `web_search` goes to `web/search`.
+The run result is the model's final reply. To offer a tool is to put it in the current section entry's [tool scope](#tool-scope) before the entry's first loop round, so the model can call it during `models.loop`. `tools.offer('web/search')` adds the `web` Pack's `search` tool to the scope of `Ask`, so every model round of the loop that follows advertises the tool under its wire name `web_search`, and each call the model makes to `web_search` goes to `web/search`.
 
 Offering a tool only makes it available to the model and never calls it. If the model answers without asking for a search, the tool is never called, and a section that offers a tool and never calls it runs normally. Your own Lua needs no offer to call a tool, as [Calling tools from Lua and counting calls](#calling-tools-from-lua-and-counting-calls) shows, because offering controls only what the model sees.
 
@@ -692,7 +692,7 @@ Offering a tool only makes it available to the model and never calls it. If the 
 
 ### Nothing is offered until you offer it
 
-A catalog tool stays out of the model's view until the section offers it, even when the prompt declares its Pack under `uses:`, and so does an adhoc tool the section defines. Declaring `web` in `offer-search` makes `web/fetch` callable from Lua as well, but `## Ask` offers only `web/search`, so its rounds never advertise `web_fetch`. One `tools.offer` call before the first loop round leaves the model with a Static Set of exactly that one tool when its Pack does not render, with nothing added by default (see [Tool scope](#tool-scope)).
+A catalog tool stays out of the model's view until the section offers it, even when the prompt declares its Pack under `uses:`, and so does an adhoc tool the section defines. Declaring `web` in `offer-search` makes `web/fetch` callable from Lua as well, but `Ask` offers only `web/search`, so its rounds never advertise `web_fetch`. One `tools.offer` call before the first loop round leaves the model with a Static Set of exactly that one tool when its Pack does not render, with nothing added by default (see [Tool scope](#tool-scope)).
 
 A model round in a section entry that offers nothing advertises no tools, even when the run has tools the section could offer. In a run with no catalog tools, a section that offers nothing has an empty tool scope, and with no tools in scope the loop sends its rounds with no tools at all.
 
@@ -732,7 +732,7 @@ Calling `tools.offer()` with no argument, or `tools.offer({})` with an empty arr
 
 ### Offering a whole Pack
 
-A string without a slash, or a Pack object, offers a whole Pack, so every tool of the Pack reaches the model. Put this block in the `## Ask` section of `offer-search` in place of the first one:
+A string without a slash, or a Pack object, offers a whole Pack, so every tool of the Pack reaches the model. Put this block in the `Ask` section of `offer-search` in place of the first one:
 
 ````lua
 tools.offer('web')
@@ -774,7 +774,7 @@ The section entry's first loop round freezes the Static Set from the remembered 
 6. A Pack's tool whose wire name equals an offered adhoc tool's wire name is dropped, whatever its place in the set, and that includes a tool only the model sees (see [An adhoc tool that shadows a catalog tool](#an-adhoc-tool-that-shadows-a-catalog-tool)).
 7. Last, the round fails, sending nothing, when two tools left in the set share a wire name, when a tool shares its wire name with a Dynamic Set tool, or when a tool's wire name breaks the wire-name rule or its parameter schema is not a JSON object (see [What the model sees for each offered tool](#what-the-model-sees-for-each-offered-tool)).
 
-So the order of the offers decides the order the model sees. Put this block in the `## Ask` section of `offer-search` in place of the first one:
+So the order of the offers decides the order the model sees. Put this block in the `Ask` section of `offer-search` in place of the first one:
 
 ````lua
 tools.offer('web')
@@ -944,7 +944,7 @@ return messages[#messages].content
 ```
 ````
 
-`## Recall` offers nothing, so its first round freezes an empty tool list and its rounds advertise no tools. `## Search` is a new section entry with its own scope and its own empty `messages`, so its rounds advertise `web_search`, and the first answer reaches it through `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)). A list of Tool objects works the same way: after `tools.offer(list)` before the first loop round, each round of the section entry advertises those tools under their wire names, as their Packs render them.
+`Recall` offers nothing, so its first round freezes an empty tool list and its rounds advertise no tools. `Search` is a new section entry with its own scope and its own empty `messages`, so its rounds advertise `web_search`, and the first answer reaches it through `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)). A list of Tool objects works the same way: after `tools.offer(list)` before the first loop round, each round of the section entry advertises those tools under their wire names, as their Packs render them.
 
 ### Which section entries an offer reaches
 
@@ -973,7 +973,7 @@ uses: [web]
 
 ```lua
 tools.offer('web/search')
-require '## offers'
+require '/offers'
 messages:user('Find the latest Lua release.')
 models.loop()
 ```
@@ -981,7 +981,7 @@ models.loop()
 ## Check
 
 ```lua
-require '## offers'
+require '/offers'
 messages:user('Fetch the Lua home page and quote its first line.')
 models.loop()
 return messages[#messages].content
@@ -994,7 +994,7 @@ tools.offer('web')
 ```
 ````
 
-`## Ask` offers `web/search` itself and then the `web` Pack through `require '## offers'`, so its rounds advertise `web_search` and then `web_fetch`. Offers from the section's own `tools.offer` calls and from required sections add up within one section entry, so a round in that entry sees all of them together. `## Ask` returns nothing, so the walk falls through to `## Check`, which starts with nothing offered. Its own `require '## offers'` puts the `web` Pack's tools in its own scope, so its rounds advertise `web_fetch` and then `web_search`. Two entries that require the same section each get that section's offers in their own scope.
+`Ask` offers `web/search` itself and then the `web` Pack through `require '/offers'`, so its rounds advertise `web_search` and then `web_fetch`. Offers from the section's own `tools.offer` calls and from required sections add up within one section entry, so a round in that entry sees all of them together. `Ask` returns nothing, so the walk falls through to `Check`, which starts with nothing offered. Its own `require '/offers'` puts the `web` Pack's tools in its own scope, so its rounds advertise `web_fetch` and then `web_search`. Two entries that require the same section each get that section's offers in their own scope.
 
 ### Errors from `tools.offer`
 
@@ -1039,7 +1039,7 @@ So `tools.offer('mcp')` on a Host whose `mcp` Pack cannot serve raises with that
 
 Because the check runs when `tools.offer` is called, an unknown entry raises on that line while the section's Lua runs, before the first loop round freezes the section entry's tool list, and the tool never reaches any model round. A failed `tools.offer` in a section's prologue, the Lua before its prose, stops the run before the section's prose reaches a model. The refusal reads the same wherever in the prompt's Lua the offer runs, apart from the line the error points at, and left uncaught it fails the run with the error code `lua_runtime` (see [Run error codes](16-limits-and-errors.md#run-error-codes)).
 
-You can catch the error with `pcall`. This block offers a misspelled tool id next to a real one. Put it in the `## Ask` section of `offer-search` in place of the first one:
+You can catch the error with `pcall`. This block offers a misspelled tool id next to a real one. Put it in the `Ask` section of `offer-search` in place of the first one:
 
 ````lua
 local ok, err = pcall(tools.offer, { 'web/search', 'web/serch' })
@@ -1208,9 +1208,9 @@ To put the tool to work, offer it before the section's first `models.loop` with 
 
 ### How tool calls are recorded
 
-Each call to a catalog tool is recorded with the tool's canonical id such as `web/fetch`, the name the call used, its arguments, and its origin, which says who made the call and where. Every origin names the execution, the section, the caller, `model` or `script`, and the section entry that made the call, and a model call's origin also names the model of the round that requested the call. The origin's `execution`, `section`, and `entry` match what `sys.execution`, `sys.section_name`, and `sys.id` read in the section entry that made the call (see [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui)), so two entries of one section, such as a section entered twice or two fanout arms of one worker section, record the same `section` with different `entry` values (see [Section entry ids](05-lua-environment.md#section-entry-ids)). A model call's `model` is the name part of the model id its round was bound to, without the server namespace, so a round bound to `gateway/fast` gives `fast`, the name its request sent (see [Model ids](10-models.md#model-ids)). That is always the requesting round's model, never the chain's current model: after `models.use` switches models between two `models.loop` calls, each loop's calls name that loop's model, and an adhoc tool's handler that switches models or runs an infer round on another model does not change the model the same round's later calls name. A model call from `## Chat`, the first walked section of a run named `run-1`, requested by a round bound to `gateway/fast`, has the origin `{"execution":"run-1","section":"Chat","caller":"model","entry":"0.1","model":"fast"}`.
+Each call to a catalog tool is recorded with the tool's canonical id such as `web/fetch`, the name the call used, its arguments, and its origin, which says who made the call and where. Every origin names the execution, the section, the caller, `model` or `script`, and the section entry that made the call, and a model call's origin also names the model of the round that requested the call. The origin's `execution`, `section`, and `entry` match what `sys.execution`, `sys.section_name`, and `sys.id` read in the section entry that made the call (see [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui)), so two entries of one section, such as a section entered twice or two fanout arms of one worker section, record the same `section` with different `entry` values (see [Section entry ids](05-lua-environment.md#section-entry-ids)). A model call's `model` is the name part of the model id its round was bound to, without the server namespace, so a round bound to `gateway/fast` gives `fast`, the name its request sent (see [Model ids](10-models.md#model-ids)). That is always the requesting round's model, never the chain's current model: after `models.use` switches models between two `models.loop` calls, each loop's calls name that loop's model, and an adhoc tool's handler that switches models or runs an infer round on another model does not change the model the same round's later calls name. A model call from `Chat`, the first walked section of a run named `run-1`, requested by a round bound to `gateway/fast`, has the origin `{"execution":"run-1","section":"Chat","caller":"model","entry":"0.1","model":"fast"}`.
 
-A script call is attributed to the section that made it, such as `Only` for a section headed `## Only`, with the script recorded as the caller. Its origin has no `model` key, even when the section ran a model round before the call, so a script call from `## Only`, the first walked section of a run named `run-1`, has the origin `{"execution":"run-1","section":"Only","caller":"script","entry":"0.1"}`.
+A script call is attributed to the section that made it, such as `Only` for a section headed `## Only`, with the script recorded as the caller. Its origin has no `model` key, even when the section ran a model round before the call, so a script call from `Only`, the first walked section of a run named `run-1`, has the origin `{"execution":"run-1","section":"Only","caller":"script","entry":"0.1"}`.
 
 A model tool call is recorded under the wire name the model called, such as `web_fetch`, alongside the tool's id `web/fetch`. A script call to a catalog tool is recorded under the tool's id, such as `web/fetch`, never its wire name, and its `tool_result` event's `alias` holds that id too. A script call to an adhoc tool reports its `tool_result` event under the tool's `name` instead, so `tools.call('adhoc/grab')` reports the `alias` `grab`.
 
@@ -1396,7 +1396,7 @@ The text an adhoc tool's handler returns is trusted because you wrote the handle
 
 ### The untrusted envelope
 
-Untrusted tool output reaches your Lua wrapped. The `web` Pack's tools mark their output untrusted, so on a Host that serves `web`, put this block in the `## Call` section of `plain-result` in place of the first one:
+Untrusted tool output reaches your Lua wrapped. The `web` Pack's tools mark their output untrusted, so on a Host that serves `web`, put this block in the `Call` section of `plain-result` in place of the first one:
 
 ````lua
 local page = tools.call('web/fetch', { url = 'https://www.lua.org/' })
@@ -1714,7 +1714,7 @@ return var.verdict
 ```
 ````
 
-When the model calls `decide` with `{"choice":"use_mcp"}`, the handler stores `use_mcp` in `var.verdict`, and `## Result` returns it as the run result:
+When the model calls `decide` with `{"choice":"use_mcp"}`, the handler stores `use_mcp` in `var.verdict`, and `Result` returns it as the run result:
 
 ````text
 use_mcp
@@ -2151,7 +2151,7 @@ runvil: 0
 ```lua
 local j = jump
 local grab = tools.adhoc({ name = 'grab', description = 'Grab a value', parameters = { value = 'string' } }, function(args)
-  j('## Other')
+  j('../Other')
   return 'unreachable'
 end)
 local ok, err = pcall(tools.call, grab, { value = 'hi' })
@@ -2173,15 +2173,15 @@ The run result is:
 no jump
 ````
 
-The handler's `j('## Other')` raises this error, which reaches the `pcall` around `tools.call`:
+The handler's `j('../Other')` raises this error, which reaches the `pcall` around `tools.call`:
 
 ````text
 jump is unavailable inside an adhoc tool handler: return a value from the handler and call jump from the block after the tool call returns
 ````
 
-The refusal lasts until the outermost handler returns or raises, including across nested adhoc calls: inside an `outer` handler, `jump` is still refused after its own `tools.call(inner, {})` returns. Once the outer handler returns, or after a handler's raise is caught, `jump` works again in the block. Replacing the `if not ok` lines with `jump('## Other')` makes the run result `jumped`.
+The refusal lasts until the outermost handler returns or raises, including across nested adhoc calls: inside an `outer` handler, `jump` is still refused after its own `tools.call(inner, {})` returns. Once the outer handler returns, or after a handler's raise is caught, `jump` works again in the block. Replacing the `if not ok` lines with `jump('../Other')` makes the run result `jumped`.
 
-The same refusal applies when the model calls the tool during `models.loop`, because the handler runs inside the section's own block. After `models.loop` answers the model's `grab` call, `jump('## Other')` in the same block lands.
+The same refusal applies when the model calls the tool during `models.loop`, because the handler runs inside the section's own block. After `models.loop` answers the model's `grab` call, `jump('../Other')` in the same block lands.
 
 ### Events from adhoc tool calls
 

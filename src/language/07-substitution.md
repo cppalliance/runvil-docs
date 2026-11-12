@@ -275,7 +275,7 @@ Name: Ada Lovelace
 
 Operator text inside the braces is read as part of the path, so `{{ var.n + 1 }}` looks up a key named `n + 1` and fails with substitution kind `MissingKey` instead of computing.
 
-Dotted segments match table keys only and never index into an array, so pick the element in Lua first. With this section in place of the `## Main` section of the `full_name` prompt, the run result is `First tag: red`:
+Dotted segments match table keys only and never index into an array, so pick the element in Lua first. With this section in place of the `Main` section of the `full_name` prompt, the run result is `First tag: red`:
 
 ````markdown
 ## Main
@@ -365,7 +365,7 @@ Plan for rivers.
 
 ### Nested tables in `var`
 
-A dotted path inside a `var` placeholder reaches a nested field of a table stored in `var`, and a placeholder that names a whole table or array renders it as compact JSON, the JSON text with no spaces. With this section in place of the `## Main` section of the `paper` prompt, the run result is `cell 1, row {"a":1}, arr [1,2,3]`:
+A dotted path inside a `var` placeholder reaches a nested field of a table stored in `var`, and a placeholder that names a whole table or array renders it as compact JSON, the JSON text with no spaces. With this section in place of the `Main` section of the `paper` prompt, the run result is `cell 1, row {"a":1}, arr [1,2,3]`:
 
 ````markdown
 ## Main
@@ -478,7 +478,7 @@ Whole: {"n":2,"query":"papers"}; Field: papers
 q={{ argv.query }} cell={{ argv.row.a }}
 ````
 
-As the prose of the `query` prompt's `## Main` section, this line run with the argument string `{"query":"papers","row":{"a":1}}` renders `q=papers cell=1`. With the same argument string, `got {{ argv }}` renders `got {"query":"papers","row":{"a":1}}`.
+As the prose of the `query` prompt's `Main` section, this line run with the argument string `{"query":"papers","row":{"a":1}}` renders `q=papers cell=1`. With the same argument string, `got {{ argv }}` renders `got {"query":"papers","row":{"a":1}}`.
 
 ### Prompts with no `args:` key
 
@@ -603,7 +603,7 @@ runvil: 0
 ## Main
 
 ```lua
-return call('## Sub', 'chain-args')
+return call('../Sub', 'chain-args')
 ```
 
 ## Sub
@@ -621,13 +621,13 @@ Run with the argument string `run-args`, the run result is:
 Args: chain-args
 ````
 
-A chain started by `call` with no argument string, such as `call('## Inner')`, keeps the argument string of the chain that started it, and so does a fanout arm. With these two sections in place of `## Sub` in the `chains` prompt, `## Inner` still renders `Args: chain-args`, not the run's `run-args`:
+A chain started by `call` with no argument string, such as `call('../Inner')`, keeps the argument string of the chain that started it, and so does a fanout arm. With these two sections in place of `Sub` in the `chains` prompt, `Inner` still renders `Args: chain-args`, not the run's `run-args`:
 
 ````markdown
 ## Sub
 
 ```lua
-return call('## Inner')
+return call('../Inner')
 ```
 
 ## Inner
@@ -639,7 +639,7 @@ return prose
 ```
 ````
 
-Such a chain also keeps its starter's frozen `argv`, H1 repair included, so `{{ argv }}` there renders the repaired value rather than a fresh parse of the argument string. With the H1 block setting `argv = { query = 'repaired' }` and `## Main` running `call('## Sub')` under the argument string `broken`, `## Sub` sees `argv.query == 'repaired'`. Every section of a task started by [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) with an `input` option sees that string through `{{ args }}` and `{{ argv }}`, as a `call` given an argument string does, so `tasks.spawn('## Child', ...)` with `input = 'child args'` among its options gives `## Child` the argument string `child args`.
+Such a chain also keeps its starter's frozen `argv`, H1 repair included, so `{{ argv }}` there renders the repaired value rather than a fresh parse of the argument string. With the H1 block setting `argv = { query = 'repaired' }` and `Main` running `call('../Sub')` under the argument string `broken`, `Sub` sees `argv.query == 'repaired'`. Every section of a task started by [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) with an `input` option sees that string through `{{ args }}` and `{{ argv }}`, as a `call` given an argument string does, so `tasks.spawn('../Child', ...)` with `input = 'child args'` among its options gives `Child` the argument string `child args`.
 
 ### Placeholders ignore the `args` and `argv` globals
 
@@ -688,7 +688,7 @@ runvil: 0
 ## Parent
 
 ```lua
-tasks.fanout('### Worker', {'alpha', 'beta'})
+tasks.fanout('Worker', {'alpha', 'beta'})
 return 'done'
 ```
 
@@ -736,7 +736,7 @@ runvil: 0
 ## Parent
 
 ```lua
-tasks.fanout('### Worker', {{7, 'x'}})
+tasks.fanout('Worker', {{7, 'x'}})
 return 'done'
 ```
 
@@ -758,12 +758,12 @@ In a keyed collection (see [Collections and member order](14-fanout.md#collectio
 `{{ item }}` works only where an item is seeded: the first section a fanout arm enters, or the first section of a task started with an `item` option. A spawned chain's first section consumes its seeds, so every later section that chain enters has no item, and neither does any other chain. Each fanout arm is spawned the same way as a task, with the arm's member as its `item`. To seed a task, pass `item` in the options of [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn):
 
 ````lua
-tasks.spawn('## Child', { item = 'alpha' })
+tasks.spawn('../Child', { item = 'alpha' })
 ````
 
 In the first section of that task, `{{ item }}` renders `alpha`. The `item` option is converted to JSON and seeded into the chain's first section, where it also becomes the chain's `item` global, and it renders by the same rule as in a fanout arm, because every seeded item uses one rendering rule.
 
-Prose in a library that an arm loads with [`require`](03-blocks-and-prose.md#sharing-code-with-require) can use `{{ item }}` too, and it renders that arm's item, because a section's own prose and the prose of the libraries it loads share one `item`. So when the arm for `'alpha'` runs `require '## house_style'`, whose prose reads `Plain words for {{ item }}.`, the library yields `Plain words for alpha.` A `{{ item }}` placeholder in a subsection's prose, such as `Do work on {{ item }}.` in a `### Worker` body, loads without any parse error.
+Prose in a library that an arm loads with [`require`](03-blocks-and-prose.md#sharing-code-with-require) can use `{{ item }}` too, and it renders that arm's item, because a section's own prose and the prose of the libraries it loads share one `item`. So when the arm for `'alpha'` runs `require '/house_style'`, whose prose reads `Plain words for {{ item }}.`, the library yields `Plain words for alpha.` A `{{ item }}` placeholder in a subsection's prose, such as `Do work on {{ item }}.` in a `Worker` body, loads without any parse error.
 
 ### Fields of a table item
 
@@ -869,7 +869,7 @@ runvil: 0
 
 ```lua
 style = 'terse'
-return require '## house_style'
+return require '/house_style'
 ```
 
 ## house_style
@@ -891,7 +891,7 @@ Write in a terse voice for readers.
 
 ### Defaults through a `_G` metatable
 
-A bare name with no global of its own resolves through your `_G` metatable (see [Giving `_G` a metatable](05-lua-environment.md#giving-_g-a-metatable)), so an `__index` default renders in prose. When `tone` exists only in the `__index` defaults table, `Tone: {{ tone }}.` renders `Tone: friendly.` The metatable can come from a library: a Lua block that runs `require '## defaults'`, which sets `defaults` and an `__index` metatable on `_G`, and then reads `prose` renders `Tone: {{ tone }}.` as `Tone: friendly.`
+A bare name with no global of its own resolves through your `_G` metatable (see [Giving `_G` a metatable](05-lua-environment.md#giving-_g-a-metatable)), so an `__index` default renders in prose. When `tone` exists only in the `__index` defaults table, `Tone: {{ tone }}.` renders `Tone: friendly.` The metatable can come from a library: a Lua block that runs `require '/defaults'`, which sets `defaults` and an `__index` metatable on `_G`, and then reads `prose` renders `Tone: {{ tone }}.` as `Tone: friendly.`
 
 ### When a bare name fails
 
@@ -1026,7 +1026,7 @@ Placeholders in the [pending prose](03-blocks-and-prose.md#pending-prose-and-the
 
 ### Render once
 
-Every placeholder in a block's `prose` renders at most once, on the first read of `prose` during the run, and the result is kept for every later read in that block. This is called render once. With this section in place of `## Main` in the `lazy` prompt, the assertion passes and the run result is `The word is one.`:
+Every placeholder in a block's `prose` renders at most once, on the first read of `prose` during the run, and the result is kept for every later read in that block. This is called render once. With this section in place of `Main` in the `lazy` prompt, the assertion passes and the run result is `The word is one.`:
 
 ````markdown
 ## Main
@@ -1161,9 +1161,9 @@ Prose in the H1 body, the blocks under the prompt's title, is substituted the sa
 
 ### Library prose under `require`
 
-A library's prose renders when the library's Lua block reads `prose` while `require` loads it, using the `var` values and globals the calling section set before the `require` call. A Lua block that runs `var.x = 'seven'` and then `local seen = require '## lib'` sees `seven` in the library's rendered prose, and the `style` prompt in [Inserting Lua globals by bare name](#inserting-lua-globals-by-bare-name) works the same way with a global.
+A library's prose renders when the library's Lua block reads `prose` while `require` loads it, using the `var` values and globals the calling section set before the `require` call. A Lua block that runs `var.x = 'seven'` and then `local seen = require '/lib'` sees `seven` in the library's rendered prose, and the `style` prompt in [Inserting Lua globals by bare name](#inserting-lua-globals-by-bare-name) works the same way with a global.
 
-A `require` leaves the calling section's `prose` alone. Text the calling block already read stays the same, and prose it has not read yet still renders from its own placeholders at its first read, even after a library that raised an error. A block that reads `prose` as `caller saw one`, requires a library whose prose renders `lib text`, and reads `prose` again joins the three as `caller saw one|lib text|caller saw one`, and after `pcall(require, '## bad')` fails, the block's `prose` still reads `caller text`.
+A `require` leaves the calling section's `prose` alone. Text the calling block already read stays the same, and prose it has not read yet still renders from its own placeholders at its first read, even after a library that raised an error. A block that reads `prose` as `caller saw one`, requires a library whose prose renders `lib text`, and reads `prose` again joins the three as `caller saw one|lib text|caller saw one`, and after `pcall(require, '/bad')` fails, the block's `prose` still reads `caller text`.
 
 ## Escapes and literal braces
 
