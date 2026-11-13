@@ -357,7 +357,7 @@ return messages[#messages].content
 ```
 ````
 
-Each section runs one conversation over its own `messages` list, on the `default` model role, which is the model a chain starts on (see [Where a chain starts](10-models.md#where-a-chain-starts)). In `Ask`, every model round of the loop offers the model one tool, `web_search`. `Ask` returns nothing, so the walk falls through to `Plain`, which offers nothing: its rounds go out with no tool list at all, and the run result is the model's reply there.
+Each section runs one conversation over its own `messages` list, on the `default` model role, which is the model a chain starts on (see [Where a chain starts](10-models.md#where-a-chain-starts)). In `Ask`, every model round of the loop offers the model one tool, `web_search`. `Ask` has no `return`, so the walk falls through to `Plain`, which offers nothing: its rounds go out with no tool list at all, and the run result is the model's reply there.
 
 A section entry's tool scope is the set of tools the model is offered in that entry's `models.loop` rounds. You fill it by calling `tools.offer` in that entry before its first loop round (see [Offering tools and Packs with `tools.offer`](#offering-tools-and-packs-with-toolsoffer)). The first loop round freezes the scope into the Static Set, which every round of the section entry then offers the model.
 
@@ -994,7 +994,7 @@ tools.offer('web')
 ```
 ````
 
-`Ask` offers `web/search` itself and then the `web` Pack through `require '/offers'`, so its rounds advertise `web_search` and then `web_fetch`. Offers from the section's own `tools.offer` calls and from required sections add up within one section entry, so a round in that entry sees all of them together. `Ask` returns nothing, so the walk falls through to `Check`, which starts with nothing offered. Its own `require '/offers'` puts the `web` Pack's tools in its own scope, so its rounds advertise `web_fetch` and then `web_search`. Two entries that require the same section each get that section's offers in their own scope.
+`Ask` offers `web/search` itself and then the `web` Pack through `require '/offers'`, so its rounds advertise `web_search` and then `web_fetch`. Offers from the section's own `tools.offer` calls and from required sections add up within one section entry, so a round in that entry sees all of them together. `Ask` has no `return`, so the walk falls through to `Check`, which starts with nothing offered. Its own `require '/offers'` puts the `web` Pack's tools in its own scope, so its rounds advertise `web_fetch` and then `web_search`. Two entries that require the same section each get that section's offers in their own scope.
 
 ### Errors from `tools.offer`
 
@@ -1984,7 +1984,7 @@ State can also be a counter. A `save_note` handler can raise `local saved = 0` b
 
 ### What a handler's return value becomes
 
-A handler's return value follows the same [scalar return rule](04-how-a-prompt-runs.md#returning-values) as a block's return: only the first value counts, and it becomes the call's result as text. Each kind of value turns into text like this:
+A handler's return value follows the same [scalar return rule](04-how-a-prompt-runs.md#returning-values) as a block's return: only the first value counts, and it becomes the call's result as text. The one difference is `nil`: a handler that returns `nil` or nothing gives the call the empty string, where a block's `return` of `nil` ends its section with no result. Each kind of value turns into text like this:
 
 | The handler returns | The call's result |
 |---|---|

@@ -891,7 +891,7 @@ The block ends with `return 'hello'`, so the string `hello` becomes the section'
 
 ### How a block ends
 
-A Lua block ends in exactly one of three ways: it returns, it jumps, or it fails with an error. When a block calls `jump` and then raises an error, the jump wins:
+A Lua block ends in exactly one of four ways: it runs to its last line, it executes a `return`, it jumps, or it fails with an error. A block that runs to its last line lets the section go on to its next block, and each of the other three ends the section. When a block calls `jump` and then raises an error, the jump wins:
 
 ````lua
 jump('../Target')
@@ -902,7 +902,7 @@ This block ends as a jump to `Target`, not as a failure.
 
 ### The scalar return rule
 
-A `return` at the top level of a Lua block ends that block, and the returned value becomes the block's result. This is the scalar return rule: returning a string, an integer, a float, or a boolean makes that value the result, as text, and returning `nil` or ending with no `return` statement gives no result. A block that finishes normally hands back an optional scalar value, so a `return` gives either no value or a value as text.
+A `return` at the top level of a Lua block ends that block, and the returned value becomes the block's result. This is the scalar return rule: returning a string, an integer, a float, or a boolean makes that value the result, as text, and returning `nil` or no value at all gives no result. A `return` ends the section either way, with a result or without one (see [Returning no value](#returning-no-value)). A `return` inside a function that the block defines or calls ends only that function.
 
 The value a block returns becomes its section's result, and the `return` ends the section with that value. A block can return early from inside an `if`, and the first `return` it reaches gives the section's result:
 
@@ -922,7 +922,7 @@ Any expression that produces a scalar can be returned: a literal such as `return
 return models.infer(prose)
 ````
 
-Ending the last block of a section with `return models.infer(prose)` makes the model's reply the run's result through the scalar return rule (see [`models.infer`](10-models.md#running-a-round-with-modelsinfer)). In a prompt with several sections that is usually the last section, because earlier sections that return nothing hand off to the next one. A block can return a tool's reply the same way, as in `return tools.call('web/fetch', { url = 'https://example.com' })` (see [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls)). An epilog can return a value it computes, as in `return normalize(var.subject)`, where `normalize` is a function the prompt defines.
+Ending the last block of a section with `return models.infer(prose)` makes the model's reply the run's result through the scalar return rule (see [`models.infer`](10-models.md#running-a-round-with-modelsinfer)). In a prompt with several sections that is usually the last section, because earlier sections that have no `return` hand off to the next one. A block can return a tool's reply the same way, as in `return tools.call('web/fetch', { url = 'https://example.com' })` (see [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls)). An epilog can return a value it computes, as in `return normalize(var.subject)`, where `normalize` is a function the prompt defines.
 
 A block's return value survives the block pausing and resuming. A block that waits on a model round inside `pcall` and resumes with the reply still returns the value it builds from that reply, intact.
 
@@ -940,17 +940,19 @@ Each scalar type becomes text by a fixed rule, and the table shows one case of e
 | `return 0/0` | `NaN` |
 | `return true` | `true` |
 | `return 'a', 'b'` | `a` |
+| `return nil` | no result |
+| `return` | no result |
 | `return nil, 'text'` | no result |
 
 A string becomes the result unchanged, except that bytes that are not valid UTF-8 become the Unicode replacement character U+FFFD. An integer becomes its decimal digits as plain text, so `return 42` gives `42` and a counter that reaches eight million gives `8000000`.
 
 A float is formatted by the Engine rather than by Lua's `tostring`. It is written as decimal text in plain display form and never in exponent form, and a whole-number float drops its fraction. So `return 1.5` gives `1.5`, `return 3.0` gives `3` where `tostring(3.0)` gives `3.0`, and `return 1e20` gives `100000000000000000000` where `tostring` gives `1e+20`. An infinity or NaN becomes `inf`, `-inf`, or `NaN`, so `return 0/0` gives `NaN` where `tostring` gives `nan` or `-nan`. A boolean becomes `true` or `false`.
 
-Only the first returned value counts, and the values after it are never checked, so `return 'a', 'b'` gives `a`. Because only the first value counts, a `nil` first value gives no result even when a value follows it: `return nil, 'text'` keeps the run going as if the block returned nothing.
+Only the first returned value counts, and the values after it are never checked, so `return 'a', 'b'` gives `a`. Because only the first value counts, a `nil` first value gives no result even when a value follows it: `return nil, 'text'` ends the section with no result, as `return nil` does.
 
-### Returning nothing
+### A block with no return
 
-A block with no result hands control to whatever follows it:
+A block that ends with no `return` hands control to whatever follows it:
 
 ````markdown
 ---
@@ -978,13 +980,74 @@ return var.greeting .. ' world'
 hello world
 ````
 
-`First` stores a value in [`var`](05-lua-environment.md#keeping-state-in-var) and ends with no `return`, so it produces no result. A block that returns `nil` or nothing lets the section go on to the prose and blocks that follow it. When the section has nothing left, the run keeps going with the next section, where a later `return` can set the result. Here `Second` returns, and its value is the run result.
+`First` stores a value in [`var`](05-lua-environment.md#keeping-state-in-var) and ends with no `return`, so it produces no result and ends nothing. A block that runs to its last line lets the section go on to the prose and blocks that follow it. When the section has nothing left, the run keeps going with the next section, where a later `return` can set the result. Here `Second` returns, and its value is the run result.
 
-Returning an empty string is different from returning nothing. `return ''` sets a result, so it ends the chain the way any other string does, while no result moves on to the next block.
+Only a `return` that the block executes ends the section. A `return` the block never reaches, such as the one in `if false then return end`, ends nothing, and neither does a `return` inside a function:
+
+````lua
+local function size(n)
+  if n > 2 then return end
+  return 'small'
+end
+var.size = size(3) or 'big'
+````
+
+The `return` inside `size` ends the call to `size`, the block stores `big`, and the section goes on to its next block.
+
+### Returning no value
+
+A `return` ends the section whatever it returns. A `return` with no value, `return nil`, and a `return` of an expression that turns out to be `nil` all end it the way `return 'text'` does, with no result:
+
+````markdown
+---
+name: stop_here
+description: Ends the run with a return that gives no value.
+runvil: 0
+---
+
+# Stop here
+
+## First
+
+```lua
+local ready = false
+if not ready then return end
+error('the rest of this block never runs')
+```
+
+```lua
+error('a later block never runs')
+```
+
+## Second
+
+```lua
+error('a later section never runs')
+```
+````
+
+````text
+done
+````
+
+The `return` in `First` ends the block, the section, and the main walk, so neither the second block nor `Second` runs. The walk ends with no result, and the run result is the [`done` fallback](#the-done-fallback), the same as when the walk runs past its last section. In a section reached through `call`, or one that runs as a task, the same `return` ends that chain and hands its caller the empty string (see [A return ends the chain](#a-return-ends-the-chain)).
+
+So a `return` you write always ends the section, and it never depends on what the returned expression holds. `return var.answer` ends it even when `var.answer` was never set, and `return models.loop()` ends it even though [`models.loop`](11-conversations.md#starting-a-conversation) returns `nil`. To skip the rest of a block and let the section continue, put the rest inside an `if` in place of an early `return`:
+
+````lua
+local ready = false
+if ready then
+  var.note = 'worked'
+end
+````
+
+This block runs to its last line whether or not `ready` holds, so the section's next block runs.
+
+Returning an empty string differs from returning no value only in the result. `return ''` ends the section with the empty string as its result, and `return nil` ends it with no result, which on the main walk gives `done`.
 
 ### A return ends the chain
 
-A scalar return ends the [chain](#the-section-walk) it runs in, and the value becomes that chain's result. On the main walk, a return from any section ends the whole run at once, so the rest of that section and every later section never run:
+A return ends the [chain](#the-section-walk) it runs in, and a scalar it returns becomes that chain's result. On the main walk, a return from any section ends the whole run at once, so the rest of that section and every later section never run:
 
 ````markdown
 ---
@@ -1208,7 +1271,7 @@ The H1 pass is its own section entry for offers. A Pack the H1 offers with [`too
 
 ### Falling through to the walk
 
-H1 code does not need to return a value. When the H1 pass finishes with neither a scalar `return` nor a `jump`, it falls through, and the main walk starts at the first top-level `##` section on its own. The H1 pass never completes the run this way, because it is never a walked section that can complete it.
+H1 code does not need to return a value. When the H1 pass finishes with neither a `return` nor a `jump`, it falls through, and the main walk starts at the first top-level `##` section on its own. The H1 pass never completes the run this way, because it is never a walked section that can complete it.
 
 `h1_tone` and `count_blocks` both fall through. So does an H1 block that stores a model reply with `var.h1 = models.infer(prose)` instead of returning it: the walk starts at the first section, whose scalar return can become the run result.
 
@@ -1250,7 +1313,7 @@ Later H1 blocks never run, and the main walk starts at the top-level section the
 
 ### Returning from the H1 pass
 
-A scalar returned from a block in the H1 body ends the whole run at once:
+A `return` in a block of the H1 body ends the whole run at once:
 
 ````markdown
 ---
@@ -1276,16 +1339,16 @@ error('the walk must not start after an H1 return')
 early
 ````
 
-The returned value becomes the run result, no `##` section runs, and the `error` inside the skipped section `Never` never fires. Returning `models.infer(prose)` from the H1 pass works the same way: the model's reply becomes the run result, and the walk never starts.
+The returned value becomes the run result, no `##` section runs, and the `error` inside the skipped section `Never` never fires. Returning `models.infer(prose)` from the H1 pass works the same way: the model's reply becomes the run result, and the walk never starts. A `return` that gives [no value](#returning-no-value) ends the run too: with a bare `return` in place of `return 'early'`, `Never` still never runs, and the run result is `done`.
 
-The final `var` is still read back on that early exit, as on every exit from the H1 pass. On the early exit the H1 pass is never reported as a finished section, and the run's section start and finish events never name the H1 title at all (see [Run events and records](#run-events-and-records)). Because of the read-back, an H1 block that replaces `var` itself with another value still fails the run even when it then returns a scalar, as [Failures outside the gate](#failures-outside-the-gate) explains.
+The final `var` is still read back on that early exit, as on every exit from the H1 pass. On the early exit the H1 pass is never reported as a finished section, and the run's section start and finish events never name the H1 title at all (see [Run events and records](#run-events-and-records)). Because of the read-back, an H1 block that replaces `var` itself with another value still fails the run even when it then returns, as [Failures outside the gate](#failures-outside-the-gate) explains.
 
 ### How the H1 pass differs from the walk
 
 The H1 pass follows the walk's rules with exactly three differences:
 
 - It runs first, ahead of the main walk's sections.
-- A scalar return from it ends the whole run.
+- A return from it ends the whole run.
 - An uncaught Lua runtime error in it, code `lua_runtime`, such as a failed `assert`, is the prompt's failed [hard gate](#the-h1-hard-gate), which fails the run with error code [`requirements_unmet`](#preparing-the-run) and stops later H1 blocks from running.
 
 So the H1 region, from the `#` title to the first `##` heading, runs as its own live pass that can return early, fall through to the walk, or read its prose through an explicit model round such as `models.infer(prose)`.
@@ -1440,7 +1503,7 @@ An error you catch with `pcall` in the H1 pass and raise again keeps the failure
 
 Two checks run around the H1 blocks rather than inside them. They are not part of the gate, so each fails the run with error code `lua_runtime`:
 
-- When the H1 pass's `var` is read back and `var` turns out to have been replaced with another value, the run fails with an error naming `global was reassigned`, at the first Lua line of the last Lua block that ran. This happens even when the block returned a scalar that would otherwise end the run.
+- When the H1 pass's `var` is read back and `var` turns out to have been replaced with another value, the run fails with an error naming `global was reassigned`, at the first Lua line of the last Lua block that ran. This happens even when the block executed a `return` that would otherwise end the run.
 - A `jump` from the H1 pass whose heading matches no top-level section, or more than one, fails the run, because the jump's heading is checked after the H1 block has finished. The failure points at the line of the `jump`.
 
 ## The run result
@@ -1491,7 +1554,7 @@ local x = 1
 done
 ````
 
-No block returns a scalar, the walk runs past the end of the last top-level section, and the run's result is the fixed fallback text `done`. This is the `done` fallback.
+No block returns, the walk runs past the end of the last top-level section, and the run's result is the fixed fallback text `done`. This is the `done` fallback.
 
 ### Where the run result comes from
 
@@ -1507,11 +1570,11 @@ The rule holds at every heading level the main walk reaches: when the top-level 
 
 A section's `return` value becomes the run result, not the model's last reply. A section that ends with `return 'ok'` after the model's final reply `done` gives the result `ok`. A section that calls a model without returning the reply adds nothing to the run's result, and only a reply that a block returns, such as `return models.infer(prose)` in the last block, becomes the result. Running [`models.loop`](11-conversations.md#starting-a-conversation) on the section entry's `messages` list and then returning `messages[#messages].content` makes the model's final text reply from the loop the run result, which is how the last block of the [shipped](01-what-a-prompt-is.md#shipped-example-prompts) `research-person` prompt ends.
 
-Returns from other chains go back to the code that started them instead. A value returned inside a section reached through `call('../S1')` goes back to the caller as the value of `call`. A section started with `tasks.spawn` hands its `return` value back as that task's result, and the section that started the tasks reads those values as `results[1].result` and `results[2].result`. When two `Reply` tasks each return `hi there`, the run result is `hi there hi there` only because `Greet`, the entry section, returns that text after waiting on both tasks. A called section or task that ends without returning gives back empty text, not `done`.
+Returns from other chains go back to the code that started them instead. A value returned inside a section reached through `call('../S1')` goes back to the caller as the value of `call`. A section started with `tasks.spawn` hands its `return` value back as that task's result, and the section that started the tasks reads those values as `results[1].result` and `results[2].result`. When two `Reply` tasks each return `hi there`, the run result is `hi there hi there` only because `Greet`, the entry section, returns that text after waiting on both tasks. A called section or task that ends without returning, or at a `return` that gives no value, gives back empty text, not `done`.
 
 ### The `done` fallback
 
-When no block returns a scalar and nothing else produces a result, the run's result is `done`. A walk whose last section falls through without returning still ends the run as completed, and a prompt with only an H1 title, nothing that runs under it, and no sections finishes at once with the result `done`. A prompt with no Lua at all ends the same way:
+When no block returns a scalar and nothing else produces a result, the run's result is `done`. A walk whose last section falls through without returning still ends the run as completed, and so does a `return` in the H1 pass or on the main walk that gives [no value](#returning-no-value). A prompt with only an H1 title, nothing that runs under it, and no sections finishes at once with the result `done`. A prompt with no Lua at all ends the same way:
 
 ````markdown
 ---

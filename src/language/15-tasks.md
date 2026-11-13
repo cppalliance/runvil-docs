@@ -203,7 +203,7 @@ You can spawn the same section more than once. Each spawn runs as its own task, 
 
 A task's target section runs ordinary Lua as the task body. It can call a tool with [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls), and the task stays live while that call is outstanding, so a wait on the task lasts until the call returns and the section finishes. It can [offer](12-tools.md#offering-tools-and-packs-with-toolsoffer) its own tools and run its own model loop, as a block does that runs `tools.offer('web/search')` in a prompt that declares the `web` Pack, adds `messages:user('go')` to its own `messages` list, and calls `models.loop()`. It also sees every [Pack prelude](12-tools.md#pack-preludes) global, so in a prompt that declares the made-up `acme/issue-tracker` Pack from that section, a `Child` task can call `tickets.open('Follow up')`. A task cannot wait for the operator, whose messages reach only the main chain: a `tasks.receive()` in a task waits on the task's own inbox, which its owner fills with `tasks.send` (see [Messages between tasks](#messages-between-tasks)).
 
-The section hands back its result with an ordinary `return`, such as `return 'child result'`. A task can return the text of `models.infer`: a task section doing `return models.infer('slow please')`, answered with the reply `slow answer`, gives its owner's wait `ok` and the result `slow answer`. A task that runs off its last section without returning gives the empty string as its result, the same as a fanout arm.
+The section hands back its result with an ordinary `return`, such as `return 'child result'`. A task can return the text of `models.infer`: a task section doing `return models.infer('slow please')`, answered with the reply `slow answer`, gives its owner's wait `ok` and the result `slow answer`. A task that runs off its last section without returning gives the empty string as its result, the same as a fanout arm, and so does a task that ends at a `return` that gives [no value](04-how-a-prompt-runs.md#returning-no-value).
 
 The [scalar return rule](04-how-a-prompt-runs.md#returning-values) applies as in any block, but a return ends the run only from the H1 pass or from a section on the main walk. A `return` from a section inside a task becomes the task's result for its owner, such as `return 'alpha text'` making `alpha text` the result, and it never ends the run or becomes the run result. The spawning section's own return still ends the run, so when an owner parks on a `store.write` while its task returns `'child result'`, and then returns `'done'`, the run result is `done`.
 
@@ -1241,7 +1241,7 @@ The refusal in the middle always reads `` task `{task}` is not a task this chain
 
 ### When a chain ends with live tasks
 
-A chain must wait on or cancel every task it spawned before it ends. When a section or other chain ends normally, by a scalar return or by running out of sections, while a task it spawned is still running and not idle, its outcome becomes an error value of kind `tasks_live` in place of the returned value, and the owner chain fails. A leaked task is treated as a bug in your prompt, and only a normal ending with at least one leaked task produces `tasks_live`. Canceled tasks leave nothing live at chain end, so a run that cancels its tasks ends normally, with text such as `done`, and without `tasks_live`.
+A chain must wait on or cancel every task it spawned before it ends. When a section or other chain ends normally, by a return or by running out of sections, while a task it spawned is still running and not idle, its outcome becomes an error value of kind `tasks_live` in place of the returned value, and the owner chain fails. A leaked task is treated as a bug in your prompt, and only a normal ending with at least one leaked task produces `tasks_live`. Canceled tasks leave nothing live at chain end, so a run that cancels its tasks ends normally, with text such as `done`, and without `tasks_live`.
 
 An [idle](#idle-tasks) task is no leak. It already handed its owner a reply, so an owner may end while it has idle tasks: they are abandoned with it, and its outcome stays its own. An owner that ends with an idle task and a running one fails with `tasks_live` naming only the running one.
 
@@ -1355,7 +1355,7 @@ An abandoned task carries the reason it was abandoned, which says how its owner 
 
 | Reason | Phrase | When it applies |
 |---|---|---|
-| `owner_returned` | `the section ended` | The owner ended normally, by a scalar return or by running out of sections, or the idle cap closed it, while the task was still live, without canceling it |
+| `owner_returned` | `the section ended` | The owner ended normally, by a return or by running out of sections, or the idle cap closed it, while the task was still live, without canceling it |
 | `owner_failed` | `the owner failed` | The owner failed with its own error while the task was live |
 | `tool_loop_exhausted` | `the tool loop was exhausted` | The owner's `models.loop` ran past its round cap while the task was live |
 | `owner_aborted` | `the owner was aborted` | The owner was stopped from outside, by fail-fast after a sibling arm failed fatally or because the owner's own owner ended first |

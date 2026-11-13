@@ -158,7 +158,7 @@ return "hello"
 hello
 ````
 
-A complete prompt needs no `##` section. Frontmatter, one H1 title, and a Lua block in the H1 body run on their own, and the block's return value is the run result. With no return, the run ends with `done`. Replace the block's code with a line that returns nothing:
+A complete prompt needs no `##` section. Frontmatter, one H1 title, and a Lua block in the H1 body run on their own, and the block's return value is the run result. With no return, the run ends with `done`. Replace the block's code with a line that has no `return`:
 
 ````lua
 local x = 1

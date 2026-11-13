@@ -710,7 +710,7 @@ After `Q`, the H4 level runs out, so the walk resumes after its jumper, `X`, at 
 
 ### Returning from a child walk
 
-A scalar `return` inside a jump-started child walk ends the whole chain (see [Returning values](04-how-a-prompt-runs.md#returning-values)), so neither the child level's remaining sections nor the parent walk's next sibling run. Change `X` in the first prompt of this section to return a value:
+A `return` inside a jump-started child walk ends the whole chain (see [Returning values](04-how-a-prompt-runs.md#returning-values)), so neither the child level's remaining sections nor the parent walk's next sibling run. Change `X` in the first prompt of this section to return a value:
 
 ````markdown
 ### X
@@ -724,7 +724,7 @@ return 'x-value'
 x-value
 ````
 
-Neither `Y` nor `B` runs, and the run result is `x-value`.
+Neither `Y` nor `B` runs, and the run result is `x-value`. A `return` that gives [no value](04-how-a-prompt-runs.md#returning-no-value) ends the chain the same way: with a bare `return` in `X`, neither `Y` nor `B` runs, and the run result is `done`.
 
 ## When a jump is refused or fails
 
@@ -972,7 +972,7 @@ B saw: S1 S2
 
 `S1` has no `return`, so the contained chain falls through to `S2`. Within a called chain, `var` rolls forward across the chain's sections as it does on the main walk, so the `var.trail` that `S1` stores is readable in `S2`. `S2`'s return ends the chain, `call` returns `S1 S2` to `A`, and the walk resumes at `B`.
 
-A `return value` inside a called chain ends only that chain, not the run (see [Returning values](04-how-a-prompt-runs.md#returning-values)). The value becomes what `call` returns, the chain's remaining sections are skipped, and the outer walk keeps going. `call` returns the final reply of its contained chain from whichever section ends it with a return, even when that section is a later sibling of the target rather than the section you named, so a call to `Sub` that falls through to a `Tail` returning `'tail-reply'` gives `tail-reply`. A called chain that runs off its last section without returning gives `call` the empty string. Only the top-level run substitutes a generic completion text in that case (see [The run result](04-how-a-prompt-runs.md#the-run-result)).
+A `return value` inside a called chain ends only that chain, not the run (see [Returning values](04-how-a-prompt-runs.md#returning-values)). The value becomes what `call` returns, the chain's remaining sections are skipped, and the outer walk keeps going. `call` returns the final reply of its contained chain from whichever section ends it with a return, even when that section is a later sibling of the target rather than the section you named, so a call to `Sub` that falls through to a `Tail` returning `'tail-reply'` gives `tail-reply`. A called chain that runs off its last section without returning gives `call` the empty string, and so does one that ends at a `return` that gives [no value](04-how-a-prompt-runs.md#returning-no-value), such as a bare `return` or `return nil`. Only the top-level run substitutes a generic completion text in those cases (see [The run result](04-how-a-prompt-runs.md#the-run-result)).
 
 A section can `call` any other sibling at its level, earlier or later in the file, even one that sits past other sections, such as `A` calling a `Sub` that sits after `B`.
 
@@ -982,7 +982,7 @@ After `call` returns, the calling block keeps running its remaining statements, 
 
 - Use it directly inside an expression, such as concatenating it with `..` in `return var.first .. ',' .. call('../Answer')`.
 - Write `call('../Sub')` as a plain statement that discards the chain's reply. The block's following statements still run.
-- Return it directly with `return call(...)`, which passes the called section's return value straight through as the section's own result.
+- Return it directly with `return call(...)`, which passes the called section's return value straight through as the section's own result. That `return` ends the calling section whatever the called chain gave back, the empty string included.
 
 Calls nest, so a called section can `call` another section and hand that result back to its own caller, as with `return call('../Inner')`.
 
@@ -1738,13 +1738,13 @@ section `../Parent` not found: `/Parent/Worker` has no sibling `Parent`
 
 `jump` works in the Lua blocks of any section, including a section running as a fanout arm. Calling `jump(path)` inside an arm ends the worker section's code at that point, so the lines after the `jump` never run, as the `error` in `Worker` in the first prompt of this section shows.
 
-A `jump` from an arm to a sibling of the worker section runs the target section and then falls through to the target's following sibling sections, and the last reply of that walk becomes the arm's text, or the empty string when no section in the walk replies. With the headings above, `Worker` runs `jump('../Target')`, then `Target` and `Tail` run in that order, and when `Tail` returns `'tail-reply'`, the arm's text is `tail-reply`. When `Target` returns nothing and no later section replies, the arm's text is `""`.
+A `jump` from an arm to a sibling of the worker section runs the target section and then falls through to the target's following sibling sections, and the last reply of that walk becomes the arm's text, or the empty string when no section in the walk replies. With the headings above, `Worker` runs `jump('../Target')`, then `Target` and `Tail` run in that order, and when `Tail` returns `'tail-reply'`, the arm's text is `tail-reply`. When `Target` has no `return` and no later section replies, the arm's text is `""`.
 
 An arm can also `jump` into one of the worker section's own children. `jump('Child')` runs that child and then falls through to the worker section's later children, so `Child` and `ChildTail` run in that order, and when `ChildTail` returns `'child-tail-reply'`, the arm's text is `child-tail-reply`.
 
 ### Calling inside an arm
 
-`call` inside an arm runs a contained chain over the worker visible set and returns that chain's final reply as the value of the `call`, as in `local got = call('../Sub')`, where `Sub` is a sibling of the worker section. A chain started by `call` from an arm falls through from the called section to its following siblings, and the last section's return value becomes the `call` result. When `Sub` sets `var.leaves` and returns nothing, `Target` returns nothing either, and `Tail` does this:
+`call` inside an arm runs a contained chain over the worker visible set and returns that chain's final reply as the value of the `call`, as in `local got = call('../Sub')`, where `Sub` is a sibling of the worker section. A chain started by `call` from an arm falls through from the called section to its following siblings, and the last section's return value becomes the `call` result. When `Sub` sets `var.leaves` and has no `return`, `Target` has none either, and `Tail` does this:
 
 ````lua
 return 'tail-reply:' .. var.leaves

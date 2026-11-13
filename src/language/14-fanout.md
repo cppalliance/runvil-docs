@@ -771,13 +771,13 @@ Each arm's Lua return value becomes that arm's entry in the fanout result. Here 
 
 A `return value` in the worker section's prologue ends the arm with that value as its result. The worker section's prose after the fence is never sent to a model, and such an arm needs no model round, so in `arm-return` the prose `Do work.` goes unused. A worker section that is pure Lua and returns right away runs without any model connection, so that kind of fanout needs no model and stays fast. The 1025-arm `many-members` prompt runs with no model configured and returns `m1025`.
 
-A worker section's return hands its value back to `tasks.fanout` as the arm's result and never ends the run, because a scalar return ends the run only from the H1 pass or the main walk (see [Returning values](04-how-a-prompt-runs.md#returning-values)). The calling section, such as `Parent`, goes on to check the results, and its own return, such as `'ok'`, becomes the run's text.
+A worker section's return hands its value back to `tasks.fanout` as the arm's result and never ends the run, because a return ends the run only from the H1 pass or the main walk (see [Returning values](04-how-a-prompt-runs.md#returning-values)). The calling section, such as `Parent`, goes on to check the results, and its own return, such as `'ok'`, becomes the run's text.
 
 A section can call `tasks.fanout` from its epilog block, and the results still come back in collection order. The `fanout-epilog` prompt in [Where you can call `tasks.fanout`](#where-you-can-call-tasksfanout) returns `x-done,y-done` with both arms succeeding.
 
 The arm's result is whatever the worker section returns, not whatever its model rounds return. A worker section that runs `models.infer(item)` and then `return item` gets a reply every time, yet over the members `'1'` through `'1025'`, `r[1].text` is `1` and `r[1025].text` is `1025`.
 
-A fanout arm that runs off its last section without returning gives the empty string as its result, so `r[1].ok` holds and `r[1].text == ''`, the same as a task that runs off its last section.
+A fanout arm that runs off its last section without returning gives the empty string as its result, so `r[1].ok` holds and `r[1].text == ''`, the same as a task that runs off its last section. An arm that ends at a `return` that gives [no value](04-how-a-prompt-runs.md#returning-no-value), such as a bare `return`, gives the same result, and the sections after that `return` do not run.
 
 ### The worker section's visible set
 
@@ -971,7 +971,7 @@ return 'tail-reply'
 worker:tail-reply:alpha
 ````
 
-`Sub` returns nothing and falls through to `Tail`, whose `'tail-reply'` comes back to the arm as the value of `call`. The arm's own `item` is still `alpha` after the call returns.
+`Sub` has no `return` and falls through to `Tail`, whose `'tail-reply'` comes back to the arm as the value of `call`. The arm's own `item` is still `alpha` after the call returns.
 
 The called chain starts on a copy of the arm's current model, taken when the `call` is made, so a `models.use` inside the called chain does not reach the arm.
 

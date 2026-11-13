@@ -1177,7 +1177,7 @@ Because a table read from `var` holds no entries of its own, a few Lua operation
 
 The run reads `var` back as JSON data at fixed points:
 
-- when a section ends by falling through, jumping, or returning a value
+- when a section ends by falling through, jumping, or returning
 - when the H1 pass ends
 - when prose renders
 - when `call`, `tasks.fanout`, or a task start takes its copy of `var`
@@ -1243,7 +1243,7 @@ Change `var` only through its fields, and keep the `var` global itself in place.
 the `var` global was reassigned; write `var.<field>` instead
 ````
 
-The run's error code is `lua_runtime`. When a section entry has reassigned the `var` global, the read-back at the entry's end or at its `jump` fails the run, and the entry does not count as completed. The run's message ends with ` (at {file}:{line})` for the first Lua line of the last block that ran, which is the block that called `jump` when the read-back comes at a jump. In the H1 pass the code stays `lua_runtime` rather than `requirements_unmet` (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)), even when the H1 pass returns a scalar, because the read-back still runs before the scalar becomes the run result.
+The run's error code is `lua_runtime`. When a section entry has reassigned the `var` global, the read-back at the entry's end or at its `jump` fails the run, and the entry does not count as completed. The run's message ends with ` (at {file}:{line})` for the first Lua line of the last block that ran, which is the block that called `jump` when the read-back comes at a jump. In the H1 pass the code stays `lua_runtime` rather than `requirements_unmet` (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)), even when the H1 pass returns, because the read-back still runs before the `return` ends the run.
 
 ## Encoding and decoding JSON with `json`
 

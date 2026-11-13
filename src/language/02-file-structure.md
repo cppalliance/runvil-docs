@@ -97,7 +97,7 @@ return 'second'
 second
 ````
 
-The walk visits sections in file order (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)). `## First` runs, returns nothing, and falls through, so `## Second` starts after it, and its `return` gives the run result. A prompt can have as many sections as it needs: a prompt titled `# Tasks` can hold `## Spawner`, `## Sibling`, and `## Child`, where `## Sibling` starts after `## Spawner` falls through, and a prompt titled `# ModelTasks` can hold `## Only`, `## Child`, and `## Leaf`, each with its own `lua` fence.
+The walk visits sections in file order (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)). `## First` runs, has no `return`, and falls through, so `## Second` starts after it, and its `return` gives the run result. A prompt can have as many sections as it needs: a prompt titled `# Tasks` can hold `## Spawner`, `## Sibling`, and `## Child`, where `## Sibling` starts after `## Spawner` falls through, and a prompt titled `# ModelTasks` can hold `## Only`, `## Child`, and `## Leaf`, each with its own `lua` fence.
 
 After the frontmatter, every prompt has one H1 title line, such as `# Calls`, `# Limits`, `# Greeter`, `# Test prompt`, or `# Title`, followed by section headings such as `## Main`, `## First`, `## Second`, `## Greet`, or `## Only`.
 
@@ -919,7 +919,7 @@ Nothing in the H1 body becomes a section, because the H1 body ends where the fir
 A prompt needs no `##` sections. An H1 title with only `lua` blocks under it parses and runs, and the H1 body does all the work, as in the `h1_only` prompt at the start of this chapter, which runs to the result `hello`. A prompt has no minimum number of sections: a prompt with an H1 title and no `##` sections is valid, parses with an empty section list, and runs with or without a Lua `return`.
 
 - When its H1 Lua returns a value, that value is the run result, such as `hello`.
-- When its H1 Lua returns nothing, the run ends with the generic result `done`.
+- When its H1 Lua has no `return`, or returns no value, the run ends with the generic result `done`.
 - When it has no H1 blocks at all, as in the `frontmatter-only` prompt under [What the frontmatter holds](#what-the-frontmatter-holds), the run ends with the same generic completion.
 
 A prompt with an H1 title and prose but no `##` sections is valid too. A file of just `# Only a title` and `Text.` under its frontmatter is a complete prompt:

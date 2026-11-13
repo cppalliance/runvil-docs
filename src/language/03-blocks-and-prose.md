@@ -363,7 +363,7 @@ return 'saved'
 saved
 ````
 
-The epilog sends `Name one ocean.` to the model, writes the reply to `reply.txt` in the store, and returns `saved`. A Lua block can also call a tool with `tools.call` and return nothing, and the section then continues with the prose that follows.
+The epilog sends `Name one ocean.` to the model, writes the reply to `reply.txt` in the store, and returns `saved`. A Lua block can also call a tool with `tools.call` and end with no `return`, and the section then continues with the prose that follows.
 
 The prologue and the epilog run as two separate Lua blocks, each with its own `lua_chunk_started` and `lua_chunk_succeeded` events, and a `models.infer` call in the epilog reports its model round between the epilog's own pair of events.
 
@@ -1726,7 +1726,7 @@ Any section with a Lua block can serve as a library, whether it holds only Lua o
 
 `require` takes the path of a section in the prompt. It loads sections only, never a file from disk or native code, and it reads its argument as a section path every time, so Lua's `os` and `package` tables stay `nil` however you call it.
 
-When a library section returns nothing, you call `require` as a bare statement purely for its effects. A `setup` library that only runs [`models.use('strong')`](10-models.md#selecting-a-role-with-modelsuse) works this way. The choice belongs to the chain, so the block that called `require` and every later section of that chain make their model rounds on the `strong` role until the next `models.use`.
+When a library section returns no value, you call `require` as a bare statement purely for its effects. A `setup` library that only runs [`models.use('strong')`](10-models.md#selecting-a-role-with-modelsuse) works this way. The choice belongs to the chain, so the block that called `require` and every later section of that chain make their model rounds on the `strong` role until the next `models.use`.
 
 ### What `require` returns
 
@@ -1769,12 +1769,12 @@ searched rust everywhere
 
 A library's top-level statements run once, at the point it is required, and functions it defines can return values computed at that moment. A library table can mix a value computed at load time with a function that computes its result when called later, as in `lib.helped .. '|' .. lib.later()`.
 
-A library with several Lua blocks runs them in order, and the first block that returns a value other than `nil` ends the library:
+A library with several Lua blocks runs them in order, and the first block that executes a `return` ends the library:
 
 ````markdown
 ---
 name: block_returns
-description: Runs a library's blocks until one returns a value.
+description: Runs a library's blocks until one returns.
 runvil: 0
 ---
 
@@ -1793,19 +1793,19 @@ first = 'ran'
 ```
 
 ```lua
-return nil
+return first .. ' then second'
 ```
 
 ```lua
-return first .. ' then third'
+return 'never reached'
 ```
 ````
 
 ````text
-ran then third
+ran then second
 ````
 
-A block that returns `nil` lets the next block run, and the blocks after the one that returns a value do not run. A block that returns `false` ends the library, and `require` returns `false`, because only `nil` falls through to the next block. A library whose blocks all fall through without returning a value gives `true` to `require`, so a `silent` section with the blocks `quiet = 1` and `return nil` makes `tostring(require '/silent')` read `true`.
+A block that ends with no `return` lets the next block run, and the blocks after the one that returns do not run. The rule is the one a section follows (see [Returning values](04-how-a-prompt-runs.md#returning-values)): a `return` ends the library whatever it returns. A block that returns `false` ends the library, and `require` returns `false`. A block that returns `nil`, or returns with no value, ends the library too, and `require` then returns `true`, as Lua's own `require` does for a module that returns no value. A library whose blocks all end with no `return` gives `true` to `require` as well. So a `silent` section with the blocks `quiet = 1` and `return nil` makes `tostring(require '/silent')` read `true`, and a third block written after them never runs.
 
 A library loads successfully whether its code ends in a `return` value or is plain code with no `return`, such as `loaded = true`. Either way the run records `Lua library load succeeded: /lib` for a top-level library named `lib`.
 
