@@ -971,7 +971,7 @@ return 'tail-reply'
 worker:tail-reply:alpha
 ````
 
-`Sub` has no `return` and falls through to `Tail`, whose `'tail-reply'` comes back to the arm as the value of `call`. The arm's own `item` is still `alpha` after the call returns.
+`Sub` has no `return` and falls through to `Tail`, whose `'tail-reply'` comes back to the arm as the value of `call`. The arm's own `item` is still `alpha` after the call returns. A called chain that ends with no text gives the arm `nil`, as it does in any block (see [A call that gets no text](08-jump-and-call.md#a-call-that-gets-no-text)).
 
 The called chain starts on a copy of the arm's current model, taken when the `call` is made, so a `models.use` inside the called chain does not reach the arm.
 

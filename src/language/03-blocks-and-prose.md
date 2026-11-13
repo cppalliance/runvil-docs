@@ -2509,7 +2509,7 @@ return var.name
 nested
 ````
 
-The same section can be used with both `require` and `call`, and each returns that section's block value.
+The same section can be used with both `require` and `call`, and each returns that section's block value. They differ for a section whose blocks return no value: `require` returns `true`, and `call` returns `nil`.
 
 ## Library errors, cycles, and load events
 

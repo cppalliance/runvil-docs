@@ -62,7 +62,7 @@ Each one takes the target section's section path as its first argument, written 
 
 `call(target, input?)` runs another section as a contained chain: a chain that starts at the target and [falls through](04-how-a-prompt-runs.md#the-section-walk) the target's following siblings until a section returns or the level runs out. The second argument is an optional string, as in `call('../Sub', 'chain-args')`, `call("../Child", "override")`, or `call('../Sub', '{"query":"chain"}')`. Leaving it out, as in `call('../Child')`, passes no call input. [Call input and `var`](#call-input-and-var) covers what the called sections see in each case.
 
-`call` runs the section like a function and returns the contained chain's final text to the block as a plain Lua string. Here `Main` calls its child `Sub`, which falls through to `After`:
+`call` runs the section like a function and returns the contained chain's final text to the block as a plain Lua string, or `nil` when the chain ends with no text. Here `Main` calls its child `Sub`, which falls through to `After`:
 
 ````markdown
 ---
@@ -972,17 +972,17 @@ B saw: S1 S2
 
 `S1` has no `return`, so the contained chain falls through to `S2`. Within a called chain, `var` rolls forward across the chain's sections as it does on the main walk, so the `var.trail` that `S1` stores is readable in `S2`. `S2`'s return ends the chain, `call` returns `S1 S2` to `A`, and the walk resumes at `B`.
 
-A `return value` inside a called chain ends only that chain, not the run (see [Returning values](04-how-a-prompt-runs.md#returning-values)). The value becomes what `call` returns, the chain's remaining sections are skipped, and the outer walk keeps going. `call` returns the final reply of its contained chain from whichever section ends it with a return, even when that section is a later sibling of the target rather than the section you named, so a call to `Sub` that falls through to a `Tail` returning `'tail-reply'` gives `tail-reply`. A called chain that runs off its last section without returning gives `call` the empty string, and so does one that ends at a `return` that gives [no value](04-how-a-prompt-runs.md#returning-no-value), such as a bare `return` or `return nil`. Only the top-level run substitutes a generic completion text in those cases (see [The run result](04-how-a-prompt-runs.md#the-run-result)).
+A `return value` inside a called chain ends only that chain, not the run (see [Returning values](04-how-a-prompt-runs.md#returning-values)). The value becomes what `call` returns, the chain's remaining sections are skipped, and the outer walk keeps going. `call` returns the final reply of its contained chain from whichever section ends it with a return, even when that section is a later sibling of the target rather than the section you named, so a call to `Sub` that falls through to a `Tail` returning `'tail-reply'` gives `tail-reply`. A called chain that runs off its last section without returning has no text to give back, so `call` returns `nil`, and so does one that ends at a `return` that gives [no value](04-how-a-prompt-runs.md#returning-no-value), such as a bare `return` or `return nil`. A chain that returns the empty string on purpose, with `return ''`, gives `call` that string. [A call that gets no text](#a-call-that-gets-no-text) shows what the calling block can do with the `nil`.
 
 A section can `call` any other sibling at its level, earlier or later in the file, even one that sits past other sections, such as `A` calling a `Sub` that sits after `B`.
 
 ### Using the value `call` returns
 
-After `call` returns, the calling block keeps running its remaining statements, and the block's own `return` becomes its reply. The value `call` returns is a Lua string, so you can use it in several ways:
+After `call` returns, the calling block keeps running its remaining statements, and the block's own `return` becomes its reply. The value `call` returns is a Lua string when the called chain ends with text, so you can use it in several ways:
 
 - Use it directly inside an expression, such as concatenating it with `..` in `return var.first .. ',' .. call('../Answer')`.
 - Write `call('../Sub')` as a plain statement that discards the chain's reply. The block's following statements still run.
-- Return it directly with `return call(...)`, which passes the called section's return value straight through as the section's own result. That `return` ends the calling section whatever the called chain gave back, the empty string included.
+- Return it directly with `return call(...)`, which passes the called section's return value straight through as the section's own result. That `return` ends the calling section whatever the called chain gave back.
 
 Calls nest, so a called section can `call` another section and hand that result back to its own caller, as with `return call('../Inner')`.
 
@@ -1015,6 +1015,53 @@ return sys.id
 ````text
 0.0.0,0.1.0
 ````
+
+### A call that gets no text
+
+When the called chain ends with no text, `call` returns `nil` in place of a string:
+
+````markdown
+---
+name: call-nothing
+description: Calls a section that ends with no text.
+runvil: 0
+---
+
+# Call nothing
+
+## Main
+
+```lua
+local quiet = call('Quiet')
+local loud = call('Loud')
+return type(quiet) .. '|' .. (quiet or 'fallback') .. '|' .. loud
+```
+
+### Loud
+
+```lua
+return 'loud'
+```
+
+### Quiet
+
+```lua
+var.note = 'ran'
+```
+````
+
+````text
+nil|fallback|loud
+````
+
+`Quiet` has no `return` and is the last section of its chain, so the chain ends with no text, and `quiet` is `nil`. `Loud` returns, so `loud` is the string `loud`. A `nil` tells the calling block that the chain gave it nothing, where the empty string would look like a reply:
+
+- Test the value, as in `if quiet then`, which is false for a chain that ended with no text.
+- Give it a fallback with `or`, as in `quiet or 'fallback'`.
+- Do not concatenate it as it is. `'got: ' .. call('Quiet')` raises the Lua error `attempt to concatenate a nil value` at that line, which fails the run unless something catches it. Write `'got: ' .. (call('Quiet') or '')` where the called chain may end with no text.
+- `return call('Quiet')` still ends the calling section, as every `return` does. The calling section then ends with no text itself, so its own caller gets `nil`, and on the main walk the run result is `done`.
+
+Each kind of chain reports an ending with no text in its own way. The main walk gives the run result `done` (see [The run result](04-how-a-prompt-runs.md#the-run-result)), a called chain gives `call` `nil`, and a [task](15-tasks.md#what-a-task-section-returns) or a [fanout arm](14-fanout.md#what-an-arm-returns) gives its owner the empty string.
 
 ### Calling a child section
 
@@ -1347,7 +1394,7 @@ fallback
 
 ### What `pcall` catches
 
-You catch a failing `call` by writing `pcall(call, '../Section')`, which returns `false` and the error value instead of ending the run. To fall back after a failed call, check the first value from `pcall(call, ...)`. It is `true` followed by the called chain's result on success, and `false` followed by the failure on error, as in `local ok, result = pcall(call, '../Risky')` with a fallback when `ok` is false. If `Risky` returned `'fine'` instead, the run above would end with `risky said fine`.
+You catch a failing `call` by writing `pcall(call, '../Section')`, which returns `false` and the error value instead of ending the run. To fall back after a failed call, check the first value from `pcall(call, ...)`. It is `true` followed by the called chain's result on success, which is `nil` for a chain that ended with no text, and `false` followed by the failure on error, as in `local ok, result = pcall(call, '../Risky')` with a fallback when `ok` is false. If `Risky` returned `'fine'` instead, the run above would end with `risky said fine`.
 
 A `pcall` around a `call` catches each of these, and each comes back to the calling block as the call's ordinary error instead of ending the run:
 
@@ -1570,7 +1617,7 @@ jumped
 
 ### Calling from the H1
 
-Inside the H1 block, `call('Name')` runs a top-level section as a contained chain and returns whatever that section returns, as `var.answer = call('Answer')` gets `called from h1` in the first prompt of this section.
+Inside the H1 block, `call('Name')` runs a top-level section as a contained chain and returns whatever that section returns, as `var.answer = call('Answer')` gets `called from h1` in the first prompt of this section. A chain that ends with no text gives the H1 block `nil`, as it does in any block (see [A call that gets no text](#a-call-that-gets-no-text)).
 
 To compute a value once before the walk, call a section from the H1, keep the result in `var`, and place the call target after the section that returns. In that prompt, `Result` returns `var.answer` and sits before `Answer`, so the walk never runs `Answer` on its own.
 
@@ -1750,7 +1797,7 @@ An arm can also `jump` into one of the worker section's own children. `jump('Chi
 return 'tail-reply:' .. var.leaves
 ````
 
-then `got` holds `tail-reply:` followed by the value `Sub` stored, such as `tail-reply:x!y!`.
+then `got` holds `tail-reply:` followed by the value `Sub` stored, such as `tail-reply:x!y!`. When the chain ends with no text, `got` is `nil`, as for a `call` in any block (see [A call that gets no text](#a-call-that-gets-no-text)), while the arm's own text is still the empty string when the arm ends with no text.
 
 A `call` from an arm whose path names no section in the worker visible set raises a not-found error that the arm can catch with `pcall`:
 

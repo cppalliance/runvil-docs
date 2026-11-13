@@ -39,7 +39,7 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `args` | global | Holds the run's exact argument string, never parsed or trimmed | [The argument string in `args`](06-arguments.md#the-argument-string-in-args) |
 | `argv` | global | Parsed argument string; writable only in the H1 pass, frozen elsewhere | [Arguments at a glance](06-arguments.md#arguments-at-a-glance) |
 | `assert` | function | Checks a condition, raising its message when false | [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors) |
-| `call` | function | Runs a contained chain at `target`; optional `input` string replaces `args` | [Jump and call at a glance](08-jump-and-call.md#jump-and-call-at-a-glance) |
+| `call` | function | Runs a contained chain at `target`; optional `input` string replaces `args`; returns the chain's final text, or `nil` when the chain ends with no text | [Jump and call at a glance](08-jump-and-call.md#jump-and-call-at-a-glance) |
 | `collectgarbage` | removed | Reads nil; no garbage collector control | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `compactors` | global | Table of shipped compactor policies, holding `fail` and `clear` | [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion) |
 | `compactors.clear` | function | Removes every record from `messages`, keeping the Static Set; works only inside a compactor | [`compactors.clear`](11-conversations.md#compactorsclear) |

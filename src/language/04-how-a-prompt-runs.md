@@ -861,7 +861,7 @@ local x = 1
 done
 ````
 
-[The run result](#the-run-result) explains this `done` fallback.
+[The run result](#the-run-result) explains this `done` fallback. A chain started by `call` that ends this way gives `call` `nil` instead (see [A call that gets no text](08-jump-and-call.md#a-call-that-gets-no-text)).
 
 ## Returning values
 
@@ -1030,9 +1030,9 @@ error('a later section never runs')
 done
 ````
 
-The `return` in `First` ends the block, the section, and the main walk, so neither the second block nor `Second` runs. The walk ends with no result, and the run result is the [`done` fallback](#the-done-fallback), the same as when the walk runs past its last section. In a section reached through `call`, or one that runs as a task, the same `return` ends that chain and hands its caller the empty string (see [A return ends the chain](#a-return-ends-the-chain)).
+The `return` in `First` ends the block, the section, and the main walk, so neither the second block nor `Second` runs. The walk ends with no result, and the run result is the [`done` fallback](#the-done-fallback), the same as when the walk runs past its last section. In a section reached through `call`, the same `return` ends that chain, and `call` returns `nil` (see [A call that gets no text](08-jump-and-call.md#a-call-that-gets-no-text)). In a section that runs as a task or a fanout arm, it ends the task or the arm, whose result is the empty string.
 
-So a `return` you write always ends the section, and it never depends on what the returned expression holds. `return var.answer` ends it even when `var.answer` was never set, and `return models.loop()` ends it even though [`models.loop`](11-conversations.md#starting-a-conversation) returns `nil`. To skip the rest of a block and let the section continue, put the rest inside an `if` in place of an early `return`:
+So a `return` you write always ends the section, and it never depends on what the returned expression holds. `return var.answer` ends it even when `var.answer` was never set, `return models.loop()` ends it even though [`models.loop`](11-conversations.md#starting-a-conversation) returns `nil`, and `return call('../Sub')` ends it even when `Sub` gave no text. To skip the rest of a block and let the section continue, put the rest inside an `if` in place of an early `return`:
 
 ````lua
 local ready = false
@@ -1043,7 +1043,7 @@ end
 
 This block runs to its last line whether or not `ready` holds, so the section's next block runs.
 
-Returning an empty string differs from returning no value only in the result. `return ''` ends the section with the empty string as its result, and `return nil` ends it with no result, which on the main walk gives `done`.
+Returning an empty string differs from returning no value only in the result. `return ''` ends the section with the empty string as its result, and `return nil` ends it with no result, which on the main walk gives `done` and in a called section gives `call` `nil`.
 
 ### A return ends the chain
 
@@ -1570,7 +1570,7 @@ The rule holds at every heading level the main walk reaches: when the top-level 
 
 A section's `return` value becomes the run result, not the model's last reply. A section that ends with `return 'ok'` after the model's final reply `done` gives the result `ok`. A section that calls a model without returning the reply adds nothing to the run's result, and only a reply that a block returns, such as `return models.infer(prose)` in the last block, becomes the result. Running [`models.loop`](11-conversations.md#starting-a-conversation) on the section entry's `messages` list and then returning `messages[#messages].content` makes the model's final text reply from the loop the run result, which is how the last block of the [shipped](01-what-a-prompt-is.md#shipped-example-prompts) `research-person` prompt ends.
 
-Returns from other chains go back to the code that started them instead. A value returned inside a section reached through `call('../S1')` goes back to the caller as the value of `call`. A section started with `tasks.spawn` hands its `return` value back as that task's result, and the section that started the tasks reads those values as `results[1].result` and `results[2].result`. When two `Reply` tasks each return `hi there`, the run result is `hi there hi there` only because `Greet`, the entry section, returns that text after waiting on both tasks. A called section or task that ends without returning, or at a `return` that gives no value, gives back empty text, not `done`.
+Returns from other chains go back to the code that started them instead. A value returned inside a section reached through `call('../S1')` goes back to the caller as the value of `call`. A section started with `tasks.spawn` hands its `return` value back as that task's result, and the section that started the tasks reads those values as `results[1].result` and `results[2].result`. When two `Reply` tasks each return `hi there`, the run result is `hi there hi there` only because `Greet`, the entry section, returns that text after waiting on both tasks. A called section or a task that ends without returning, or at a `return` that gives no value, never gives back `done`: `call` returns `nil`, and the task's result is the empty string.
 
 ### The `done` fallback
 
