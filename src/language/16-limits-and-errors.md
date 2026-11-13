@@ -117,7 +117,7 @@ A run observes five limits, each with a default:
 | Memory ceiling | 64 MiB | the Lua heap of each section VM | the Harness |
 | Log event quota | 1024 `log` events | each section VM | the Harness |
 
-These built-in values are the default limits, the set every run starts from. The Engine accepts other limits from the code that starts a run, and the Harness passes it the limits set for the run, which are these defaults unless the Host sets others. Workshop sets none, so every Workshop run observes these defaults. One set of limits applies to the whole run, every section included.
+These built-in values are the default limits, the set every run starts from. The Engine accepts other limits from the code that starts a run, and the Harness passes it the limits set for the run, which are these defaults unless the Host sets others. Workshop sets none, so every Workshop run observes these defaults. One set of limits applies to the whole run, every section included. The Harness also runs at most 10 tool calls at once across a run unless the Host sets another number, which Workshop leaves as it is, and the calls past that wait and start oldest first.
 
 Every count and size limit of a run is at least 1, so the round cap, the concurrency limit, the idle cap, the memory ceiling, and the log event quota can never be zero.
 
@@ -132,7 +132,7 @@ The response cap is at least 1 byte, so it can never be zero.
 
 ### The one limit a prompt sets
 
-`max_tool_iterations` is the only run limit a prompt's frontmatter can change (see [Optional keys and unknown keys](02-file-structure.md#optional-keys-and-unknown-keys)), and the other four run limits come from the Harness that runs the prompt. A prompt's own `max_tool_iterations` value replaces the run's round cap. Without the key, the run's cap applies, which is 24 unless the Harness sets another.
+`max_tool_iterations` is the only run limit a prompt's frontmatter can change (see [Optional keys and unknown keys](02-file-structure.md#optional-keys-and-unknown-keys)), and the other four run limits come from the Harness that runs the prompt. A prompt's own `max_tool_iterations` value replaces the run's round cap, up to a ceiling the Host can set, which is 1000 by default. Without the key, the run's cap applies, which is 24 unless the Harness sets another.
 
 The round cap allows 24 model rounds by default in each `models.loop` call. Each call starts its own count at zero, so two loop calls in one section can each use up to the full cap.
 
