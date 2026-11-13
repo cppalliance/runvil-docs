@@ -13,8 +13,6 @@ description: says hi
 runvil: 0
 ---
 
-# Greeter
-
 ## Say hi
 
 Say hello.
@@ -34,25 +32,26 @@ This file is a prompt file, which is a Markdown file with the `.md` extension. Y
 
 ### The parts of a complete prompt
 
-A complete prompt is one `.md` file that parses and runs. The prompt above is complete and combines every part a prompt can have: YAML frontmatter, an H1 title, a `##` section heading, a Lua block, and prose. In it:
+A complete prompt is one `.md` file that parses and runs. The prompt above is complete and is built from YAML frontmatter, a `##` section heading, a Lua block, and prose. In it:
 
 - The frontmatter is the YAML between the two `---` lines.
-- The H1 title is `# Greeter`, the prompt's one level-1 heading.
 - `## Say hi` is the heading of a section, which is a heading plus everything under it up to the next heading at the same or a higher level.
 - `Say hello.` is prose.
 - `return prose` is a Lua block.
 
-The shipped `analyst-example.md` prompt has the same parts with more in its section: frontmatter, the H1 title `# Analyst Example`, an `## Analyze` section, and prose between two Lua blocks.
+A prompt can have one more part, a preamble, which is the text between the frontmatter and the first heading (see [The preamble](02-file-structure.md#the-preamble)). The prompt above has none, because its first heading follows the frontmatter directly. The shipped `analyst-example.md` prompt has every part: frontmatter, a preamble of one paragraph of prose, an `## Analyze` section, and in that section prose between two Lua blocks.
 
 ### Three parts in a fixed order
 
 A prompt file has three parts, always in this order, which is also the order Runvil reads them:
 
 1. Frontmatter, the YAML block at the top of the file.
-2. Exactly one H1 title with non-empty text, followed by an optional H1 body of prose and Lua blocks (see [The H1 title and H1 body](02-file-structure.md#the-h1-title-and-h1-body)).
-3. Any number of `##` sections, including none.
+2. An optional preamble of prose and Lua blocks, which ends at the first heading (see [The preamble](02-file-structure.md#the-preamble)).
+3. Any number of sections, including none. Each heading starts a section, and the top-level sections, the ones a run goes through in file order, are `##` headings in this guide's examples (see [Section headings and nesting](02-file-structure.md#section-headings-and-nesting)).
 
-Because sections are optional, a prompt whose H1 body does all the work is complete and runs. [The smallest complete prompt](#the-smallest-complete-prompt) shows one.
+A preamble that holds a Lua block is a section itself, the first one the run enters. A preamble that holds only prose is commentary, which nothing reads and which has no effect on the run.
+
+Because the preamble and the sections are both optional, a prompt of frontmatter alone is complete and runs, and so is a prompt whose preamble does all the work. [The smallest complete prompt](#the-smallest-complete-prompt) shows both.
 
 ### Frontmatter comes first
 
@@ -74,7 +73,7 @@ Two mistakes stop parsing at this point. A file whose first line is something ot
 
 You put logic in Lua blocks and text meant for a model in prose. A Lua block below the prose reads that text as `prose` (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)). The block can hand the text back as the run result with `return prose`, as the first example does, or send it to a model with `models.infer(prose)` (see [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer)).
 
-Prose alone never reaches a model, and nothing reaches a model until Lua sends it with `models.infer`. Prose that no Lua reads, whether in the H1 body or in a section that holds only prose, is discarded at the end of that part without needing a model, and the run continues:
+Prose alone never reaches a model, and nothing reaches a model until Lua sends it with `models.infer`. Prose that no Lua reads, whether in a preamble that holds no Lua block or in a section that holds only prose, is discarded unread without needing a model, and the run continues:
 
 ````markdown
 ---
@@ -83,9 +82,7 @@ description: says hi
 runvil: 0
 ---
 
-# Greeter
-
-This line sits in the H1 body, and no Lua reads it.
+This line sits in the preamble, and no Lua reads it.
 
 ## Notes
 
@@ -102,13 +99,13 @@ return 'ok'
 ok
 ````
 
-The line in the H1 body and the whole `## Notes` section are discarded unread, no model is needed, and the run goes on to `## Say hi`, whose block returns `ok` as the run result.
+This preamble holds no Lua block, so it is commentary. Its line and the whole `## Notes` section are discarded unread, no model is needed, and the run goes on to `## Say hi`, whose block returns `ok` as the run result.
 
 ### Runs and run events
 
 A run is one execution of one prompt, from its start to its run result. A run reports a run event for each thing that happens during it, so the Host can log them.
 
-Runvil parses a prompt file into a parsed prompt before anything runs. A parsed prompt is the prompt file read into its frontmatter, H1 title, and sections, and each run executes exactly one parsed prompt.
+Runvil parses a prompt file into a parsed prompt before anything runs. A parsed prompt is the prompt file read into its frontmatter and its sections, and each run executes exactly one parsed prompt.
 
 ### The runvil version
 
@@ -126,19 +123,17 @@ name: greeter
 description: says hi
 runvil: 0
 ---
-
-# Greeter
 ````
 
 ````text
 done
 ````
 
-This is the smallest prompt that runs: frontmatter with `name`, `description`, and `runvil: 0`, plus one H1 title with nothing under it. It parses with no sections, and the run ends with `done`, the default run result when nothing returns a value. A line of prose under the title gives the same result, because nothing reads that prose.
+This is the smallest prompt that runs: frontmatter with `name`, `description`, and `runvil: 0`, and nothing after it. It parses with no sections, and the run ends with `done`, the default run result when nothing returns a value. A line of prose after the frontmatter gives the same result, because that prose is a preamble with no Lua block, and nothing reads it.
 
-### Lua in the H1 body
+### A prompt of one Lua block
 
-Add a Lua block under the title:
+Add a Lua block after the frontmatter:
 
 ````markdown
 ---
@@ -146,8 +141,6 @@ name: greeter
 description: says hi
 runvil: 0
 ---
-
-# Greeter
 
 ```lua
 return "hello"
@@ -158,7 +151,7 @@ return "hello"
 hello
 ````
 
-A complete prompt needs no `##` section. Frontmatter, one H1 title, and a Lua block in the H1 body run on their own, and the block's return value is the run result. With no return, the run ends with `done`. Replace the block's code with a line that has no `return`:
+A complete prompt needs no heading. The Lua block is this prompt's [preamble](02-file-structure.md#the-preamble), and a preamble that holds a Lua block is a section, the first one the run enters. Frontmatter and that one block run on their own, and the block's return value is the run result. With no return, the run ends with `done`. Replace the block's code with a line that has no `return`:
 
 ````lua
 local x = 1
@@ -178,8 +171,6 @@ name: greeter
 description: says hi
 runvil: 0
 ---
-
-# Greeter
 
 ## Say hi
 
@@ -202,8 +193,6 @@ name: greeter
 description: says hi
 runvil: 0
 ---
-
-# Greeter
 
 ## Say hi
 
@@ -228,8 +217,6 @@ name: greeter
 description: says hi
 ---
 
-# Greeter
-
 ## Say hi
 
 ```lua
@@ -253,8 +240,6 @@ name: greet
 description: Has the model repeat a greeting.
 runvil: 0
 ---
-
-# Greet
 
 ## Main
 
@@ -297,7 +282,7 @@ The shipped `greet.md` prompt has this shape, with a `## Main` section that ends
 
 ### Calling a tool from a section
 
-A prompt with frontmatter, an H1 title, and one `##` section holding a Lua block is complete, and that block can call a tool with `tools.call` (see [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls)). The tool can be an adhoc tool, one the section defines itself with `tools.adhoc` (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)). A greeter prompt with a `# Greeter` title and a `## Greet` section ends its block with these lines, where `reply` holds a model's reply:
+A prompt with frontmatter and one `##` section holding a Lua block is complete, and that block can call a tool with `tools.call` (see [Calling tools from Lua and counting calls](12-tools.md#calling-tools-from-lua-and-counting-calls)). The tool can be an adhoc tool, one the section defines itself with `tools.adhoc` (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)). A greeter prompt with one `## Greet` section ends its block with these lines, where `reply` holds a model's reply:
 
 ````lua
 local shout = tools.adhoc({ name = 'shout', description = 'Returns the text in capital letters.', parameters = { text = 'string' } }, function(args)
@@ -328,7 +313,7 @@ uses:
 ---
 ````
 
-The rest of a complete Pack-using prompt is the same shape as before: an H1 title and one `##` section holding a Lua block.
+The rest of a complete Pack-using prompt is the same shape as before: one `##` section holding a Lua block.
 
 ### A prompt that sends prose to a model
 
@@ -341,8 +326,6 @@ description: Says hello.
 runvil: 0
 ---
 
-# Hello World
-
 ## Greet
 
 Say "Hello, world!"
@@ -352,7 +335,7 @@ return models.infer(prose)
 ```
 ````
 
-The frontmatter has no `models:` key. The `## Greet` block sends the section's prose to the model with `return models.infer(prose)`, and the model's reply to `Say "Hello, world!"` is the run result. The Host's model, the model of the `default` role, answers the round. A prompt can attach requirements to the five built-in roles, `default`, `strong`, `small`, `fast`, and `creative`, with the `models:` key (see [Declaring roles under `models:`](10-models.md#declaring-roles-under-models)), and it can switch to another role with `models.use` (see [Selecting a role with `models.use`](10-models.md#selecting-a-role-with-modelsuse)). The shipped `hello.md` prompt, which describes itself as `A minimal test prompt.`, has this shape.
+The frontmatter has no `models:` key. The `## Greet` block sends the section's prose to the model with `return models.infer(prose)`, and the model's reply to `Say "Hello, world!"` is the run result. The Host's model, the model of the `default` role, answers the round. A prompt can attach requirements to the five built-in roles, `default`, `strong`, `small`, `fast`, and `creative`, with the `models:` key (see [Declaring roles under `models:`](10-models.md#declaring-roles-under-models)), and it can switch to another role with `models.use` (see [Selecting a role with `models.use`](10-models.md#selecting-a-role-with-modelsuse)). The shipped `hello.md` prompt, whose preamble is the one line of commentary `A minimal test prompt.`, has this shape.
 
 ### A prompt with no contract keys
 
@@ -364,8 +347,6 @@ name: greeter
 description: Writes a note to the store and reads it back.
 runvil: 0
 ---
-
-# Greeter
 
 ## Greet
 
@@ -405,7 +386,7 @@ The block writes `hello` to `note.md` in the store, selects the `fast` role with
 
 ### A helper section and a nested section
 
-One prompt can combine a section that other sections load, prose in the H1 body, several `##` sections, and a nested section. In a prompt titled `# Require Library`, the H1 body holds prose and a `## helpers` section defines a function named `normalize`. The `## Prepare` and `## Finish` sections each load it with `require '/helpers'` (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)) and call `normalize`. A `### Author note` section of prose nests under `## Prepare`, so the prompt has three `##` sections and `## Prepare` holds one nested section.
+One prompt can combine a section that other sections load, commentary in the preamble, several `##` sections, and a nested section. In a prompt named `require_library`, the preamble holds one line of commentary and a `## helpers` section defines a function named `normalize`. The `## Prepare` and `## Finish` sections each load it with `require '/helpers'` (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)) and call `normalize`. A `### Author note` section of prose nests under `## Prepare`, so the prompt has three `##` sections and `## Prepare` holds one nested section.
 
 ### Sections that run in sequence
 
@@ -421,8 +402,6 @@ name: greeter
 description: says hi
 runvil: 0
 ---
-
-# Greeter
 
 ## Say hi
 
@@ -465,8 +444,6 @@ name: run-inputs
 description: Reads the start time and an untrusted envelope.
 runvil: 0
 ---
-
-# Run inputs
 
 ## Only
 
@@ -521,8 +498,6 @@ description: Writes a note to the store and reads it back.
 runvil: 0
 ---
 
-# Greeter
-
 ## Greet
 
 ```lua
@@ -555,8 +530,6 @@ name: no-io
 description: Shows that io and os are absent.
 runvil: 0
 ---
-
-# No io
 
 ## Only
 
@@ -621,6 +594,8 @@ Every prompt shipped in the repository's `prompts` directory, including the prom
 - `hello.md` has the model say hello through the prose `Say "Hello, world!"` and `return models.infer(prose)`; [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer) teaches `models.infer`.
 - `greet.md` builds a greeting from its argument with `var.greeting = "Hello, " .. args .. "!"` and has the model repeat it through `{{ var.greeting }}` in its prose; [Placeholders in prose](07-substitution.md#placeholders-in-prose) teaches placeholders.
 - `analyst-example.md` sets `min_context: 40000` for the `strong` role under `models:` and calls `models.use("strong")` before `return models.infer(prose)`; [Model roles instead of models](10-models.md#model-roles-instead-of-models) teaches model roles.
+
+Each of these four opens with a preamble of commentary, a paragraph before its first heading that describes the prompt.
 
 Runvil also ships `research-person.md`, which researches a person. Its `## Research` section calls `tools.offer({"web/search", "web/fetch"})` (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)), and the prompt runs end to end to a factual summary. [What the web Pack gives a prompt](13-web-fetch-and-search.md#what-the-web-pack-gives-a-prompt) teaches `web/search` and `web/fetch`.
 

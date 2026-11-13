@@ -1,6 +1,6 @@
 # How a prompt runs
 
-Every run moves through the same stages in the same order: the parse, prepare, the start checks, the H1 pass, and the section walk, and it ends with its result: its final text, or the error that ended it. This chapter follows that order, one stage at a time. Knowing the order tells you which mistakes stop a run before any of your Lua runs, which sections run and when, and what text the run hands back when it finishes.
+Every run moves through the same stages in the same order: the parse, prepare, the start checks, and the section walk, and it ends with its result: its final text, or the error that ended it. This chapter follows that order, one stage at a time. Knowing the order tells you which mistakes stop a run before any of your Lua runs, which sections run and when, and what text the run hands back when it finishes.
 
 ## How a run proceeds
 
@@ -13,8 +13,6 @@ description: Returns a fixed greeting.
 runvil: 0
 ---
 
-# Hello
-
 ## Main
 
 ```lua
@@ -26,20 +24,19 @@ return 'hello'
 hello
 ````
 
-This run is as short as a run gets. The start checks find nothing missing, because the frontmatter declares no Packs and no model requirements. The H1 body under `# Hello` is empty, so there is no H1 pass. The walk enters `Main`, the block returns `hello`, and the run ends in success with `hello` as its run result. A block that only returns a literal value asks the Harness for no work at all, so this run finishes without waiting on anything outside the prompt.
+This run is as short as a run gets. The start checks find nothing missing, because the frontmatter declares no Packs and no model requirements. The walk enters `Main`, the prompt's only section, the block returns `hello`, and the run ends in success with `hello` as its run result. A block that only returns a literal value asks the Harness for no work at all, so this run finishes without waiting on anything outside the prompt.
 
 ### The stages in order
 
 Every run goes through these stages, in this order:
 
-1. Parse. The whole file is parsed and every Lua block in the H1 body and the sections is compiled, and nothing runs yet. See [Parsing comes first](#parsing-comes-first).
+1. Parse. The whole file is parsed and every Lua block in it is compiled, and nothing runs yet. See [Parsing comes first](#parsing-comes-first).
 2. Prepare. The Harness stages the declared input file, readies the run's Packs, and builds the run. See [Preparing the run](#preparing-the-run).
 3. The start checks. The run's first step checks the `runvil` version, the store, and the requirements, and refuses a run that fails one of them. See [Preparing the run](#preparing-the-run).
-4. The H1 pass. The H1 body's blocks run before the first section, but only when the H1 body holds a `lua` block or prose. See [The H1 pass](#the-h1-pass).
-5. The section walk. The top-level sections run in file order. See [The section walk](#the-section-walk).
-6. The result. The run ends with its text or with the error that ended it. See [The run result](#the-run-result).
+4. The section walk. The top-level sections run in file order, starting at the first one. See [The section walk](#the-section-walk).
+5. The result. The run ends with its text or with the error that ended it. See [The run result](#the-run-result).
 
-The Harness parses the prompt before the run exists, so a file that does not parse starts no run and never reaches the checks of Packs and model roles. Once the prompt parses, the Harness draws the run's seed and start time, begins the run's record, and looks up the Host's current model. A prompt whose H1 body holds no `lua` block and no prose skips the H1 pass and goes straight to its first section, as `hello` does. A run that completes ends with its final text, and any other run ends with the error that ended it. A cancel is one of those errors: a run the Host cancels ends with the error whose code is `canceled`.
+The Harness parses the prompt before the run exists, so a file that does not parse starts no run and never reaches the checks of Packs and model roles. Once the prompt parses, the Harness draws the run's seed and start time, begins the run's record, and looks up the Host's current model. A run that completes ends with its final text, and any other run ends with the error that ended it. A cancel is one of those errors: a run the Host cancels ends with the error whose code is `canceled`.
 
 ### A run can be refused before it starts
 
@@ -54,8 +51,6 @@ models:
   strong:
     min_context: 200000
 ---
-
-# Needs context
 
 ## Main
 
@@ -83,8 +78,6 @@ name: handoff
 description: Writes a file in one section and reads it in the next.
 runvil: 0
 ---
-
-# Handoff
 
 ## First
 
@@ -132,8 +125,6 @@ description: Holds one Lua block for the parse to compile.
 runvil: 0
 ---
 
-# T
-
 ```lua
 local secret = 42
 ```
@@ -143,11 +134,11 @@ local secret = 42
 p
 ````
 
-Parsing this prompt compiles one Lua block, the H1 block's `local secret = 42`, and runs none of it. Parsing builds the prompt's tree of H1, sections, and blocks without running any of its Lua or prose. Section `S` holds only prose, so it gives the parse nothing to compile.
+Parsing this prompt compiles one Lua block, `local secret = 42`, and runs none of it. That block sits in the preamble, the text between the frontmatter and the first heading, which is a section of its own when it holds Lua (see [The preamble](02-file-structure.md#the-preamble)). Parsing builds the prompt's tree of sections and blocks without running any of its Lua or prose. Section `S` holds only prose, so it gives the parse nothing to compile.
 
 ### The whole file parses before anything runs
 
-The whole prompt file is parsed, and every Lua block in its H1 body and sections compiled, before any part of the prompt runs. A prompt with a parse error never starts. An invalid prompt file is rejected as a whole, never accepted in part, so none of its sections run. Parsing needs no network access and no connection to a model, so you can check a prompt's structure offline.
+The whole prompt file is parsed, and every Lua block in it compiled, before any part of the prompt runs. A prompt with a parse error never starts. An invalid prompt file is rejected as a whole, never accepted in part, so none of its sections run. Parsing needs no network access and no connection to a model, so you can check a prompt's structure offline.
 
 Parsing checks only the shape of the frontmatter's contract keys and what the file's text shows: keys, names, duplicates, ranges, and default types. A prompt whose contract has a valid shape parses even when the environment that runs it cannot satisfy it. Matching the Packs under `uses:` and the requirements under `models:` against the environment happens on the run's first step, and the tool catalog and the model reach the prompt only when the Harness prepares the run. The tool catalog holds the tools of the run's Packs that can serve it, every `runvil` Pack and each third-party Pack the prompt declares (see [The Engine, the Harness, and the Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host)). A prompt that declares Pack `web` in an environment without it parses first, and then the requirements notice reports the gap:
 
@@ -160,7 +151,7 @@ Each check stops the prompt before the next one starts, so the order of failures
 
 ### Lua blocks compile in source order
 
-Compiling is part of parsing: the parse compiles every Lua block, without running it, in source order. The H1 body's blocks come first, then each section's blocks in the order the file holds them. A section with a prologue and an epilog (see [Prologue, prose, and epilog](03-blocks-and-prose.md#prologue-prose-and-epilog)) holds two blocks, and its prologue compiles first. Replace `S` in the prompt above with this section:
+Compiling is part of parsing: the parse compiles every Lua block, without running it, in source order. The preamble's blocks come first, then each section's blocks in the order the file holds them. A section with a prologue and an epilog (see [Prologue, prose, and epilog](03-blocks-and-prose.md#prologue-prose-and-epilog)) holds two blocks, and its prologue compiles first. Replace `S` in the prompt above with this section:
 
 ````markdown
 ## S
@@ -176,11 +167,11 @@ local after = 2
 ```
 ````
 
-The parse now compiles three blocks: the H1 block, then the prologue of `S`, then its epilog. A prose-only section, like the first version of `S`, has no block to compile.
+The parse now compiles three blocks: the preamble's block, then the prologue of `S`, then its epilog. A prose-only section, like the first version of `S`, has no block to compile.
 
 A Lua block that fails to compile fails the whole parse with the code `lua_compile`. The parse stops at that block: the blocks before it compiled, and the blocks after it are never compiled. The compile error names the failing block by its section and its place in it, such as ``section `Private section` prologue``, or the epilog when the epilog fails.
 
-A prompt that breaks a Lua fence rule (see [Exact fence rules and fence errors](03-blocks-and-prose.md#exact-fence-rules-and-fence-errors)) fails its parse before any Lua compiles, even when the H1 body holds Lua.
+A prompt that breaks a Lua fence rule (see [Exact fence rules and fence errors](03-blocks-and-prose.md#exact-fence-rules-and-fence-errors)) fails its parse before any Lua compiles, even when the preamble holds Lua.
 
 ### A prompt that does not parse starts no run
 
@@ -198,8 +189,6 @@ name: no-requirements
 description: Declares no Packs and no model requirements.
 runvil: 0
 ---
-
-# No requirements
 
 ## Main
 
@@ -278,10 +267,6 @@ After the wait, each run takes one snapshot of its Packs. That snapshot supplies
 
 Every prompt has five model roles: `default`, `strong`, `small`, `fast`, and `creative`. When the Harness builds the run in prepare, it gives the run a role map from roles to models, and that map holds the Host's current model under `default`. A role with no entry of its own uses the `default` entry, so that one model fills all five roles. The `models:` key only attaches requirements to the roles, and the run's first step checks each declared context minimum and `thinking` requirement against the model that fills the role. A role requiring `thinking: true` fails on a model whose thinking capability is `Never`, and a role requiring `thinking: false` fails on a model whose thinking capability is `Always` (see [The thinking requirement](10-models.md#the-thinking-requirement)). When the Host has no current model, the map is empty, no role is filled, and nothing is checked. [Model roles at prepare](#model-roles-at-prepare) shows each case.
 
-### An H1 gate failure reads like a refusal
-
-One failure that is not a refusal reports the same error code. An uncaught Lua runtime error, code `lua_runtime`, in the prompt's H1 blocks, such as a failed `assert` or an error raised by a library that an H1 block loads with `require` (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)), is the prompt's failed hard gate. It ends the run before any later H1 block or any section runs, with error code `requirements_unmet` and a message made of the line `the environment cannot satisfy this prompt:`, the line `- the H1 gate failed`, then `: ` and the Lua error's own text, and last ` (at {file}:{line})`, the line of the failure that tripped the gate. [The H1 hard gate](#the-h1-hard-gate) shows an example and every gate case.
-
 ## Packs at prepare
 
 After this section you can predict how the run treats each Pack you declare, what an unavailable Pack does to a run, and what the tool catalog holds once the run starts.
@@ -293,8 +278,6 @@ description: Declares the web Pack.
 runvil: 0
 uses: [web]
 ---
-
-# Needs web
 
 ## Main
 
@@ -393,8 +376,6 @@ models:
     min_context: 200000
 ---
 
-# Roles
-
 ## Main
 
 ```lua
@@ -428,8 +409,6 @@ models:
     min_context: 200000
     thinking: true
 ---
-
-# Analysis
 
 ## Main
 
@@ -508,8 +487,6 @@ models:
     thinking: true
 ---
 
-# Deep analysis
-
 ## Main
 
 ```lua
@@ -545,7 +522,6 @@ The notice is written for a model to read: concise, factual, and self-contained.
 | `- role '{role}': requires a context of at least {required} tokens; the model filling it provides {actual}` | a role whose `min_context` is above the window of the model filling it |
 | `- role '{role}': requires '{required}'; the thinking capability of the model filling it is {actual}` | a role whose `thinking` requirement the model filling it fails |
 | `- role 'default': requires a model; the caller's role map has no 'default' entry` | a role map that has entries but none for `default` |
-| `- the H1 gate failed` | an uncaught `lua_runtime` error in the H1 pass |
 
 ### Pack lines in the notice
 
@@ -568,10 +544,6 @@ When the context window of the model filling a role is smaller than the role's `
 An unmet `thinking` requirement gives the line `- role '{role}': requires '{required}'; the thinking capability of the model filling it is {actual}`, where `{required}` is `thinking: true` or `thinking: false`. `{actual}` reads `Never` for an unmet `thinking: true` and `Always` for an unmet `thinking: false`, capitalized as shown, and a `Switchable` model meets both. A role with `thinking: false` on a model that always thinks gives `- role '{role}': requires 'thinking: false'; the thinking capability of the model filling it is Always`.
 
 Only `min_context` and `thinking` can add these role lines, and the one other model line is the `default` line that [A role map without a default entry](#a-role-map-without-a-default-entry) describes. The notice lists only the roles that fall short and leaves out roles the model meets. When the Host gives no model, the notice has no role lines, because the run skips the role checks.
-
-### The H1 gate line
-
-The `- the H1 gate failed` line does not come from a refusal. An uncaught `lua_runtime` error in the H1 pass fails the prompt's hard gate, which also ends the run with error code `requirements_unmet` before any later block runs. Its notice is the same opening line followed by `- the H1 gate failed`, and its message adds `: ` and the Lua error's text, then ` (at {file}:{line})`, the line of the failure that tripped the gate, as [The H1 hard gate](#the-h1-hard-gate) shows.
 
 ### The order of the lines
 
@@ -598,8 +570,6 @@ description: Passes values through three sections.
 runvil: 0
 ---
 
-# Walk
-
 ## A
 
 ```lua
@@ -624,11 +594,11 @@ return var.from_a .. var.from_b
 ab
 ````
 
-The H1 body under `# Walk` is empty, so the run moves straight into the first `##` section, `A`. Its block sets `var.from_a` and ends without `return`, so the walk falls through to `B`. `B` sees the value `A` left on `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)), sets `var.from_b`, and falls through to `C`. `C` returns `ab`, and that return value becomes the run result (see [Returning values](#returning-values)).
+The run starts at the first top-level section, `A`. Its block sets `var.from_a` and ends without `return`, so the walk falls through to `B`. `B` sees the value `A` left on `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)), sets `var.from_b`, and falls through to `C`. `C` returns `ab`, and that return value becomes the run result (see [Returning values](#returning-values)).
 
 ### The main walk and the entry section
 
-A Lua block placed under a named `##` section, such as `Greet`, runs when the section walk reaches that section. Without `jump` or `call`, a prompt's top-level `##` sections run one after another in file order, top to bottom, each finishing before the next one starts. The main walk is this walk over the top-level sections, the walk the run itself begins. It starts at the entry section: the first top-level `##` section in file order, whatever its name.
+A Lua block placed under a named `##` section, such as `Greet`, runs when the section walk reaches that section. Without `jump` or `call`, a prompt's top-level sections run one after another in file order, top to bottom, each finishing before the next one starts. The main walk is this walk over the top-level sections, the walk the run itself begins. It starts at the entry section: the first top-level section in file order, whatever its name.
 
 ````markdown
 ---
@@ -636,8 +606,6 @@ name: entry
 description: Starts at whichever section comes first.
 runvil: 0
 ---
-
-# Entry
 
 ## Zebra
 
@@ -656,9 +624,71 @@ return 'main'
 zebra
 ````
 
-You choose the starting section by placing it first. With `Zebra` written before `Main`, the walk starts at `Zebra`, and because `Zebra` returns, `Main` never runs. Naming a section `Main` gives it no special role, so a `Main` written after another `##` section is not the entry section.
+You choose the starting section by placing it first. With `Zebra` written before `Main`, the walk starts at `Zebra`, and because `Zebra` returns, `Main` never runs. Naming a section `Main` gives it no special role, so a `Main` written after another top-level section is not the entry section.
 
-When the H1 title has no Lua block under it, the run moves into the first `##` section and runs its `lua` block, and that section's `return` value becomes the run result. A prompt can also have no `##` section at all (see [Section headings and nesting](02-file-structure.md#section-headings-and-nesting)): such an H1-only prompt still parses, but it has no entry section.
+The top-level sections are the sections at the shallowest heading level in the file (see [Section headings and nesting](02-file-structure.md#section-headings-and-nesting)), which the examples in this guide write as `##` headings. Lua written before the first heading adds one more top-level section ahead of them, the preamble, and the preamble is then the entry section. Text before the first heading that holds no `lua` fence is commentary and no section: with a line of plain text above `## Zebra`, the entry section of `entry` is still `Zebra`. The entry section runs under the same rules as every section after it.
+
+### A preamble runs first
+
+The preamble is the text between the frontmatter and the first heading, and when it holds a `lua` fence it is a section: the first top-level section, which has no name (see [The preamble](02-file-structure.md#the-preamble)). A prompt with such a preamble starts its walk there:
+
+````markdown
+---
+name: tone
+description: Sets a value in the preamble that the next section reads.
+runvil: 0
+---
+
+```lua
+var.tone = 'friendly'
+```
+
+## Reply
+
+```lua
+return 'tone: ' .. var.tone
+```
+````
+
+````text
+tone: friendly
+````
+
+The block above `## Reply` runs first, because the preamble is the entry section. It ends without `return`, so the walk falls through to `Reply`, as it does from any section to the next, and `Reply` reads the `friendly` that the preamble left on `var`. To run a block ahead of every heading's section, you put it in the preamble.
+
+A preamble can hold several Lua blocks with prose between them, and they run in file order, each exactly once, like the blocks of any section:
+
+````markdown
+---
+name: count_blocks
+description: Counts the preamble's blocks that ran before the next section.
+runvil: 0
+---
+
+```lua
+var.executions = (var.executions or 0) + 1
+```
+
+Ask for one round.
+
+```lua
+var.executions = (var.executions or 0) + 1
+```
+
+## Result
+
+```lua
+return var.executions
+```
+````
+
+````text
+2
+````
+
+Both blocks run before the walk enters `Result`, so `Result` returns `2`. The line `Ask for one round.` is the prose of the block after it, as prose ahead of a `lua` fence is in every section (see [Prologue, prose, and epilog](03-blocks-and-prose.md#prologue-prose-and-epilog)), so the preamble reads it only through `prose`, as in `models.infer(prose)`.
+
+Lua in the preamble makes the same Engine calls as Lua in any section, including model rounds, `require`, [`prompt.section` and `prompt.section_or`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptsection_or), `call`, `jump`, [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn), [`tasks.fanout`](14-fanout.md#fanout-in-one-call), and the store functions, such as `store.read` and `store.write`. Because the preamble runs first, a `store.write` there is the run's first effect. What the preamble leaves for the sections after it is what any section leaves for the next, and [What carries from one section to the next](#what-carries-from-one-section-to-the-next) lists it.
 
 ### Falling through to the next section
 
@@ -672,8 +702,6 @@ name: fresh
 description: Shows that plain globals end with their section.
 runvil: 0
 ---
-
-# Fresh
 
 ## First
 
@@ -704,8 +732,6 @@ description: Leaves prose unread at the end of a section.
 runvil: 0
 ---
 
-# Discarded
-
 ## First
 
 {{ var.missing }} is never read here.
@@ -734,8 +760,6 @@ description: Shows the walk passing over a child section.
 runvil: 0
 ---
 
-# Children wait
-
 ## A
 
 ```lua
@@ -759,7 +783,7 @@ return var.seen .. 'B'
 AB
 ````
 
-The walk goes from `A` straight to `B` and passes over `Child`, so its `error` never runs and the run succeeds. The walk never enters a child section on its own: it skips the subsections nested under a walked section and moves on to the next sibling at the same heading level. A child section runs only when something names it with a section path, such as `jump` (see [Jumping to a section](08-jump-and-call.md#jumping-to-a-section)), `call` (see [Calling a section](08-jump-and-call.md#calling-a-section)), or a task started with `tasks.spawn('Arm')` (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn)). A child section that holds only prose, such as `Author note`, works as a note for people reading the file, because the walk never enters it.
+The walk goes from `A` straight to `B` and passes over `Child`, so its `error` never runs and the run succeeds. The walk never enters a child section on its own: it skips the subsections nested under a section it enters and moves on to the next sibling at the same heading level. A child section runs only when something names it with a section path, such as `jump` (see [Jumping to a section](08-jump-and-call.md#jumping-to-a-section)), `call` (see [Calling a section](08-jump-and-call.md#calling-a-section)), or a task started with `tasks.spawn('Arm')` (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn)). A child section that holds only prose, such as `Author note`, works as a note for people reading the file, because the walk never enters it.
 
 ### Every top-level section is on the main walk
 
@@ -773,8 +797,6 @@ name: nested-lib
 description: Keeps a library off the walk by nesting it.
 runvil: 0
 ---
-
-# Nested lib
 
 ## Main
 
@@ -801,6 +823,94 @@ nested
 
 `Main` loads the library and falls through, and the walk goes from `Main` straight to `Last`. It never reaches `lib`, so its table return never meets the section rules, and the run succeeds with `nested`. Placing a `lib` after a `Main` whose block returns keeps it off the walk the same way, because the walk ends before it gets there.
 
+### Jumping from the preamble
+
+A `jump` in the preamble moves the walk to the top-level section it names:
+
+````markdown
+---
+name: preamble_jump
+description: Jumps from the preamble past a section.
+runvil: 0
+---
+
+```lua
+jump('../Target')
+```
+
+## Skipped
+
+```lua
+error('this section never runs')
+```
+
+## Target
+
+```lua
+return 'jumped'
+```
+````
+
+````text
+jumped
+````
+
+The top-level sections are the preamble's siblings, so a relative path from the preamble names one as `../Target` (see [Jump and call from the preamble](08-jump-and-call.md#jump-and-call-from-the-preamble)). The jump ends the preamble at once, and the walk continues at `Target` with the `var` the preamble left, skipping every section between the two. `Skipped` never runs, so its `error` never fires.
+
+### Returning from the preamble
+
+A `return` in the preamble ends the whole run at once:
+
+````markdown
+---
+name: early_exit
+description: Returns from the preamble so no later section runs.
+runvil: 0
+---
+
+```lua
+return 'early'
+```
+
+## Never
+
+```lua
+error('no section runs after the preamble returns')
+```
+````
+
+````text
+early
+````
+
+The preamble is a section of the main walk, and a `return` in any section of the main walk ends the chain and the run with it (see [A return ends the chain](#a-return-ends-the-chain)). The returned value becomes the run result, no later section runs, and the `error` inside `Never` never fires. Returning `models.infer(prose)` from the preamble works the same way: the model's reply becomes the run result. A `return` that gives [no value](#returning-no-value) ends the run too: with a bare `return` in place of `return 'early'`, `Never` still never runs, and the run result is `done`.
+
+The preamble finishes normally on that exit, like any section that returns: it reports `section_finished`, and then the run reports `run_succeeded` (see [Section boundaries](#section-boundaries)).
+
+### Prompts with no heading
+
+A prompt needs no heading. Without one, the whole body is the preamble, and a Lua block in it makes the preamble the prompt's one section:
+
+````markdown
+---
+name: no_heading
+description: A prompt whose only block is its preamble.
+runvil: 0
+---
+
+```lua
+return 'hello'
+```
+````
+
+````text
+hello
+````
+
+The preamble is the [entry section](#the-main-walk-and-the-entry-section) and the only section on the walk, so the scalar its block returns becomes the run result. With `local x = 1` in place of the return, the preamble ends without a result, the walk has no section left to enter, and the result text is `done`, the same [`done` fallback](#the-done-fallback) that ends any run that produces nothing.
+
+A prompt with no section at all, one with no heading and no Lua in its body, is valid too. Its walk has nothing to enter, so the run ends at once with the result `done`.
+
 ### The main walk as a chain
 
 A chain is a walk with its own entries. The main walk is a chain: a walk over sibling sections that the run itself begins. A `call` begins a chain of its own:
@@ -811,8 +921,6 @@ name: sub-chain
 description: Calls a child section that falls through to its sibling.
 runvil: 0
 ---
-
-# Sub chain
 
 ## Main
 
@@ -848,8 +956,6 @@ description: Ends without returning a value.
 runvil: 0
 ---
 
-# Fallback
-
 ## Only
 
 ```lua
@@ -863,6 +969,77 @@ done
 
 [The run result](#the-run-result) explains this `done` fallback. A chain started by `call` that ends this way gives `call` `nil` instead (see [A call that gets no text](08-jump-and-call.md#a-call-that-gets-no-text)).
 
+### What carries from one section to the next
+
+The sections a chain enters share what belongs to the chain, and each one keeps to itself what belongs to its own section entry:
+
+````markdown
+---
+name: carries
+description: Shows what one section leaves for the next.
+runvil: 0
+---
+
+## First
+
+```lua
+var.note = 'kept'
+models.use('strong')
+tasks.concurrency(2)
+scratch = 'gone'
+```
+
+## Second
+
+```lua
+return var.note .. '|' .. models.current().name .. '|' .. tasks.concurrency() .. '|' .. tostring(scratch)
+```
+````
+
+````text
+kept|strong|2|nil
+````
+
+`Second` reads three things that `First` left behind and one that it did not. Four things carry from one section to the next on a walk:
+
+- `var`, with every value the earlier sections stored in it (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)).
+- The chain's current model. The `models.use('strong')` in `First` keeps `Second` and every section after it on the `strong` role until one of them calls `models.use` again (see [Where a chain starts](10-models.md#where-a-chain-starts)).
+- The chain's concurrency limit, which `tasks.concurrency` sets and reads (see [Setting the limit with `tasks.concurrency`](14-fanout.md#setting-the-limit-with-tasksconcurrency)).
+- The tasks the chain spawned. A task that one section starts with `tasks.spawn` keeps running when the section ends, and a later section can wait on it (see [The owner of a task](15-tasks.md#the-owner-of-a-task)).
+
+What belongs to the section entry ends with it, because each entry runs in its own section VM: its Lua globals, such as `scratch`, the libraries it loaded with `require`, the tools it offered with `tools.offer` (see [Which section entries an offer reaches](12-tools.md#which-section-entries-an-offer-reaches)), and its `messages` list (see [`messages` is the section entry's conversation](11-conversations.md#messages-is-the-section-entrys-conversation)). A later section that needs a library loads it again, and one that needs a tool offers it again. Files written with `store` belong to the run, so every later section reads them.
+
+The preamble is one of the walk's sections, so all of this holds for it as for any other. A `models.use('strong')` in the preamble starts every section after it on the `strong` role, a value the preamble stores in `var` is there for all of them, and a tool it offers reaches only its own model rounds.
+
+### Section entry ids on the main walk
+
+Each section the main walk enters gets a section entry id, which its Lua reads as [`sys.id`](05-lua-environment.md#run-facts-in-sys-and-ui):
+
+````markdown
+---
+name: entry_ids
+description: Checks the section entry ids of the first two sections.
+runvil: 0
+---
+
+```lua
+assert(sys.id == '0.0')
+```
+
+## Result
+
+```lua
+assert(sys.id == '0.1')
+return 'ok'
+```
+````
+
+````text
+ok
+````
+
+The main walk is the root chain, chain `0`, and an entry's id is its chain's id, a dot, and the entry's place in the chain, counted from zero. So the first section the run enters reads `0.0` and the next reads `0.1`. Here the preamble is the first section entered, which makes it `0.0` and `Result` `0.1`, and in a prompt with no preamble the first heading's section reads `0.0`. A chain that the main walk starts, with `call` or as a task, has an id of its own, numbered in the order the chains start. The first is chain `0.0`, so when a `call` starts it, the called section reads `0.0.0`, whichever section of the walk makes the call. [Section entry ids](05-lua-environment.md#section-entry-ids) covers the ids of every chain and task.
+
 ## Returning values
 
 After this section you can end a Lua block with a value and predict what that value does to its section, its chain, and the run.
@@ -873,8 +1050,6 @@ name: say_hi
 description: Returns a fixed greeting.
 runvil: 0
 ---
-
-# Say hi
 
 ## Greet
 
@@ -961,8 +1136,6 @@ description: Shows a section with no return handing off to the next section.
 runvil: 0
 ---
 
-# Hand off
-
 ## First
 
 ```lua
@@ -1004,8 +1177,6 @@ name: stop_here
 description: Ends the run with a return that gives no value.
 runvil: 0
 ---
-
-# Stop here
 
 ## First
 
@@ -1055,8 +1226,6 @@ name: first_wins
 description: Shows a return ending the run before later sections.
 runvil: 0
 ---
-
-# First wins
 
 ## First
 
@@ -1114,8 +1283,6 @@ description: Shows a called section handing its value back to the caller.
 runvil: 0
 ---
 
-# Ask research
-
 ## Main
 
 ```lua
@@ -1147,8 +1314,6 @@ description: Returns from the prologue so the prose and epilog never run.
 runvil: 0
 ---
 
-# Stop early
-
 ## Finish
 
 ```lua
@@ -1179,332 +1344,9 @@ return table.concat(kinds, ',')
 
 This block returns `alpha,beta`. For a result that should be JSON text, build the string with [`json.encode`](05-lua-environment.md#encoding-and-decoding-json-with-json) instead, so `return json.encode(kinds)` returns `["alpha","beta"]`.
 
-Returning any other first value fails the block with `cannot return a {type} as a result`, where `{type}` is the Lua type name: `table` for a table, `function` for a function, and `userdata` for an Engine object. So a table return fails with a message that contains `cannot return a table as a result`. This is an ordinary Lua error, so in a walked section it fails the run with error code `lua_runtime`. In the H1 pass the same error fails the [hard gate](#the-h1-hard-gate) instead.
+Returning any other first value fails the block with `cannot return a {type} as a result`, where `{type}` is the Lua type name: `table` for a table, `function` for a function, and `userdata` for an Engine object. So a table return fails with a message that contains `cannot return a table as a result`. This is an ordinary Lua error, so on the main walk it fails the run with error code `lua_runtime`, in the preamble as in every other section.
 
 The easiest way to hit this error is with a library section that ends by returning a table for `require`. When the walk reaches that section on its own, the walk applies the scalar return rule to it, and the run fails with error code `lua_runtime` and `cannot return a table as a result`. Placing library sections after the section that returns keeps the walk from reaching them.
-
-## The H1 pass
-
-After this section you can run Lua before the first section and know what that early pass can change for the rest of the run.
-
-````markdown
----
-name: h1_tone
-description: Sets a value in the H1 pass that the first section reads.
-runvil: 0
----
-
-# H1 tone
-
-```lua
-var.tone = 'friendly'
-```
-
-## Reply
-
-```lua
-return 'tone: ' .. var.tone
-```
-````
-
-````text
-tone: friendly
-````
-
-The block directly under `# H1 tone` runs first, before `Reply` is walked. That is the H1 pass: every Lua block in the [H1 body](02-file-structure.md#the-h1-title-and-h1-body), meaning under the `#` title and before the first `##` heading, runs first as section 0, before any section runs. To run a block ahead of every section, you put it there.
-
-The H1 pass starts with an empty `var`. Its final `var` is read back when it ends, and the first top-level section starts from that `var`, so values the H1 blocks store in `var` become the starting state of the sections walked afterward. That is how `Reply` reads `friendly`.
-
-### What the H1 body holds
-
-You can put Lua fences and prose directly under the `#` title, before the first `##` heading, and they are live blocks kept in file order. The H1 body can hold several Lua blocks, even with prose between them, and they run in file order as one pass, each exactly once, before any section:
-
-````markdown
----
-name: count_blocks
-description: Counts the H1 blocks that ran before the first section.
-runvil: 0
----
-
-# Count blocks
-
-```lua
-var.executions = (var.executions or 0) + 1
-```
-
-Ask for one round.
-
-```lua
-var.executions = (var.executions or 0) + 1
-```
-
-## Result
-
-```lua
-return var.executions
-```
-````
-
-````text
-2
-````
-
-The H1 counts as section 0 of the prompt, and its blocks run once, together, as a single section entered under the prompt's `#` title. Prose in the H1 body takes part in the run too: the line `Ask for one round.` is both a live prose block and the prompt's description text. The H1 pass reads that prose only through an explicit model round, such as `models.infer(prose)`.
-
-### What the H1 pass can do
-
-Lua in the H1 body can make the same Engine calls a section can, including model rounds, `require`, [`prompt.section` and `prompt.section_or`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptsection_or), `call`, `jump`, and [`tasks.fanout`](14-fanout.md#fanout-in-one-call). It can spawn tasks with `tasks.spawn`, and it can call the store functions, such as `store.read` and `store.write`, just as section code does. Because the H1 block runs before any `##` section, a `store.write` there is the run's first effect.
-
-The model an H1 block selects stays in force for the walk, because the main walk starts on the model the H1 pass ended on (see [Where a chain starts](10-models.md#where-a-chain-starts)). That makes the H1 the place to move every section onto another role with [`models.use`](10-models.md#selecting-a-role-with-modelsuse):
-
-````lua
-models.use('strong')
-````
-
-With this block in the H1 body, every section walked afterward starts on the `strong` [model role](10-models.md#model-roles-instead-of-models) until a section calls `models.use` again. A prompt whose H1 selects nothing starts the walk on the `default` role.
-
-The H1 is also the place to validate and repair the prompt's parsed input in `argv` (see [Reading parsed input from `argv`](06-arguments.md#reading-parsed-input-from-argv)). An `assert` on `argv` checks it, and assigning a repaired `argv` table in the H1 body means every later section sees the repaired value.
-
-A model round in the H1 pass reaches the model exactly once, even though sections run afterward. Model rounds happen in source order, so an H1 pass's `models.infer` call reaches the model before a later `##` section's round.
-
-The H1 pass is its own section entry for offers. A Pack the H1 offers with [`tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer) reaches only the H1 pass's own model rounds, and walked sections start without that offer. Checkpoints that H1 Lua records with [`log`](05-lua-environment.md#logging-and-lifecycle-reports), such as `log("H1 ran")`, are attributed to the H1 title.
-
-### Falling through to the walk
-
-H1 code does not need to return a value. When the H1 pass finishes with neither a `return` nor a `jump`, it falls through, and the main walk starts at the first top-level `##` section on its own. The H1 pass never completes the run this way, because it is never a walked section that can complete it.
-
-`h1_tone` and `count_blocks` both fall through. So does an H1 block that stores a model reply with `var.h1 = models.infer(prose)` instead of returning it: the walk starts at the first section, whose scalar return can become the run result.
-
-### Jumping from the H1 pass
-
-A `jump` in an H1 block ends the H1 pass at once:
-
-````markdown
----
-name: h1_jump
-description: Jumps from the H1 pass past a section.
-runvil: 0
----
-
-# H1 jump
-
-```lua
-jump('Target')
-```
-
-## Skipped
-
-```lua
-error('this section never runs')
-```
-
-## Target
-
-```lua
-return 'jumped'
-```
-````
-
-````text
-jumped
-````
-
-Later H1 blocks never run, and the main walk starts at the top-level section the jump names, with the H1 pass's `var`, skipping every section before it. `Skipped` never runs, so its `error` never fires.
-
-### Returning from the H1 pass
-
-A `return` in a block of the H1 body ends the whole run at once:
-
-````markdown
----
-name: early_exit
-description: Returns from the H1 pass so the walk never starts.
-runvil: 0
----
-
-# Early exit
-
-```lua
-return 'early'
-```
-
-## Never
-
-```lua
-error('the walk must not start after an H1 return')
-```
-````
-
-````text
-early
-````
-
-The returned value becomes the run result, no `##` section runs, and the `error` inside the skipped section `Never` never fires. Returning `models.infer(prose)` from the H1 pass works the same way: the model's reply becomes the run result, and the walk never starts. A `return` that gives [no value](#returning-no-value) ends the run too: with a bare `return` in place of `return 'early'`, `Never` still never runs, and the run result is `done`.
-
-The final `var` is still read back on that early exit, as on every exit from the H1 pass. On the early exit the H1 pass is never reported as a finished section, and the run's section start and finish events never name the H1 title at all (see [Run events and records](#run-events-and-records)). Because of the read-back, an H1 block that replaces `var` itself with another value still fails the run even when it then returns, as [Failures outside the gate](#failures-outside-the-gate) explains.
-
-### How the H1 pass differs from the walk
-
-The H1 pass follows the walk's rules with exactly three differences:
-
-- It runs first, ahead of the main walk's sections.
-- A return from it ends the whole run.
-- An uncaught Lua runtime error in it, code `lua_runtime`, such as a failed `assert`, is the prompt's failed [hard gate](#the-h1-hard-gate), which fails the run with error code [`requirements_unmet`](#preparing-the-run) and stops later H1 blocks from running.
-
-So the H1 region, from the `#` title to the first `##` heading, runs as its own live pass that can return early, fall through to the walk, or read its prose through an explicit model round such as `models.infer(prose)`.
-
-### Prompts with no sections
-
-A prompt can consist of only a `#` title with one Lua block and no `##` sections, and that H1 Lua runs when the prompt runs:
-
-````markdown
----
-name: h1_only
-description: A prompt whose only block sits in the H1 body.
-runvil: 0
----
-
-# H1 only
-
-```lua
-return 'hello'
-```
-````
-
-````text
-hello
-````
-
-A prompt with no `##` section has no [entry section](#the-section-walk), so its H1 pass is the whole run, and a scalar the H1 block returns becomes the run's result text, even when that block is the prompt's only block. With `local x = 1` in place of the return, the H1 pass ends without a result, the end of the H1 pass is the end of the run, and the result text is `done`, the same [`done` fallback](#the-done-fallback) that ends any run that produces nothing.
-
-### When there is an H1 pass
-
-When the H1 body holds a Lua block or prose, it runs once as the H1 pass before the walk starts, and prose alone under the title also starts the pass. The H1 region can hold only prose and a `---` [thematic break](03-blocks-and-prose.md#thematic-breaks-and-setext-headings) with no Lua block, and then the H1 pass runs no author code.
-
-A `#` title with nothing under it is valid. With no Lua block and no prose in the H1 body there is no H1 pass, and the run starts its walk directly at the first top-level `##` section, or, with no sections either, ends at once with the result `done`.
-
-### Section entry ids in the H1 pass
-
-The H1 pass is entry 0 of root chain `0`, and the main walk continues that same chain:
-
-````markdown
----
-name: h1_ids
-description: Checks the section entry ids of the H1 pass and the first section.
-runvil: 0
----
-
-# H1 ids
-
-```lua
-assert(sys.id == '0.0')
-```
-
-## Result
-
-```lua
-assert(sys.id == '0.1')
-return 'ok'
-```
-````
-
-````text
-ok
-````
-
-The H1 pass's [`sys.id`](05-lua-environment.md#run-facts-in-sys-and-ui) is `0.0`, and the first walked section's is `0.1`. A `call` made from the H1 pass runs as `0.0.0`, and one made from that first section runs as `0.1.0`.
-
-## The H1 hard gate
-
-After this section you can use the H1 body to stop a run before any section is walked, and to tell which failures there count as a failed gate.
-
-````markdown
----
-name: gated
-description: Fails the hard gate before the walk starts.
-runvil: 0
----
-
-# Gated
-
-```lua
-assert(false, 'the gate cannot hold')
-```
-
-## Work
-
-```lua
-return 'never reached'
-```
-````
-
-````text
-the environment cannot satisfy this prompt:
-- the H1 gate failed: H1 `Gated` lua:10: runtime error: H1 `Gated` lua:10: the gate cannot hold
-````
-
-The run fails with error code `requirements_unmet`, and its message opens with these two lines. After `- the H1 gate failed: ` comes the Lua error's own text. Its first line names the failing block and its line in the prompt file and then gives the `assert` message `the gate cannot hold`, and a Lua stack traceback follows on the next lines. After the traceback, the message ends with ` (at gated.md:10)`, the line of the failed `assert`. `Work` never runs.
-
-The Lua blocks under a prompt's H1 title are its hard gates. An `assert` there checks the prompt's arguments or prompt-wide settings, and when it fails, the run ends before any section is walked, with error code `requirements_unmet`. Move the same `assert` into the block under `Work` and the run fails with error code `lua_runtime` instead, because the same uncaught Lua error in a block under a walked section is an ordinary `lua_runtime` failure.
-
-Once the hard gate fails, the later blocks in the H1 body and every section never run, so a later H1 block's effects, such as a `store.write`, never happen. The failure still counts as the failing block's own: a `lua_chunk_failed` event is reported under the H1 title before the run ends.
-
-### Failures that fail the gate
-
-Any ordinary Lua error left uncaught in an H1 block fails the hard gate, and the run's error message holds the Lua error text, then the line of the failure. That covers these cases:
-
-- An `error` or `assert` call.
-- A call to a function that does not exist.
-- Running out of Lua memory.
-- An `error(...)` inside a library that the H1 body loads with `require`. The library's raised message is kept as the cause, so a library section `broken` that runs `error('library boom')` gives a cause containing `library boom`.
-- A `call` that names no visible section.
-- A `tasks.fanout` error that would otherwise end the run with `lua_runtime`, such as a bad collection or an arm that failed with a `lua_runtime` error (see [When an arm fails](14-fanout.md#when-an-arm-fails)).
-
-A `{{ }}` substitution that fails in the H1 body does not fail the gate: it keeps its own code and ends the run with `substitution`, at its placeholder's line (see [Placeholders in prose](07-substitution.md#placeholders-in-prose)).
-
-Each case fails the gate only when it is left uncaught. A `call` that names no visible section raises its error at the call site, so you can catch it with `pcall`:
-
-````lua
-local ok, err = pcall(call, '../Nope')
-return tostring(ok) .. ':' .. tostring(err)
-````
-
-As the only block in an H1 body, this block returns text that starts with `false:`, followed by an error naming `Nope`, and that text is the run result.
-
-Because `tasks.fanout` raises the failing arm's own error, an arm's tool or store failure keeps its own code instead of becoming `requirements_unmet`.
-
-### The failed gate's message
-
-Error code `requirements_unmet` covers two cases inside the run: the [requirements check](#preparing-the-run) refusing the run, and the H1 pass failing its hard gate. The message tells them apart. A refusal's message is the [requirements notice](#the-requirements-notice), with the line of a gap the prompt caused when there is one, while a failed gate's message holds the Lua error text after the notice. A model round that has no model fails with a model code of its own instead, `model_required`, and the message `model binding required for section {section}`. The Harness also ends a run with `requirements_unmet` before it starts, when the launch input does not match the prompt's `input:` declaration or the Host's selected model is missing from its list of models (see [Runs that end before the walk](#runs-that-end-before-the-walk)).
-
-A failed gate's error has a fixed notice, the line `the environment cannot satisfy this prompt:` followed by the line `- the H1 gate failed`, and it keeps the Lua failure as its cause. The message is the notice, then a colon and a space, then the cause's text, with the cause text appearing exactly once. So the assertion's message appears in the cause and not in the notice. The run's message then ends with ` (at {file}:{line})`, the line where the cause failed, as `gated` shows.
-
-### Failures that keep their own code
-
-In the H1 pass only ordinary Lua errors, the ones with code `lua_runtime`, turn into `requirements_unmet`, and every other uncaught failure keeps its own code:
-
-| Failure in the H1 pass | How the run ends |
-| --- | --- |
-| A `log` quota that runs out, or a `call`, task, or fanout arm past the call depth cap | `lua_quota` or `call_depth_exceeded` |
-| A failed `{{ }}` substitution | `substitution` |
-| A task error | Its task code, such as `tasks_live` or `task_canceled` |
-| A failed model call, a model round with no model, or a context the compactor cannot make fit | Its model code, such as `transport`, `model_required`, or `context_exhausted` |
-| A tool failure or a failed tool freeze | Its tool code, such as `tool_backend` or `tool_sets_invalid` |
-| A failed store call or a claims conflict | Its store code, such as `not_found`, or `determinism` for a claims conflict |
-| A Host cancel | `canceled` |
-
-Task errors keep their task codes rather than becoming `requirements_unmet`. That covers an uncaught `tasks_live`, `task_not_owned`, or `task_consumed` error (see [Ownership, leaked tasks, and abandonment](15-tasks.md#ownership-leaked-tasks-and-abandonment)), a delivered canceled task's `task_canceled` error, and a `task_not_owned` or `task_consumed` error raised again later. A Host cancel during the H1 pass ends the run with the canceled error, as a cancel does anywhere in the run.
-
-### Errors raised again after a catch
-
-An error you catch with `pcall` in the H1 pass and raise again keeps the failure it came from when you raise it before the block makes another call that waits on the Harness, such as a model round, so its own code holds. Raised again after such a call, an error whose `kind` is `lua` is rebuilt as an ordinary Lua error with code `lua_runtime` and fails the gate as `requirements_unmet`, while an error of any other kind still keeps the failure it came from and its own code.
-
-### Failures outside the gate
-
-Two checks run around the H1 blocks rather than inside them. They are not part of the gate, so each fails the run with error code `lua_runtime`:
-
-- When the H1 pass's `var` is read back and `var` turns out to have been replaced with another value, the run fails with an error naming `global was reassigned`, at the first Lua line of the last Lua block that ran. This happens even when the block executed a `return` that would otherwise end the run.
-- A `jump` from the H1 pass whose heading matches no top-level section, or more than one, fails the run, because the jump's heading is checked after the H1 block has finished. The failure points at the line of the `jump`.
 
 ## The run result
 
@@ -1516,8 +1358,6 @@ name: plain
 description: Returns a fixed string as the run result.
 runvil: 0
 ---
-
-# Plain
 
 ## Only
 
@@ -1541,8 +1381,6 @@ description: Ends with the fallback result because no block returns.
 runvil: 0
 ---
 
-# No return
-
 ## Only
 
 ```lua
@@ -1558,7 +1396,7 @@ No block returns, the walk runs past the end of the last top-level section, and 
 
 ### Where the run result comes from
 
-A completed run's result text comes only from a `return` in the H1 pass, a `return` on the main walk, or the `done` fallback. Any scalar that a section on the main walk returns becomes the run's result text, including these:
+A completed run's result text comes only from a `return` on the main walk or the `done` fallback. Any scalar that a section on the main walk returns becomes the run's result text, including these:
 
 - `return 'done'` gives `done`.
 - `return store.read('note.md')` gives the note's text.
@@ -1574,7 +1412,7 @@ Returns from other chains go back to the code that started them instead. A value
 
 ### The `done` fallback
 
-When no block returns a scalar and nothing else produces a result, the run's result is `done`. A walk whose last section falls through without returning still ends the run as completed, and so does a `return` in the H1 pass or on the main walk that gives [no value](#returning-no-value). A prompt with only an H1 title, nothing that runs under it, and no sections finishes at once with the result `done`. A prompt with no Lua at all ends the same way:
+When no block returns a scalar and nothing else produces a result, the run's result is `done`. A walk whose last section falls through without returning still ends the run as completed, and so does a `return` on the main walk that gives [no value](#returning-no-value). A prompt with no section at all finishes at once with the result `done` (see [Prompts with no heading](#prompts-with-no-heading)). A prompt with no Lua at all ends the same way:
 
 ````markdown
 ---
@@ -1582,8 +1420,6 @@ name: prose_only
 description: A prompt with one prose section and no Lua.
 runvil: 0
 ---
-
-# Prose only
 
 ## Only
 
@@ -1594,7 +1430,7 @@ This prose is never sent to a model.
 done
 ````
 
-This prompt has one prose-only section, no Lua anywhere, and an empty H1 body, so it declares nothing the Harness has to provide. A prose-only section with no Lua fence runs without calling a model and falls through to the next section, and here there is no next section, so the run ends with `done`.
+This prompt has one prose-only section and no Lua anywhere, so it declares nothing the Harness has to provide. A prose-only section with no Lua fence runs without calling a model and falls through to the next section, and here there is no next section, so the run ends with `done`.
 
 ### How a run ends
 
@@ -1618,9 +1454,9 @@ A start check that fails after the run's cancel fired, whether on the version, t
 A failed run ends with an error, the same error that a caught [error value](05-lua-environment.md#error-values) stands for in Lua. It has a code, a message for people to read, the prose a model reads, an optional location, and the values it names, such as a path. The code names the cause by its tag, in snake_case, such as `lua_runtime`, which a caught error value holds as `err.code`. Each code also has a number whose hundreds give its family, such as 2xx for the Lua codes (see [Run error codes](16-limits-and-errors.md#run-error-codes)). The failed run's message is the error's located message: its text with its causes, then where the failure happened. Running a prompt fails with one of these two codes most often:
 
 - `lua_runtime`, for an uncaught Lua error in a section.
-- `requirements_unmet`, when the Harness cannot satisfy the prompt, such as when a required Pack is missing, or when an H1 block fails the prompt's hard gate.
+- `requirements_unmet`, when the Harness cannot satisfy the prompt, such as when a required Pack is missing.
 
-Any uncaught Lua error in a walked section fails the run with error code `lua_runtime`. That includes `assert(false, 'message')`, a call to a function that does not exist, and a walked library section that returns a table, which fails with `cannot return a table as a result`. Calling `error('message')` in a section's Lua block stops the run on purpose, and the rest of the prompt never runs:
+Any uncaught Lua error in a section, the preamble included, fails the run with error code `lua_runtime`. That includes `assert(false, 'message')`, a call to a function that does not exist, and a library section that the walk reaches and that returns a table, which fails with `cannot return a table as a result`. Calling `error('message')` in a section's Lua block stops the run on purpose, and the rest of the prompt never runs:
 
 ````markdown
 ---
@@ -1628,8 +1464,6 @@ name: second_fails
 description: Fails on purpose in the second section.
 runvil: 0
 ---
-
-# Second fails
 
 ## First
 
@@ -1644,7 +1478,33 @@ error('expected failure')
 ```
 ````
 
-The run fails with error code `lua_runtime` and a message containing `expected failure` that ends with ` (at second_fails.md:18)`, the line of the `error` call. Other failures report their own codes, such as a tool code like `tool_backend` for a tool failure and a store code like `not_found` for a failed store call, and [Failures that keep their own code](#failures-that-keep-their-own-code) lists the ones the H1 pass leaves unchanged.
+The run fails with error code `lua_runtime` and a message containing `expected failure` that ends with ` (at second_fails.md:16)`, the line of the `error` call. Other failures report their own codes, such as a tool code like `tool_backend` for a tool failure and a store code like `not_found` for a failed store call, in whichever section they happen.
+
+The first code a run executes fails the same way. An uncaught Lua error in the preamble ends the run before any later section runs:
+
+````markdown
+---
+name: not_ready
+description: Fails in the preamble before any later section runs.
+runvil: 0
+---
+
+```lua
+assert(false, 'the run is not ready')
+```
+
+## Work
+
+```lua
+return 'never reached'
+```
+````
+
+````text
+preamble prologue:8: runtime error: preamble prologue:8: the run is not ready
+````
+
+The run fails with error code `lua_runtime`, as `second_fails` does, and its message opens with this line, which names the failing block and its line in the prompt file and then gives the `assert` message `the run is not ready`. A Lua stack traceback follows on the next lines, and after it the message ends with ` (at not_ready.md:8)`, the line of the failed `assert`. `Work` never runs. So an `assert` in the preamble is a check made ahead of every other section, on the prompt's arguments or on a prompt-wide setting: when it fails, the later blocks of the preamble and every section after it never run, and their effects, such as a `store.write`, never happen.
 
 ### Runs that end before the walk
 
@@ -1671,8 +1531,6 @@ description: Returns a fixed string from one section.
 runvil: 0
 ---
 
-# Loop
-
 ## Only
 
 ```lua
@@ -1684,39 +1542,38 @@ This run records these events, in this order, each with the name it carries:
 
 | Order | Event kind | Name |
 |---|---|---|
-| 1 | `run_started` | `Loop` |
+| 1 | `run_started` | `loop` |
 | 2 | `section_started` | `Only` |
 | 3 | `lua_chunk_started` | `Only` |
 | 4 | `lua_chunk_succeeded` | `Only` |
 | 5 | `lua_teardown_started` | `Only` |
 | 6 | `lua_teardown_succeeded` | `Only` |
 | 7 | `section_finished` | `Only` |
-| 8 | `run_succeeded` | `Loop` |
+| 8 | `run_succeeded` | `loop` |
 
-The run's events open with `run_started` under the H1 title `Loop`. Parsing comes before the run and reports no events (see [Parsing comes first](#parsing-comes-first)). `# Loop` has no H1 body, so the run goes straight from `run_started` to the first section's `section_started`.
+The run's events open with `run_started` under `loop`, the prompt's frontmatter `name`. Parsing comes before the run and reports no events (see [Parsing comes first](#parsing-comes-first)). `Only` is the entry section, so the run goes straight from `run_started` to its `section_started`.
 
 ### The order of run events
 
 A run reports its progress as ordered [run events](01-what-a-prompt-is.md#a-markdown-file-that-is-a-program). Each event's `kind` field spells its name in snake_case, and a run reports them in this order:
 
 1. `run_started`.
-2. When the H1 body has Lua blocks, the H1 pass's block events and teardown events.
-3. For each walked section: `section_started`; `lua_chunk_started` and then `lua_chunk_succeeded` around each Lua block it runs, with that block's model and tool events, such as `model_turn_completed`, between them; one `lua_teardown_started` and `lua_teardown_succeeded` pair after its last block; and `section_finished`.
-4. `run_succeeded`.
+2. For each section the walk enters, the preamble included: `section_started`; `lua_chunk_started` and then `lua_chunk_succeeded` around each Lua block it runs, with that block's model and tool events, such as `model_turn_completed`, between them; one `lua_teardown_started` and `lua_teardown_succeeded` pair after its last block; and `section_finished`.
+3. `run_succeeded`.
 
-A prompt with no H1 blocks, such as `loop`, goes straight from `run_started` to the first section's `section_started`. A block that is waiting reports neither succeeded nor failed until it finally returns or fails.
+The first section's `section_started` follows `run_started` directly, as in `loop`. A block that is waiting reports neither succeeded nor failed until it finally returns or fails.
 
-A run that started and does not succeed ends its events with `run_failed` under the H1 title in place of `run_succeeded`. The only run-level events are `run_started`, `run_succeeded`, and `run_failed`, and there is no run-level cancel event, so a canceled run also ends with `run_failed`, even though a canceled run is not a failed run.
+A run that started and does not succeed ends its events with `run_failed` under the prompt's `name` in place of `run_succeeded`. The only run-level events are `run_started`, `run_succeeded`, and `run_failed`, and there is no run-level cancel event, so a canceled run also ends with `run_failed`, even though a canceled run is not a failed run.
 
 ### Which name an event carries
 
-Every run event, error, and report names the section that produced it by its heading text without the leading hashes, so `# Boundaries` reports as `Boundaries` and `## Only` as `Only`. Run-level events and those from the H1 pass carry the prompt's H1 title, while those from a walked section name that section. That is why `loop` reports `run_started` and `run_succeeded` under `Loop`, around the events named `Only`.
+Every run event, error, and report names the section that produced it by its heading text without the leading hashes, so `## Only` reports as `Only` and `### Child` as `Child`. The three run-level events carry the prompt's frontmatter `name` in the place of a section name. That is why `loop` reports `run_started` and `run_succeeded` under `loop`, around the events named `Only`.
 
-The H1 pass reports no `section_started` or `section_finished` of its own, because it is not a walked section. Only its block and teardown events appear under the H1 title.
+The preamble has no heading, so its events carry the empty string as their section name. It reports `section_started` and `section_finished` like every section. The `tone` prompt from [A preamble runs first](#a-preamble-runs-first) reports `run_started` under `tone`, then the events from `section_started` through `section_finished` under the empty name, then the same six events under `Reply`, and last `run_succeeded` under `tone`.
 
 ### Section boundaries
 
-Each walked section reports `section_started` when the walk enters it and `section_finished` when it completes, both under the section's name. At a fall-through, the section that ends reports `section_finished` before the next section reports `section_started`, so sections `One` and `Two` report One started, One finished, Two started, Two finished.
+Each section reports `section_started` when the walk enters it and `section_finished` when it completes, both under the section's name. At a fall-through, the section that ends reports `section_finished` before the next section reports `section_started`, so sections `One` and `Two` report One started, One finished, Two started, Two finished.
 
 A section that ends by jumping counts as completed too. It reports `section_finished` before the section the jump names reports `section_started`, the same as at a fall-through, so `A` running `jump('../B')` reports A started, A finished, B started, B finished. A section whose `jump` path names no section still reports `section_finished`, because the section completes before the path is looked up. The run then fails on the unresolved path, and for `jump('../Missing')` the error contains `not found`.
 
@@ -1724,13 +1581,13 @@ A section that ends the walk with `return` still finishes normally, as at a fall
 
 ### Events from a failing section
 
-A walked section that raises an uncaught error, such as `error('expected failure')`, reports `section_started` and `lua_chunk_failed` but never `section_finished`. Earlier sections have already finished normally. The failing section entry's VM is still torn down exactly once, with one `lua_teardown_started` and `lua_teardown_succeeded` pair, and then the run reports `run_failed`.
+A section that raises an uncaught error, such as `error('expected failure')`, reports `section_started` and `lua_chunk_failed` but never `section_finished`. Earlier sections have already finished normally. The failing section entry's VM is still torn down exactly once, with one `lua_teardown_started` and `lua_teardown_succeeded` pair, and then the run reports `run_failed`.
 
-In `second_fails`, that means `First` reports everything through its `section_finished`, then `Second` reports `section_started`, `lua_chunk_started`, `lua_chunk_failed`, and one teardown pair, and the run ends with `run_failed` under `Second fails`.
+In `second_fails`, that means `First` reports everything through its `section_finished`, then `Second` reports `section_started`, `lua_chunk_started`, `lua_chunk_failed`, and one teardown pair, and the run ends with `run_failed` under `second_fails`.
 
 ### Log checkpoints in the record
 
-A `log` checkpoint is recorded under the name of the section whose Lua wrote it, in the order the run reaches it. Checkpoints from the H1 body come under the H1 title ahead of every walked section's, so a `log("shared loaded")` call in the H1 body records its checkpoint ahead of every section's checkpoints.
+A `log` checkpoint is recorded under the name of the section whose Lua wrote it, in the order the run reaches it. Checkpoints from the preamble come under the empty section name, ahead of those of every section after it, so a `log("shared loaded")` call in the preamble records its checkpoint ahead of every later section's checkpoints.
 
 ### Events from a run that ends early
 

@@ -14,8 +14,6 @@ runvil: 0
 uses: [web]
 ---
 
-# Fetch page
-
 ## Fetch
 
 ```lua
@@ -77,8 +75,6 @@ name: fetch-undeclared
 description: Fetches one web page without declaring the web Pack.
 runvil: 0
 ---
-
-# Fetch undeclared
 
 ## Fetch
 
@@ -146,8 +142,6 @@ description: Fetches one web page with the web Pack.
 runvil: 0
 uses: [web]
 ---
-
-# Fetch page
 
 ## Fetch
 
@@ -264,8 +258,6 @@ runvil: 0
 uses: [web]
 ---
 
-# Search web
-
 ## Search
 
 ```lua
@@ -381,8 +373,6 @@ description: Fetches a page that answers with an error status.
 runvil: 0
 uses: [web]
 ---
-
-# Fetch missing
 
 ## Fetch
 
@@ -541,8 +531,6 @@ runvil: 0
 uses: [web]
 ---
 
-# Search web
-
 ## Search
 
 ```lua
@@ -605,8 +593,6 @@ runvil: 0
 uses: [web]
 ---
 
-# Summarize page
-
 ## Summary
 
 Use `web_fetch` to read `https://example.com/` and summarize the page in three sentences.
@@ -632,8 +618,6 @@ description: Has a model research a person with web search and fetch.
 runvil: 0
 uses: [web]
 ---
-
-# Research
 
 ## Findings
 
@@ -690,8 +674,6 @@ runvil: 0
 uses: [web]
 ---
 
-# Fetch data
-
 ## Fetch
 
 ```lua
@@ -722,8 +704,6 @@ description: Fetches a JSON document and returns one of its fields.
 runvil: 0
 uses: [web]
 ---
-
-# Fetch field
 
 ## Fetch
 
@@ -825,8 +805,6 @@ runvil: 0
 uses: [web]
 ---
 
-# Fetch page
-
 ## Fetch
 
 ```lua
@@ -897,8 +875,6 @@ description: Fetches the first 25 characters of a web page.
 runvil: 0
 uses: [web]
 ---
-
-# Fetch short
 
 ## Fetch
 
@@ -1006,8 +982,6 @@ description: Fetches a page whose URL has a query string and a fragment.
 runvil: 0
 uses: [web]
 ---
-
-# Fetch path
 
 ## Fetch
 
@@ -1130,8 +1104,6 @@ runvil: 0
 uses: [web]
 ---
 
-# Fetch page
-
 ## Fetch
 
 ```lua
@@ -1243,8 +1215,6 @@ runvil: 0
 uses: [web]
 ---
 
-# Fetch page
-
 ## Fetch
 
 ```lua
@@ -1336,8 +1306,6 @@ description: Searches the web with the web Pack.
 runvil: 0
 uses: [web]
 ---
-
-# Search web
 
 ## Search
 

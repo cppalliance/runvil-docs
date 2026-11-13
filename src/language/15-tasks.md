@@ -13,8 +13,6 @@ description: Starts one task and waits for its result.
 runvil: 0
 ---
 
-# One task
-
 ## Main
 
 ```lua
@@ -57,8 +55,6 @@ description: Shows that the tasks global needs no declaration.
 runvil: 0
 ---
 
-# Tasks global
-
 ## Main
 
 ```lua
@@ -70,7 +66,7 @@ return type(tasks) .. ' ' .. type(tasks.spawn)
 table function
 ````
 
-The `tasks` global is a table in the Lua of every section, including the H1 body, the sections that tasks run, and fanout [arms](14-fanout.md#what-an-arm-sees). The Engine installs it alongside the other [suspending calls](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals), such as `call`, `models.infer`, `tools.call`, and `tasks.fanout`.
+The `tasks` global is a table in the Lua of every section, including the [preamble](02-file-structure.md#the-preamble) before the first heading, the sections that tasks run, and fanout [arms](14-fanout.md#what-an-arm-sees). The Engine installs it alongside the other [suspending calls](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals), such as `call`, `models.infer`, `tools.call`, and `tasks.fanout`.
 
 The table holds twelve task functions, `spawn`, `join_any`, `join`, `concurrency`, `ready`, `status`, `pending`, `note`, `receive`, `send`, `reply`, and `cancel`, plus `fanout`, which the Engine adds to the same table. A Lua block spawns tasks with `tasks.spawn`, waits on them with `tasks.join_any` and `tasks.join`, checks on them with `tasks.ready`, `tasks.status`, and `tasks.pending`, notes a task's progress with `tasks.note`, passes messages with `tasks.send`, `tasks.receive`, and `tasks.reply`, and cancels tasks with `tasks.cancel`. `tasks.concurrency` gives the effective [concurrency limit](14-fanout.md#concurrency-and-the-admission-window), and `tasks.fanout` is the fanout call itself. Their call forms include `tasks.spawn(target, opts?)`, `tasks.join_any(set, opts?)`, `tasks.join(set, opts?)`, `tasks.concurrency(n?)`, `tasks.pending()`, `tasks.receive()`, `tasks.send(task, text)`, and `tasks.reply(value?)`, where `?` marks an optional argument.
 
@@ -119,8 +115,6 @@ description: Shows that a task first runs when its owner parks.
 runvil: 0
 ---
 
-# Spawn order
-
 ## Main
 
 ```lua
@@ -155,7 +149,7 @@ Once it starts, a task runs concurrently with its owner. The owner keeps working
 
 `tasks.spawn` names the section the task runs by a relative [section path](02-file-structure.md#section-paths): the bare name of a child of the spawning section, such as `'Worker'`, or `../` and the name of a sibling, such as `'../Child'` or `'../Alpha'`. It resolves that path exactly as `call` resolves its target, over the sections visible from the spawning section (see [Resolving section paths](08-jump-and-call.md#resolving-section-paths)). It checks the path with the same rules `call` applies to its target, and it shares `call`'s [recursion depth cap](08-jump-and-call.md#the-recursion-depth-cap). So a path that names no visible section fails `tasks.spawn` with the same error text `call` gives for that path, and `pcall` catches it the same way.
 
-The target can be a child of the spawning section, such as `'Worker'` or `'Caller'` spawned from the block under `Main`, or a sibling of it, such as `'../Child'` spawned from `Main`. The task starts at the target section's own position in the document, the same way a `jump` out of the H1 body and a `call` start theirs. Any section in the visible set can be a target, including one with no Lua of its own.
+The target can be a child of the spawning section, such as `'Worker'` or `'Caller'` spawned from the block under `Main`, or a sibling of it, such as `'../Child'` spawned from `Main`. The task starts at the target section's own position in the document, the same way a `jump` and a `call` start theirs. Any section in the visible set can be a target, including one with no Lua of its own.
 
 The spawning section's own child sections are visible from it and make good targets:
 
@@ -165,8 +159,6 @@ name: pros-and-cons
 description: Spawns two child sections and joins them.
 runvil: 0
 ---
-
-# Pros and cons
 
 ## Weigh
 
@@ -205,7 +197,7 @@ A task's target section runs ordinary Lua as the task body. It can call a tool w
 
 The section hands back its result with an ordinary `return`, such as `return 'child result'`. A task can return the text of `models.infer`: a task section doing `return models.infer('slow please')`, answered with the reply `slow answer`, gives its owner's wait `ok` and the result `slow answer`. A task that runs off its last section without returning gives the empty string as its result, the same as a fanout arm, and so does a task that ends at a `return` that gives [no value](04-how-a-prompt-runs.md#returning-no-value).
 
-The [scalar return rule](04-how-a-prompt-runs.md#returning-values) applies as in any block, but a return ends the run only from the H1 pass or from a section on the main walk. A `return` from a section inside a task becomes the task's result for its owner, such as `return 'alpha text'` making `alpha text` the result, and it never ends the run or becomes the run result. The spawning section's own return still ends the run, so when an owner parks on a `store.write` while its task returns `'child result'`, and then returns `'done'`, the run result is `done`.
+The [scalar return rule](04-how-a-prompt-runs.md#returning-values) applies as in any block, but a return ends the run only from a section on the main walk. A `return` from a section inside a task becomes the task's result for its owner, such as `return 'alpha text'` making `alpha text` the result, and it never ends the run or becomes the run result. The spawning section's own return still ends the run, so when an owner parks on a `store.write` while its task returns `'child result'`, and then returns `'done'`, the run result is `done`.
 
 ### Keeping task sections off the walk
 
@@ -226,8 +218,6 @@ name: task-fall-through
 description: Spawns a section that falls through to its next sibling.
 runvil: 0
 ---
-
-# Task fall-through
 
 ## Main
 
@@ -267,8 +257,6 @@ description: Starts a task with its own input, item, and index.
 runvil: 0
 ---
 
-# Seeded task
-
 ## Main
 
 ```lua
@@ -295,9 +283,9 @@ The options argument is a table. Any other value raises an error of kind `lua` w
 
 ### Replacing the argument string with `input`
 
-`input` is a string that replaces the task's argument string, so the task reads it as its [`args`](06-arguments.md#the-argument-string-in-args) global: `input = 'child args'` makes `' args=' .. args` give `args=child args` above. Giving a task its own argument string forks that task's `args` from its owner's, and the task's [`argv`](06-arguments.md#reading-parsed-input-from-argv) is derived again from `input` under the prompt's declaration and frozen in that task, exactly as for a `call` with input.
+`input` is a string that replaces the task's argument string, so the task reads it as its [`args`](06-arguments.md#the-argument-string-in-args) global: `input = 'child args'` makes `' args=' .. args` give `args=child args` above. Giving a task its own argument string forks that task's `args` from its owner's, and the task's [`argv`](06-arguments.md#reading-parsed-input-from-argv) is derived again from `input` under the prompt's declaration, exactly as for a `call` with input.
 
-Without `input`, the task runs under its owner's own argument string. It inherits the owner's `args` and frozen `argv` whole, the [H1 repair](06-arguments.md#checking-and-repairing-argv-in-the-h1-pass) included.
+Without `input`, the task runs under its owner's own argument string, so it inherits the owner's `args` and `argv` whole. Either way, the task's `argv` is read-only, as it is in every section (see [`argv` is read-only](06-arguments.md#argv-is-read-only)).
 
 An `input` of another type fails with `input must be a string, got {type}`, and text that is not valid UTF-8 fails with `input must be a valid UTF-8 string`.
 
@@ -313,8 +301,6 @@ name: item-seeds
 description: Spawns one section twice with different item seeds.
 runvil: 0
 ---
-
-# Item seeds
 
 ## Main
 
@@ -360,8 +346,6 @@ description: Shows that each task starts from a copy of var taken at the spawn.
 runvil: 0
 ---
 
-# Var snapshot
-
 ## Main
 
 ```lua
@@ -399,8 +383,6 @@ description: Starts two tasks on strong, then switches the spawner to fast.
 runvil: 0
 ---
 
-# Task model
-
 ## Main
 
 ```lua
@@ -437,8 +419,6 @@ name: freeform
 description: Spawns one worker task per topic and merges their files by index.
 runvil: 0
 ---
-
-# Freeform
 
 ## Parent
 
@@ -481,8 +461,6 @@ name: two-tasks
 description: Starts two tasks and joins them.
 runvil: 0
 ---
-
-# Two tasks
 
 ## Main
 
@@ -552,8 +530,6 @@ description: Joins two tasks when one of them fails.
 runvil: 0
 ---
 
-# Checked join
-
 ## Main
 
 ```lua
@@ -589,7 +565,7 @@ error('beta boom')
 0.1 failed: lua
 ````
 
-`Beta`'s uncaught `error('beta boom')` fails that task, and the run still ends with `Main`'s result. `tasks.join` never raises because a member failed: it collects an entry for every member, the failed member's entry holds `ok == false` and the error value in `result`, and your code decides what to do with each outcome. The error value has the same shape as an error the Engine raises, with `kind`, `code`, `message`, and the kind's own fields, so `entry.result.kind` reads `lua` here and `tostring(entry.result)` reads `checked-join.md:35: beta boom. The Lua code failed at runtime. Fix the code at this location.`, keeping the line in `Beta` where the task failed (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). A member that ran out of its log event quota arrives the same way, with `err.kind` reading `lua` and `tostring(err)` reading `{file}:{line}: lua log event quota exceeded. The section logged more than its budget allows. Log less.`, where `{line}` is the member's `log` call that ran out.
+`Beta`'s uncaught `error('beta boom')` fails that task, and the run still ends with `Main`'s result. `tasks.join` never raises because a member failed: it collects an entry for every member, the failed member's entry holds `ok == false` and the error value in `result`, and your code decides what to do with each outcome. The error value has the same shape as an error the Engine raises, with `kind`, `code`, `message`, and the kind's own fields, so `entry.result.kind` reads `lua` here and `tostring(entry.result)` reads `checked-join.md:33: beta boom. The Lua code failed at runtime. Fix the code at this location.`, keeping the line in `Beta` where the task failed (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). A member that ran out of its log event quota arrives the same way, with `err.kind` reading `lua` and `tostring(err)` reading `{file}:{line}: lua log event quota exceeded. The section logged more than its budget allows. Log less.`, where `{line}` is the member's `log` call that ran out.
 
 ### Wait sets
 
@@ -624,8 +600,6 @@ description: Shows that a task's result goes to one wait only.
 runvil: 0
 ---
 
-# Wait once
-
 ## Main
 
 ```lua
@@ -649,7 +623,7 @@ once|false|task_consumed|0.0
 The first wait takes `once`, and the second one raises. The `task_consumed` error value's `task` field holds the task id, and its message points at the second wait and names the task:
 
 ````text
-wait-once.md:14: task `0.0` was already delivered: a task's result is taken by one wait. The task's result was already delivered. Wait on each task only once.
+wait-once.md:12: task `0.0` was already delivered: a task's result is taken by one wait. The task's result was already delivered. Wait on each task only once.
 ````
 
 The refusal in the middle always reads `` task `{task}` was already delivered: a task's result is taken by one wait ``. A `task_consumed` left uncaught ends the run with that error, under its own [error code](16-limits-and-errors.md#run-error-codes) `task_consumed`, and a message that is that refusal followed by ` (at {file}:{line})`.
@@ -709,8 +683,6 @@ description: Runs two stages in order, the second reading the first one's file.
 runvil: 0
 ---
 
-# Pipeline
-
 ## Main
 
 ```lua
@@ -751,8 +723,6 @@ name: cancel-one
 description: Cancels a task and then waits on it.
 runvil: 0
 ---
-
-# Cancel one
 
 ## Main
 
@@ -857,8 +827,6 @@ description: Races two sections and cancels whichever loses.
 runvil: 0
 ---
 
-# Race
-
 ## Main
 
 ```lua
@@ -897,8 +865,6 @@ name: draft-loop
 description: Asks a task for a draft and sends it two follow-ups.
 runvil: 0
 ---
-
-# Draft loop
 
 ## Main
 
@@ -1075,8 +1041,6 @@ description: Waits on a task that waits for a message nobody sends.
 runvil: 0
 ---
 
-# Stalled wait
-
 ## Main
 
 ```lua
@@ -1110,8 +1074,6 @@ name: clean-end
 description: Cancels every live task before the walk returns.
 runvil: 0
 ---
-
-# Clean end
 
 ## Main
 
@@ -1162,8 +1124,6 @@ description: Waits in a later section on a task spawned before a jump.
 runvil: 0
 ---
 
-# Jump keeps tasks
-
 ## Main
 
 ```lua
@@ -1191,7 +1151,7 @@ true work
 
 The task spawned in `Main` keeps running, or stays queued, after the walk jumps to `Next`, and `Next` joins it with `ok == true`.
 
-Tasks spawned in the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) are handed off to the main walk once it starts. The walk owns them from then on and can wait on, inspect, cancel, or leak them exactly as if it had spawned them itself, so the walk's end is where such a task leaks. When the prompt has no sections, a task the H1 pass spawned and left live is settled when the pass ends, under the same chain-end rules as any finishing chain.
+A task spawned in the [preamble](02-file-structure.md#the-preamble) belongs to the main walk in the same way, because the preamble and the sections after it are entries of one chain, the root chain (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)). A later section can wait on, inspect, or cancel such a task, and the walk's end is where it leaks.
 
 ### Only the owner may touch a task
 
@@ -1203,8 +1163,6 @@ name: not-owned
 description: Shows that a task cannot cancel itself.
 runvil: 0
 ---
-
-# Not owned
 
 ## Main
 
@@ -1232,7 +1190,7 @@ Inside `Child`, `tasks.status(me)` would work, but `pcall(tasks.cancel, me)` is 
 The error's message points at the refused call and names the task the caller reached for, such as `0.0`, and the error sets the field `task`. In `not-owned` it reads:
 
 ````text
-not-owned.md:21: task `0.0` is not a task this chain owns. The task is not one this chain owns. Wait on, inspect, or cancel only the tasks this chain spawned.
+not-owned.md:19: task `0.0` is not a task this chain owns. The task is not one this chain owns. Wait on, inspect, or cancel only the tasks this chain spawned.
 ````
 
 The refusal in the middle always reads `` task `{task}` is not a task this chain owns ``.
@@ -1254,8 +1212,6 @@ description: Leaves a task live when a later section returns.
 runvil: 0
 ---
 
-# Leaky walk
-
 ## Launch
 
 ```lua
@@ -1276,10 +1232,10 @@ return 'child result'
 ````
 
 ````text
-chain ended with tasks still live: 0.0; wait on or cancel every task a chain spawns before it ends (at leaky-walk.md:12)
+chain ended with tasks still live: 0.0; wait on or cancel every task a chain spawns before it ends (at leaky-walk.md:10)
 ````
 
-`Launch` spawns `Child` and falls through to `Sibling`, whose `return 'done'` ends the walk with the task still live, so the run fails with `tasks_live` naming `0.0`. The failure points at the `tasks.spawn` of the first task left running, line 12 in `Launch`, not at the `return` that ended the walk. A `jump` settles nothing about owned tasks either, so ending `Launch` with `jump('../Sibling')` gives the same failure. Waiting on the task in `Sibling`, or canceling it there, settles it. In the same way, when the walk returns while a task spawned in the H1 pass is still live, the run fails with `tasks_live` naming that task, such as `0.0`, and the task is abandoned.
+`Launch` spawns `Child` and falls through to `Sibling`, whose `return 'done'` ends the walk with the task still live, so the run fails with `tasks_live` naming `0.0`. The failure points at the `tasks.spawn` of the first task left running, line 10 in `Launch`, not at the `return` that ended the walk. A `jump` settles nothing about owned tasks either, so ending `Launch` with `jump('../Sibling')` gives the same failure. Waiting on the task in `Sibling`, or canceling it there, settles it. In the same way, when the walk returns while a task spawned in the preamble is still live, the run fails with `tasks_live` naming that task, such as `0.0`, and the task is abandoned.
 
 At the main walk, `tasks_live` is the run's failure. Inside a called chain, `tasks_live` is the `call`'s error instead, so the caller can catch it with `pcall`, keep running, and return normally:
 
@@ -1289,8 +1245,6 @@ name: leak-check
 description: Catches the leak of a called section with pcall.
 runvil: 0
 ---
-
-# Leak check
 
 ## Main
 
@@ -1314,10 +1268,10 @@ return 'child result'
 ````
 
 ````text
-tasks_live|0.0.0|leak-check.md:19: chain ended with tasks still live: 0.0.0; wait on or cancel every task a chain spawns before it ends. The chain ended with tasks still running. Wait on or cancel every task the chain spawns before it ends.
+tasks_live|0.0.0|leak-check.md:17: chain ended with tasks still live: 0.0.0; wait on or cancel every task a chain spawns before it ends. The chain ended with tasks still running. Wait on or cancel every task the chain spawns before it ends.
 ````
 
-`Leaky` spawns a task and returns `'leaked'`, so its caller receives kind `tasks_live` as the call's error, and the run continues with `Main`'s result. The error keeps the line of `Leaky`'s `tasks.spawn`, line 19, rather than the `call` line in `Main`. Tasks spawned inside a `call` chain, including ones it leaks, are abandoned when that chain ends and returns to its caller (see [Catching call failures](08-jump-and-call.md#catching-call-failures)).
+`Leaky` spawns a task and returns `'leaked'`, so its caller receives kind `tasks_live` as the call's error, and the run continues with `Main`'s result. The error keeps the line of `Leaky`'s `tasks.spawn`, line 17, rather than the `call` line in `Main`. Tasks spawned inside a `call` chain, including ones it leaks, are abandoned when that chain ends and returns to its caller (see [Catching call failures](08-jump-and-call.md#catching-call-failures)).
 
 A `tasks_live` error value caught in Lua has `kind` equal to `'tasks_live'`. The kind carries one field of its own, `tasks`, and belongs to the cancellation and task lifetimes group of error kinds. `err.tasks` is one string of the leaked task ids in the order they were spawned, joined with `, `, such as `0.0, 0.1`, not a table, so it concatenates directly with `..`. The message names the same ids, and `tostring` on the error value gives that message, where `{line}` is the spawn line of the first task left running:
 
@@ -1374,8 +1328,6 @@ description: Spawns a task, checks on it, and reads its note.
 runvil: 0
 ---
 
-# Task status
-
 ## Main
 
 ```lua
@@ -1417,8 +1369,6 @@ name: self-note
 description: A task publishes a note and reads it back from its own status.
 runvil: 0
 ---
-
-# Self note
 
 ## Main
 
@@ -1472,8 +1422,6 @@ name: status-snapshot
 description: Reads a task's status during and after its model round.
 runvil: 0
 ---
-
-# Status snapshot
 
 ## Main
 
@@ -1621,7 +1569,7 @@ return 'child done'
 
 The `note` field holds the task's note once one is set, and it is nil when the task has published none. `tasks.status` shows the note while the task runs and keeps it after the task finishes, so a task that runs `tasks.note('working')` reads `note` `working` both while it waits and when it is done.
 
-A `tasks.note` from a section reached by `call` inside a task records on the task itself, so the called section's note is the task's note. On the main walk, in the H1 pass, and in a section reached by `call` from either, `tasks.note` succeeds and records nothing.
+A `tasks.note` from a section reached by `call` inside a task records on the task itself, so the called section's note is the task's note. On the main walk, and in a section reached by `call` from it, `tasks.note` succeeds and records nothing.
 
 ### Checking without waiting with `tasks.ready`
 
@@ -1680,8 +1628,6 @@ description: Waits on a task with a time limit.
 runvil: 0
 ---
 
-# Timed wait
-
 ## Main
 
 ```lua
@@ -1731,8 +1677,6 @@ description: Gives a task five seconds, then waits for it with no limit.
 runvil: 0
 ---
 
-# Still working
-
 ## Main
 
 ```lua
@@ -1766,8 +1710,6 @@ name: timed-join
 description: Joins two tasks with a time limit, then collects the late one.
 runvil: 0
 ---
-
-# Timed join
 
 ## Main
 
@@ -1841,8 +1783,6 @@ name: late-write
 description: Reads a file that a task wrote, after a timed join and a follow-up wait.
 runvil: 0
 ---
-
-# Late write
 
 ## Main
 
@@ -1973,8 +1913,6 @@ description: Shows the ids of two tasks spawned from the main walk.
 runvil: 0
 ---
 
-# Task ids
-
 ## Main
 
 ```lua
@@ -2009,7 +1947,7 @@ Every chain in a run other than the main walk, whether a `call` chain or a spawn
 
 A task's id is the id of the chain that runs it, so both read as the same dotted path. `sys.taskid` holds, as a string, the id of the task the code runs inside: `'0'` on the main walk, and the task's own id inside a spawned task or a fanout arm, so code in the first task the main walk spawns reads `'0.0'`. A `call` chain reports its caller's task.
 
-A task's own sections read `sys.id` values that extend the task id with a section entry index (see [Section entry ids](05-lua-environment.md#section-entry-ids)), so the first section of task `0.0` reads `sys.id` `0.0.0`. Section entries and children count separately, so the same text can name a section entry and a task: `0.0` can be both the H1 body's `sys.id` and the first task's id.
+A task's own sections read `sys.id` values that extend the task id with a section entry index (see [Section entry ids](05-lua-environment.md#section-entry-ids)), so the first section of task `0.0` reads `sys.id` `0.0.0`. Section entries and children count separately, so the same text can name a section entry and a task: `0.0` can be both the `sys.id` of the first section the main walk enters and the first task's id.
 
 ### One child counter per chain
 
@@ -2021,8 +1959,6 @@ name: shared-counter
 description: Shows a call and a spawn sharing one child counter.
 runvil: 0
 ---
-
-# Shared counter
 
 ## Main
 
@@ -2057,7 +1993,7 @@ The `call('../Helper')` is the main walk's first child, so the called chain is `
 The same numbering holds everywhere a chain starts children:
 
 - The first fanout arm started from the main walk has task id `0.0`, and a spawn inside that arm gets `0.0.0`, the same id as a spawn inside the main walk's first called chain, because both extend a child chain `0.0` by its first child index (see [Arms as tasks, ids, and events](14-fanout.md#arms-as-tasks-ids-and-events)).
-- A task spawned in the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) takes the same numbering as a spawn from the walk, starting at `0.0`, and it keeps its id for the rest of the run, because the section walk continues the pass's child counter.
+- The main walk has one child counter for all of its sections, the [preamble](02-file-structure.md#the-preamble) included, so a task spawned in the preamble is `0.0`, the next spawn in a later section is `0.1`, and each task keeps its id for the rest of the run.
 - Each wait with a valid timeout takes one index for its timer (see [The timer behind a time limit](#the-timer-behind-a-time-limit)).
 
 Ids depend only on the spawner's own order of calls, not on how the scheduler interleaves work. Two runs of the same prompt with the same inputs give the same tasks the same ids, however their chains interleave. Likewise, the `sys.id` of the section entry that owns a set of tasks does not change with the order in which those tasks finish.
@@ -2080,8 +2016,6 @@ name: early-start
 description: Starts a task in one section and waits for it in a later one.
 runvil: 0
 ---
-
-# Early start
 
 ## Start
 
@@ -2107,7 +2041,7 @@ return result
 job done
 ````
 
-`Start` spawns its child section `Job` and keeps the handle in `var.job`. The walk falls through to `Finish`, which waits on `var.job`. The same works for a handle saved in `var` during the H1 pass and waited on later from a section in the walk, and for a handle joined from a later section reached by [`jump`](08-jump-and-call.md#jumping-to-a-section).
+`Start` spawns its child section `Job` and keeps the handle in `var.job`. The walk falls through to `Finish`, which waits on `var.job`. The same works for a handle saved in `var` in the preamble and waited on from a later section, and for a handle joined from a later section reached by [`jump`](08-jump-and-call.md#jumping-to-a-section).
 
 ### Valid task ids and id errors
 
@@ -2133,8 +2067,6 @@ name: nested-tasks
 description: A task spawns two tasks of its own and joins them.
 runvil: 0
 ---
-
-# Nested tasks
 
 ## Main
 
@@ -2181,9 +2113,9 @@ Tasks admitted together first run in spawn order, so their first model requests 
 
 ### Concurrency slots
 
-A chain's concurrency limit, the most of its tasks admitted at once, gates when its queued spawned tasks start exactly as it gates fanout arms, so with a limit of two, two spawned tasks start together and their work is in flight at the same time. [Concurrency and the admission window](14-fanout.md#concurrency-and-the-admission-window) covers the run's default limit and how `tasks.concurrency` sets and reads a chain's limit, inside a task and in the H1 pass included.
+A chain's concurrency limit, the most of its tasks admitted at once, gates when its queued spawned tasks start exactly as it gates fanout arms, so with a limit of two, two spawned tasks start together and their work is in flight at the same time. [Concurrency and the admission window](14-fanout.md#concurrency-and-the-admission-window) covers the run's default limit and how `tasks.concurrency` sets and reads a chain's limit, inside a task included.
 
-A concurrency slot is one place under a chain's concurrency limit. Every spawned task takes one concurrency slot at the chain that owns it and at every enclosing ancestor chain, and it holds that slot until the task ends. So concurrency limits nest: in `nested-tasks`, each `Inner` task takes a slot under the limit of `Outer` and another under the main walk's. A task spawned inside a `call` counts against the call chain's limit and then against the limits of the calling chain and every chain above it. Tasks the H1 pass spawned keep their slots when the section walk takes them over, and count against the walk from then on.
+A concurrency slot is one place under a chain's concurrency limit. Every spawned task takes one concurrency slot at the chain that owns it and at every enclosing ancestor chain, and it holds that slot until the task ends. So concurrency limits nest: in `nested-tasks`, each `Inner` task takes a slot under the limit of `Outer` and another under the main walk's. A task spawned inside a `call` counts against the call chain's limit and then against the limits of the calling chain and every chain above it.
 
 A task spawned while every slot it needs is taken is queued, and it does not start until a slot frees. A queued task starts only when its owner and every enclosing ancestor each have a free slot under their own limit. The scheduler admits tasks by these rules:
 
@@ -2204,7 +2136,7 @@ These rules decide who gives a slot back and how a waiting chain continues:
 - A `call` chain running inside a task that parks on a task wait gives back the slot of the task it runs inside, so the tasks under that task can run during the wait.
 - The main walk holds no slot, so a wait in the main walk, or in a `call` chain under the main walk, gives no slot back.
 - When a wait that gave back a slot answers, a task wait or a message that ends an inbox wait, the waiting task or `call` chain queues again and must retake that slot before it continues, reading `blocked` `queued` while it waits.
-- The main walk and the H1 pass resume right away when the wait answers, without queueing for a slot.
+- The main walk resumes right away when the wait answers, without queueing for a slot.
 
 ### The depth cap for spawned tasks
 
@@ -2216,8 +2148,6 @@ name: deep-spawn
 description: Spawns one task inside another until the depth cap refuses a spawn.
 runvil: 0
 ---
-
-# Deep spawn
 
 ## Main
 
@@ -2251,7 +2181,7 @@ return result
 ````
 
 ````text
-deep-spawn.md:31: recursion exceeded cap of 8. Calls nest deeper than the cap allows. Nest `call`, `tasks.spawn`, and `tasks.fanout` less deeply.
+deep-spawn.md:29: recursion exceeded cap of 8. Calls nest deeper than the cap allows. Nest `call`, `tasks.spawn`, and `tasks.fanout` less deeply.
 ````
 
 `Odd` and `Even` spawn each other, because a section cannot spawn itself, and each task runs one level deeper than the one that spawned it. The `Even` task at depth 8 tries to spawn depth 9, and that `tasks.spawn` is refused with `recursion exceeded cap of 8`, the same words a `call` or a `tasks.fanout` past the cap gives. The refusal raises at the call site, on the line of the `tasks.spawn` that went too deep, and `pcall` catches it, as in `local ok, err = pcall(tasks.spawn, '../Odd')`. Its message adds the depth cap's prose after the refusal (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). Each task returns the result it joined, so the message travels back up to `Main` and becomes the run result.
@@ -2280,8 +2210,6 @@ name: task-events
 description: Spawns one task and collects its result.
 runvil: 0
 ---
-
-# Task events
 
 ## Spawner
 

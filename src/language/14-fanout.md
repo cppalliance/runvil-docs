@@ -13,8 +13,6 @@ description: Runs one worker section for each of three members.
 runvil: 0
 ---
 
-# Fanout basic
-
 ## Parent
 
 ```lua
@@ -51,8 +49,6 @@ name: fanout-rounds
 description: Sends two prompts from each of two arms.
 runvil: 0
 ---
-
-# Fanout rounds
 
 ## Parent
 
@@ -93,8 +89,6 @@ description: Calls tasks.fanout from the epilog of a section.
 runvil: 0
 ---
 
-# Fanout epilog
-
 ## Parent
 
 The arms below each label one member.
@@ -119,7 +113,7 @@ You can also call `tasks.fanout` as a bare statement that throws away the result
 
 A block can call `tasks.fanout` more than once in sequence, and each call returns its own result list. After `local a = tasks.fanout('Worker', {'one'})` and then `local b = tasks.fanout('Worker', {'two'})`, `b[1].text` comes from the arm for `two`.
 
-A section run by [`call`](08-jump-and-call.md#calling-a-section) can itself call `tasks.fanout`, and so can the H1 body's Lua. [Fanout from the H1 body and from called sections](#fanout-from-the-h1-body-and-from-called-sections) shows both.
+A section run by [`call`](08-jump-and-call.md#calling-a-section) can itself call `tasks.fanout`, and so can the Lua of the [preamble](02-file-structure.md#the-preamble). [Fanout from the preamble and from called sections](#fanout-from-the-preamble-and-from-called-sections) shows both.
 
 ## Choosing the worker section
 
@@ -131,8 +125,6 @@ name: sibling-worker
 description: Fans out to a sibling section.
 runvil: 0
 ---
-
-# Sibling worker
 
 ## Main
 
@@ -169,8 +161,6 @@ description: Names a section outside the visible set.
 runvil: 0
 ---
 
-# Niece worker
-
 ## Main
 
 ```lua
@@ -205,8 +195,6 @@ name: shared-worker
 description: Two sections fan out to the same worker section.
 runvil: 0
 ---
-
-# Shared worker
 
 ## A
 
@@ -247,8 +235,6 @@ description: A worker section with a thematic break above its block.
 runvil: 0
 ---
 
-# Break worker
-
 ## Parent
 
 ```lua
@@ -271,21 +257,19 @@ alpha-done,beta-done
 
 A section that holds only a list, with no `lua` block, is an ordinary section too. Named as the worker section, it is entered like any section with no Lua, so each arm runs nothing and its text is the empty string. To run a fanout over a list's items, pass the items as the collection instead, as [List collections](#list-collections) shows.
 
-### Fanout from the H1 body and from called sections
+### Fanout from the preamble and from called sections
 
-`tasks.fanout` works in the H1 body's Lua the same way it works in any section (see [The H1 pass](04-how-a-prompt-runs.md#the-h1-pass)). From the H1 body, the worker section's path names a top-level section, since those are the H1's children, and the arms still join in collection order:
+`tasks.fanout` works in the preamble's Lua the same way it works in any section. The [preamble](02-file-structure.md#the-preamble) is the text between the frontmatter and the first heading, and when it holds a `lua` fence it is the first top-level section. From the preamble, the top-level sections are its siblings, so the worker section's path is `../` and the name of a top-level section (see [`jump` and `call` from the preamble](08-jump-and-call.md#jump-and-call-from-the-preamble)), and the arms still join in collection order:
 
 ````markdown
 ---
-name: h1-fanout
-description: Fans out from the H1 body.
+name: preamble-fanout
+description: Fans out from the preamble.
 runvil: 0
 ---
 
-# H1 fanout
-
 ```lua
-local r = tasks.fanout('Worker', {'a', 'b'})
+local r = tasks.fanout('../Worker', {'a', 'b'})
 return r[1].text .. '|' .. r[2].text
 ```
 
@@ -300,7 +284,7 @@ return 'item:' .. item
 item:a|item:b
 ````
 
-The top-level `Worker` runs once for `a` and once for `b`. The H1 block's return ends the run, so the walk never reaches `Worker` on its own. When the H1 body passes a path that names no top-level section, such as `tasks.fanout('Nope', {'a'})`, the run fails with the not-found error, whose text is ``section `Nope` not found: the top level has no section `Nope` ``.
+The top-level `Worker` runs once for `a` and once for `b`. The preamble's return ends the run, so the walk never reaches `Worker` on its own. When the preamble passes a path that names no top-level section, such as `tasks.fanout('../Nope', {'a'})`, the run fails with the not-found error, whose text is ``section `../Nope` not found: the preamble has no sibling `Nope` ``.
 
 A section running in a chain that `call` started can name one of its own children as the worker section:
 
@@ -310,8 +294,6 @@ name: called-fanout
 description: A called section fans out over its own child.
 runvil: 0
 ---
-
-# Called fanout
 
 ## Parent
 
@@ -349,8 +331,6 @@ name: list-collection
 description: Fans out over the items of a list in a child section.
 runvil: 0
 ---
-
-# List collection
 
 ## Parent
 
@@ -391,8 +371,6 @@ description: Fans out over 1025 members built in a loop.
 runvil: 0
 ---
 
-# Many members
-
 ## Parent
 
 ```lua
@@ -424,8 +402,6 @@ name: mixed-members
 description: Fans out over members of four types.
 runvil: 0
 ---
-
-# Mixed members
 
 ## Parent
 
@@ -459,8 +435,6 @@ name: keyed-collection
 description: Fans out over a keyed table.
 runvil: 0
 ---
-
-# Keyed collection
 
 ## Parent
 
@@ -527,10 +501,8 @@ description: Shows the values each arm starts with.
 runvil: 0
 ---
 
-# Arm view
-
 ```lua
-var.from_h1 = 'seeded'
+var.from_preamble = 'seeded'
 ```
 
 ## Parent
@@ -544,7 +516,7 @@ return r[1].text .. ',' .. r[2].text
 ### Worker
 
 ```lua
-assert(var.from_h1 == 'seeded')
+assert(var.from_preamble == 'seeded')
 var[item] = true
 local sibling = item == 'alpha' and 'beta' or 'alpha'
 assert(var[sibling] == nil)
@@ -556,7 +528,7 @@ return item .. '-' .. sys.index
 alpha-1,beta-2
 ````
 
-`tasks.fanout` starts one arm per member, first member first, and seeds each arm with its member as `item`, its position as `sys.index`, and a snapshot of the caller's `var`. So the first arm started is the one for the first member, with `sys.index` 1. Each arm here reads the `var.from_h1` value the H1 body set, writes its own entry into its copy of `var`, and never sees its sibling's entry, and once `tasks.fanout` returns, the caller's `var` holds neither entry.
+`tasks.fanout` starts one arm per member, first member first, and seeds each arm with its member as `item`, its position as `sys.index`, and a snapshot of the caller's `var`. So the first arm started is the one for the first member, with `sys.index` 1. Each arm here reads the `var.from_preamble` value the preamble set, writes its own entry into its copy of `var`, and never sees its sibling's entry, and once `tasks.fanout` returns, the caller's `var` holds neither entry.
 
 ### The `item` global
 
@@ -592,8 +564,6 @@ description: Asks the model about each member.
 runvil: 0
 ---
 
-# Replies
-
 ## Parent
 
 ```lua
@@ -620,7 +590,7 @@ In the arm for `alpha`, the prose `Reply about {{ item }}.` becomes `Reply about
 
 The `item` global exists only in the first section an arm or a spawned task enters with an item. For an arm, that is its worker section. For a task, it is the target of a [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) given an `item` option, so after `tasks.spawn('../Child', { input = 'child args', item = { name = 'alpha' }, index = 7 })` the child reads `item.name` as `alpha`. After a `jump` from the worker section, the next section, such as `Child`, passes `assert(item == nil)`.
 
-A section the normal walk reaches has no `item` global, so `item` there is nil and `assert(item == nil)` passes. The H1 pass, the main walk, and a chain started with `call` have neither `item` nor `sys.index`, even when the `call` is made from inside an arm, so a `Sub` that an arm reaches with `call('../Sub')` passes `assert(item == nil)`.
+A section the normal walk reaches has no `item` global, so `item` there is nil and `assert(item == nil)` passes. The main walk and a chain started with `call` have neither `item` nor `sys.index`, even when the `call` is made from inside an arm, so a `Sub` that an arm reaches with `call('../Sub')` passes `assert(item == nil)`.
 
 `sys.index` follows the same rule. It exists only in the first section an arm or a spawned task enters with an index, which is the arm's worker section or the target of a `tasks.spawn` given an `index` option. There it holds that option's value as given, so the child spawned above with `index = 7` reads `sys.index` as 7 and logs `index=7`.
 
@@ -633,8 +603,6 @@ description: Tells a fanout arm from an ordinary section.
 runvil: 0
 ---
 
-# Careful
-
 ## Main
 
 ```lua
@@ -646,14 +614,14 @@ return 'not an arm: ' .. tostring(result)
 ````
 
 ````text
-not an arm: careful.md:12: unknown sys field 'index'. The Lua code failed at runtime. Fix the code at this location.
+not an arm: careful.md:10: unknown sys field 'index'. The Lua code failed at runtime. Fix the code at this location.
 ````
 
-`Main` runs on the main walk, so outside an arm the caught text is `careful.md:12: unknown sys field 'index'. The Lua code failed at runtime. Fix the code at this location.`, which points at the failing read inside the protected function.
+`Main` runs on the main walk, so outside an arm the caught text is `careful.md:10: unknown sys field 'index'. The Lua code failed at runtime. Fix the code at this location.`, which points at the failing read inside the protected function.
 
 ### A snapshot of `var`
 
-Each arm starts from its own fresh copy of the caller's `var` as it stood when `tasks.fanout` was called, so it reads every entry the caller had, including values set in the H1 body. In `arm-view`, the H1 body sets `var.from_h1 = 'seeded'`, and every arm passes `assert(var.from_h1 == 'seeded')`.
+Each arm starts from its own fresh copy of the caller's `var` as it stood when `tasks.fanout` was called, so it reads every entry the caller had, including values set in the preamble. In `arm-view`, the preamble sets `var.from_preamble = 'seeded'`, and every arm passes `assert(var.from_preamble == 'seeded')`.
 
 The snapshot is copied out as plain data, the same way a `call` gets a copy of the caller's `var` (see [Call input and `var`](08-jump-and-call.md#call-input-and-var)), so an arm whose caller has an empty `var` starts with an empty `var`. One snapshot, taken when `tasks.fanout` is called, serves every arm, so all arms of one fanout start from the same `var`. The caller cannot change `var` in between, because it is paused inside the `tasks.fanout` call.
 
@@ -661,13 +629,13 @@ An arm can write to its own copy of `var` without error, so `var[item] = true` r
 
 ### `args`, `argv`, and call input in an arm
 
-A fanout arm starts with no call input of its own (see [Call input and `var`](08-jump-and-call.md#call-input-and-var)). Every arm reads [`args`](06-arguments.md#the-argument-string-in-args) too, because it runs under its caller's `args`. Every arm also inherits its caller's frozen [`argv`](06-arguments.md#reading-parsed-input-from-argv), the same way a `call` without an argument string does.
+A fanout arm starts with no call input of its own (see [Call input and `var`](08-jump-and-call.md#call-input-and-var)). Every arm reads [`args`](06-arguments.md#the-argument-string-in-args) too, because it runs under its caller's `args`. Every arm also inherits its caller's read-only [`argv`](06-arguments.md#reading-parsed-input-from-argv), the same way a `call` without an argument string does.
 
 ### Models, tools, and libraries in an arm
 
 An arm inherits its caller's context whole, so the run's models and tools work in it as in any section. A worker section can run `tools.call('web/fetch', { url = item })` over a collection of URLs, or `return models.infer(prose)`, and reach the tool or the model. A fanout arm gets the same section Lua environment setup as a walked section, including the [sandbox](05-lua-environment.md#the-sandbox), and only its seeded `item` and `sys.index` differ.
 
-An arm starts on a copy of its caller's current model, taken when `tasks.fanout` spawns the arm (see [Children and fanout arms](10-models.md#children-and-fanout-arms)). A prompt that never calls `models.use` runs every arm on the `default` role's model, so in the `replies` prompt an arm's `return models.infer(prose)` reaches the model with no `models:` block and no setup in the H1 body. A `models.use('strong')` in the H1 body, or in the calling section before the fanout, puts every arm on `strong`. An arm's own `models.use` changes only that arm, and the caller's model is the same after the fanout as before it. To give the arms a model of their own, pass a handle as the first argument, as [Running arms on a model](#running-arms-on-a-model) shows.
+An arm starts on a copy of its caller's current model, taken when `tasks.fanout` spawns the arm (see [Children and fanout arms](10-models.md#children-and-fanout-arms)). A prompt that never calls `models.use` runs every arm on the `default` role's model, so in the `replies` prompt an arm's `return models.infer(prose)` reaches the model with no `models:` block and no setup in the preamble. A `models.use('strong')` in the preamble, or in the calling section before the fanout, puts every arm on `strong`. An arm's own `models.use` changes only that arm, and the caller's model is the same after the fanout as before it. To give the arms a model of their own, pass a handle as the first argument, as [Running arms on a model](#running-arms-on-a-model) shows.
 
 Worker section Lua can also run one round on a different model through a [model handle](10-models.md#model-handles) with `models.infer(handle, prompt)`, which leaves the arm's own model as it is. Each arm runs in its own section VM with its own empty [`messages`](11-conversations.md#messages-is-the-section-entrys-conversation) list, which it fills and drives with [`models.loop`](11-conversations.md#starting-a-conversation), so the arms' conversations stay separate and each arm opens its own first round.
 
@@ -691,8 +659,6 @@ name: fanout-on-a-model
 description: Runs every arm on the fast role while the caller stays on strong.
 runvil: 0
 ---
-
-# Fanout on a model
 
 ## Parent
 
@@ -742,8 +708,6 @@ description: Each arm returns from its prologue.
 runvil: 0
 ---
 
-# Arm return
-
 ## Parent
 
 ```lua
@@ -771,7 +735,7 @@ Each arm's Lua return value becomes that arm's entry in the fanout result. Here 
 
 A `return value` in the worker section's prologue ends the arm with that value as its result. The worker section's prose after the fence is never sent to a model, and such an arm needs no model round, so in `arm-return` the prose `Do work.` goes unused. A worker section that is pure Lua and returns right away runs without any model connection, so that kind of fanout needs no model and stays fast. The 1025-arm `many-members` prompt runs with no model configured and returns `m1025`.
 
-A worker section's return hands its value back to `tasks.fanout` as the arm's result and never ends the run, because a return ends the run only from the H1 pass or the main walk (see [Returning values](04-how-a-prompt-runs.md#returning-values)). The calling section, such as `Parent`, goes on to check the results, and its own return, such as `'ok'`, becomes the run's text.
+A worker section's return hands its value back to `tasks.fanout` as the arm's result and never ends the run, because a return ends the run only from the main walk (see [Returning values](04-how-a-prompt-runs.md#returning-values)). The calling section, such as `Parent`, goes on to check the results, and its own return, such as `'ok'`, becomes the run's text.
 
 A section can call `tasks.fanout` from its epilog block, and the results still come back in collection order. The `fanout-epilog` prompt in [Where you can call `tasks.fanout`](#where-you-can-call-tasksfanout) returns `x-done,y-done` with both arms succeeding.
 
@@ -789,8 +753,6 @@ name: arm-reach
 description: A worker section reads the list in a sibling section.
 runvil: 0
 ---
-
-# Arm reach
 
 ## Parent
 
@@ -839,8 +801,6 @@ description: An arm jumps to a sibling of its worker section.
 runvil: 0
 ---
 
-# Arm jump
-
 ## Parent
 
 ```lua
@@ -887,8 +847,6 @@ name: arm-child-jump
 description: An arm jumps into a child of its worker section.
 runvil: 0
 ---
-
-# Arm child jump
 
 ## Parent
 
@@ -938,8 +896,6 @@ description: An arm calls a sibling of its worker section.
 runvil: 0
 ---
 
-# Arm call
-
 ## Parent
 
 ```lua
@@ -988,8 +944,6 @@ description: Each outer arm fans out over two inner members.
 runvil: 0
 ---
 
-# Nested fanout
-
 ## Parent
 
 ```lua
@@ -1028,8 +982,6 @@ name: nested-one-wide
 description: Runs a nested fanout under a concurrency limit of 1.
 runvil: 0
 ---
-
-# Nested one wide
 
 ## Parent
 
@@ -1075,8 +1027,6 @@ name: read-results
 description: Reads every field of the fanout results.
 runvil: 0
 ---
-
-# Read results
 
 ## Parent
 
@@ -1153,8 +1103,6 @@ description: Shows that a fanout result refuses writes.
 runvil: 0
 ---
 
-# Sealed results
-
 ## Parent
 
 ```lua
@@ -1199,8 +1147,6 @@ name: one-at-a-time
 description: Runs two arms one at a time.
 runvil: 0
 ---
-
-# One at a time
 
 ## Parent
 
@@ -1252,8 +1198,6 @@ description: Fans out over far more members than the concurrency limit.
 runvil: 0
 ---
 
-# Large fanout
-
 ## Parent
 
 ```lua
@@ -1295,8 +1239,6 @@ description: Sets and reads the concurrency limit.
 runvil: 0
 ---
 
-# Set limit
-
 ## Parent
 
 ```lua
@@ -1320,7 +1262,7 @@ A limit set with `tasks.concurrency` is clamped to the parent chain's current li
 
 After lowering the limit, you can raise it again with a later `tasks.concurrency(n)` call, up to the parent's limit, as `d` does. Lowering the limit never stops tasks already running, and it only gates tasks admitted afterward.
 
-Inside the H1 pass, the limit starts at the run's concurrency limit, and lowering it with `tasks.concurrency` in the H1 pass stays in effect for the section walk that follows. `tasks.concurrency(n)` called inside a spawned task sets how many of that task's own tasks may run at once, so a fanout it runs admits at most `n` arms at once.
+In the main walk, the limit starts at the run's concurrency limit, and lowering it with `tasks.concurrency` in one section, the preamble included, stays in effect for the sections the walk enters after it. `tasks.concurrency(n)` called inside a spawned task sets how many of that task's own tasks may run at once, so a fanout it runs admits at most `n` arms at once.
 
 ### When `tasks.concurrency` refuses a limit
 
@@ -1347,8 +1289,6 @@ name: arm-ids
 description: Shows the task id and section entry id of each arm.
 runvil: 0
 ---
-
-# Arm ids
 
 ## Parent
 
@@ -1394,8 +1334,6 @@ description: Numbers two arms and a call from one counter.
 runvil: 0
 ---
 
-# Shared counter
-
 ## Parent
 
 ```lua
@@ -1418,14 +1356,14 @@ return sys.id
 ````
 
 ````text
-0.0.0=a|0.1.0=b|0.2.0|0.1
+0.0.0=a|0.1.0=b|0.2.0|0.0
 ````
 
-The arms are the caller's children `0.0` and `0.1`, the called chain is child `0.2`, and the caller is still at `0.1`. Arm task ids and `sys.id` values are the same on every run, whatever order the arms finish in, because ids are given out when the arms start rather than when they complete. Two different orders of serving the arms' model requests produce the same ids.
+The arms are the caller's children `0.0` and `0.1`, the called chain is child `0.2`, and the caller is still at `0.0`. Arm task ids and `sys.id` values are the same on every run, whatever order the arms finish in, because ids are given out when the arms start rather than when they complete. Two different orders of serving the arms' model requests produce the same ids.
 
 ### `sys.id` inside arms
 
-Inside an arm, [`sys.id`](05-lua-environment.md#section-entry-ids) is the id of the section entry the arm is running, and the worker section is the first section of the arm's chain. So for a fanout from the main walk, the worker section of arm K, counting arms from 0, reads `sys.id` as `0.K.0`, and a worker section logging `sys.id .. ':' .. sys.index` writes `0.0.0:1` in the first arm and `0.1.0:2` in the second. The calling section entry keeps its own `sys.id` before and after `tasks.fanout`, so `Parent` reads `0.1` both times.
+Inside an arm, [`sys.id`](05-lua-environment.md#section-entry-ids) is the id of the section entry the arm is running, and the worker section is the first section of the arm's chain. So for a fanout from the main walk, the worker section of arm K, counting arms from 0, reads `sys.id` as `0.K.0`, and a worker section logging `sys.id .. ':' .. sys.index` writes `0.0.0:1` in the first arm and `0.1.0:2` in the second. The calling section entry keeps its own `sys.id` before and after `tasks.fanout`, so `Parent` reads `0.0` both times.
 
 Nested arms are children of the outer arm's chain, so inner arm J of outer arm K has task id `0.K.J`, and its worker section reads `sys.id` as `0.K.J.0`:
 
@@ -1435,8 +1373,6 @@ name: tree
 description: Shows section entry ids in a nested fanout.
 runvil: 0
 ---
-
-# Tree
 
 ## Parent
 
@@ -1465,7 +1401,7 @@ return sys.id .. ':' .. item .. sys.index
 
 The inner tasks are `0.0.0`, `0.0.1`, `0.1.0`, and `0.1.1`, with `sys.id` values `0.0.0.0`, `0.0.1.0`, `0.1.0.0`, and `0.1.1.0`.
 
-A fanout inside a `call` child nests its arm ids under the `call` child's chain. When `Main` at `0.1` calls `Sub`, which runs as the called chain `0.0` with `sys.id` `0.0.0`, the arms' worker sections run at `0.0.0.0` and `0.0.1.0`, and `Main` reads `0.1` again afterward. Inside an arm, the first section of a chain that `call` starts in arm 0 reads `0.0.0.0`, so a `Sub` called from the only arm's worker section passes `assert(sys.id == '0.0.0.0')`.
+A fanout inside a `call` child nests its arm ids under the `call` child's chain. When `Main` at `0.0` calls `Sub`, which runs as the called chain `0.0` with `sys.id` `0.0.0`, the arms' worker sections run at `0.0.0.0` and `0.0.1.0`, and `Main` reads `0.0` again afterward. Inside an arm, the first section of a chain that `call` starts in arm 0 reads `0.0.0.0`, so a `Sub` called from the only arm's worker section passes `assert(sys.id == '0.0.0.0')`.
 
 Arm `sys.id` values are given out in collection order, which is sorted key order for a keyed collection. `tasks.fanout('Worker', { zeta = 1, alpha = 2, mid = 3 })` with a worker section returning `item.key .. '=' .. item.value .. '@' .. sys.index .. ':' .. sys.id` joins to `alpha=2@1:0.0.0,mid=3@2:0.1.0,zeta=1@3:0.2.0`, with ids, `sys.index`, and places in the result list all in key order.
 
@@ -1473,7 +1409,7 @@ This table gathers the `sys.id` values above for a fanout from a top-level secti
 
 | Section | `sys.id` |
 |---|---|
-| the calling section, before and after the fanout | unchanged, such as `0.1` |
+| the calling section, before and after the fanout | unchanged, such as `0.0` |
 | the worker section in arm K | `0.K.0` |
 | a `jump` target in arm 0 | `0.0.1` |
 | the first section of a chain that `call` starts in arm 0 | `0.0.0.0` |
@@ -1503,8 +1439,6 @@ name: shared-path
 description: Two arms write the same store path.
 runvil: 0
 ---
-
-# Shared path
 
 ## Parent
 
@@ -1570,8 +1504,6 @@ description: Each arm writes its own file and the caller merges them.
 runvil: 0
 ---
 
-# Safe store
-
 ## Parent
 
 ```lua
@@ -1616,8 +1548,6 @@ description: Catches a failing arm and carries on.
 runvil: 0
 ---
 
-# Caught arm
-
 ## Parent
 
 ```lua
@@ -1639,7 +1569,7 @@ return item
 caught:lua
 ````
 
-The arm for `boom` raises `fatal arm error`. The fanout fails with that arm's own error value, `pcall` hands it to `Parent` as `err`, and `Parent` goes on to return `caught:lua`. The error value keeps the line where the arm failed, so `tostring(err)` reads `caught-arm.md:21: fatal arm error. The Lua code failed at runtime. Fix the code at this location.`, pointing into `Worker` rather than at the `tasks.fanout` line.
+The arm for `boom` raises `fatal arm error`. The fanout fails with that arm's own error value, `pcall` hands it to `Parent` as `err`, and `Parent` goes on to return `caught:lua`. The error value keeps the line where the arm failed, so `tostring(err)` reads `caught-arm.md:19: fatal arm error. The Lua code failed at runtime. Fix the code at this location.`, pointing into `Worker` rather than at the `tasks.fanout` line.
 
 ### Fail-fast
 
@@ -1663,8 +1593,6 @@ name: carry-on
 description: Catches a fanout failure and runs another model round.
 runvil: 0
 ---
-
-# Carry on
 
 ## Parent
 
@@ -1739,8 +1667,6 @@ description: Catches the error for an empty collection.
 runvil: 0
 ---
 
-# Empty collection
-
 ## Parent
 
 ```lua
@@ -1802,4 +1728,4 @@ The call-time member check looks only at each member's own type and not inside i
 
 Wrapping `tasks.fanout` in `pcall` catches a collection error, as `empty-collection` does. `local ok, err = pcall(tasks.fanout, 'Worker', {})` gives `ok` as `false`, `err.kind` as `lua`, and `tostring(err)` as the rule's message, and the section keeps running after the caught error, for example on to `return 'ok'`.
 
-Left uncaught, a collection error fails the run with error code [`lua_runtime`](16-limits-and-errors.md#run-error-codes) and the same message. When the call runs in the H1 pass, the run fails with error code `requirements_unmet` instead, with the H1 gate notice and the collection error as its cause (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)).
+Left uncaught, a collection error fails the run with error code [`lua_runtime`](16-limits-and-errors.md#run-error-codes) and the same message, whichever section makes the call, the preamble included.

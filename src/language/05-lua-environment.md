@@ -13,8 +13,6 @@ description: Shouts the argument string.
 runvil: 0
 ---
 
-# Shout
-
 ```lua
 return string.upper(args)
 ```
@@ -38,8 +36,6 @@ name: counting
 description: Counts with ordinary Lua.
 runvil: 0
 ---
-
-# Counting
 
 ```lua
 -- add up 1 to 4 with a numeric for loop
@@ -92,8 +88,6 @@ description: Shows which globals last between blocks and sections.
 runvil: 0
 ---
 
-# Lifetimes
-
 ## First
 
 ```lua
@@ -129,7 +123,7 @@ Inside one section entry, every `lua` block runs in the same Lua environment, so
 
 That one Lua environment serves every block in the section entry, and the Engine globals in it stay live for the entry's whole lifecycle, so a later block sees the same `log` and `store` as an earlier one. A first block can run `saved_log = log`, and a later block of the same entry can call `saved_log('still here')`.
 
-Every section entry gets a brand-new section VM, created for that section by name, and the H1 pass gets one too (see [The H1 pass](04-how-a-prompt-runs.md#the-h1-pass)). That holds whether the walk reaches the section by fall-through, by [`jump`](08-jump-and-call.md#jumping-to-a-section), or by [`call`](08-jump-and-call.md#calling-a-section). The section VM is torn down when the section entry ends.
+Every section entry gets a brand-new section VM, created for that section by name. That holds whether the walk reaches the section by fall-through, by [`jump`](08-jump-and-call.md#jumping-to-a-section), or by [`call`](08-jump-and-call.md#calling-a-section), and it holds for the preamble, the part of a prompt above its first heading, which is a section of its own when it holds Lua (see [The preamble](02-file-structure.md#the-preamble)). The section VM is torn down when the section entry ends.
 
 So a plain global assigned in one section entry reads as nil when the next entry runs, because globals live in that entry's own Lua VM. After `note` is set in `First`, `assert(note == nil)` passes in `Second`, and the same goes for any plain global, such as `reply` after `reply = 'custom'`. Each section entry gets its own fresh Lua environment, so globals created or changed in one entry never appear in another. When a `counter` global in one section VM has counted up to `2`, a `counter` global in a second section VM starts over at `1`.
 
@@ -162,7 +156,7 @@ first_saw_args = args
 first_saw_store = store.read('seed.txt')
 ````
 
-Every section VM, in the H1 pass and in walked sections alike, starts with these Engine globals:
+Every section VM, the preamble's included, starts with these Engine globals:
 
 - `args`, `argv`, `sys`, `var`, and `prose`
 - `log`, `store`, `untrusted`, `json`, and `markdown`
@@ -176,11 +170,11 @@ Together they give every section's Lua logging through `log` (see [Logging and l
 
 The Engine installs no global beyond these 21. Fanout is `tasks.fanout`, a function on the `tasks` table (see [Fanout in one call](14-fanout.md#fanout-in-one-call)), and reading a list kept in a section goes through `prompt.section`.
 
-The H1 pass and every walked section see the same set of globals. The one difference is `argv`: it is writable in the H1 pass, so H1 code can assign it (see [Checking and repairing `argv` in the H1 pass](06-arguments.md#checking-and-repairing-argv-in-the-h1-pass)), and frozen in every other section.
+The preamble and every other section see the same set of globals, and `argv` is read-only in all of them (see [`argv` is read-only](06-arguments.md#argv-is-read-only)).
 
 The name of a [model role](10-models.md#model-roles-instead-of-models) and an offered tool never become globals of their own. `type(strong)` is `nil`. You read a role's model handle with [`models.get(role)`](10-models.md#getting-handles-with-modelsget), so `models.get('strong').name` reads `strong`, and you read a tool with [`tools.get(id)`](12-tools.md#tool-objects-pack-objects-and-toolspacks), so in a prompt that declares `web`, `tools.get('web/search').id` reads `web/search`.
 
-Every section VM is set up in one fixed order. The same order applies to every section entry, the H1 pass, every fanout arm, and every spawned task chain:
+Every section VM is set up in one fixed order. The same order applies to every section entry, every fanout arm, and every spawned task chain:
 
 1. `untrusted`, when the VM is built
 2. `args`, `argv`, `sys`, `var`, `tools`, `models`, `messages`, and `compactors`
@@ -213,8 +207,6 @@ name: notes
 description: Writes a note and reads it back.
 runvil: 0
 ---
-
-# Notes
 
 ## Keep
 
@@ -261,7 +253,7 @@ A block pauses at a suspending call and resumes with the result, so you never wr
 
 While a suspending call waits, only the calling [chain](04-how-a-prompt-runs.md#the-section-walk) pauses, and other chains keep running. Two tasks started with `tasks.spawn` that each run `call('Leaf')` both complete, in whichever order their answers arrive.
 
-The suspending calls work in every section's Lua, the H1 pass and fanout arms included, so a fanout arm (see [What an arm sees](14-fanout.md#what-an-arm-sees)) can pass its `item` straight to `tools.call`.
+The suspending calls work in every section's Lua, the preamble and fanout arms included, so a fanout arm (see [What an arm sees](14-fanout.md#what-an-arm-sees)) can pass its `item` straight to `tools.call`.
 
 A block has no direct route to I/O or a clock, because it never has the `io`, `os`, `package`, `coroutine`, or `debug` library. Work outside the block happens only through Engine calls.
 
@@ -277,8 +269,6 @@ runvil: 0
 uses:
   - acme/issue-tracker
 ---
-
-# Ticket check
 
 ```lua
 return type(tickets.open) .. ',' .. type(store.read) .. ',' .. type(tools.call)
@@ -297,7 +287,7 @@ A prelude can add any globals to a section entry's `_G` beyond the ones the Engi
 
 A prelude can also define a table global holding fields and functions. `tickets` is one: the `issue-tracker` prelude creates the `tickets` table and defines `tickets.open` as a function on it, so a block calls `tickets.open('Fix login')` like any other global function.
 
-Preludes install when each section VM is set up, before that VM runs its first block, the H1 block included. Every Lua global a prelude defines is therefore available to every block of every section entry in the run, fanout arms and spawned task chains included, and to every library a block loads with `require`. In a prompt that declares `acme/issue-tracker`, a required library, a fanout arm, and a spawned task can each call `tickets.open`.
+Preludes install when each section VM is set up, before that VM runs its first block, in the preamble too. Every Lua global a prelude defines is therefore available to every block of every section entry in the run, fanout arms and spawned task chains included, and to every library a block loads with `require`. In a prompt that declares `acme/issue-tracker`, a required library, a fanout arm, and a spawned task can each call `tickets.open`.
 
 Preludes install in the order the prompt's `uses:` list declares their Packs.
 
@@ -331,7 +321,7 @@ All preludes in a run share one global namespace, and a prelude that cannot inst
 - It defines a global that an Engine global or another reserved name already holds. A prelude defining `ui` or `item` fails the run with a message saying the name `is reserved as an Engine global`.
 - It fails to load. The message says `its prelude failed to load`.
 
-A prelude failure happens when the first section VM is set up, before the run issues any effect. No store write, tool call, or model request from the prompt happens, and that includes an H1 block such as `store.write('h1.txt', 'x')`, which would otherwise be the first thing the prompt does.
+A prelude failure happens when the first section VM is set up, before the run issues any effect. No store write, tool call, or model request from the prompt happens, and that includes a preamble block such as `store.write('first.txt', 'x')`, which would otherwise be the first thing the prompt does.
 
 ## The sandbox
 
@@ -343,8 +333,6 @@ name: shout
 description: Shouts a fixed word.
 runvil: 0
 ---
-
-# Shout
 
 ```lua
 return string.upper('hello')
@@ -398,8 +386,6 @@ description: Reports the type of several values.
 runvil: 0
 ---
 
-# Types
-
 ```lua
 return type('x') .. ',' .. type(1) .. ',' .. type(true) .. ',' .. type({}) .. ',' .. type(type) .. ',' .. type(never_set)
 ```
@@ -420,7 +406,7 @@ You build strings with the `..` concatenation operator, joining string literals 
 `tostring(v)` turns other values into text for joining or storing:
 
 - A number becomes its digits, for a return value or an assert message, as in `'expected 1 call, got ' .. tostring(count)`, or for a list item, as in `items[i] = tostring(i)` or `tostring(#files)`.
-- A boolean, such as the status `pcall` returns, becomes `true` or `false`, so `var.answer .. ':' .. tostring(var.sys_untouched)` gives `h1 answer:true`, and `tostring(ok)` stores the status as text.
+- A boolean, such as the status `pcall` returns, becomes `true` or `false`, so `var.answer .. ':' .. tostring(var.sys_untouched)` gives `first answer:true`, and `tostring(ok)` stores the status as text.
 - `nil` becomes the string `nil`, so `tostring(print) .. ':' .. tostring(warn)` returns `nil:nil`.
 - An error value becomes its message, so `tostring(err)` gives the error message.
 - A tool result or a model reply becomes its text, so `tostring(reply)` gives `pong` when the model replies `pong`.
@@ -435,8 +421,6 @@ name: strings
 description: Uses the string library.
 runvil: 0
 ---
-
-# Strings
 
 ```lua
 local s = 'Task id=t7'
@@ -471,8 +455,6 @@ name: joined
 description: Joins strings, numbers, and a value with __tostring.
 runvil: 0
 ---
-
-# Joined
 
 ```lua
 local point = setmetatable({ x = 1, y = 2 }, {
@@ -517,7 +499,7 @@ A table element whose metatable holds a non-table `__metatable` field, such as `
 
 A list argument that is not indexable, such as nil, fails with a Lua runtime error from taking `#list` or reading `list[k]`, rather than with stock Lua's bad-argument message. When Lua adds a position prefix to an element error, it points into the sandbox's own `table.concat` code rather than at your calling line (see [Error line numbers and locations](#error-line-numbers-and-locations)).
 
-Each of these is an ordinary Lua runtime error. `pcall` catches it, and left uncaught it ends the run with code `lua_runtime`, or with `requirements_unmet` in the H1 pass, where an uncaught `assert(false, 'the gate cannot hold')` also ends the run with `requirements_unmet` (see [What an uncaught error ends](#what-an-uncaught-error-ends)).
+Each of these is an ordinary Lua runtime error. `pcall` catches it, and left uncaught it ends the run with code `lua_runtime` (see [What an uncaught error ends](#what-an-uncaught-error-ends)).
 
 ### The `math` library
 
@@ -533,8 +515,6 @@ name: characters
 description: Counts and cuts a string with the utf8 library.
 runvil: 0
 ---
-
-# Characters
 
 ```lua
 local s = 'café'
@@ -575,8 +555,6 @@ description: Shows that print and warn read nil.
 runvil: 0
 ---
 
-# No print
-
 ```lua
 return tostring(print) .. ':' .. tostring(warn)
 ```
@@ -613,7 +591,7 @@ Each absent name closes off one kind of direct work:
 
 Your code has no `coroutine` global either. The Engine loads the coroutine library only for its own suspending calls and removes the global before section setup ends, so a block cannot create coroutines or yield on its own, and every yield in a run comes from an Engine function (see [Suspending calls](#suspending-calls)).
 
-The raw-access functions are stripped after the Engine guard on `_G` captures `rawequal`, `rawget`, and `rawset` for its own use. With no `debug` library, no `rawset`, and no code loading, your code in a section VM has no route to the Engine guard on `_G`, to a raw `prose` global, or to a raw `argv` global outside the H1 pass (see [Giving `_G` a metatable](#giving-_g-a-metatable)).
+The raw-access functions are stripped after the Engine guard on `_G` captures `rawequal`, `rawget`, and `rawset` for its own use. With no `debug` library, no `rawset`, and no code loading, your code in a section VM has no route to the Engine guard on `_G`, to a raw `prose` global, or to a raw `argv` global (see [Giving `_G` a metatable](#giving-_g-a-metatable)).
 
 Calling any of these absent names, for example `print("hi")`, fails with a Lua runtime error because the name holds nil. The message comes either from the Engine guard on `_G` or from stock Lua's error for calling a nil value.
 
@@ -627,8 +605,6 @@ name: own-require
 description: Shows that require loads sections, not stock Lua libraries.
 runvil: 0
 ---
-
-# Own require
 
 ```lua
 local ok = pcall(require, 'os')
@@ -655,8 +631,6 @@ description: Walks a table with pairs.
 runvil: 0
 ---
 
-# Order
-
 ```lua
 local seen = {}
 for k in pairs({ zeta = 1, alpha = 2, mid = 3, beta = 4 }) do
@@ -682,8 +656,6 @@ name: mixed-order
 description: Walks a table that mixes key types.
 runvil: 0
 ---
-
-# Mixed order
 
 ```lua
 local seen = {}
@@ -753,7 +725,7 @@ Two kinds of scalar key go in that same trailing group with no fixed order: stri
 
 ### The same order everywhere
 
-`pairs` and `next` visit a table's keys in the same order on every run, in every section's fresh Lua state including the H1 pass, and in libraries loaded with `require`, instead of stock Lua's unspecified hash order. Two sections that walk the same table see the same key sequence. The same deterministic key order applies wherever Runvil reads a table's keys in order: [`tasks.fanout`](14-fanout.md#fanout-in-one-call) uses it when it enumerates a table's members, array part first and then the sorted keys.
+`pairs` and `next` visit a table's keys in the same order on every run, in every section's fresh Lua state, the preamble's included, and in libraries loaded with `require`, instead of stock Lua's unspecified hash order. Two sections that walk the same table see the same key sequence. The same deterministic key order applies wherever Runvil reads a table's keys in order: [`tasks.fanout`](14-fanout.md#fanout-in-one-call) uses it when it enumerates a table's members, array part first and then the sorted keys.
 
 ### How `pairs` walks a table
 
@@ -773,8 +745,6 @@ name: clear-ahead
 description: Clears a key before the loop reaches it.
 runvil: 0
 ---
-
-# Clear ahead
 
 ```lua
 local t = { a = 1, b = 2, c = 3 }
@@ -809,8 +779,6 @@ name: custom-pairs
 description: Walks an empty table through its __pairs metamethod.
 runvil: 0
 ---
-
-# Custom pairs
 
 ```lua
 local t = setmetatable({}, {
@@ -856,7 +824,7 @@ When `pairs` gets a value that is not a table and has no `__pairs` metamethod, s
 bad argument #1 to 'pairs' (table expected, got nil)
 ````
 
-Both are Lua runtime errors. `pcall` catches them, and left uncaught they end the run with code `lua_runtime`, or with `requirements_unmet` in the H1 pass.
+Both are Lua runtime errors. `pcall` catches them, and left uncaught they end the run with code `lua_runtime`.
 
 ### Stepping with `next`
 
@@ -868,8 +836,6 @@ name: step
 description: Walks a table with next.
 runvil: 0
 ---
-
-# Step
 
 ```lua
 local t = { 10, 20, [false] = 'f', [true] = 't' }
@@ -922,8 +888,6 @@ description: Keeps a value in var and reads it back.
 runvil: 0
 ---
 
-# Greeting
-
 ## Main
 
 ```lua
@@ -949,8 +913,6 @@ description: Passes a value to the next section through var.
 runvil: 0
 ---
 
-# Trail
-
 ## First
 
 ```lua
@@ -974,7 +936,7 @@ abc
 
 A value you assign to a `var` field stays in `var` after the block that set it ends. Whenever the run needs that state, it reads `var` back as JSON data, as [When the run reads `var` back](#when-the-run-reads-var-back) explains.
 
-`var` is present in the H1 pass and in every section. You can read and write it in every walked section, in every [arm](14-fanout.md#what-an-arm-sees) of [`tasks.fanout`](14-fanout.md#fanout-in-one-call), and in every chain that [`call`](08-jump-and-call.md#calling-a-section) runs. A chain is a walk with its own entries (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)). How a call, a fanout arm, or a task starts from its own copy of `var` is covered in [Call input and `var`](08-jump-and-call.md#call-input-and-var).
+`var` is present in every section, the preamble included. You can read and write it in every walked section, in every [arm](14-fanout.md#what-an-arm-sees) of [`tasks.fanout`](14-fanout.md#fanout-in-one-call), and in every chain that [`call`](08-jump-and-call.md#calling-a-section) runs. A chain is a walk with its own entries (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)). How a call, a fanout arm, or a task starts from its own copy of `var` is covered in [Call input and `var`](08-jump-and-call.md#call-input-and-var).
 
 ### Starting values and computed keys
 
@@ -999,8 +961,6 @@ description: Reads a var field set in the prologue from the epilog.
 runvil: 0
 ---
 
-# Phases
-
 ## Main
 
 ```lua
@@ -1020,18 +980,16 @@ prologue-epilog
 
 The blocks of one section entry share one section VM, as [A fresh section VM for every section entry](#a-fresh-section-vm-for-every-section-entry) shows. The prose between the two blocks is never read, so it is dropped.
 
-### `var` in the H1 pass
+### `var` in the preamble
 
-The [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) starts `var` and hands it to the walk:
+A [preamble](02-file-structure.md#the-preamble) that holds Lua starts `var` and hands it to the section after it:
 
 ````markdown
 ---
 name: executions
-description: Counts in two H1 blocks and reads the count in a section.
+description: Counts in two preamble blocks and reads the count in a section.
 runvil: 0
 ---
-
-# Executions
 
 ```lua
 var.executions = (var.executions or 0) + 1
@@ -1054,7 +1012,7 @@ return 'count:' .. var.executions
 count:2
 ````
 
-The H1 pass starts from an empty `var` table, since it runs first and is never entered again, so the first H1 block finds `var.executions` unset and stores `1`. `var` writes accumulate across the Lua blocks of the H1 pass, so the counter bumped in two H1 blocks reads `2`. Whatever `var` holds when the H1 pass ends is the `var` the section walk starts with, so a value an H1 Lua block stores in `var` is readable in the first `##` section and in every later walked section. A prompt without H1 blocks starts its first top-level walked section with `var` set to an empty table.
+`var` is an empty table in the first section a chain enters, and here that section is the preamble, so its first block finds `var.executions` unset and stores `1`. `var` writes accumulate across the Lua blocks of the preamble as in any section, so the counter bumped in two blocks reads `2`. The preamble and the sections after it are entries of one chain (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)), so whatever `var` holds when the preamble ends is the `var` that `Result` starts with, and every later section of the walk reads it too. In a prompt with no preamble, the first top-level section is the one that starts with `var` set to an empty table.
 
 `Result` builds its return value from a `var` value with Lua's `..` operator. A number operand turns into text in the result, which is why `'count:' .. var.executions` gives `count:2`.
 
@@ -1068,8 +1026,6 @@ name: greet
 description: Shows a var value in prose.
 runvil: 0
 ---
-
-# Greet
 
 ## Main
 
@@ -1178,7 +1134,6 @@ Because a table read from `var` holds no entries of its own, a few Lua operation
 The run reads `var` back as JSON data at fixed points:
 
 - when a section ends by falling through, jumping, or returning
-- when the H1 pass ends
 - when prose renders
 - when `call`, `tasks.fanout`, or a task start takes its copy of `var`
 
@@ -1194,8 +1149,6 @@ name: guarded
 description: Catches a rejected var write and keeps going.
 runvil: 0
 ---
-
-# Guarded
 
 ## Main
 
@@ -1231,7 +1184,7 @@ After `local t = {} for i = 1, 40 do t = { t, t } end`, the write `var.x = t` ra
 
 The guard raises its error at the assigning statement itself, not later when `var` is saved. That is why a `pcall` around that one write catches it, the block keeps running, and later `var` writes still work, as `var.kept = 'yes'` does in the `guarded` prompt. A rejected write stores nothing, so `var` holds only the writes that passed the guard: after a rejected `var.t.f = function() end` following `var.t.kept = 'yes'`, `var` reads back as exactly `{ "t": { "kept": "yes" } }`.
 
-`pcall` returns `false` and an [error value](#error-values) whose `tostring` text contains the guard's message, so `tostring(err):match('must be JSON data')` finds it. In a section, the caught error value has error kind `lua`, and its `message` field gives the guard's text as [author prose](#reading-kind-and-message) after the assigning line, so in the `guarded` prompt `tostring(err)` returns `guarded.md:12: var.handler must be JSON data, got function. The Lua code failed at runtime. Fix the code at this location.` [Raising and catching errors](#raising-and-catching-errors) covers `pcall` in full.
+`pcall` returns `false` and an [error value](#error-values) whose `tostring` text contains the guard's message, so `tostring(err):match('must be JSON data')` finds it. In a section, the caught error value has error kind `lua`, and its `message` field gives the guard's text as [author prose](#reading-kind-and-message) after the assigning line, so in the `guarded` prompt `tostring(err)` returns `guarded.md:10: var.handler must be JSON data, got function. The Lua code failed at runtime. Fix the code at this location.` [Raising and catching errors](#raising-and-catching-errors) covers `pcall` in full.
 
 Left uncaught, assigning a non-JSON value such as a function to a `var` field fails the run at the assigning line with [error code](16-limits-and-errors.md#run-error-codes) `lua_runtime`.
 
@@ -1243,7 +1196,7 @@ Change `var` only through its fields, and keep the `var` global itself in place.
 the `var` global was reassigned; write `var.<field>` instead
 ````
 
-The run's error code is `lua_runtime`. When a section entry has reassigned the `var` global, the read-back at the entry's end or at its `jump` fails the run, and the entry does not count as completed. The run's message ends with ` (at {file}:{line})` for the first Lua line of the last block that ran, which is the block that called `jump` when the read-back comes at a jump. In the H1 pass the code stays `lua_runtime` rather than `requirements_unmet` (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)), even when the H1 pass returns, because the read-back still runs before the `return` ends the run.
+The run's error code is `lua_runtime`. When a section entry has reassigned the `var` global, the read-back at the entry's end or at its `jump` fails the run, and the entry does not count as completed. The run's message ends with ` (at {file}:{line})` for the first Lua line of the last block that ran, which is the block that called `jump` when the read-back comes at a jump. An entry that returns fails the same way, because the read-back still runs before the `return` takes effect.
 
 ## Encoding and decoding JSON with `json`
 
@@ -1255,8 +1208,6 @@ name: json-round-trip
 description: Decodes JSON text, edits it, and encodes it again.
 runvil: 0
 ---
-
-# JSON round trip
 
 ```lua
 local data = json.decode('{"name":"tides","tags":["sea"],"note":null}')
@@ -1281,7 +1232,7 @@ The run result is:
 - `json.null` stands for JSON null.
 - `json.array` marks a table as a list, so it stays a list when it is empty.
 
-`json` is in every section VM, the H1 pass, fanout arms, spawned tasks, and libraries loaded with `require` included, and a Pack prelude's functions can call it too, so you never import it. Encoding is strict: a value that is not JSON data raises an error that names exactly where the value sits, unless you ask for a [debug dump](#dumping-any-value-in-debug-mode). Output and error text are identical on every run, because object keys are written sorted and table keys are always checked in one fixed order. Nulls and lists are recognized by the values themselves, never by looking anything up in the `json` table, so reassigning one of its fields changes nothing about how a value encodes.
+`json` is in every section VM, the preamble, fanout arms, spawned tasks, and libraries loaded with `require` included, and a Pack prelude's functions can call it too, so you never import it. Encoding is strict: a value that is not JSON data raises an error that names exactly where the value sits, unless you ask for a [debug dump](#dumping-any-value-in-debug-mode). Output and error text are identical on every run, because object keys are written sorted and table keys are always checked in one fixed order. Nulls and lists are recognized by the values themselves, never by looking anything up in the `json` table, so reassigning one of its fields changes nothing about how a value encodes.
 
 Every error a `json` function raises is an [error value](#error-values) of kind `lua`, so `pcall` catches it, and `tostring(err)` gives its message: the error's own text, such as `json.decode: expected value at line 1 column 1`, as [author prose](#reading-kind-and-message) after the line of the failing call. The messages this section quotes are that own text. Left uncaught, it ends the block like any other `lua` failure (see [What an uncaught error ends](#what-an-uncaught-error-ends)).
 
@@ -1295,8 +1246,6 @@ name: decoded-types
 description: Shows the Lua values JSON text decodes to.
 runvil: 0
 ---
-
-# Decoded types
 
 ```lua
 local v = json.decode('{"n":2,"x":1.5,"big":9223372036854775808,"list":[1,null,3]}')
@@ -1354,8 +1303,6 @@ description: Tells a JSON null apart from a missing field.
 runvil: 0
 ---
 
-# Null check
-
 ```lua
 local row = json.decode('{"id":7,"note":null}')
 local seen = {}
@@ -1390,8 +1337,6 @@ description: Keeps a filtered list as a list when nothing passes the filter.
 runvil: 0
 ---
 
-# Empty list
-
 ```lua
 local long, plain = json.array(), {}
 for _, word in ipairs({ 'alpha', 'beta', 'gamma' }) do
@@ -1419,9 +1364,9 @@ A marked list carries a metatable whose only field is `__metatable = false`. So 
 `json.array` raises two errors:
 
 - `json.array expects a table or no argument, got {type}`, for any value other than a table or nil, so `json.array(5)` reports `got integer`.
-- `json.array: the table already has a metatable`, for a table whose metatable is anything other than the list marker. That covers `var` and every table read from it, frozen `argv`, sealed Pack globals, fanout results, `_G`, and any table you gave a metatable yourself.
+- `json.array: the table already has a metatable`, for a table whose metatable is anything other than the list marker. That covers `var` and every table read from it, `argv`, sealed Pack globals, fanout results, `_G`, and any table you gave a metatable yourself.
 
-The marker works beyond `json.encode`. Every place the Engine turns a Lua table into JSON honors it, so a marked list goes out as `[]` in a `tools.call` argument table, a task's `item`, a message record, and `var`, where a plain empty table goes out as `{}`. An empty list stored in `var` or in frozen `argv` keeps its marker, so after `var.items = json.array()`, `var` reads back as `{ "items": [] }`, and a `{{ var.items }}` placeholder renders `[]` (see [When the run reads `var` back](#when-the-run-reads-var-back)). `var.items = {}` still reads back as `{ "items": {} }`.
+The marker works beyond `json.encode`. Every place the Engine turns a Lua table into JSON honors it, so a marked list goes out as `[]` in a `tools.call` argument table, a task's `item`, a message record, and `var`, where a plain empty table goes out as `{}`. An empty list stored in `var` or held in `argv` keeps its marker, so after `var.items = json.array()`, `var` reads back as `{ "items": [] }`, and a `{{ var.items }}` placeholder renders `[]` (see [When the run reads `var` back](#when-the-run-reads-var-back)). `var.items = {}` still reads back as `{ "items": {} }`.
 
 ### Encoding values with `json.encode`
 
@@ -1433,8 +1378,6 @@ name: encode-var
 description: Encodes what var holds.
 runvil: 0
 ---
-
-# Encode var
 
 ## Main
 
@@ -1477,7 +1420,7 @@ Tables encode this way:
 
 Functions, threads, and every userdata other than `json.null` are not JSON data, so they raise an error. That includes Engine objects such as tool objects, the `messages` list, and the record views that `messages[i]` returns. To encode a message record, encode `messages[i].content` or a plain table you build from its fields.
 
-A sealed view is a table that holds no entries of its own and whose metatable has both `__index` and `__metatable`. `var` and every table read from it, frozen `argv`, sealed Pack globals, and [fanout results](14-fanout.md#reading-the-results) are sealed views. When a view's `__index` is a table, `json.encode` encodes that table in the view's place, so `json.encode(var)` gives everything `var` holds. For a fanout arm over the member `alpha` whose worker returns `item .. '-' .. sys.index`, `json.encode(r[1])` gives `{"exhausted":false,"item":"alpha","ok":true,"text":"alpha-1"}`. When a view's `__index` is a function, as in `sys`, the view cannot be read, and `json.encode(sys)` raises this error:
+A sealed view is a table that holds no entries of its own and whose metatable has both `__index` and `__metatable`. `var` and every table read from it, `argv`, sealed Pack globals, and [fanout results](14-fanout.md#reading-the-results) are sealed views. When a view's `__index` is a table, `json.encode` encodes that table in the view's place, so `json.encode(var)` gives everything `var` holds. For a fanout arm over the member `alpha` whose worker returns `item .. '-' .. sys.index`, `json.encode(r[1])` gives `{"exhausted":false,"item":"alpha","ok":true,"text":"alpha-1"}`. When a view's `__index` is a function, as in `sys`, the view cannot be read, and `json.encode(sys)` raises this error:
 
 ````text
 json.encode: value cannot be read (sys is sealed); copy the fields you need into a plain table
@@ -1496,8 +1439,6 @@ description: Catches a value that json.encode refuses.
 runvil: 0
 ---
 
-# Encode refused
-
 ```lua
 local ok, err = pcall(json.encode, { items = { 'a', function() end } })
 return err.kind .. '|' .. tostring(err)
@@ -1507,7 +1448,7 @@ return err.kind .. '|' .. tostring(err)
 The run result is:
 
 ````text
-lua|encode-refused.md:10: json.encode: value.items[2] must be JSON data, got function. The Lua code failed at runtime. Fix the code at this location.
+lua|encode-refused.md:8: json.encode: value.items[2] must be JSON data, got function. The Lua code failed at runtime. Fix the code at this location.
 ````
 
 Every message names the failing value by its path. The path starts at `value`, the value you passed, and adds `.name` for each string key and `[k]` for any other key, so `value.items[2]` is the second item of the `items` field. A string key that is not valid UTF-8 appears in the path with replacement characters. The size refusal is the one message with no path, because the walk stops wherever the budget runs out. These are the messages:
@@ -1551,8 +1492,6 @@ description: Dumps a table that is not JSON data into the store.
 runvil: 0
 ---
 
-# Debug dump
-
 ```lua
 local state = { step = 2, retry = function() end, ratio = 0/0 }
 state.self = state
@@ -1588,8 +1527,6 @@ name: rows
 description: Appends records as JSON Lines and reads them back.
 runvil: 0
 ---
-
-# Rows
 
 ## First
 
@@ -1665,8 +1602,6 @@ description: Parses a Markdown document and reads a section, a list, and a fence
 runvil: 0
 ---
 
-# Markdown parse
-
 ## Main
 
 ```lua
@@ -1712,7 +1647,7 @@ The run result is:
 - `markdown.select(blocks, selector)` collects every block of one kind, at any depth, or every block of any kind.
 - `markdown.render(blocks)` writes a list of blocks back as Markdown text. For a parsed document, that is the text it was parsed from.
 
-`markdown` is in every section VM, the H1 pass, fanout arms, spawned tasks, and libraries loaded with `require` included, so you never import it. It takes text and never a file name: you read a file with [`store.read`](09-the-store.md#writing-and-reading-files) and parse what it returns. Every function is pure. The same input gives the same result, and none of them performs an effect or suspends. Nothing in the text is run or substituted, so a `{{ name }}` placeholder comes back as written.
+`markdown` is in every section VM, the preamble, fanout arms, spawned tasks, and libraries loaded with `require` included, so you never import it. It takes text and never a file name: you read a file with [`store.read`](09-the-store.md#writing-and-reading-files) and parse what it returns. Every function is pure. The same input gives the same result, and none of them performs an effect or suspends. Nothing in the text is run or substituted, so a `{{ name }}` placeholder comes back as written.
 
 Every error a `markdown` function raises is an [error value](#error-values) of kind `lua`, so `pcall` catches it, and `tostring(err)` gives its message: the error's own text, such as `markdown.section: path "/Guide/" has an empty step`, as [author prose](#reading-kind-and-message) after the line of the failing call. The messages this section quotes are that own text.
 
@@ -1737,7 +1672,7 @@ title: Notes
 tags: [a, b]
 ---
 
-Preface paragraph.
+Opening paragraph.
 
 # Guide
 
@@ -1779,15 +1714,15 @@ return 2
 2. second
 ````
 
-`local md = markdown.parse(text)` gives three top-level blocks: the frontmatter, the preface, and the section `Guide`, which holds the rest. Ordinary indexing reads all of it:
+`local md = markdown.parse(text)` gives three top-level blocks: the frontmatter, the opening paragraph, and the section `Guide`, which holds the rest. Ordinary indexing reads all of it:
 
 ````lua
 #md                              --> 3
 md[1].kind                       --> 'frontmatter'
 md[1].data.title                 --> 'Notes'
 md[1].data.tags[2]               --> 'b'
-md[2].text                       --> 'Preface paragraph.'
-md[2].source                     --> 'Preface paragraph.\n\n'
+md[2].text                       --> 'Opening paragraph.'
+md[2].source                     --> 'Opening paragraph.\n\n'
 md[2].line                       --> 6
 md[4]                            --> nil
 
@@ -2181,8 +2116,6 @@ description: Reads run facts from sys.
 runvil: 0
 ---
 
-# Where am I
-
 ## Only
 
 ```lua
@@ -2191,10 +2124,10 @@ return sys.section_name .. ' ' .. sys.id .. ' of ' .. sys.section_count
 ````
 
 ````text
-Only 0.1 of 1
+Only 0.0 of 1
 ````
 
-`sys` is an Engine global that the Engine installs in every section entry and in the H1 pass: a table of runtime values the run supplies, which a Lua block reads run metadata from. `sys` is a sealed, read-only table, and you read a field by name with dot or bracket syntax, as in `sys.id` or `sys['when']`.
+`sys` is an Engine global that the Engine installs in every section entry: a table of runtime values the run supplies, which a Lua block reads run metadata from. `sys` is a sealed, read-only table, and you read a field by name with dot or bracket syntax, as in `sys.id` or `sys['when']`.
 
 ### The `sys` fields
 
@@ -2222,8 +2155,6 @@ description: Reads the section name, section count, and run name.
 runvil: 0
 ---
 
-# Two sections
-
 ## Alpha
 
 ```lua
@@ -2246,27 +2177,27 @@ In a run named `execute-test`, every assertion holds and the run result is:
 execute-test
 ````
 
-`sys.section_name` is a string holding the section name of the section whose Lua is running, so it reads `'Alpha'` in section Alpha and `'Beta'` in section Beta. `sys.section_count` is a number holding the count of top-level sections in the prompt. `sys.execution` is a string holding the run's name, which the Harness assigns. Both read the same in every section, the H1 pass included.
+`sys.section_name` is a string holding the section name of the section whose Lua is running, so it reads `'Alpha'` in section Alpha and `'Beta'` in section Beta. `sys.section_count` is a number holding the count of top-level sections in the prompt. `sys.execution` is a string holding the run's name, which the Harness assigns. Both read the same in every section.
 
-In the H1 pass, Lua runs under the title, so `sys.section_name` reads the prompt's title:
+A [preamble](02-file-structure.md#the-preamble) that holds Lua is a top-level section with no name, so `sys.section_name` reads the empty string there, and `sys.section_count` counts the preamble with the other top-level sections:
 
 ````markdown
 ---
-name: title-demo
-description: Reads the title from sys in the H1 pass.
+name: preamble-name
+description: Reads the section name and the section count in the preamble.
 runvil: 0
 ---
 
-# Title Demo
-
 ```lua
-return sys.section_name
+return '[' .. sys.section_name .. '] ' .. sys.section_count
 ```
 ````
 
 ````text
-Title Demo
+[] 1
 ````
+
+Nothing stands between the brackets, and the preamble is this prompt's only top-level section, so the count is `1`.
 
 Fanout arms, and chains that an arm starts with `call`, see the same `sys.section_count` as the run, its top-level section count, and a child worker section does not add to it. With `Parent` as the only top-level section, a `Worker` arm under it reads `sys.section_count == 1`.
 
@@ -2278,8 +2209,6 @@ name: arm-task
 description: Reads the task id on the main walk and inside a fanout arm.
 runvil: 0
 ---
-
-# Arm task
 
 ## Parent
 
@@ -2300,7 +2229,7 @@ return sys.taskid
 0.0
 ````
 
-`sys.taskid` is a string holding the id of the nearest enclosing task, the task the code runs inside (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn)). It reads `'0'` on the main walk and in the H1 pass, which is why the assertion in `Parent` holds. Every section a chain enters reads the same `sys.taskid`, the chain's task id.
+`sys.taskid` is a string holding the id of the nearest enclosing task, the task the code runs inside (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn)). It reads `'0'` on the main walk, which is why the assertion in `Parent` holds. Every section a chain enters reads the same `sys.taskid`, the chain's task id.
 
 Inside a spawned task or a fanout arm, `sys.taskid` reads that task's own id, the same value as the `task` field of the handle `tasks.spawn` returns, so the first task spawned from the main walk reads `0.0`, as the arm above does. Inside a called chain, `sys.taskid` reads the caller's task, because a `call` starts no task, while inside a fanout arm or a `tasks.spawn` chain it reads that task's own id.
 
@@ -2316,7 +2245,7 @@ Reading a field that `sys` does not have raises an error instead of returning a 
 unknown sys field '{field}'
 ````
 
-So reading `sys.index` in an ordinary walked section raises `unknown sys field 'index'`. The error is a runtime error with error kind `lua`. Left uncaught, it ends the run with code `lua_runtime`, or with `requirements_unmet` in the H1 pass. A prose placeholder for an absent field fails with its own message, which repeats the placeholder after `missing`, so `{{ sys.index }}` in an ordinary walked section's prose fails with `missing {{ sys.index }}`.
+So reading `sys.index` in an ordinary walked section raises `unknown sys field 'index'`. The error is a runtime error with error kind `lua`. Left uncaught, it ends the run with code `lua_runtime`. A prose placeholder for an absent field fails with its own message, which repeats the placeholder after `missing`, so `{{ sys.index }}` in an ordinary walked section's prose fails with `missing {{ sys.index }}`.
 
 To read a `sys` field that may be absent, such as `sys.model` before any tool call, wrap the read in `pcall`. As the Lua block of `Only` in the `where-am-i` prompt, this returns `no tool call yet`:
 
@@ -2325,7 +2254,7 @@ local ok, model = pcall(function() return sys.model end)
 return ok and model or 'no tool call yet'
 ````
 
-The run goes on whether or not the field is there. A caught unknown field error is an error value with error kind `lua`, and `tostring` on it reads `{file}:{line}: unknown sys field '{field}'. The Lua code failed at runtime. Fix the code at this location.`, with the line of the read (see [Reading `kind` and `message`](#reading-kind-and-message)), so here, where the read fails, `model` holds that error value and `tostring(model)` reads `where-am-i.md:12: unknown sys field 'model'. The Lua code failed at runtime. Fix the code at this location.`
+The run goes on whether or not the field is there. A caught unknown field error is an error value with error kind `lua`, and `tostring` on it reads `{file}:{line}: unknown sys field '{field}'. The Lua code failed at runtime. Fix the code at this location.`, with the line of the read (see [Reading `kind` and `message`](#reading-kind-and-message)), so here, where the read fails, `model` holds that error value and `tostring(model)` reads `where-am-i.md:10: unknown sys field 'model'. The Lua code failed at runtime. Fix the code at this location.`
 
 ### `sys` is sealed and read-only
 
@@ -2346,20 +2275,18 @@ An assignment to `sys.when` gives `sys is read-only; cannot set 'when'`, and one
 ````markdown
 ---
 name: started
-description: Reads the run's start instant in the H1 pass and in a section.
+description: Reads the run's start instant in the preamble and in a section.
 runvil: 0
 ---
 
-# Started
-
 ```lua
-var.h1_when = sys.when
+var.first_when = sys.when
 ```
 
 ## Main
 
 ```lua
-assert(sys.when == var.h1_when)
+assert(sys.when == var.first_when)
 return sys.when
 ```
 ````
@@ -2370,7 +2297,7 @@ For a run that started at 00:00:00.123 UTC on 29 February 2000, the run result i
 2000-02-29T00:00:00.123Z
 ````
 
-`sys.when` is a string holding the instant the run started, rendered as RFC 3339 in UTC and ending in `Z`. It is one fixed instant stamped at run start, so every section of the run, the H1 pass included, reads the same value, and it keeps that value across the hand-off from the H1 pass to the section walk, which is why the assertion holds. `sys.when` is the only time field in `sys`, so a prompt reads the run's time through `sys.when`, and `sys` has no field that reads the current time.
+`sys.when` is a string holding the instant the run started, rendered as RFC 3339 in UTC and ending in `Z`. It is one fixed instant stamped at run start, so every section of the run reads the same value. The preamble keeps its reading in `var`, `Main` is the next entry of the same chain and finds it there, and the two readings are equal, which is why the assertion holds. `sys.when` is the only time field in `sys`, so a prompt reads the run's time through `sys.when`, and `sys` has no field that reads the current time.
 
 `sys.when` is the start instant the Harness supplies when it creates the run, not a live clock, so it never advances while the run executes and reads as the identical string on every read. It does not depend on the run [seed](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host): runs with different seeds but the same start instant read the same `sys.when`, even though the Harness supplies the seed and the start instant together. A replay that passes back the run's recorded start instant reproduces the same `sys.when`.
 
@@ -2415,8 +2342,6 @@ uses:
   - web
 ---
 
-# Model name
-
 ```lua
 models.use('strong')
 ```
@@ -2436,7 +2361,7 @@ return var.before .. ' / ' .. prose
 ```
 ````
 
-The H1 block selects the `strong` role, and the walk starts on that model (see [The current model](10-models.md#the-current-model)), so `Main` runs on `strong`. On a Host whose role map fills `strong` with the model `gateway/claude-sonnet-4-6` (a one-model map fills every role with that model), once the fetch answers, the run result is:
+The preamble selects the `strong` role, and `Main` is the next entry of the same chain, so it keeps that model (see [The current model](10-models.md#the-current-model)) and runs on `strong`. On a Host whose role map fills `strong` with the model `gateway/claude-sonnet-4-6` (a one-model map fills every role with that model), once the fetch answers, the run result is:
 
 ````text
 no tool call yet / Model name is claude-sonnet-4-6.
@@ -2448,7 +2373,7 @@ At the section entry's first tool call, `sys.model` takes the chain's current mo
 
 `sys.model` appears at the section entry's first tool call: a call to a catalog tool or an adhoc tool, or the model's call to a discovery tool, whether a Lua block makes it with `tools.call` or the model makes it during a conversation, such as a tool call inside [`models.loop`](11-conversations.md#starting-a-conversation). A discovery call that the Engine answers with refusal text still counts as that first call. A call refused before it is dispatched does not: a `tools.call` that fails with `unbound_tool` or `model_only_tool`, and a model call that fails with `out_of_scope_tool`, create neither `sys.model` nor `tools.stats`. A model round, one request to a model and its reply, never sets `sys.model` by itself, so a [`models.infer`](10-models.md#running-a-round-with-modelsinfer) or `models.loop` round with no tool call leaves it unreadable. A section entry that makes no tool call, or has no model when its first tool call runs, never gets the field.
 
-Reading `sys.model` before the section entry's first tool call fails with `unknown sys field 'model'`, even when the H1 pass selected a model with `models.use('strong')`. That holds whether the read is in the section's opening Lua block or inside a function from a library the section loads with [`require`](03-blocks-and-prose.md#sharing-code-with-require), as in `require '/sys_reader'` followed by `return read_sys_model()`.
+Reading `sys.model` before the section entry's first tool call fails with `unknown sys field 'model'`, even when an earlier section of the chain, such as the preamble, selected a model with `models.use('strong')`. That holds whether the read is in the section's opening Lua block or inside a function from a library the section loads with [`require`](03-blocks-and-prose.md#sharing-code-with-require), as in `require '/sys_reader'` followed by `return read_sys_model()`.
 
 Inside a fanout arm, once the arm's first tool call has been dispatched, `sys.model` reads the name part of the arm's current model's id in the same way. In the two-argument form `tasks.fanout(worker, collection)`, an arm starts on the model its parent was on when the arm was dispatched, so an arm for the member `a` that returns `sys.model .. ':' .. item`, with the parent on `strong` as above, gives `claude-sonnet-4-6:a`. With `tasks.fanout(model, worker, collection)`, every arm starts on the given handle's model instead.
 
@@ -2460,8 +2385,6 @@ name: host-model
 description: Reads the Host-state snapshot when the run has one.
 runvil: 0
 ---
-
-# Host model
 
 ## Main
 
@@ -2495,8 +2418,6 @@ description: Reads section entry ids along the main walk.
 runvil: 0
 ---
 
-# Numbered
-
 ```lua
 assert(sys.id == '0.0')
 ```
@@ -2520,15 +2441,15 @@ return sys.id
 
 A section entry id names one entry into a section. `sys.id` is a string that holds the id of the current section entry, written as a dotted path such as `0.1`, `0.0.0`, or `0.3.0`. Each section entry reads its own `sys.id`, made of the id of the chain that entered it, a dot, and that chain's zero-based entry counter.
 
-The H1 pass and the walk share one root chain, `0`. The H1 Lua reads `sys.id` as `'0.0'`, the walk continues the same entry counter, and the first walked section reads `'0.1'`. Entry `0.0` stays reserved for the H1 pass even when the prompt has no H1 blocks, so sections on the main walk always read `sys.id` as `0.1`, `0.2`, and so on. Without its H1 block, the `numbered` prompt still returns `0.2`.
+The main walk is one chain, the root chain `0`, and it counts its entries from zero: the first section it enters reads `sys.id` as `'0.0'`, the next reads `'0.1'`, and so on. The `numbered` prompt has a [preamble](02-file-structure.md#the-preamble), the first section the walk enters, so the preamble's Lua reads `'0.0'`, `First` reads `'0.1'`, and `Second` reads `'0.2'`. In a prompt with no preamble, the first heading's section is entry `0.0`, as `Main` is in the prompts below.
 
-`sys.id` compares equal to a plain Lua string, so you test it with `==` against a string literal such as `'0.1'`, as the assertions above do. `tostring(sys.id)` gives the same text as `sys.id`, because the id is already a string, so a block can return or store either form, and `return tostring(sys.id)` in the second walked section gives `0.2` too.
+`sys.id` compares equal to a plain Lua string, so you test it with `==` against a string literal such as `'0.1'`, as the assertions above do. `tostring(sys.id)` gives the same text as `sys.id`, because the id is already a string, so a block can return or store either form, and `return tostring(sys.id)` in `Second` gives `0.2` too.
 
 ### The id format
 
 A section entry id is its chain's id followed by a dot and the entry's index, so entries 0 and 7 of chain `0.3` read `0.3.0` and `0.3.7`, and the first section entered by chain `0.3` reads `0.3.0`. Section entries on the main walk read `0.N` because the main walk is chain `0`.
 
-Every section entry gets a fresh `sys.id`, so a section entered more than once in the same chain, including through `jump`, reads a new id each time: the id counts entries, not sections. `sys.id` counts up by one for each section the walk chain enters, and a `jump` into a child level stays in the same chain, so the count continues rather than restarting. Across `A`, `X`, `Y`, and `B`, entered in that order, the ids are `0.1`, `0.2`, `0.3`, and `0.4`.
+Every section entry gets a fresh `sys.id`, so a section entered more than once in the same chain, including through `jump`, reads a new id each time: the id counts entries, not sections. `sys.id` counts up by one for each section the walk chain enters, and a `jump` into a child level stays in the same chain, so the count continues rather than restarting. Across `A`, `X`, `Y`, and `B`, entered in that order from the start of the walk, the ids are `0.0`, `0.1`, `0.2`, and `0.3`.
 
 ### Ids inside a `call`
 
@@ -2538,8 +2459,6 @@ name: called-ids
 description: Reads section entry ids inside called chains.
 runvil: 0
 ---
-
-# Called ids
 
 ## Main
 
@@ -2563,16 +2482,16 @@ return var.ids .. ',' .. sys.id
 ````
 
 ````text
-0.1,0.0.0,0.1.0,0.2
+0.0,0.0.0,0.1.0,0.1
 ````
 
 Each `call` starts a contained child chain nested under the caller's chain. The first `call` from `Main` is the root chain's first child, so it opens chain `0.0`, and its section entries read `0.0.N`, starting with `0.0.0` for the called section. A section run by `call` or as a fanout arm is the first entry of its new chain, so its `sys.id` ends in `.0`.
 
-Each `call` starts a new child chain numbered in call order, so entering the same section through two calls gives two distinct `sys.id` values, `0.0.0` and `0.1.0`. After `call` returns, the caller's `sys.id` is unchanged, so `Main` still reads `0.1` after both calls, and the walk goes on to `Last` as `0.2`.
+Each `call` starts a new child chain numbered in call order, so entering the same section through two calls gives two distinct `sys.id` values, `0.0.0` and `0.1.0`. After `call` returns, the caller's `sys.id` is unchanged, so `Main` still reads `0.0` after both calls, and the walk goes on to `Last` as `0.1`.
 
-Call chains are numbered as children of the calling chain, not of the calling section's entry. The two calls from `Main`, itself entry `0.1`, start chains `0.0` and `0.1`, so the second chain's section reads `0.1.0` even though the calling section is also `0.1`. Child chains are numbered by the calling chain's own child counter in the order they start, and calls, tasks, fanout arms, and each [timed wait](15-tasks.md#the-timer-behind-a-time-limit)'s internal timer all share that counter no matter which section made the call, so each new call or arm takes the next child chain number.
+Call chains are numbered as children of the calling chain, not of the calling section's entry. The two calls from `Main`, itself entry `0.0`, start chains `0.0` and `0.1`, so the first chain's section reads `0.0.0` and the second's reads `0.1.0`, which does not start with the calling entry's id. Child chains are numbered by the calling chain's own child counter in the order they start, and calls, tasks, fanout arms, and each [timed wait](15-tasks.md#the-timer-behind-a-time-limit)'s internal timer all share that counter no matter which section made the call, so each new call or arm takes the next child chain number.
 
-A chain started by `call` numbers its own section entries. With this `Main` and its children in place of the ones in the `called-ids` prompt, the run result is `0.1,0.0.1,0.2`:
+A chain started by `call` numbers its own section entries. With this `Main` and its children in place of the ones in the `called-ids` prompt, the run result is `0.0,0.0.1,0.1`:
 
 ````markdown
 ## Main
@@ -2594,9 +2513,9 @@ return sys.id
 ```
 ````
 
-The called section reads `0.0.0`, the fall-through inside that chain takes the next entry, `0.0.1`, and after the chain ends the outer walk resumes its own sequence, so the next walked section reads `0.2` no matter how many entries the chain used.
+The called section reads `0.0.0`, the fall-through inside that chain takes the next entry, `0.0.1`, and after the chain ends the outer walk resumes its own sequence, so the next walked section reads `0.1` no matter how many entries the chain used.
 
-A `call` from the H1 pass takes the root chain's first child slot, so the called section runs as `0.0.0`. A later `call` from the first walked section then runs as `0.1.0`, and that calling section still reads `sys.id == '0.1'`.
+A `call` from a preamble takes the root chain's first child slot, so the called section runs as `0.0.0`. A later `call` from the section after the preamble then runs as `0.1.0`, and that calling section itself reads `sys.id == '0.1'`.
 
 ### Ids inside fanout arms
 
@@ -2606,8 +2525,6 @@ name: mixed-ids
 description: Reads section entry ids from calls and fanout arms.
 runvil: 0
 ---
-
-# Mixed ids
 
 ## Main
 
@@ -2638,12 +2555,12 @@ return var.ids .. ',' .. sys.id
 ````
 
 ````text
-0.1,0.0.0,0.1.0,0.2.0,0.3.0,0.4.0,0.2
+0.0,0.0.0,0.1.0,0.2.0,0.3.0,0.4.0,0.1
 ````
 
 Each fanout arm is a new child chain of the caller's chain, numbered by the caller's next child slot, so its worker section reads `sys.id` as that chain id followed by `.0`. Here the first `call` took `0.0`, so the three arms read `0.1.0`, `0.2.0`, and `0.3.0`, and the second `call` takes the next slot, `0.4.0`. With no earlier children, three arms from the main walk read `0.0.0`, `0.1.0`, and `0.2.0`. Fanout arms take their ids in collection order when the fanout dispatches, so the ids never depend on which arm finishes first.
 
-`tasks.fanout`, alone or followed by a `call`, leaves the calling section entry's `sys.id` unchanged, so `Main` still reads `0.1` after its arms return. Dispatching calls and fanout arms does not advance the walk's own entry count either, so after `Main` makes two calls and a three-arm fanout, `Last` still reads `0.2`.
+`tasks.fanout`, alone or followed by a `call`, leaves the calling section entry's `sys.id` unchanged, so `Main` still reads `0.0` after its arms return. Dispatching calls and fanout arms does not advance the walk's own entry count either, so after `Main` makes two calls and a three-arm fanout, `Last` still reads `0.1`.
 
 Ids nest the same way at every depth:
 
@@ -2665,8 +2582,6 @@ description: Reads the task id, section entry id, and index inside each arm.
 runvil: 0
 ---
 
-# Task ids
-
 ## Main
 
 ```lua
@@ -2682,12 +2597,12 @@ return sys.taskid .. ' ' .. sys.id .. ' ' .. sys.index
 ````
 
 ````text
-0.0 0.0.0 1 | 0.1 0.1.0 2 | 0.1
+0.0 0.0.0 1 | 0.1 0.1.0 2 | 0.0
 ````
 
 Each arm is a task. Inside a spawned task, `sys.id` is a section entry id that extends the task id, while `sys.taskid` is the task id itself, so the first section of task `0.0` reads `sys.taskid` as `0.0` and `sys.id` as `0.0.0`. A task started with [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) follows the same rule.
 
-A `sys.id` can have the same text as a task id, because a chain counts its section entries and its children separately. Here `Main` reads `sys.id` as `0.1` while its second arm is task `0.1`, and `0.0` can be both the H1 body's `sys.id` and the first task's id. Task ids are reproducible in the same way as `sys.id`, because they come from the same chain-local child counters, so the arm tasks `0.0` and `0.1` keep their ids whichever arm finishes first.
+A `sys.id` can have the same text as a task id, because a chain counts its section entries and its children separately. Here `Main` reads `sys.id` as `0.0` while its first arm is task `0.0`. Task ids are reproducible in the same way as `sys.id`, because they come from the same chain-local child counters, so the arm tasks `0.0` and `0.1` keep their ids whichever arm finishes first.
 
 ### Using `sys.id` as a key
 
@@ -2709,8 +2624,6 @@ name: progress
 description: Records checkpoints while it works.
 runvil: 0
 ---
-
-# Progress
 
 ## Prepare
 
@@ -2742,7 +2655,7 @@ A log checkpoint is a short progress message your Lua records by calling `log(me
 
 ### Where you can call `log`
 
-`log` is an Engine global, always present in every section VM, the H1 VM included. You can call `log(message)` to record checkpoints from any Lua block: in any section, in a fanout arm, in the H1 pass, and in prologues and epilogs alike.
+`log` is an Engine global, always present in every section VM. You can call `log(message)` to record checkpoints from any Lua block: in any section, in the preamble, in a fanout arm, and in prologues and epilogs alike.
 
 `log` stays defined for the section entry's whole lifecycle, so every block in the entry can call it. It is an ordinary function value that you can assign to a variable and call through that variable, as in `saved_log = log`, and a saved reference keeps working in later blocks of the same entry (see [A fresh section VM for every section entry](#a-fresh-section-vm-for-every-section-entry)). A library section's top-level code can call `log` while [`require`](03-blocks-and-prose.md#sharing-code-with-require) loads it, because section setup installs `log` before it installs `require`.
 
@@ -2753,14 +2666,12 @@ No section VM has `print` or `warn` (see [Names that read nil](#names-that-read-
 ````markdown
 ---
 name: log-checkpoints
-description: Records checkpoints across the H1 pass, a prologue, and an epilog.
+description: Records checkpoints across the preamble, a prologue, and an epilog.
 runvil: 0
 ---
 
-# Log Checkpoints
-
 ```lua
-log('H1 ran')
+log('preamble ran')
 ```
 
 ## Prepare
@@ -2792,13 +2703,13 @@ log('unreachable epilog')
 The run result is `finished`, and the checkpoints come out in this order:
 
 ````text
-Lua: H1 ran
+Lua: preamble ran
 Lua: prepare started
 Lua: prepare finished
 Lua: finish started
 ````
 
-Each `log` checkpoint is tagged with, and attributed to, the section name of the section whose Lua called `log`, and it is also tagged with the run's execution id. A `log` call in the H1 body records its checkpoint under the prompt's title, ahead of every section's checkpoints, so `H1 ran` is recorded under `Log Checkpoints`. The next two are recorded under `Prepare`, and `finish started` under `Finish`.
+Each `log` checkpoint is tagged with, and attributed to, the section name of the section whose Lua called `log`, and it is also tagged with the run's execution id. The preamble has no name, so a `log` call in it records its checkpoint under the empty section name, and `preamble ran` comes ahead of every later section's checkpoints. The next two are recorded under `Prepare`, and `finish started` under `Finish`.
 
 A checkpoint is attributed to the section whose code called `log`, including a section reached through `call`: when `Outer` runs `call('../Inner')`, `log('inner ran')` in `Inner` is attributed to `Inner`. Calling `log` inside a task's section records the message as a checkpoint under that section's name, and `log` records each message under the name of the section that logs it, in order, including inside a spawned child. When several runs execute at the same time, each run's checkpoints keep that run's execution id and appear in that run's call order.
 
@@ -2806,7 +2717,7 @@ A checkpoint is attributed to the section whose code called `log`, including a s
 
 The run records each `log` message verbatim, attributed to the section that called it, in call order across blocks. Several `log` calls in one section appear in the trace in the order the Lua made them, and checkpoints from separate Lua blocks in the same section appear in the order the blocks run, as `prepare started` and `prepare finished` do above.
 
-Checkpoints come out in a deterministic order across the H1 pass, prologues, and epilogs, and code that never runs logs nothing. In `Finish`, the prologue returns, so the epilog never runs and `unreachable epilog` is never recorded. Checkpoints logged before an early return, such as `finish started`, still appear in the trace.
+Checkpoints come out in a deterministic order across the preamble, prologues, and epilogs, and code that never runs logs nothing. In `Finish`, the prologue returns, so the epilog never runs and `unreachable epilog` is never recorded. Checkpoints logged before an early return, such as `finish started`, still appear in the trace.
 
 `log` emits its checkpoint at the moment of the call, through the same channel the runtime's own reports use, so checkpoints sit in call order among chunk, store, and teardown reports. `log` checkpoints, message text included, interleave with Engine operation reports such as [store](09-the-store.md#writing-and-reading-files) reports in program order:
 
@@ -2916,8 +2827,6 @@ uses:
   - user
 ---
 
-# Ask once
-
 ## Main
 
 ```lua
@@ -2932,7 +2841,7 @@ When the operator sends `kept`, the run result is:
 kept
 ````
 
-The operator is the person who answers a run while it runs. The operator's messages go to the run's main chain, the H1 pass and the section walk after it (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)), and the main chain reads them with `tasks.receive()`. Declaring the `user` Pack, as `ask-once` does, says that the prompt needs an operator, so a run with nobody to answer refuses the prompt at its first step, before any of its Lua runs.
+The operator is the person who answers a run while it runs. The operator's messages go to the run's main chain, the chain of the main walk (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)), and the main chain reads them with `tasks.receive()`. Declaring the `user` Pack, as `ask-once` does, says that the prompt needs an operator, so a run with nobody to answer refuses the prompt at its first step, before any of its Lua runs.
 
 `tasks.receive()` pauses the section until the operator's next message and returns that message's text as a string, exactly as it was sent. Leading and trailing spaces, newlines, and tabs are kept, with no trimming or re-encoding, and the text never arrives wrapped in the untrusted `<untrusted_input_...>` markers.
 
@@ -2984,7 +2893,7 @@ local second = tasks.receive()
 return first .. '|' .. second
 ````
 
-Every part of the main chain reads that one inbox: the H1 pass, the walk after it, and every section the main chain runs with [`call`](08-jump-and-call.md#calling-a-section), so a `tasks.receive()` in a section run with `call` takes the operator's next message. A message the H1 pass leaves unread is still queued when the walk begins.
+Every part of the main chain reads that one inbox: the preamble, the sections after it, and every section the main chain runs with [`call`](08-jump-and-call.md#calling-a-section), so a `tasks.receive()` in a section run with `call` takes the operator's next message. A message one section leaves unread is still queued when the next section begins.
 
 A `models.loop` on the main chain reads that inbox too. It takes every queued message before each model request, and once more before it returns unless its round cap is spent, so a message that arrives while the loop runs goes to the model rather than to the next `tasks.receive()` (see [Messages that arrive while the loop runs](11-conversations.md#messages-that-arrive-while-the-loop-runs)).
 
@@ -3021,8 +2930,6 @@ description: Catches an error value and reports its kind and message.
 runvil: 0
 ---
 
-# Read error
-
 ## Probe
 
 ```lua
@@ -3034,12 +2941,12 @@ return type(err) .. '|' .. err.kind .. '|' .. tostring(err)
 The run result is:
 
 ````text
-table|lua|read-error.md:12: unknown sys field 'nothing'. The Lua code failed at runtime. Fix the code at this location.
+table|lua|read-error.md:10: unknown sys field 'nothing'. The Lua code failed at runtime. Fix the code at this location.
 ````
 
 [`sys`](#run-facts-in-sys-and-ui) has no field named `nothing`, so the read fails, and `pcall` catches the failure instead of letting it end the block (see [Raising and catching errors](#raising-and-catching-errors)). What comes back is an error value: a Lua table holding a `kind` string, a `code` string, a `message` string, and any extra fields its kind defines. Every failure that an Engine call or an Engine function raises reaches your code as one, so `type(err)` is `table` and never a plain string, whether the failure came from a model round, a store operation, or a guard like the one on `sys`.
 
-The message starts with where the failure happened, `read-error.md:12:`, the prompt file and the line of the `sys.nothing` read, and goes on with what failed and what to do about it, as [Reading `kind` and `message`](#reading-kind-and-message) explains.
+The message starts with where the failure happened, `read-error.md:10:`, the prompt file and the line of the `sys.nothing` read, and goes on with what failed and what to do about it, as [Reading `kind` and `message`](#reading-kind-and-message) explains.
 
 The error kind is the value's `kind` field, a lowercase snake_case string such as `lua`, `out_of_scope_tool`, or `empty_model_reply`. It names which failure occurred, so you read it at any call site and branch on it.
 
@@ -3074,7 +2981,7 @@ Messages you meet through `tostring(err)` include these, shown without the `{fil
 - `the model replied with no text and no tool calls`
 - ``section `../Missing` not found: {where}. The Lua code failed at runtime. Fix the code at this location.``
 - ``recursion exceeded cap of 8. Calls nest deeper than the cap allows. Nest `call`, `tasks.spawn`, and `tasks.fanout` less deeply.``
-- `argv is frozen outside H1: assign it in H1 only. The Lua code failed at runtime. Fix the code at this location.`
+- ``argv is read-only: assign to `var` or a section global instead. The Lua code failed at runtime. Fix the code at this location.``
 
 Because `kind` is a string and `tostring` gives the message, one expression can report a failure in full:
 
@@ -3212,8 +3119,6 @@ description: Reads a note, or reports that there is none yet.
 runvil: 0
 ---
 
-# Careful read
-
 ## Keep
 
 ```lua
@@ -3303,8 +3208,6 @@ description: Fails on purpose when the answer is wrong.
 runvil: 0
 ---
 
-# Checked
-
 ## Verify
 
 ```lua
@@ -3314,7 +3217,7 @@ return 'checked'
 ```
 ````
 
-The run fails with code `lua_runtime`, the run error's text contains `the answer must be yes` and ends with ` (at checked.md:13)`, the line of the `assert`, and `return 'checked'` never runs.
+The run fails with code `lua_runtime`, the run error's text contains `the answer must be yes` and ends with ` (at checked.md:11)`, the line of the `assert`, and `return 'checked'` never runs.
 
 `assert(condition, message)` raises an error carrying `message` when `condition` is false, and returns normally and silently when it is true, so the block goes on to its next statement. `assert` works everywhere in prompt Lua, in sections, in fanout arms (see [What an arm sees](14-fanout.md#what-an-arm-sees)), and in [adhoc tool](01-what-a-prompt-is.md#effects-and-harness-work) handlers, for checking a condition mid-run with a message that says what was expected. Called with no message, as in `assert(false)`, it raises a Lua runtime error whose text is `assertion failed!`, after a location prefix such as ``section `Web Search` epilog:51:`` (see [Error line numbers and locations](#error-line-numbers-and-locations)).
 
@@ -3334,13 +3237,11 @@ Rebinding `error` or `math` in your code does not change how Engine functions ra
 
 ### What an uncaught error ends
 
-An uncaught Lua runtime error ends the block with an error instead of a return value. An uncaught Lua failure, a runtime error in your code or an error you raise on purpose, then ends the run with code `lua_runtime`, holding the failure's message, wherever it happens: a walked section, a `call` [chain](04-how-a-prompt-runs.md#the-section-walk), a task, a fanout arm, or a library's load. The run's message is the failure's text, its causes included, followed by where it happened: ` (at {file}:{line})` for a failure on a line of the prompt file, after the stack traceback when the failure has one (see [Where an error points](16-limits-and-errors.md#where-an-error-points)).
-
-In the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass), an uncaught failure such as `assert(false, message)` or `error(message)` is a failed gate instead. The run ends before the walk with code `requirements_unmet` instead of `lua_runtime`, the Lua failure's message is kept as the error's cause text, the run's message points at the line of the failure that tripped the gate, and no later block runs (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)).
+An uncaught Lua runtime error ends the block with an error instead of a return value. An uncaught Lua failure, a runtime error in your code or an error you raise on purpose, then ends the run with code `lua_runtime`, holding the failure's message, wherever it happens: the preamble, any other walked section, a `call` [chain](04-how-a-prompt-runs.md#the-section-walk), a task, a fanout arm, or a library's load. The run's message is the failure's text, its causes included, followed by where it happened: ` (at {file}:{line})` for a failure on a line of the prompt file, after the stack traceback when the failure has one (see [Where an error points](16-limits-and-errors.md#where-an-error-points)).
 
 When an Engine operation fails and the block does not catch the failure, the block fails with the error the operation returned. The run ends with that call's own specific error, placed on the line of the call, such as a `context_exhausted` failure from `models.infer`, rather than a plain string or a generic Lua runtime error. An uncaught error from a built-in Lua function ends the run with code `lua_runtime`, and its message names the calling function, as in `tools.offer: ...`. The exception is a `context_exhausted` raise: an uncaught `compactors.fail` call ends the run with code `context_exhausted`. An uncaught `models.loop` error ends the run with its own code: `tool_loop_exhausted`, `context_exhausted`, or, for an `empty_model_reply` error, `empty_reply`. A `lua`-kind loop error, such as a call with the wrong arguments or a loop started while another runs, fails the run as a Lua runtime error with code `lua_runtime`, and its message keeps the loop's own text.
 
-An uncaught Lua failure leaves its block in one of two forms: a Lua error, which holds a message, or a Lua runtime error, which holds a message plus further details. A Lua runtime error's message already holds the Lua error's text, so a printout of the error and its causes shows that text once rather than repeating it. A store failure you do not catch keeps its own error instead and ends the run with its store code, such as `not_found`, in the H1 pass too (see [When a store call fails](09-the-store.md#when-a-store-call-fails)).
+An uncaught Lua failure leaves its block in one of two forms: a Lua error, which holds a message, or a Lua runtime error, which holds a message plus further details. A Lua runtime error's message already holds the Lua error's text, so a printout of the error and its causes shows that text once rather than repeating it. A store failure you do not catch keeps its own error instead and ends the run with its store code, such as `not_found` (see [When a store call fails](09-the-store.md#when-a-store-call-fails)).
 
 ### Re-raising a caught error value
 
@@ -3376,9 +3277,9 @@ Once another suspending call has run, the run ends according to the error value'
 
 | Error value raised after another suspending call | How the run ends |
 | --- | --- |
-| `lua` | as an ordinary Lua runtime error at the `error` line, with code `lua_runtime`, or `requirements_unmet` in the H1 pass |
+| `lua` | as an ordinary Lua runtime error at the `error` line, with code `lua_runtime` |
 | `canceled` from a canceled run or a stopped call, with no `task` field | with the canceled error, whose code is `canceled` |
-| any other kind, a canceled task's `canceled` value included | with the original error and its own code, such as a store code like `not_found` for `store`, a model code like `overloaded` for `model_failure`, or `task_canceled` for a canceled task's value, in the H1 pass too |
+| any other kind, a canceled task's `canceled` value included | with the original error and its own code, such as a store code like `not_found` for `store`, a model code like `overloaded` for `model_failure`, or `task_canceled` for a canceled task's value |
 
 An error value of any kind except `lua` keeps its kind, code, fields, and line in the error that ends the run this way instead of being flattened to its message string, so a `context_exhausted` value keeps its `reason`, such as `precheck`. The fragment above ends the run with the store's code, `not_found`, and the store's original message, which still points at the line of the failed `store.read` rather than the `call` or the `error` line (see [When a store call fails](09-the-store.md#when-a-store-call-fails)). A run ends with its result, its final text or the error that ended it, a cancel included, as [The run result](04-how-a-prompt-runs.md#the-run-result) explains.
 
@@ -3408,8 +3309,6 @@ description: Fails on purpose to show where an error points.
 runvil: 0
 ---
 
-# Verify answer
-
 ## Check
 
 ```lua
@@ -3423,10 +3322,10 @@ end
 The run fails with code `lua_runtime`, and the first line of its message is:
 
 ````text
-section `Check` prologue:14: runtime error: section `Check` prologue:14: the answer must be yes
+section `Check` prologue:12: runtime error: section `Check` prologue:12: the answer must be yes
 ````
 
-``section `Check` prologue`` is the block's location label, and `14` is the absolute prompt line of the `error` call: line 14 of the file, counting the frontmatter. The label and line appear twice, once as a prefix at the head of the message and once where Lua's own position marker stood, with `runtime error:` between them, and a stack traceback follows on the next lines. After the traceback, the message ends with ` (at verify-answer.md:14)`, the prompt file and the same line (see [Where an error points](16-limits-and-errors.md#where-an-error-points)).
+``section `Check` prologue`` is the block's location label, and `12` is the absolute prompt line of the `error` call: line 12 of the file, counting the frontmatter. The label and line appear twice, once as a prefix at the head of the message and once where Lua's own position marker stood, with `runtime error:` between them, and a stack traceback follows on the next lines. After the traceback, the message ends with ` (at verify-answer.md:12)`, the prompt file and the same line (see [Where an error points](16-limits-and-errors.md#where-an-error-points)).
 
 An absolute prompt line is a line number counted from the top of the prompt file, with the frontmatter's opening `---` as line 1. A location label names the Lua block an error came from, by its section and its place in the section. A caught [error value](#error-values) names the same line another way, with the prompt file instead of the label, in the `{file}:{line}: ` its message starts with.
 
@@ -3434,17 +3333,17 @@ An absolute prompt line is a line number counted from the top of the prompt file
 
 A Lua runtime error reports the failing line as an absolute prompt line, not a line counted from the top of the block, because each block keeps its starting line in the file. The absolute line is the block's first Lua line plus the line inside the block, minus one.
 
-A block's first Lua line is the line right after its ```` ```lua ```` opener. In the prompt above, the fence opens on line 11, so the Lua starts on line 12, and the `error` call on the block's third line reports 12 + 3 - 1 = 14. Every line of the file counts: the frontmatter lines (`---`, `name:`, `description:`, `runvil:`, `---`), the H1 title, blank lines, headings, prose, and fence lines. Each block's first line is its true line in the `.md` file, in a library too and in files with CRLF line endings.
+A block's first Lua line is the line right after its ```` ```lua ```` opener. In the prompt above, the fence opens on line 9, so the Lua starts on line 10, and the `error` call on the block's third line reports 10 + 3 - 1 = 12. Every line of the file counts: the frontmatter lines (`---`, `name:`, `description:`, `runvil:`, `---`), blank lines, headings, prose, and fence lines. Each block's first line is its true line in the `.md` file, in a library too and in files with CRLF line endings.
 
 An error on a block's first line reports the line where the block's Lua starts, and an error on a later line reports that exact line, not the block's first line. A block whose Lua starts on line 40 reports line 40 for a failure on its only line, line 41 for a failure on its second line, and line 43 for one on its fourth. The rule holds in every kind of block:
 
 - a section's prologue: a `Work` prologue whose fence opens on line 10 reports an `assert(false)` on line 11 as line 11
 - a section's epilog: an `assert(false)` on line 14 of a `Check` epilog reports line 14
 - a block between prose blocks: the third of four Lua blocks in `S`, starting on line 23, reports an `assert(false)` on line 24 as line 24
-- a block under the H1 title: one whose code starts on line 9 reports its `assert(false)` as line 9
+- a preamble block: one whose code starts on line 8 reports its `assert(false)` as line 8
 - a block deep in a long prompt: one starting on line 112 reports an `assert(false)` on its second line as line 113
 
-The line always names the place in the prompt file where the error was raised, never a line inside the Engine's wrapper around the block, and it sits between colons, in the form `:14:`.
+The line always names the place in the prompt file where the error was raised, never a line inside the Engine's wrapper around the block, and it sits between colons, in the form `:12:`.
 
 ### Location labels
 
@@ -3455,23 +3354,24 @@ An error message names the block by its location label, followed by a colon and 
 | A Lua block that opens the section, before any prose, also when it is the only block | ``section `{name}` prologue`` |
 | A Lua block that ends a section that has prose before it | ``section `{name}` epilog`` |
 | Any other Lua block of a section | ``section `{name}` lua {ordinal}`` |
-| A Lua block under the H1 title | ``H1 `{title}` lua`` |
 
 `{ordinal}` is the block's 1-based place among the section's Lua blocks. The role follows from the block's position, the section's block count, whether the section has any prose, and the block's place among the section's Lua blocks, so it matches the prologue and epilog of [Prologue, prose, and epilog](03-blocks-and-prose.md#prologue-prose-and-epilog) for an ordinary section. One section's two blocks read ``section `Private section` prologue`` and ``section `Private section` epilog``, a failing block under the heading `## lib` reports ``section `lib` prologue:19: load fault``, and the second block of `lib` is ``section `lib` lua 2``.
+
+The [preamble](02-file-structure.md#the-preamble) has no name, so its blocks take the same three roles after the word `preamble`: `preamble prologue`, `preamble epilog`, and `preamble lua {ordinal}`, as in `preamble lua 2`. An `assert(false)` on line 8 of a preamble's first block fails with a message that starts `preamble prologue:8:`.
 
 Every Lua block is its own unit with its own location, so four Lua blocks in `S` have four distinct locations. A long section name appears in full, so `Gather Background Research Notes` gives ``section `Gather Background Research Notes` prologue``. A location of any length still maps, so a block labeled ``section `Shared Research Helper Functions` (line 1200) prologue`` still reports `{location}:40:`.
 
 ### Sections that share a section name
 
-When another section heading anywhere after the H1, at any level, has the same section name, the location adds the heading's line as `(line {heading_abs_line})`, so you can tell the two sections' errors apart. With `Helpers` on line 10 under `A` and another `Helpers` on line 18 under `B`, the first section's prologue is ``section `Helpers` (line 10) prologue`` and the second's is ``section `Helpers` (line 18) prologue``.
+When another section heading anywhere in the file, at any level, has the same section name, the location adds the heading's line as `(line {heading_abs_line})`, so you can tell the two sections' errors apart. With `Helpers` on line 10 under `A` and another `Helpers` on line 18 under `B`, the first section's prologue is ``section `Helpers` (line 10) prologue`` and the second's is ``section `Helpers` (line 18) prologue``.
 
 The number is the line of the heading itself, not of the fence or the code, so a `### Helpers` heading on line 10 whose fence opens on line 12, with code from line 13, gives `(line 10)`. A heading line of three or more digits appears in full, as in ``section `Research Worker Notes` (line 109) prologue``. A section whose name no other section uses gets a location without a line number, such as ``section `C` prologue``, even when other sections in the file share names.
 
-Errors from two sections with the same name stay separate: each reports its own block's file line, and one `Helpers` section never maps the other's error. Location labels need not be unique for this to work, because the label is a display name only. Lua knows each block by a name built from its first prompt line, `line {source_line}`, and that name decides which block an error belongs to, so two H1 blocks that both carry the label ``H1 `T` lua`` still map only their own errors.
+Errors from two sections with the same name stay separate: each reports its own block's file line, and one `Helpers` section never maps the other's error. Location labels need not be unique for this to work, because the label is a display name only. Lua knows each block by a name built from its first prompt line, `line {source_line}`, and that name decides which block an error belongs to.
 
 ### Compile errors
 
-A compile error is a Lua block that does not compile as Lua 5.5, such as one with a syntax error. Every Lua block in the H1 body and the sections is compiled, without being run, when the prompt file is parsed, so a compile error stops the prompt before the run begins and before any of its code runs:
+A compile error is a Lua block that does not compile as Lua 5.5, such as one with a syntax error. Every Lua block in the prompt, the preamble's included, is compiled, without being run, when the prompt file is parsed, so a compile error stops the prompt before the run begins and before any of its code runs:
 
 ````markdown
 ---
@@ -3479,8 +3379,6 @@ name: broken-check
 description: Holds an epilog that does not compile.
 runvil: 0
 ---
-
-# Broken check
 
 ## Check
 
@@ -3492,7 +3390,7 @@ return secret
 ```
 ````
 
-The parse fails with parse error kind `Lua` (see [Parsing comes first](04-how-a-prompt-runs.md#parsing-comes-first)), and the message starts with ``lua compilation error at section `Check` epilog (line 14): `` followed by `syntax error: ` and the Lua compiler's diagnostic. A compile error has this form:
+The parse fails with parse error kind `Lua` (see [Parsing comes first](04-how-a-prompt-runs.md#parsing-comes-first)), and the message starts with ``lua compilation error at section `Check` epilog (line 12): `` followed by `syntax error: ` and the Lua compiler's diagnostic. A compile error has this form:
 
 ````text
 lua compilation error at {location} (line {source_line}): {message}
@@ -3502,9 +3400,9 @@ lua compilation error at {location} (line {source_line}): {message}
 - `(line {source_line})` is the block's first Lua line, the line after its opening fence, counted from the top of the file with the frontmatter included. It is not the line of the fault, so an epilog whose fence opens on line 12 reports ``lua compilation error at section `Check` epilog (line 13): {message}``.
 - `{message}` is the Lua 5.5 compiler's own diagnostic, unchanged, after a `syntax error: ` label. It names the block `[string "line {source_line}"]`, where `{source_line}` is the block's first prompt line, such as `[string "line 1"]` for a block that starts on line 1.
 
-The compiler's diagnostic is never rewritten to file lines, so the `{k}` in its `[string "line {source_line}"]:{k}:` marker counts from the top of the block, and the faulting file line is `{source_line}` + `{k}` - 1. In the prompt above, the diagnostic names `[string "line 14"]`, so its `{k}` added to 14, less one, is the file line of the fault.
+The compiler's diagnostic is never rewritten to file lines, so the `{k}` in its `[string "line {source_line}"]:{k}:` marker counts from the top of the block, and the faulting file line is `{source_line}` + `{k}` - 1. In the prompt above, the diagnostic names `[string "line 12"]`, so its `{k}` added to 12, less one, is the file line of the fault.
 
-Every block compiles this way, whether it sits in a library, under the H1 title, or in any section, the last block of the last section included: an unclosed `return (` in a final epilog fails the parse as ``section `Transform` epilog``. A syntax error in a section's prologue fence is located as ``section `{name}` prologue``, such as ``section `Private section` prologue``, and one in its epilog fence as ``section `{name}` epilog``. The compile error does not include the block's source: it holds the block's location label, its first line, and the compiler's diagnostic, which quotes at most the token where compiling stopped, such as `near <eof>`, or an unclosed string up to the end of its line.
+Every block compiles this way, whether it sits in a library, in the preamble, or in any other section, the last block of the last section included: an unclosed `return (` in a final epilog fails the parse as ``section `Transform` epilog``. A syntax error in a section's prologue fence is located as ``section `{name}` prologue``, such as ``section `Private section` prologue``, and one in its epilog fence as ``section `{name}` epilog``. The compile error does not include the block's source: it holds the block's location label, its first line, and the compiler's diagnostic, which quotes at most the token where compiling stopped, such as `near <eof>`, or an unclosed string up to the end of its line.
 
 The compile error's text is the parse error's whole message, with nothing added in front. The parse error itself points at the faulting file line, the one the diagnostic's `{k}` names, in its own location fields, which a Host such as Workshop reads. The Harness finds the error before the run starts, and the failed run's code is `lua_compile`. Its message is the located message every failed run has: that text followed by ` (at {file}:{line})` for the faulting line (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). A compile error in a prompt's own blocks always fails the parse, so no run starts. A compile error during a run, such as one in a [Pack prelude](12-tools.md#pack-preludes), ends the run with code `lua_runtime` (see [When a prelude fails](#when-a-prelude-fails)).
 
@@ -3520,7 +3418,7 @@ The mapping leaves error text that names no Lua block unchanged, adding no locat
 
 ### Errors that pass through several blocks
 
-An error from one Lua block is never mapped onto the lines of another block in the same section, and an error from one H1 block is never mapped onto the lines of another H1 block. When an error passes through several blocks, each frame maps using the starting line of the block it came from, so the calling section's frame reports its own prompt line, as when a `boom()` call on prompt line 13 appears as ``section `Main` prologue:13:``.
+An error from one Lua block is never mapped onto the lines of another block in the same section. When an error passes through several blocks, each frame maps using the starting line of the block it came from, so the calling section's frame reports its own prompt line, as when a `boom()` call on prompt line 11 appears as ``section `Main` prologue:11:``.
 
 An error that surfaces through a parent block keeps the child's already absolute line, while the parent's own frames map to the parent's lines, so a message can start with ``section `Main` prologue:24: `` and still hold the child's line 51 intact. An error raised in a fanout arm or a called section traces back through its caller the same way, with each frame's line pointing at its own block's prompt line, so a child's ``section `lib` prologue:51: deep fault`` raised again in the parent stays at line 51. An error value that a called or spawned chain hands back keeps the line where it happened in that chain the same way, so its `{file}:{line}: ` names the child's line, not the parent's `call`, `tasks.fanout`, or wait.
 
@@ -3536,8 +3434,6 @@ name: lib-fault
 description: Shows where an error inside a library points.
 runvil: 0
 ---
-
-# Lib fault
 
 ## Main
 
@@ -3558,10 +3454,10 @@ end
 The run fails with code `lua_runtime`, and the first line of its message is:
 
 ````text
-section `lib` prologue:20: runtime error: section `lib` prologue:20: deep fault
+section `lib` prologue:18: runtime error: section `lib` prologue:18: deep fault
 ````
 
-The first line of an uncaught library error carries exactly one leading prefix naming the raise point, then `runtime error:`, then the mapped message. The prefix names the library line where the raise happened, line 20 inside `boom`, even though the call came from ``section `Main` prologue``. The traceback below it shows each frame mapped once to its own prompt line, covering both the library frame, ``section `lib` prologue:20: in``, and the calling section's frame, ``section `Main` prologue:13: in``. After the traceback, the message ends with ` (at lib-fault.md:20)`, the same library line.
+The first line of an uncaught library error carries exactly one leading prefix naming the raise point, then `runtime error:`, then the mapped message. The prefix names the library line where the raise happened, line 18 inside `boom`, even though the call came from ``section `Main` prologue``. The traceback below it shows each frame mapped once to its own prompt line, covering both the library frame, ``section `lib` prologue:18: in``, and the calling section's frame, ``section `Main` prologue:11: in``. After the traceback, the message ends with ` (at lib-fault.md:18)`, the same library line.
 
 - A raise during a library's load reports the library block's location and the line of the raise, not the requiring block's line, so a library block whose Lua starts on line 40 and raises on its fourth line reports ``section `lib` prologue:43: load fault``.
 - A raise from a library function called after the load reports the line inside the function body where the raise happened, so `error('later fault')` on the library block's second line reports ``section `lib` prologue:41: later fault``.
@@ -3578,8 +3474,6 @@ name: tone-default
 description: Gives a missing global a default.
 runvil: 0
 ---
-
-# Tone default
 
 ## Reply
 
@@ -3627,7 +3521,7 @@ getmetatable(_G).__index = function(_, key) return 'live ' .. key end
 return tone
 ````
 
-Your metatable applies during the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) too, so H1 code reads its defaults and gets its strict errors, and it stays in place across later fences of the same section, so a default still reads in the second fence.
+Your metatable works in the [preamble](02-file-structure.md#the-preamble) as in any other section, so preamble code reads its defaults and gets its strict errors, and it stays in place across later fences of the same section, so a default still reads in the second fence.
 
 ### Strict globals
 
@@ -3726,7 +3620,7 @@ return table.concat(names, ',')
 
 ### What the Engine guard on `_G` still blocks
 
-The Engine guard on `_G` serves three names that your metatable never touches: `prose`, `messages`, and `argv` outside the H1 pass. Your code reads them as globals, even though a raw read of any of them from `_G` gives `nil`. The guard handles `argv`, `prose`, and `messages` before your metatable, so reads and assignments of those names never reach your `__index` or `__newindex`, an `argv` assignment in the H1 pass included, whatever metatable you set, clear, or change. An assignment to `messages` always raises the refusal that [`messages` is the section entry's conversation](11-conversations.md#messages-is-the-section-entrys-conversation) shows.
+The Engine guard on `_G` serves three names that your metatable never touches: `argv`, `prose`, and `messages`. Your code reads them as globals, even though a raw read of any of them from `_G` gives `nil`. The guard handles `argv`, `prose`, and `messages` before your metatable, so reads and assignments of those names never reach your `__index` or `__newindex`, whatever metatable you set, clear, or change. An assignment to `messages` always raises the refusal that [`messages` is the section entry's conversation](11-conversations.md#messages-is-the-section-entrys-conversation) shows.
 
 In an epilog that follows the prose `Hi.`, this block returns `Hi.` even though its `__index` raises for every undefined global and its `__newindex` records every new one:
 

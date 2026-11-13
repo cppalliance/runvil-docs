@@ -13,8 +13,6 @@ description: Says hello.
 runvil: 0
 ---
 
-# Hello World
-
 ## Greet
 
 Say "Hello, world!"
@@ -48,7 +46,7 @@ The Host's list of models stays with the Host. A prompt's roles draw only on the
 
 ### The `models` global
 
-The `models` global is the table your Lua uses to choose and run models. Every section has it, the H1 section included, and it is reserved as an [Engine global](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals). You can reach it from the Lua of every section, from the blocks of the H1 body, and from a [library](03-blocks-and-prose.md#sharing-code-with-require).
+The `models` global is the table your Lua uses to choose and run models. Every section has it, and it is reserved as an [Engine global](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals). You can reach it from the Lua of every section and from a [library](03-blocks-and-prose.md#sharing-code-with-require). That includes the [preamble](02-file-structure.md#the-preamble), the text between the frontmatter and the first heading, which is the first top-level section when it holds Lua.
 
 The table holds six functions. `models.use` selects a role or a handle, `models.get` returns a model handle without selecting it, `models.current` returns a handle for the model in use, `models.infer` runs one model round, and `models.loop` and `models.compact` are taught with conversations:
 
@@ -63,7 +61,7 @@ The table holds six functions. `models.use` selects a role or a handle, `models.
 
 The `models` table is in place with the other Engine globals before any block runs, so any block, its top-level statements included, calls it directly with no `require` and no setup line. The block in `hello` uses it that way.
 
-The roles are fixed, and Lua never creates or binds one, so the `models` table holds no function for adding a role. `models.use` and `models.get` take one of the five role names, and any other name is an error that lists the five (see [Rejected calls](#rejected-calls)), except that when the Host passes a Host-state snapshot, `models.get` also accepts a raw gateway model id (see [Raw model ids and the Host-state snapshot](#raw-model-ids-and-the-host-state-snapshot)). The run fills its roles before any Lua runs, and every section, the H1 pass included, reads that same set, so the same roles work in every section.
+The roles are fixed, and Lua never creates or binds one, so the `models` table holds no function for adding a role. `models.use` and `models.get` take one of the five role names, and any other name is an error that lists the five (see [Rejected calls](#rejected-calls)), except that when the Host passes a Host-state snapshot, `models.get` also accepts a raw gateway model id (see [Raw model ids and the Host-state snapshot](#raw-model-ids-and-the-host-state-snapshot)). The run fills its roles before any Lua runs, and every section, the preamble included, reads that same set, so the same roles work in every section.
 
 ### When a prompt needs a role
 
@@ -78,8 +76,6 @@ description: Sends prose to a model.
 runvil: 0
 ---
 
-# Unselected
-
 ## Only
 
 Say "Hello, world!"
@@ -92,7 +88,7 @@ return models.infer(prose)
 On a Host that gave the run no model, the run fails with this message, which names the section whose round had no model and ends with the line of the `models.infer` call (see [Where an error points](16-limits-and-errors.md#where-an-error-points)):
 
 ````text
-model binding required for section Only (at unselected.md:14)
+model binding required for section Only (at unselected.md:12)
 ````
 
 This is the missing-model error, covered in [Infer errors and the missing-model error](#infer-errors-and-the-missing-model-error). On a Host that gives the run a model, the same prompt runs as `hello` does.
@@ -105,8 +101,6 @@ name: word
 description: Returns its own prose without a model.
 runvil: 0
 ---
-
-# Word
 
 ## Main
 
@@ -140,8 +134,6 @@ models:
   fast:
     thinking: false
 ---
-
-# Research
 
 ## Main
 
@@ -233,8 +225,6 @@ models:
     thinking: false
 ---
 
-# Boiling point
-
 ```lua
 models.use('fast')
 ```
@@ -248,7 +238,7 @@ return models.infer(prose)
 ```
 ````
 
-The `fast` role declares `thinking: false`, so the run checks that the model filling `fast` can run with thinking turned off, and every round on `fast` asks for thinking off, including the round in `Ask`. That round reaches `fast` through the `models.use('fast')` call in the H1 body, because the choice lasts for the rest of the chain (see [The current model](#the-current-model)).
+The `fast` role declares `thinking: false`, so the run checks that the model filling `fast` can run with thinking turned off, and every round on `fast` asks for thinking off, including the round in `Ask`. That round reaches `fast` through the `models.use('fast')` call in the preamble, because the choice lasts for the rest of the chain (see [The current model](#the-current-model)).
 
 ### Thinking modes
 
@@ -270,7 +260,7 @@ The switch is fixed once per run from the role's declaration, when the run fills
 
 The switch takes effect on a model that can switch thinking per request. A fixed-mode model only ever runs with a matching switch, because `thinking: true` on a `never` model and `thinking: false` on an `always` model refuse the run on its first step.
 
-A role with `thinking: false` sends every request with thinking off, whether a section picks the role with `models.use` or the chain reaches it from an earlier section, and including when the model filling the role is `switchable`. In `boiling-point` above, the H1 body's `models.use('fast')` puts the chain on `fast`, and the round in `Ask` runs there, yet it still asks for thinking off.
+A role with `thinking: false` sends every request with thinking off, whether a section picks the role with `models.use` or the chain reaches it from an earlier section, and including when the model filling the role is `switchable`. In `boiling-point` above, the preamble's `models.use('fast')` puts the chain on `fast`, and the round in `Ask` runs there, yet it still asks for thinking off.
 
 ## How the Host fills and checks roles
 
@@ -287,8 +277,6 @@ models:
   small:
     thinking: false
 ---
-
-# Two roles
 
 ## Main
 
@@ -371,8 +359,6 @@ models:
     thinking: true
 ---
 
-# Analysis
-
 ## Main
 
 ```lua
@@ -428,8 +414,6 @@ models:
     min_context: 200000
 ---
 
-# Unread
-
 This prose is never sent to a model.
 
 ## Main
@@ -445,7 +429,7 @@ On a Host that gives no model, the run returns:
 ok
 ````
 
-When the Host gives no model, its role map is empty, so the run fills no role and checks no requirement, and even a role with `min_context` does not stop the run from starting. This prompt declares a requirement on `strong`, but no section asks a model for a reply and its H1 prose is never read by a model, so the run still succeeds.
+When the Host gives no model, its role map is empty, so the run fills no role and checks no requirement, and even a role with `min_context` does not stop the run from starting. This prompt declares a requirement on `strong`, but no section asks a model for a reply, and the line above `Main` sits in a [preamble](02-file-structure.md#the-preamble) with no Lua, so it is commentary that nothing reads. The run therefore still succeeds.
 
 Nothing refuses the run in this case, and every role stays empty. Selecting a role with `models.use` or `models.get` then raises an error that names the role, and `models.current()` raises its own, where the caller in both is the Host:
 
@@ -463,11 +447,9 @@ After this section you can say which model a round runs on, read it back, and te
 ````markdown
 ---
 name: current
-description: Switches model in the H1 body and reads it in a section.
+description: Switches model in the preamble and reads it in a section.
 runvil: 0
 ---
-
-# Current
 
 ```lua
 models.use('strong')
@@ -484,7 +466,7 @@ return models.current().name
 strong
 ````
 
-The current model is the model a round runs on when the call names none, such as `models.infer(prose)`. `models.use` sets it and `models.current()` reads it. It belongs to a chain, not to a section: the H1 body's `models.use('strong')` set it, and `Check`, a different section, still sees it.
+The current model is the model a round runs on when the call names none, such as `models.infer(prose)`. `models.use` sets it and `models.current()` reads it. It belongs to a chain, not to a section: the preamble's `models.use('strong')` set it, and `Check`, a different section, still sees it.
 
 A chain is a walk with its own entries (see [The main walk as a chain](04-how-a-prompt-runs.md#the-main-walk-as-a-chain)). The main walk is one chain, a section run through `call` begins another, and each spawned task is a chain of its own.
 
@@ -492,8 +474,7 @@ A chain is a walk with its own entries (see [The main walk as a chain](04-how-a-
 
 Each chain starts on a model the run decides when it begins:
 
-- The H1 pass starts on the `default` role's model, or on no model when the Host gave none.
-- The main walk starts on the model the H1 pass ended on. A `models.use` in an H1 block therefore chooses the model for every section the walk enters, as `current` shows, and a prompt with no H1 pass starts its walk on `default`. A `jump` out of the H1 body hands its model to the walk the same way, and a `jump` between sections stays in one chain, so it keeps the current model.
+- The main walk, which is the root chain, starts on the `default` role's model, or on no model when the Host gave none. A `models.use` lasts for the rest of its chain, so one in the preamble chooses the model for every section the walk enters after it, as `current` shows, because the preamble and those sections are entries of the same chain. A `jump` between sections stays in one chain too, so it keeps the current model.
 - A section run through `call` starts on a copy of its caller's current model, taken when the `call` is dispatched.
 - A spawned task starts on a copy of its spawner's current model, taken when the spawn is dispatched. Every fanout arm is a spawned task, so arms start the same way.
 
@@ -509,8 +490,6 @@ name: restore
 description: Switches to the creative role and back.
 runvil: 0
 ---
-
-# Restore
 
 ## Main
 
@@ -539,8 +518,6 @@ name: children
 description: Shows that a child's switch never reaches its parent.
 runvil: 0
 ---
-
-# Children
 
 ## Main
 
@@ -580,8 +557,6 @@ description: Drafts a tagline on the creative role and critiques it on the stron
 runvil: 0
 ---
 
-# Tagline
-
 ## Draft
 
 ```lua
@@ -619,8 +594,6 @@ name: label-check
 description: Reads a selected role's label and name.
 runvil: 0
 ---
-
-# Label check
 
 ## Main
 
@@ -682,12 +655,12 @@ A role name starts from the role's own binding, which has no sampling options, s
 A round that names no model runs on the chain's current model, which is picked in a fixed order:
 
 1. The chain's latest `models.use`.
-2. Otherwise, the model the chain started on (see [Where a chain starts](#where-a-chain-starts)): the `default` role's model for the H1 pass and the main walk, and a copy of the parent's current model for a `call` child, a spawned task, or a fanout arm.
+2. Otherwise, the model the chain started on (see [Where a chain starts](#where-a-chain-starts)): the `default` role's model for the main walk, and a copy of the parent's current model for a `call` child, a spawned task, or a fanout arm.
 3. Otherwise, no model at all, which happens only when the Host gave the run none.
 
 A round that names a model with a handle, as in `models.infer(handle, prompt)`, runs on that handle and leaves the current model alone.
 
-A `models.use` selection lasts until the next `models.use` in its chain. It reaches the sections that follow, including the options it set, so a later section's rounds send the same `temperature` and `max_tokens` until a plain `models.use(role)` replaces the selection. A `models.use` call in the H1 body selects for the H1 pass and for every section the walk enters afterward, because the walk starts on the model the H1 pass ended on. [When a prompt needs a role](#when-a-prompt-needs-a-role) covers the one case where a round has no model.
+A `models.use` selection lasts until the next `models.use` in its chain. It reaches the sections that follow, including the options it set, so a later section's rounds send the same `temperature` and `max_tokens` until a plain `models.use(role)` replaces the selection. A `models.use` call in the preamble selects for the rest of the preamble and for every section the walk enters afterward, because the preamble and those sections are entries of the same chain. [When a prompt needs a role](#when-a-prompt-needs-a-role) covers the one case where a round has no model.
 
 ### The effective model
 
@@ -706,8 +679,6 @@ description: Catches the selection of a name that is not a role.
 runvil: 0
 ---
 
-# Ghost
-
 ## Main
 
 ```lua
@@ -717,7 +688,7 @@ return err.kind .. '|' .. tostring(err)
 ````
 
 ````text
-lua|ghost.md:12: models.use label "reviewer" is not a model role: expected default, strong, small, fast or creative. The Lua code failed at runtime. Fix the code at this location.
+lua|ghost.md:10: models.use label "reviewer" is not a model role: expected default, strong, small, fast or creative. The Lua code failed at runtime. Fix the code at this location.
 ````
 
 `models.use` rejects a call in these ways, each with an error value of kind `lua`:
@@ -733,7 +704,7 @@ In the first row, `{type}` is the Lua type name of the value given, where intege
 
 `models.use` checks its target first and its options second, and it records the selection only after every check passes. So an unknown role name is reported even when the options are also bad, and a rejected call leaves the chain's current model unchanged. [Sampling option errors](#sampling-option-errors) lists the option messages.
 
-An uncaught `models.use` rejection ends the run with error code `lua_runtime`, like any other Lua runtime failure, except in a `lua` fence of the H1 body, where an uncaught `lua_runtime` failure fails the hard gate, ending the run with `requirements_unmet` and keeping the rejection as its cause (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)).
+An uncaught `models.use` rejection ends the run with error code `lua_runtime`, like any other Lua runtime failure.
 
 ## Sampling options on `models.use`
 
@@ -745,8 +716,6 @@ name: slogan
 description: Writes a bakery slogan at a low temperature
 runvil: 0
 ---
-
-# Slogan
 
 ## Write
 
@@ -883,8 +852,6 @@ models:
     thinking: true
 ---
 
-# Inspect
-
 ## Look
 
 ```lua
@@ -942,8 +909,6 @@ description: Asks the strong role while the chain stays on the default role
 runvil: 0
 ---
 
-# Second opinion
-
 ## Check
 
 ```lua
@@ -972,8 +937,6 @@ description: Asks the strong role without switching to it
 runvil: 0
 ---
 
-# Review
-
 ## Ask
 
 ```lua
@@ -993,8 +956,6 @@ name: bread-review
 description: Drafts on the default role and checks on the strong role
 runvil: 0
 ---
-
-# Review
 
 ## Draft
 
@@ -1022,8 +983,6 @@ description: Asks whichever role the argument string names
 runvil: 0
 ---
 
-# Ask role
-
 ## Ask
 
 Say hello.
@@ -1040,7 +999,7 @@ return models.infer(h, prose)
 The role name arrives as the run's argument string in `args` (see [The argument string in `args`](06-arguments.md#the-argument-string-in-args)). With the argument string `strong`, the block runs one round on the `strong` role. In a run without a Host-state snapshot, the argument string `reviewer` names none of the five roles, `pcall` catches the failure, and the block falls back instead of failing:
 
 ````text
-unknown role: ask-role.md:14: models.get label "reviewer" is not a model role: expected default, strong, small, fast or creative. The Lua code failed at runtime. Fix the code at this location.
+unknown role: ask-role.md:12: models.get label "reviewer" is not a model role: expected default, strong, small, fast or creative. The Lua code failed at runtime. Fix the code at this location.
 ````
 
 A failing `models.get` call caught by `pcall` or `xpcall` yields an error value whose `kind` is `lua`, whose `message` is the file and line of the call, then the rejection text, then the fixed prose for a Lua runtime failure, and whose `tostring` is that message. An `xpcall` handler sees the same error value.
@@ -1053,8 +1012,6 @@ name: raw-id
 description: Reads a handle for a raw model id
 runvil: 0
 ---
-
-# Raw id
 
 ## Look
 
@@ -1113,8 +1070,6 @@ name: bakery
 description: Asks the model for a bakery slogan
 runvil: 0
 ---
-
-# Bakery
 
 ## Write
 
@@ -1204,8 +1159,6 @@ description: Falls back when a model round fails
 runvil: 0
 ---
 
-# Careful
-
 ## Write
 
 Write a slogan for a bakery.
@@ -1253,7 +1206,7 @@ An infer round that fails at the model, such as a transport or backend failure, 
 
 ### When a section has no model
 
-The missing-model error is the error a model round raises when the chain it runs in has no model. A chain starts on the `default` role's model, so this happens only when the Host gave the run no model (see [When the Host gives no model](#when-the-host-gives-no-model)), which is why the `unselected` prompt in [When a prompt needs a role](#when-a-prompt-needs-a-role) fails with `model binding required for section Only` on such a Host. Only `models.infer` and `models.loop` raise it, and only when they name no model handle. Its own text is `model binding required for section {section}`, where `{section}` is the section name, such as `Only` or `Worker`, or the prompt's H1 title for a round in the H1 pass. Left uncaught, it fails the run with error code `model_required` and that text as the message, ending with the line of the `models.infer` or `models.loop` call. Raised in a fanout arm, it fails both the fanout and the run.
+The missing-model error is the error a model round raises when the chain it runs in has no model. A chain starts on the `default` role's model, so this happens only when the Host gave the run no model (see [When the Host gives no model](#when-the-host-gives-no-model)), which is why the `unselected` prompt in [When a prompt needs a role](#when-a-prompt-needs-a-role) fails with `model binding required for section Only` on such a Host. Only `models.infer` and `models.loop` raise it, and only when they name no model handle. Its own text is `model binding required for section {section}`, where `{section}` is the section name, such as `Only` or `Worker`. The preamble's name is the empty string, so a round there leaves `{section}` empty. Left uncaught, it fails the run with error code `model_required` and that text as the message, ending with the line of the `models.infer` or `models.loop` call. Raised in a fanout arm, it fails both the fanout and the run.
 
 The missing-model error reaches the call as its answer, so `pcall` catches it as an error value of kind `model_required` and a block can fall back instead of failing. The caught value's message is the call's file and line, then the fixed prose ``The round has no model. Select a model before `models.infer` or `models.loop`, or bind a default model.``, so it does not name the section. On a Host that gave the run no model, `careful` returns:
 
@@ -1277,8 +1230,6 @@ name: greet-events
 description: Makes one infer round on the default role
 runvil: 0
 ---
-
-# Greet events
 
 ## Greet
 

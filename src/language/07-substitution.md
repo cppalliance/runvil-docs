@@ -13,8 +13,6 @@ description: Greets the argument string
 runvil: 0
 ---
 
-# Greet
-
 ## Main
 
 hi {{ args }}!
@@ -64,8 +62,6 @@ description: Shows that Lua source keeps its braces
 runvil: 0
 ---
 
-# Literal
-
 ## Main
 
 ```lua
@@ -89,8 +85,6 @@ name: subject
 description: Writes about the argument string
 runvil: 0
 ---
-
-# Subject
 
 ## Main
 
@@ -140,8 +134,6 @@ description: Reads prose that names an unset global
 runvil: 0
 ---
 
-# Ghost
-
 ## Main
 
 {{ ghost }} here.
@@ -163,8 +155,6 @@ name: cell
 description: Reads a nested value with a dotted path
 runvil: 0
 ---
-
-# Cell
 
 ## Main
 
@@ -210,8 +200,6 @@ description: Reads a key that contains a space
 runvil: 0
 ---
 
-# Spaced
-
 ## Main
 
 ```lua
@@ -249,8 +237,6 @@ name: full_name
 description: Joins two names in Lua before the prose reads them
 runvil: 0
 ---
-
-# Full name
 
 ## Main
 
@@ -305,8 +291,6 @@ description: Renders values the prologue stored in var
 runvil: 0
 ---
 
-# Paper
-
 ## Main
 
 ```lua
@@ -333,16 +317,14 @@ The placeholder resolves against values set by Lua blocks that already ran. A va
 
 ### Values from earlier on the walk
 
-A `var` placeholder can insert a value that the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) or an earlier section on the walk wrote, because each section entry starts with the walk's current `var` and the render reads that table:
+A `var` placeholder can insert a value that an earlier section on the [walk](04-how-a-prompt-runs.md#the-section-walk) wrote, because each section entry starts with the walk's current `var` and the render reads that table. Here the earlier section is the [preamble](02-file-structure.md#the-preamble), the text between the frontmatter and the first heading, which runs as the first top-level section when it holds Lua:
 
 ````markdown
 ---
 name: plan
-description: Renders a value the H1 pass stored
+description: Renders a value the preamble stored
 runvil: 0
 ---
-
-# Plan
 
 ```lua
 var.topic = args
@@ -404,9 +386,9 @@ Once the section entry has made its first tool call (see [Calling tools from Lua
 
 When a block reads `prose`, each `var` placeholder renders from the section entry's own `var` table as it stands at the first read, so a later change such as `var.word = 'changed'` does not change the text that later reads return. `sys` is read as it stands at that same moment, and the read sees the live `sys`, so a `sys` field the run adds after the Lua block starts but before that first read, such as `sys.model` after a tool call, is visible in the rendered text. [When substitution happens](#when-substitution-happens) covers this timing in full.
 
-### `var` in H1 body prose
+### `var` in preamble prose
 
-Prose in the [H1 body](02-file-structure.md#the-h1-title-and-h1-body) can use `{{ var.key }}` too. When an H1 block reads `prose`, the placeholder renders from the `var` values the H1 blocks have written so far.
+Prose in the [preamble](02-file-structure.md#the-preamble) can use `{{ var.key }}` too. When a Lua block of the preamble reads `prose`, the placeholder renders from the `var` values the preamble's blocks have written so far.
 
 ## Inserting arguments with `args` and `argv`
 
@@ -419,8 +401,6 @@ description: Inserts the argument string exactly as passed
 runvil: 0
 args: { query: { type: string } }
 ---
-
-# Raw
 
 ## Main
 
@@ -450,8 +430,6 @@ description: Inserts the parsed arguments whole and by field
 runvil: 0
 args: { query: { type: string } }
 ---
-
-# Query
 
 ## Main
 
@@ -491,8 +469,6 @@ description: Shows argv under the default declaration
 runvil: 0
 ---
 
-# Wrapped
-
 ## Main
 
 {{ argv.prose }} / {{ argv }}
@@ -516,7 +492,7 @@ Here `argv.prose` and `args` both equal `'hello there'`.
 
 ### When `argv` is nil
 
-Under an explicit declaration, `argv` is nil for substitution when the argument string does not parse as JSON, when it is the JSON `null`, or when the H1 pass leaves `argv` nil, so the argument strings `not json` and `null` both leave a nil `argv` under a `query` declaration. The default declaration always wraps the string instead. An `argv` placeholder never renders an empty string for a nil `argv`: `{{ argv }}` and every `{{ argv.field }}` fail with substitution kind `NilArgv`, the kind for a nil `argv` (see [Freezing `argv` after the H1 pass](06-arguments.md#freezing-argv-after-the-h1-pass)), with a message of the form `{{ {path} }} is nil (argv holds no value)` that uses the placeholder's own path. Check `argv` in Lua first and read `prose` only when the argument string parsed:
+Under an explicit declaration, `argv` is nil for substitution when the argument string does not parse as JSON or when it is the JSON `null`, so the argument strings `not json` and `null` both leave a nil `argv` under a `query` declaration. The default declaration always wraps the string instead. An `argv` placeholder never renders an empty string for a nil `argv`: `{{ argv }}` and every `{{ argv.field }}` fail with substitution kind `NilArgv`, the kind for a nil `argv` (see [`argv` is read-only](06-arguments.md#argv-is-read-only) for what a prompt does about malformed input), with a message of the form `{{ {path} }} is nil (argv holds no value)` that uses the placeholder's own path. Check `argv` in Lua first and read `prose` only when the argument string parsed:
 
 ````markdown
 ---
@@ -525,8 +501,6 @@ description: Falls back when the argument string does not parse
 runvil: 0
 args: { query: { type: string } }
 ---
-
-# Guarded
 
 ## Main
 
@@ -552,27 +526,23 @@ Value: {"query":"x"}
 
 Without the guard, the read of `prose` under `not json` fails with an error naming `argv`, `{{ argv }} is nil (argv holds no value)`. The guard works because prose that a block never reads never renders, so even prose holding an unclosed `{{` or a missing key runs clean when the block never reads `prose`.
 
-### The frozen `argv` and H1 repair
-
-In every section after the H1 pass, both `argv` placeholder forms render the same frozen `argv` that the section's Lua reads. An `argv` repaired in the H1 body (see [Checking and repairing `argv` in the H1 pass](06-arguments.md#checking-and-repairing-argv-in-the-h1-pass)) reaches substitution from the first walked section on:
+### `argv` in placeholders
 
 ````markdown
 ---
-name: repaired
-description: Repairs argv in the H1 pass before a section renders it
+name: fallback
+description: Keeps its own query in var when the argument string does not parse
 runvil: 0
 args: { query: { type: string } }
 ---
 
-# Repaired
-
 ```lua
-if not argv then argv = { query = 'repaired' } end
+if argv then var.query = argv.query else var.query = 'everything' end
 ```
 
 ## First
 
-Query: {{ argv.query }}
+Query: {{ var.query }}
 
 ```lua
 return prose
@@ -582,10 +552,12 @@ return prose
 Run with the argument string `broken input`, the run result is:
 
 ````text
-Query: repaired
+Query: everything
 ````
 
-The section's Lua sees `argv.query == 'repaired'`, and its prose renders the same value. The H1 body's own prose still sees the parse of the run's argument string, because the repaired `argv` takes effect only when the H1 pass ends, and placeholders read `argv` from the [chain](04-how-a-prompt-runs.md#the-section-walk), not from the Lua `argv` global.
+Run with the argument string `{"query":"papers"}`, the run result is `Query: papers`.
+
+Both `argv` placeholder forms read the parsed input, the same value the section's Lua reads from `argv`. No code can change that value, because `argv` is read-only in every section (see [`argv` is read-only](06-arguments.md#argv-is-read-only)), so `{{ argv.query }}` renders the `query` the argument string gave, and fails when the argument string gave none. A prompt that builds its own input keeps it in `var` and writes `{{ var.query }}`, as this one does: its preamble copies `argv.query` into `var.query` when the argument string parsed and stores a query of its own when it did not, and the prose of `First` renders whichever value `var` holds.
 
 ### Arguments in called chains and tasks
 
@@ -597,8 +569,6 @@ name: chains
 description: Shows the argument string a called chain sees
 runvil: 0
 ---
-
-# Chains
 
 ## Main
 
@@ -639,7 +609,7 @@ return prose
 ```
 ````
 
-Such a chain also keeps its starter's frozen `argv`, H1 repair included, so `{{ argv }}` there renders the repaired value rather than a fresh parse of the argument string. With the H1 block setting `argv = { query = 'repaired' }` and `Main` running `call('../Sub')` under the argument string `broken`, `Sub` sees `argv.query == 'repaired'`. Every section of a task started by [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) with an `input` option sees that string through `{{ args }}` and `{{ argv }}`, as a `call` given an argument string does, so `tasks.spawn('../Child', ...)` with `input = 'child args'` among its options gives `Child` the argument string `child args`.
+Such a chain also keeps its starter's `argv`, so `{{ argv }}` there renders the same parsed value as in the chain that started it. Every section of a task started by [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) with an `input` option sees that string through `{{ args }}` and `{{ argv }}`, as a `call` given an argument string does, so `tasks.spawn('../Child', ...)` with `input = 'child args'` among its options gives `Child` the argument string `child args`.
 
 ### Placeholders ignore the `args` and `argv` globals
 
@@ -651,8 +621,6 @@ name: original
 description: Shows that reassigning args leaves the placeholder alone
 runvil: 0
 ---
-
-# Original
 
 ## Main
 
@@ -682,8 +650,6 @@ name: topics
 description: Renders each member into the worker section's prose
 runvil: 0
 ---
-
-# Topics
 
 ## Parent
 
@@ -730,8 +696,6 @@ name: pairs
 description: Renders a table member as compact JSON
 runvil: 0
 ---
-
-# Pairs
 
 ## Parent
 
@@ -794,8 +758,6 @@ description: Reads an item where none is seeded
 runvil: 0
 ---
 
-# No item
-
 ## Main
 
 Ask about {{ item }}.
@@ -817,8 +779,6 @@ name: globals
 description: Renders Lua globals set in an earlier block
 runvil: 0
 ---
-
-# Globals
 
 ## Main
 
@@ -863,8 +823,6 @@ description: Renders a library's prose with the calling section entry's globals
 runvil: 0
 ---
 
-# Style
-
 ## Main
 
 ```lua
@@ -906,8 +864,6 @@ description: Names a global that holds a function
 runvil: 0
 ---
 
-# Not data
-
 ## Main
 
 ```lua
@@ -924,7 +880,7 @@ return prose
 The run fails with this message, which gives the substitution's own text in the form `{message} [Serialize at byte {offset}]`, then the reason the lookup gave, then the placeholder's line:
 
 ````text
-global 'f' in {{ f }} is not JSON data [Serialize at byte 5]: global `f` is a function; bare globals in prose must be JSON data (at not_data.md:15)
+global 'f' in {{ f }} is not JSON data [Serialize at byte 5]: global `f` is a function; bare globals in prose must be JSON data (at not_data.md:13)
 ````
 
 A caught error value names neither the Lua type nor the lookup's reason, so when `tostring(err)` says `is not JSON data`, check what the global holds.
@@ -943,8 +899,6 @@ name: render
 description: Renders one value of each type
 runvil: 0
 ---
-
-# Render
 
 ## Main
 
@@ -1004,8 +958,6 @@ description: Sets a value after the prose but before the read
 runvil: 0
 ---
 
-# Lazy
-
 ## Main
 
 The word is {{ var.word }}.
@@ -1055,8 +1007,6 @@ description: Renders two prose blocks against different values
 runvil: 0
 ---
 
-# Pairs of fences
-
 ## Main
 
 ```lua
@@ -1098,8 +1048,6 @@ description: Leaves broken placeholders unread
 runvil: 0
 ---
 
-# Unread
-
 ## Main
 
 An unclosed {{ placeholder and a {{ var.missing }} key.
@@ -1117,22 +1065,20 @@ The run result is:
 ok
 ````
 
-Markdown that no Lua block reads through `prose` never renders, so a malformed or unresolvable placeholder in it causes no error, and the prompt still loads and runs. Neither placeholder above the block is evaluated, because the block never reads `prose`. The same holds for prose after a section's last Lua fence, like the trailing line here, and for prose in a section with no Lua fence after it, such as a section `First` that holds only `{{ var.missing }} is never read here.` Unread prose in the H1 body is discarded when the H1 pass ends, even when a placeholder in it would fail or render empty, such as `{{ var.omit }}` after `var.omit = ''`.
+Markdown that no Lua block reads through `prose` never renders, so a malformed or unresolvable placeholder in it causes no error, and the prompt still loads and runs. Neither placeholder above the block is evaluated, because the block never reads `prose`. The same holds for prose after a section's last Lua fence, like the trailing line here, and for prose in a section with no Lua fence after it, such as a section `First` that holds only `{{ var.missing }} is never read here.` The preamble follows the same rule: prose there that no block reads never renders, even when a placeholder in it would fail or render empty, such as `{{ var.omit }}` after `var.omit = ''`.
 
 ### Parsing keeps placeholders
 
-Parsing keeps every placeholder exactly as written, and nothing renders until the run reads `prose`. A section whose own text ends with `{{ x }}` parses with no substitution error for the unknown `x`. Even when a Lua block before the prose sets `var.before`, the parsed prose is still literally `Ask about {{ var.before }}.`, and during the run a placeholder resolves against the values as set just before the block's read. A placeholder in H1 prose stays verbatim in the parsed prompt too, as in `Plan {{ args }}.`, and so does `Write about {{ var.subject }}.` in a section.
+Parsing keeps every placeholder exactly as written, and nothing renders until the run reads `prose`. A section whose own text ends with `{{ x }}` parses with no substitution error for the unknown `x`. Even when a Lua block before the prose sets `var.before`, the parsed prose is still literally `Ask about {{ var.before }}.`, and during the run a placeholder resolves against the values as set just before the block's read. A placeholder in preamble prose stays verbatim in the parsed prompt too, as in `Plan {{ args }}.`, and so does `Write about {{ var.subject }}.` in a section.
 
-### Prose in the H1 body
+### Prose in the preamble
 
 ````markdown
 ---
 name: outline
-description: Renders H1 body prose from values the H1 pass set
+description: Renders preamble prose from values the preamble set
 runvil: 0
 ---
-
-# Outline
 
 ```lua
 var.topic = args
@@ -1157,7 +1103,7 @@ Run with the argument string `rivers`, the run result is:
 Outline rivers.
 ````
 
-Prose in the H1 body, the blocks under the prompt's title, is substituted the same way as any section's prose when a block in the H1 body reads `prose`, and its placeholders render from the `var` values the H1 blocks have written so far. An H1 block can also send its own pending prose to a model, as `var.h1 = models.infer(prose)` does.
+Prose in the preamble is the pending prose of the preamble's next Lua block, so it is substituted the same way as any section's prose when that block reads `prose`, and its placeholders render from the `var` values the preamble's blocks have written so far. A preamble block can also send its own pending prose to a model, as `var.intro = models.infer(prose)` does.
 
 ### Library prose under `require`
 
@@ -1175,8 +1121,6 @@ name: escapes
 description: Writes literal braces and a backslash
 runvil: 0
 ---
-
-# Escapes
 
 ## Main
 
@@ -1236,8 +1180,6 @@ description: Inserts a value that looks like a placeholder
 runvil: 0
 ---
 
-# Payload
-
 ## Main
 
 ```lua
@@ -1269,8 +1211,6 @@ name: unclosed
 description: Leaves a placeholder open
 runvil: 0
 ---
-
-# Unclosed
 
 ## Main
 
@@ -1329,8 +1269,6 @@ description: Names prose inside its own prose
 runvil: 0
 ---
 
-# Recursion
-
 ## Main
 
 Recursion: {{ prose }}.
@@ -1359,8 +1297,6 @@ name: caught
 description: Catches a failed prose read
 runvil: 0
 ---
-
-# Caught
 
 ## Main
 
@@ -1393,10 +1329,10 @@ return err.kind .. ' | ' .. err.message
 The run result is:
 
 ````text
-lua | caught.md:11: missing {{ var.missing }}. A placeholder in the section's prose could not be filled. Fix the placeholder, or set the value it reads before the prose is read.
+lua | caught.md:9: missing {{ var.missing }}. A placeholder in the section's prose could not be filled. Fix the placeholder, or set the value it reads before the prose is read.
 ````
 
-A caught substitution failure gives an error value whose error kind, its `kind` field, is always `lua`, whatever its substitution kind. Its `message` field, which `tostring(err)` also returns, starts with the file and line of the failing placeholder, here `caught.md:11`, the line of `Missing: {{ var.missing }}.` rather than the line of the `prose` read (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). It goes on to name what failed and ends with the fixed prose for a failed substitution. It leaves out the substitution kind, here `MissingKey`, and the byte offset, which only the run's failure message shows (see [The error text](#the-error-text)), and the error value has no field for the substitution kind, the path, or the offset. Its `code` is `substitution` whatever the substitution kind.
+A caught substitution failure gives an error value whose error kind, its `kind` field, is always `lua`, whatever its substitution kind. Its `message` field, which `tostring(err)` also returns, starts with the file and line of the failing placeholder, here `caught.md:9`, the line of `Missing: {{ var.missing }}.` rather than the line of the `prose` read (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). It goes on to name what failed and ends with the fixed prose for a failed substitution. It leaves out the substitution kind, here `MissingKey`, and the byte offset, which only the run's failure message shows (see [The error text](#the-error-text)), and the error value has no field for the substitution kind, the path, or the offset. Its `code` is `substitution` whatever the substitution kind.
 
 ### The error text
 
@@ -1412,8 +1348,6 @@ name: offset
 description: Shows where a byte offset counts from
 runvil: 0
 ---
-
-# Offset
 
 ## Main
 
@@ -1431,10 +1365,10 @@ return prose
 The run fails with this message:
 
 ````text
-unknown namespace or global 'ghost' in {{ ghost.x }} [UnknownNamespace at byte 7] (at offset.md:15)
+unknown namespace or global 'ghost' in {{ ghost.x }} [UnknownNamespace at byte 7] (at offset.md:13)
 ````
 
-The thematic break starts fresh pending prose, so `Draft notes.` is not counted, and the offset is 7, just past `prefix `, while the line, 15, counts from the top of the file. A body of `Draft notes.`, a `---` break, and `Ask the question.` before a fence leaves pending prose of exactly `Ask the question.` in the same way.
+The thematic break starts fresh pending prose, so `Draft notes.` is not counted, and the offset is 7, just past `prefix `, while the line, 13, counts from the top of the file. A body of `Draft notes.`, a `---` break, and `Ask the question.` before a fence leaves pending prose of exactly `Ask the question.` in the same way.
 
 ### How messages quote a path
 
@@ -1442,16 +1376,14 @@ When a substitution error message quotes the placeholder, it prints the path tri
 
 ### When a failure goes uncaught
 
-An uncaught substitution failure raised by reading `prose` fails the run with error code `substitution`. The run's error message is the substitution's own text, which names the failing placeholder, followed by the placeholder's location, so with `return prose` in place of the block in the `caught` prompt, the run fails with `missing {{ var.missing }} [MissingKey at byte 9] (at caught.md:11)`. The H1 pass is no exception, because a failed substitution never counts as a failed [H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate):
+An uncaught substitution failure raised by reading `prose` fails the run with error code `substitution`. The run's error message is the substitution's own text, which names the failing placeholder, followed by the placeholder's location, so with `return prose` in place of the block in the `caught` prompt, the run fails with `missing {{ var.missing }} [MissingKey at byte 9] (at caught.md:9)`. A read in the preamble fails the same way:
 
 ````markdown
 ---
-name: gate
-description: Fails a prose read in the H1 pass
+name: early
+description: Fails a prose read in the preamble
 runvil: 0
 ---
-
-# Gate
 
 Missing: {{ var.missing }}.
 
@@ -1466,10 +1398,10 @@ return var.text
 ```
 ````
 
-The run fails with error code `substitution` and this message, which points at the placeholder's line in the H1 body:
+The run fails with error code `substitution` and this message, which points at the placeholder's line in the preamble:
 
 ````text
-missing {{ var.missing }} [MissingKey at byte 9] (at gate.md:9)
+missing {{ var.missing }} [MissingKey at byte 9] (at early.md:7)
 ````
 
-Unlike a failed H1 gate, the message has no [requirements notice](04-how-a-prompt-runs.md#the-requirements-notice) in front. An uncaught substitution failure ends the run with `substitution` wherever the `prose` read happens.
+An uncaught substitution failure ends the run with `substitution` wherever the `prose` read happens.

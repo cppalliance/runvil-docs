@@ -13,8 +13,6 @@ description: Calls a child section for a value, then jumps past a sibling.
 runvil: 0
 ---
 
-# Jump and call
-
 ## Check
 
 ```lua
@@ -71,8 +69,6 @@ description: Calls a child section that falls through to its next sibling.
 runvil: 0
 ---
 
-# Call child
-
 ## Main
 
 ```lua
@@ -110,8 +106,6 @@ description: Shows that the walk skips a child section.
 runvil: 0
 ---
 
-# Child stays put
-
 ## A
 
 ```lua
@@ -147,8 +141,6 @@ name: levels
 description: Calls a child section by its section path.
 runvil: 0
 ---
-
-# Levels
 
 ## Main
 
@@ -204,7 +196,7 @@ A path is looked up when the call runs, not when the prompt is parsed. A prompt 
 A relative path starts at the section its code is written in:
 
 - A section's own blocks start at that section, which is the one that is running. A called chain, a task, and a fanout arm each run a section of their own, and each starts from it.
-- A block in the H1 body starts at the H1. The top-level sections are its children, and it has no siblings (see [Jump and call in the H1 pass](#jump-and-call-in-the-h1-pass)).
+- A block in the [preamble](02-file-structure.md#the-preamble), the text between the frontmatter and the first heading, starts at the preamble. The other top-level sections are its siblings, and it has no children (see [Jump and call from the preamble](#jump-and-call-from-the-preamble)).
 - A library's code starts at the library section, both while the library loads and when its functions run later, whichever section is using the library (see [A library names its own sections](03-blocks-and-prose.md#a-library-names-its-own-sections)).
 
 `jump` is the one exception. It moves the walk of the section that is running, so its path starts at the running section even when the `jump` is written in a library.
@@ -246,8 +238,6 @@ description: Probes which sections a relative path can name.
 runvil: 0
 ---
 
-# Visible set
-
 ## Main
 
 ```lua
@@ -287,7 +277,7 @@ From `Main`, the paths `'../Sibling'`, `'../Other'`, and `'Kid'` each name a sec
 
 ### The visible set rule
 
-The visible set is the set of sections the two relative forms can name from a section: its sibling sections, not counting itself, plus its own direct children. `call`, `jump`, `tasks.spawn`, and `tasks.fanout` run a section and take only the relative forms, so each of them reaches only the visible set of the section it starts from. None of them has a way to write a parent, a grandchild, a sibling's child, or a cousin. In the H1 body the visible set is every top-level section and no nested section, so from the H1 body `call('Main')` runs the top-level `Main` and `call('Kid')` fails (see [Jump and call in the H1 pass](#jump-and-call-in-the-h1-pass)).
+The visible set is the set of sections the two relative forms can name from a section: its sibling sections, not counting itself, plus its own direct children. `call`, `jump`, `tasks.spawn`, and `tasks.fanout` run a section and take only the relative forms, so each of them reaches only the visible set of the section it starts from. None of them has a way to write a parent, a grandchild, a sibling's child, or a cousin. The preamble's visible set is every other top-level section, as its siblings, and no nested section, so from the preamble `call('../Main')` runs the top-level `Main` and `call('../Kid')` fails (see [Jump and call from the preamble](#jump-and-call-from-the-preamble)).
 
 So a top-level `A` can `jump('../B')` to a sibling or `jump('X')` to one of its own children. All four calls resolve a path through the same lookup, so from a given section they accept the same paths, and `pcall(tasks.spawn, '../Missing')` and `pcall(call, '../Missing')` fail with the same error text.
 
@@ -317,8 +307,6 @@ name: child-reach
 description: A child section calls its own child, then jumps to its sibling.
 runvil: 0
 ---
-
-# Child reach
 
 ## A
 
@@ -378,8 +366,6 @@ description: Calls a sibling that the section does not have.
 runvil: 0
 ---
 
-# Missing call
-
 ## Main
 
 ```lua
@@ -398,7 +384,7 @@ Other notes.
 The run fails with code `lua_runtime`. Its message is the not-found error's text, followed by the line of the `call`:
 
 ````text
-section `../Missing` not found: `/Main` has no sibling `Missing` (at missing-call.md:12)
+section `../Missing` not found: `/Main` has no sibling `Missing` (at missing-call.md:10)
 ````
 
 The not-found error's text always has this form:
@@ -416,7 +402,7 @@ section `{path}` not found: {where}
 | `'/Other/Missing'` | ``section `/Other/Missing` not found: `/Other` has no child `Missing` `` |
 | `'/Othr/Kid'` | ``section `/Othr/Kid` not found: the top level has no section `Othr` `` |
 
-A path from the top reports the step where it stopped, so the last row names `Othr` and never looks for `Kid`. In the H1 body a child is a top-level section and there are no siblings, so `call('Kid')` written there gives ``section `Kid` not found: the top level has no section `Kid` `` and `jump('../Main')` gives ``section `../Main` not found: the H1 has no siblings``.
+A path from the top reports the step where it stopped, so the last row names `Othr` and never looks for `Kid`. A relative path written in the preamble is searched from the preamble, which has no name and no path, so the message says `the preamble`: `call('Kid')` written there gives ``section `Kid` not found: the preamble has no child `Kid` `` and `jump('../Missing')` gives ``section `../Missing` not found: the preamble has no sibling `Missing` ``.
 
 The message tells the two relative forms apart, which makes two common mistakes easy to read. A sibling written without `../`, as in `call('Other')` from `Main`, reports that `/Main` has no child `Other`. A child written with `../`, as in `call('../Kid')`, reports that `/Main` has no sibling `Kid`.
 
@@ -429,7 +415,7 @@ Each call treats a path that names no section in one of two ways:
 - `call`, `jump`, `tasks.spawn`, `tasks.fanout`, `require`, and `prompt.section` raise the not-found error. For the same path searched from the same section, all of them raise the same text, so the `tasks.spawn` message is exactly the one `call` produces.
 - `prompt.section_or` returns `nil` without raising. So in a fanout worker section, `pcall(call, '../Parent')` fails with `not found` while `prompt.section_or('../Parent')` reads `nil`.
 
-`pcall(call, '../Missing')` returns `false` with a message containing ``section `../Missing` not found``. An uncaught not-found error in a walked section ends the run with code `lua_runtime`, as when an unresolved `jump('../Parent')` ends the run.
+`pcall(call, '../Missing')` returns `false` with a message containing ``section `../Missing` not found``. An uncaught not-found error in a section ends the run with code `lua_runtime`, as when an unresolved `jump('../Parent')` ends the run.
 
 ## Jumping to a section
 
@@ -441,8 +427,6 @@ name: sibling-move
 description: Jumps over a section to a later sibling.
 runvil: 0
 ---
-
-# Sibling move
 
 ## A
 
@@ -493,8 +477,6 @@ description: Jumps back to redraft until the draft has run three times.
 runvil: 0
 ---
 
-# Redraft
-
 ## Draft
 
 ```lua
@@ -525,8 +507,6 @@ name: jump-ends
 description: Shows that a jump skips the rest of its section.
 runvil: 0
 ---
-
-# Jump ends
 
 ## Check
 
@@ -568,8 +548,6 @@ description: Shows that only var reaches a jump target.
 runvil: 0
 ---
 
-# What crosses
-
 ## A
 
 ```lua
@@ -601,8 +579,6 @@ name: child-walk
 description: Jumps into a child level and returns to the parent level.
 runvil: 0
 ---
-
-# Child walk
 
 ## A
 
@@ -660,8 +636,6 @@ name: nested-walk
 description: Jumps two levels down and climbs back up.
 runvil: 0
 ---
-
-# Nested walk
 
 ## A
 
@@ -736,8 +710,6 @@ name: caught-jump
 description: Catches a jump with pcall and still lands on the target.
 runvil: 0
 ---
-
-# Caught jump
 
 ## A
 
@@ -817,8 +789,6 @@ description: Catches a handler's refused jump, then jumps from the block.
 runvil: 0
 ---
 
-# Refused jump
-
 ## Main
 
 ```lua
@@ -865,8 +835,6 @@ description: Calls a library function that jumps.
 runvil: 0
 ---
 
-# Library jump
-
 ## Main
 
 ```lua
@@ -904,8 +872,6 @@ description: Calls a subroutine section and uses its reply.
 runvil: 0
 ---
 
-# Research
-
 ## Main
 
 ```lua
@@ -938,8 +904,6 @@ name: call-chain
 description: Calls a section whose chain falls through to the next sibling.
 runvil: 0
 ---
-
-# Call chain
 
 ## A
 
@@ -995,8 +959,6 @@ description: Calls the same section twice.
 runvil: 0
 ---
 
-# Call twice
-
 ## Main
 
 ```lua
@@ -1026,8 +988,6 @@ name: call-nothing
 description: Calls a section that ends with no text.
 runvil: 0
 ---
-
-# Call nothing
 
 ## Main
 
@@ -1075,8 +1035,6 @@ name: call-later-child
 description: Calls the second of three children.
 runvil: 0
 ---
-
-# Call later child
 
 ## Main
 
@@ -1128,8 +1086,6 @@ name: jump-in-call
 description: A called section jumps to a later sibling.
 runvil: 0
 ---
-
-# Jump in call
 
 ## Main
 
@@ -1188,8 +1144,6 @@ description: Passes one section's text to the next as its call input.
 runvil: 0
 ---
 
-# Pipeline
-
 ## Main
 
 ```lua
@@ -1227,8 +1181,6 @@ description: A nested call with no call input inherits the chain's call input.
 runvil: 0
 ---
 
-# Inherit input
-
 ## Main
 
 ```lua
@@ -1252,13 +1204,13 @@ return 'Inner saw ' .. args
 Inner saw chain-args
 ````
 
-A `call` with the call input left out or passed as `nil` makes the called chain inherit the caller's arguments whole: both its `args` and its frozen [`argv`](06-arguments.md#reading-parsed-input-from-argv), including any [`argv` repair](06-arguments.md#checking-and-repairing-argv-in-the-h1-pass) the H1 made. With the run argument string `broken` and an H1 block that sets `argv = { query = 'repaired' }`, `argv.query` reads `repaired` in a `Sub` reached by `call('../Sub')`. A [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) without an argument string inherits the same way.
+A `call` with the call input left out or passed as `nil` makes the called chain inherit the caller's arguments whole: both its `args` and its [`argv`](06-arguments.md#reading-parsed-input-from-argv), which is [read-only](06-arguments.md#argv-is-read-only) in the called chain as it is in every section. In a run started with the argument string `{"query":"run"}`, under an `args:` declaration with a `query` field, `argv.query` reads `run` in a `Sub` reached by `call('../Sub')`. A [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) without an argument string inherits the same way.
 
 An empty string counts as a call input, so `call(path, '')` sets the called chain's `args` to `''` instead of inheriting the caller's argument string. Only a `nil` or missing call input inherits.
 
 ### `argv` in a called chain
 
-A call given its own call input gets a fresh `argv` built from that string under the prompt's `args:` declaration, and that `argv` is then [frozen](06-arguments.md#freezing-argv-after-the-h1-pass) for the whole chain:
+A call given its own call input gets a fresh `argv` built from that string under the prompt's `args:` declaration, and that `argv` is [read-only](06-arguments.md#argv-is-read-only) for the whole chain:
 
 ````markdown
 ---
@@ -1269,8 +1221,6 @@ args:
   query:
     type: string
 ---
-
-# Chain argv
 
 ## Main
 
@@ -1292,11 +1242,11 @@ Run with the argument string `{"query":"run"}`, the prompt returns:
 chain:false
 ````
 
-Inside `Sub`, `argv.query` reads `chain` from the call input, not `run` from the run's argument string. The chain's `argv` is frozen, so a field write such as `argv.query = 'x'` fails, and `pcall` catches it, leaving `wrote` false. How the call input becomes `argv` depends on the frontmatter:
+Inside `Sub`, `argv.query` reads `chain` from the call input, not `run` from the run's argument string. The chain's `argv` is read-only, so a field write such as `argv.query = 'x'` fails, and `pcall` catches it, leaving `wrote` false. How the call input becomes `argv` depends on the frontmatter:
 
 | Call input | `args` in the chain | `argv` in the chain |
 | --- | --- | --- |
-| Left out or `nil` | the caller's `args` | the caller's frozen `argv` |
+| Left out or `nil` | the caller's `args` | the caller's `argv` |
 | A string, no `args:` key | the string | the string as `argv.prose` (see [Prompts with no `args:` key](06-arguments.md#prompts-with-no-args-key)) |
 | A string, with an `args:` key | the string | the string parsed as JSON |
 | A string that is not JSON, or is JSON `null`, with an `args:` key | the string | `nil` |
@@ -1320,8 +1270,6 @@ name: var-snapshot
 description: A called section reads the caller's var but cannot write back.
 runvil: 0
 ---
-
-# Var snapshot
 
 ## Main
 
@@ -1368,8 +1316,6 @@ name: risky
 description: Falls back when a called section fails.
 runvil: 0
 ---
-
-# Risky
 
 ## Main
 
@@ -1433,8 +1379,6 @@ description: Two sections call each other until the depth cap stops them.
 runvil: 0
 ---
 
-# Ping pong
-
 ## Alpha
 
 ```lua
@@ -1451,7 +1395,7 @@ return call('../Alpha')
 The prompt parses and runs until the recursion depth cap fires, and then the run fails with code `call_depth_exceeded` and this message, which points at the `call` in `Alpha` that would have nested one level too deep:
 
 ````text
-recursion exceeded cap of 8 (at ping-pong.md:12)
+recursion exceeded cap of 8 (at ping-pong.md:10)
 ````
 
 ### Mutual recursion
@@ -1468,8 +1412,6 @@ name: caught-cap
 description: Catches the depth cap refusal and reports its kind.
 runvil: 0
 ---
-
-# Caught cap
 
 ## Alpha
 
@@ -1494,7 +1436,7 @@ caught lua
 
 ### How call depth counts
 
-Call depth is how many nested calls deep a section runs. A top-level section runs at call depth 0, which is why `Alpha` first runs at depth 0. Call depth accumulates through nested calls: each `call` runs the called section at its caller's depth plus one, and that called section keeps its depth, while the main walk of top-level sections always starts at depth 0. The [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) and the top-level section walk both start at the root call depth of 0, so `call` nesting and its cap count from there.
+Call depth is how many nested calls deep a section runs. A top-level section runs at call depth 0, which is why `Alpha` first runs at depth 0. Call depth accumulates through nested calls: each `call` runs the called section at its caller's depth plus one, and that called section keeps its depth, while the main walk of top-level sections always starts at depth 0. The [main walk](04-how-a-prompt-runs.md#the-section-walk) runs every top-level section, the preamble included, at the root call depth of 0, so `call` nesting and its cap count from there.
 
 The cap is 8. A section or fanout arm may run at depth 8, but nothing it starts may run at depth 9, so an arm already running at depth 8 cannot `call`. The cap is fixed and cannot be configured.
 
@@ -1535,23 +1477,21 @@ Going past the cap fails with the text `recursion exceeded cap of 8`, exactly, w
 
 Caught with `pcall`, the depth cap error is an error value of kind `lua`, the same kind as any Lua-phase failure, with no dedicated kind of its own, so a `pcall` handler that already branches on the `lua` kind keeps working, and its `code` is `call_depth_exceeded`. Its message is the file and line of the call that went too deep, then the text, then the fixed prose for the cap, as the logged message above shows, and the error value has no field for the depth reached or for the cap.
 
-Uncaught, the depth cap error reaches the run's result unchanged through every calling section, so you see the specific depth cap error and its message rather than a generic wrapper, still pointing at the line where it happened. It fails the run with code `call_depth_exceeded`, whichever construct went too deep. So a `call` that would nest past the cap ends the run with code `call_depth_exceeded` and a message that names the cap and the line of that `call`, as `recursion exceeded cap of 8 (at ping-pong.md:12)` does for the prompt at the top of this section.
+Uncaught, the depth cap error reaches the run's result unchanged through every calling section, so you see the specific depth cap error and its message rather than a generic wrapper, still pointing at the line where it happened. It fails the run with code `call_depth_exceeded`, whichever construct went too deep. So a `call` that would nest past the cap ends the run with code `call_depth_exceeded` and a message that names the cap and the line of that `call`, as `recursion exceeded cap of 8 (at ping-pong.md:10)` does for the prompt at the top of this section.
 
-## Jump and call in the H1 pass
+## Jump and call from the preamble
 
-After this section you can use `jump` and `call` from the H1 body, and know which sections they can name there.
+After this section you can use `jump` and `call` from the preamble, and know which sections they can name there.
 
 ````markdown
 ---
 name: answer-once
-description: Calls a section once from the H1 and keeps the result.
+description: Calls a section once from the preamble and keeps the result.
 runvil: 0
 ---
 
-# Answer once
-
 ```lua
-var.answer = call('Answer')
+var.answer = call('../Answer')
 ```
 
 ## Result
@@ -1563,39 +1503,39 @@ return var.answer
 ## Answer
 
 ```lua
-return 'called from h1'
+return 'called from the preamble'
 ```
 ````
 
 ````text
-called from h1
+called from the preamble
 ````
 
-`call`, `jump`, and `tasks.fanout` work in the H1 `lua` block just as they do in sections. Here the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) calls `Answer`, keeps its reply in `var`, and the walk then starts at `Result`. In the same way, `tasks.fanout('Worker', {'a', 'b'})` in the H1 runs its arms over the top-level `Worker`.
+The [preamble](02-file-structure.md#the-preamble) is the text between the frontmatter and the first heading, and when it holds a `lua` fence it is the first top-level section of the prompt. `call`, `jump`, and `tasks.fanout` work in its `lua` blocks just as they do in every other section. Here the preamble calls `Answer` and keeps its reply in `var`, and the [walk](04-how-a-prompt-runs.md#the-section-walk) then falls through to `Result`, which returns it. In the same way, `tasks.fanout('../Worker', {'a', 'b'})` in the preamble runs its arms over the top-level `Worker`.
 
-### The H1 visible set
+### The preamble's visible set
 
-The H1 visible set is the whole top level: every top-level section, with nothing excluded and no nested section. In the H1 body a relative path starts at the H1, whose children are the top-level sections, so code there writes `call('Answer')` and `jump('Target')` with no `../` in front. The H1 has no siblings, so `'../Name'` names nothing there. Code in the H1 body can `jump` to or `call` any top-level section, and only top-level sections are valid `jump` targets from the H1.
+The preamble's visible set is every other top-level section, and no nested section. The preamble is a top-level section itself, so a relative path written there starts at the preamble, whose siblings are the sections under the top-level headings, and code there writes `call('../Answer')` and `jump('../Target')` with `../` in front. The preamble has no children, so a bare `'Name'` names nothing there. Code in the preamble can `jump` to or `call` any other top-level section, and only top-level sections are valid `jump` targets from the preamble. The `tasks` functions take the same paths there, as in `tasks.spawn('../Task')`.
 
-The prompt reads work from the H1 too. `prompt.section('Main')` reads the top-level `Main`, `prompt.section_or('Kid')` is `nil` for a nested `Kid`, and a path from the top, such as `prompt.section('/Main/Kid')`, reads any section. With a top-level `Nums` section whose list holds `one`, `two`, and `three`, `table.concat(prompt.section('Nums', 'list').items, ',')` in the H1 gives `one,two,three`.
+The preamble has no name, and every name in a section path has at least one character, so no section path names the preamble. No `jump` or `call` leads back to it, and it runs once, as the first section of the run.
 
-A `call` from the H1 block resolves its path through the same lookup a `call` from a section uses, starting at the H1.
+The prompt reads work from the preamble too. `prompt.section('../Main')` reads the top-level `Main`, `prompt.section_or('../Kid')` is `nil` for a nested `Kid`, and a path from the top, such as `prompt.section('/Main/Kid')`, reads any section. With a top-level `Nums` section whose list holds `one`, `two`, and `three`, `table.concat(prompt.section('../Nums', 'list').items, ',')` in the preamble gives `one,two,three`.
 
-### Jumping from the H1
+A `call` from the preamble resolves its path through the same lookup a `call` from any other section uses, starting at the preamble.
 
-A `jump` from the H1 block ends the H1 pass and starts the main walk at the named top-level section instead of the first one, so every section before the target is skipped:
+### Jumping from the preamble
+
+A `jump` from the preamble moves the main walk to the named top-level section, so every section between the preamble and the target is skipped:
 
 ````markdown
 ---
-name: h1-jump
-description: Starts the walk at a later section.
+name: preamble-jump
+description: Jumps from the preamble to a later section.
 runvil: 0
 ---
 
-# Skip ahead
-
 ```lua
-jump('Target')
+jump('../Target')
 ```
 
 ## Skipped
@@ -1615,25 +1555,25 @@ return 'jumped'
 jumped
 ````
 
-### Calling from the H1
+The jump ends the preamble as it ends any section: the rest of the jumping block and the preamble's later blocks do not run, and `Target` starts from the preamble's final `var` (see [What a jump ends](#what-a-jump-ends) and [What crosses a jump](#what-crosses-a-jump)).
 
-Inside the H1 block, `call('Name')` runs a top-level section as a contained chain and returns whatever that section returns, as `var.answer = call('Answer')` gets `called from h1` in the first prompt of this section. A chain that ends with no text gives the H1 block `nil`, as it does in any block (see [A call that gets no text](#a-call-that-gets-no-text)).
+### Calling from the preamble
 
-To compute a value once before the walk, call a section from the H1, keep the result in `var`, and place the call target after the section that returns. In that prompt, `Result` returns `var.answer` and sits before `Answer`, so the walk never runs `Answer` on its own.
+In the preamble, `call('../Name')` runs a top-level section as a contained chain and returns whatever that chain returns, as `var.answer = call('../Answer')` gets `called from the preamble` in the first prompt of this section. A chain that ends with no text gives the preamble's block `nil`, as it does in any block (see [A call that gets no text](#a-call-that-gets-no-text)).
 
-The H1 pass and the walk after it form one root chain, so calls made in either share a child counter and take consecutive child ids. A `call` made in the H1 is child `0.0`, and the walk's first `call` is child `0.1`:
+To compute a value once before the sections under the headings run, call a section from the preamble, keep the result in `var`, and place the call target after the section that returns. In that prompt, `Result` returns `var.answer` and sits before `Answer`, so the walk never runs `Answer` on its own.
+
+The preamble and the sections after it are entries of one root chain, so calls made in any of them share a child counter and take consecutive child ids. A `call` made in the preamble is child `0.0`, and the next `call` on the walk is child `0.1`:
 
 ````markdown
 ---
-name: h1-ids
-description: Shows the child ids of a call from the H1 and from the walk.
+name: preamble-ids
+description: Shows the child ids of a call from the preamble and from the next section.
 runvil: 0
 ---
 
-# Ids
-
 ```lua
-var.first = call('Answer')
+var.first = call('../Answer')
 ```
 
 ## Result
@@ -1653,26 +1593,53 @@ return sys.id
 0.0.0,0.1.0
 ````
 
-### Failures from the H1
+### Failures from the preamble
 
-A path that names no top-level section fails differently for `call` and for `jump`, because `call` raises at the call site while `jump` is looked up after the H1 block has finished:
+A `jump`, `call`, or `tasks.fanout` fails from the preamble exactly as it fails from any other section. Here the preamble names the top-level `Answer` with a child's path:
 
-| From the H1 | Where it fails | Uncaught error code |
-| --- | --- | --- |
-| `call` or `tasks.fanout` with a path that names no section | at the call site | `requirements_unmet` |
-| `jump` with a path that names no section | after the H1 block ends | `lua_runtime` |
-| `jump` with a malformed path | after the H1 block ends | `lua_runtime` |
+````markdown
+---
+name: preamble-miss
+description: Calls a top-level section from the preamble as if it were a child.
+runvil: 0
+---
 
-When `call` in the H1 is given a path that names no top-level section, such as `call('Nope')`, it raises the not-found error, whose text is ``section `Nope` not found: the top level has no section `Nope` ``. It raises at the call site, so `pcall` catches it: `local ok, err = pcall(call, 'Nope'); return tostring(ok) .. ':' .. tostring(err)` gives a result that starts with `false:` and contains `Nope`.
+```lua
+return call('Answer')
+```
 
-An uncaught not-found error raised from the H1 ends the whole run, and you see it as the run's failure message. An uncaught not-found error from `call` or `tasks.fanout` in an H1 block fails the [H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate), so the run ends with code `requirements_unmet`. Its message is the notice line, then the gate line, then `: ` and the Lua error text as the cause, which names the path, and it ends with the line of the `call` or `tasks.fanout` that failed:
+## Answer
 
-````text
-the environment cannot satisfy this prompt:
-- the H1 gate failed: {Lua error text} (at {file}:{line})
+```lua
+return 'answer'
+```
 ````
 
-When a `jump` from the H1 block is given a path that names no top-level section, such as `jump('Nope')`, the run fails with a `lua_runtime` not-found error whose message names the path and points at the line of the `jump`. A bad `jump` target from the H1 ends the run with code `lua_runtime`, not `requirements_unmet`, because the path is looked up after the H1 block has finished. A malformed path given to `jump` in the H1 ends the run with code `lua_runtime` the same way.
+The run fails with code `lua_runtime`. Its message is the not-found error's text, followed by the line of the `call`:
+
+````text
+section `Answer` not found: the preamble has no child `Answer` (at preamble-miss.md:8)
+````
+
+The preamble has no children, so every child path written there misses with `the preamble has no child`: `jump('Answer')` and `tasks.fanout('Answer', {'a', 'b'})` in that block fail with this same message. The sibling path `'../Answer'` names the section, and with `return call('../Answer')` in the block the run ends with `answer`. A sibling path that names no top-level section misses with the sibling form. Change the block to `jump('../Missing')` and the run fails with:
+
+````text
+section `../Missing` not found: the preamble has no sibling `Missing` (at preamble-miss.md:8)
+````
+
+`call` and `tasks.fanout` raise at the call site, while `jump` is looked up after the preamble's block has finished:
+
+| From the preamble | Where it fails | A `pcall` in the block |
+| --- | --- | --- |
+| `call` or `tasks.fanout` with a path that names no section | at the call site | catches it |
+| `jump` with a path that names no section | after the preamble's block ends | cannot catch it |
+| `jump` with a malformed path | after the preamble's block ends | cannot catch it |
+
+When `call` in the preamble is given a path that names no top-level section, such as `call('../Nope')`, it raises the not-found error, whose text is ``section `../Nope` not found: the preamble has no sibling `Nope` ``. It raises at the call site, so `pcall` catches it: `local ok, err = pcall(call, '../Nope'); return tostring(ok) .. ':' .. tostring(err)` gives a result that starts with `false:` and contains `Nope`.
+
+An uncaught not-found error raised from the preamble ends the whole run, and you see it as the run's failure message. The run ends with code `lua_runtime`, and its message is the not-found error's text, followed by the line of the `call` or `tasks.fanout` that failed.
+
+When a `jump` from the preamble is given a path that names no top-level section, such as `jump('../Nope')`, the run fails with a `lua_runtime` not-found error whose message names the path and points at the line of the `jump`. The path is looked up after the preamble's block has finished, so a `pcall` around the `jump` does not catch the failure (see [Lookup after the block ends](#lookup-after-the-block-ends)). A malformed path given to `jump` in the preamble ends the run with code `lua_runtime` the same way.
 
 ## Jump and call in arms, tasks, and tool handlers
 
@@ -1684,8 +1651,6 @@ name: arm-jump
 description: An arm jumps from its worker section to a sibling.
 runvil: 0
 ---
-
-# Arm jump
 
 ## Parent
 
@@ -1754,8 +1719,6 @@ name: arm-reach
 description: An arm tries to jump to its parent section.
 runvil: 0
 ---
-
-# Arm reach
 
 ## Parent
 

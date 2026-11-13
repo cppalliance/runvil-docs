@@ -14,8 +14,6 @@ runvil: 0
 uses: [web]
 ---
 
-# Fetch once
-
 ## Call
 
 ```lua
@@ -116,8 +114,6 @@ description: Calls a tool of a Pack the prompt does not declare.
 runvil: 0
 ---
 
-# Fetch undeclared
-
 ## Call
 
 ```lua
@@ -187,8 +183,6 @@ description: Shows a Pack id and a tool id for one tool.
 runvil: 0
 uses: [web]
 ---
-
-# Fetch names
 
 ## Names
 
@@ -264,8 +258,6 @@ runvil: 0
 uses: [web]
 ---
 
-# Owner check
-
 ## Check
 
 ```lua
@@ -338,8 +330,6 @@ runvil: 0
 uses: [web]
 ---
 
-# Scoped search
-
 ## Ask
 
 ```lua
@@ -363,7 +353,7 @@ A section entry's tool scope is the set of tools the model is offered in that en
 
 ### Every section entry starts empty
 
-Every section entry starts with an empty tool scope, whether the section is walked into, entered again with `jump`, run with `call`, entered as a fanout arm or a task's first section, or is the H1 pass. Each entry runs in a fresh section VM (see [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals)) that shares only the run's tools and models, so calls to `tools.offer`, `tools.offer_dynamic`, and `tools.adhoc` never last from one section entry to the next. The entry's fresh `messages` holds no Static Set either, so its first loop round freezes its own. That is why `Plain` sees none of the tools `Ask` offered.
+Every section entry starts with an empty tool scope, whether the section is walked into, entered again with `jump`, run with `call`, entered as a fanout arm or a task's first section, or is the preamble, the section made of the Lua above a prompt's first heading (see [The preamble](02-file-structure.md#the-preamble)). Each entry runs in a fresh section VM (see [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals)) that shares only the run's tools and models, so calls to `tools.offer`, `tools.offer_dynamic`, and `tools.adhoc` never last from one section entry to the next. The entry's fresh `messages` holds no Static Set either, so its first loop round freezes its own. That is why `Plain` sees none of the tools `Ask` offered.
 
 ### What the scope holds
 
@@ -398,8 +388,6 @@ description: Reads a Tool object and a Pack object.
 runvil: 0
 uses: [web]
 ---
-
-# Look up
 
 ## Read
 
@@ -498,7 +486,7 @@ Tool objects are shared. A tool read through a Pack object's `tools`, through `t
 
 ### Where the `tools` global is available
 
-The Engine installs the `tools` global in every section VM and in the VM of the H1 pass, so you use the namespace with no declaration or other step of your own. The same `tools` table is present in every section VM, the H1 body and libraries loaded with `require` included. Tool objects are reachable alike from a walked section, from a section run through `call` (see [Calling a section](08-jump-and-call.md#calling-a-section)), and from a fanout arm (see [What an arm sees](14-fanout.md#what-an-arm-sees)), and every section VM reads Tool objects by id with no setup code in the H1 body.
+The Engine installs the `tools` global in every section VM, the preamble's included, so you use the namespace with no declaration or other step of your own. The same `tools` table is present in every section VM, libraries loaded with `require` included. Tool objects are reachable alike from a walked section, from a section run through `call` (see [Calling a section](08-jump-and-call.md#calling-a-section)), and from a fanout arm (see [What an arm sees](14-fanout.md#what-an-arm-sees)), and every section VM reads Tool objects by id with no setup code in the preamble.
 
 ### The members of `tools`
 
@@ -588,8 +576,6 @@ description: Offers the web Pack's tools when the run has them.
 runvil: 0
 ---
 
-# Maybe web
-
 ## Search
 
 ```lua
@@ -617,7 +603,7 @@ Using extras is each section entry's own opt-in, and it is off by default: no ex
 
 A Pack declared under `uses:` has a Pack object even when it offers no tool, and then its `tools` array is empty, so its length under `#` is `0`.
 
-Every section also holds the adhoc Pack, whose Pack id is `adhoc`, from the moment its VM is set up, the H1 pass included. It is not part of the run's roster: no Host supplies it, its `required` field is always `false`, and its `tools` lists the adhoc tools the section has defined.
+Every section also holds the adhoc Pack, whose Pack id is `adhoc`, from the moment its VM is set up, the preamble included. It is not part of the run's roster: no Host supplies it, its `required` field is always `false`, and its `tools` lists the adhoc tools the section has defined.
 
 The run knows each of its Packs, declared or not and with or without tools: every Pack the prompt declares, plus every `runvil` Pack whose Pack id no declared Pack takes. A third-party Pack the prompt does not declare is in no run, so it never has an object. The Host tells the run which of its Packs can serve it and, for each one that cannot, a reason written for the model. That decides which Packs get objects:
 
@@ -628,19 +614,17 @@ The run knows each of its Packs, declared or not and with or without tools: ever
 
 The error for offering a Pack the run does not have tells you to `declare it under uses: to require it`.
 
-### Reading tools and Packs in the H1 pass
+### Reading tools and Packs in the preamble
 
-The `tools` global, `tools.packs` included, is available to Lua in the H1 pass (see [The H1 pass](04-how-a-prompt-runs.md#the-h1-pass)), before any section runs, so H1 code can walk `tools.packs` and call `tools.packs.get('web')`, `tools.packs.extras()`, and `tools.get('web/search')`:
+The `tools` global, `tools.packs` included, is available to Lua in the preamble as in any section. A run starts at the preamble when the prompt has one (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)), so preamble code can walk `tools.packs` and call `tools.packs.get('web')`, `tools.packs.extras()`, and `tools.get('web/search')` before any other section runs:
 
 ````markdown
 ---
-name: h1-check
-description: Reads tools.packs before any section runs.
+name: preamble-check
+description: Reads tools.packs before any other section runs.
 runvil: 0
 uses: [web]
 ---
-
-# H1 check
 
 ```lua
 assert(tools.packs.get('web').required)
@@ -654,7 +638,7 @@ return 'ready'
 ```
 ````
 
-On a Host that has `runvil/web`, both checks hold before the walk starts, and the run result is:
+On a Host that has `runvil/web`, both checks hold in the preamble, the walk falls through to `Work`, and the run result is:
 
 ````text
 ready
@@ -671,8 +655,6 @@ description: Offers one web tool to the model.
 runvil: 0
 uses: [web]
 ---
-
-# Offer search
 
 ## Ask
 
@@ -924,8 +906,6 @@ runvil: 0
 uses: [web]
 ---
 
-# Two loops
-
 ## Recall
 
 ```lua
@@ -952,7 +932,7 @@ Each section entry sees its own scoped tool set, built from the tools and Packs 
 
 - The section the walk falls through to next starts with nothing offered (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)).
 - A section entered again with `jump` is a new entry, so it starts with nothing offered, whatever its earlier entry offered, and freezes its own sets (see [Jumping to a section](08-jump-and-call.md#jumping-to-a-section)).
-- Offers made in the H1 block do not reach the sections the walk enters afterward (see [The H1 pass](04-how-a-prompt-runs.md#the-h1-pass)).
+- Offers made in the preamble do not reach the sections the walk enters after it, because the preamble is a section entry of its own (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)).
 - A section entered with `call` starts with no tools offered, even when the calling section has offers in effect (see [Calling a section](08-jump-and-call.md#calling-a-section)).
 - A task started with `tasks.spawn` does not inherit the spawning section entry's offers and sees only the offers its own entry makes (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn)).
 - An arm makes its own offers, so `tools.offer('web/search')` inside an arm offers that tool to the arm's `models.loop`, which then sends the model's calls to it (see [What an arm sees](14-fanout.md#what-an-arm-sees)).
@@ -966,8 +946,6 @@ description: Shares one set of offers between two sections.
 runvil: 0
 uses: [web]
 ---
-
-# Shared offers
 
 ## Ask
 
@@ -1076,8 +1054,6 @@ runvil: 0
 uses: [web]
 ---
 
-# Fetch count
-
 ## Call
 
 ```lua
@@ -1179,8 +1155,6 @@ runvil: 0
 uses: [acme/kit]
 ---
 
-# Edit check
-
 ## Check
 
 ```lua
@@ -1199,7 +1173,7 @@ true|false|model_only_tool|kit/edit
 The refusal is a Lua error that `pcall` catches. Its value has `kind` set to `model_only_tool` and a `name` field that holds the id the call named, and `tostring(err)` gives this message, which points at the `tools.call` line:
 
 ````text
-edit-check.md:14: tool "kit/edit" (kit/edit) is model-only: a render shapes its arguments for the model that receives them, so a script cannot call it; offer it with tools.offer and let the model call it
+edit-check.md:12: tool "kit/edit" (kit/edit) is model-only: a render shapes its arguments for the model that receives them, so a script cannot call it; offer it with tools.offer and let the model call it
 ````
 
 The message quotes the id the call named and then repeats the tool's id in parentheses, so the two read the same. A call refused this way sends nothing to the Harness and counts in no `tools.stats` counter, so as a section entry's first tool call it creates neither `tools.stats` nor `sys.model`. Uncaught, the refusal ends the run with the error code `model_only_tool` and the same refusal text, followed by ` (at {file}:{line})` for the `tools.call` line.
@@ -1208,9 +1182,9 @@ To put the tool to work, offer it before the section's first `models.loop` with 
 
 ### How tool calls are recorded
 
-Each call to a catalog tool is recorded with the tool's canonical id such as `web/fetch`, the name the call used, its arguments, and its origin, which says who made the call and where. Every origin names the execution, the section, the caller, `model` or `script`, and the section entry that made the call, and a model call's origin also names the model of the round that requested the call. The origin's `execution`, `section`, and `entry` match what `sys.execution`, `sys.section_name`, and `sys.id` read in the section entry that made the call (see [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui)), so two entries of one section, such as a section entered twice or two fanout arms of one worker section, record the same `section` with different `entry` values (see [Section entry ids](05-lua-environment.md#section-entry-ids)). A model call's `model` is the name part of the model id its round was bound to, without the server namespace, so a round bound to `gateway/fast` gives `fast`, the name its request sent (see [Model ids](10-models.md#model-ids)). That is always the requesting round's model, never the chain's current model: after `models.use` switches models between two `models.loop` calls, each loop's calls name that loop's model, and an adhoc tool's handler that switches models or runs an infer round on another model does not change the model the same round's later calls name. A model call from `Chat`, the first walked section of a run named `run-1`, requested by a round bound to `gateway/fast`, has the origin `{"execution":"run-1","section":"Chat","caller":"model","entry":"0.1","model":"fast"}`.
+Each call to a catalog tool is recorded with the tool's canonical id such as `web/fetch`, the name the call used, its arguments, and its origin, which says who made the call and where. Every origin names the execution, the section, the caller, `model` or `script`, and the section entry that made the call, and a model call's origin also names the model of the round that requested the call. The origin's `execution`, `section`, and `entry` match what `sys.execution`, `sys.section_name`, and `sys.id` read in the section entry that made the call (see [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui)), so two entries of one section, such as a section entered twice or two fanout arms of one worker section, record the same `section` with different `entry` values (see [Section entry ids](05-lua-environment.md#section-entry-ids)). A model call's `model` is the name part of the model id its round was bound to, without the server namespace, so a round bound to `gateway/fast` gives `fast`, the name its request sent (see [Model ids](10-models.md#model-ids)). That is always the requesting round's model, never the chain's current model: after `models.use` switches models between two `models.loop` calls, each loop's calls name that loop's model, and an adhoc tool's handler that switches models or runs an infer round on another model does not change the model the same round's later calls name. A model call from `Chat`, the first section a run named `run-1` enters, requested by a round bound to `gateway/fast`, has the origin `{"execution":"run-1","section":"Chat","caller":"model","entry":"0.0","model":"fast"}`.
 
-A script call is attributed to the section that made it, such as `Only` for a section headed `## Only`, with the script recorded as the caller. Its origin has no `model` key, even when the section ran a model round before the call, so a script call from `Only`, the first walked section of a run named `run-1`, has the origin `{"execution":"run-1","section":"Only","caller":"script","entry":"0.1"}`.
+A script call is attributed to the section that made it, such as `Only` for a section headed `## Only`, with the script recorded as the caller. Its origin has no `model` key, even when the section ran a model round before the call, so a script call from `Only`, the first section a run named `run-1` enters, has the origin `{"execution":"run-1","section":"Only","caller":"script","entry":"0.0"}`.
 
 A model tool call is recorded under the wire name the model called, such as `web_fetch`, alongside the tool's id `web/fetch`. A script call to a catalog tool is recorded under the tool's id, such as `web/fetch`, never its wire name, and its `tool_result` event's `alias` holds that id too. A script call to an adhoc tool reports its `tool_result` event under the tool's `name` instead, so `tools.call('adhoc/grab')` reports the `alias` `grab`.
 
@@ -1245,8 +1219,6 @@ description: Reports how many pages the model fetched.
 runvil: 0
 uses: [web]
 ---
-
-# Page count
 
 ## Ask
 
@@ -1290,8 +1262,6 @@ runvil: 0
 uses: [web]
 ---
 
-# Count check
-
 ## Call
 
 ```lua
@@ -1302,7 +1272,7 @@ return tostring(err)
 ````
 
 ````text
-count-check.md:14: tools.stats.tools: "web/search" has no seeded count; seeded names: ["web/fetch"] (a catalog tool that was neither offered in this section nor called with tools.call). The Lua code failed at runtime. Fix the code at this location.
+count-check.md:12: tools.stats.tools: "web/search" has no seeded count; seeded names: ["web/fetch"] (a catalog tool that was neither offered in this section nor called with tools.call). The Lua code failed at runtime. Fix the code at this location.
 ````
 
 The error is a Lua error that `pcall` catches, and `tostring` of the caught value gives its message: the line of the failing read inside the protected function, the refusal, and the Lua runtime prose. The refusal names the table and the bad key and lists the keys the table holds in sorted name order, printed like `["web/fetch"]`, in the form `{table}: "{key}" has no seeded count; seeded names: [...]`, where `{table}` is `tools.stats.tools` or `tools.stats.packs`, and its ending depends on the key:
@@ -1324,8 +1294,6 @@ name: plain-result
 description: Reads a plain tool result as a string.
 runvil: 0
 ---
-
-# Plain result
 
 ## Call
 
@@ -1568,8 +1536,6 @@ description: Offers a Lua tool to the model.
 runvil: 0
 ---
 
-# Adhoc grab
-
 ## Ask
 
 ```lua
@@ -1667,8 +1633,6 @@ description: Calls an adhoc tool from Lua and counts the call.
 runvil: 0
 ---
 
-# Adhoc call
-
 ## Call
 
 ```lua
@@ -1687,16 +1651,14 @@ Calls to an adhoc tool count in `tools.stats` like any other tool call, under th
 
 ### An adhoc tool as a decision channel
 
-An adhoc tool belongs to the section VM that defines it. `tools.adhoc` works in the H1 block too, because every section entry, the H1 block included, gets the same `tools` table (see [The H1 pass](04-how-a-prompt-runs.md#the-h1-pass)). A handler can also write to `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)), so an adhoc tool defined in the H1 body can serve as a decision channel whose handler stores the model's choice for later sections:
+An adhoc tool belongs to the section VM that defines it. `tools.adhoc` works in the preamble as in any section, because every section entry, the preamble's included, gets the same `tools` table. A handler can also write to `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)), which the preamble hands on to the sections after it (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)), so an adhoc tool defined in the preamble can serve as a decision channel whose handler stores the model's choice for later sections:
 
 ````markdown
 ---
 name: decide
-description: Lets the model choose a path before the walk starts.
+description: Lets the model record a verdict in the preamble.
 runvil: 0
 ---
-
-# Decide
 
 ```lua
 tools.offer(tools.adhoc({ name = 'decide', description = 'Record the verdict', parameters = { choice = 'string' } }, function(args)
@@ -1720,7 +1682,7 @@ When the model calls `decide` with `{"choice":"use_mcp"}`, the handler stores `u
 use_mcp
 ````
 
-This is the decision-tool idiom: you define and offer an adhoc tool as the verdict channel in the H1 block, run `models.loop`, and use the captured verdict to shape the run before the walk starts.
+This is the decision-tool idiom: you define and offer an adhoc tool as the verdict channel in the preamble, run `models.loop`, and use the captured verdict to shape the sections that follow. `var` carries the verdict on, while the offer and the conversation stay with the preamble's own section entry, so `Result` starts with nothing offered and an empty `messages`.
 
 ### Adhoc tool ids and wire names
 
@@ -1810,8 +1772,6 @@ description: Calls an adhoc tool from Lua and returns its result.
 runvil: 0
 ---
 
-# Grab once
-
 ## Only
 
 ```lua
@@ -1838,8 +1798,6 @@ name: grab-loop
 description: Lets the model call an adhoc tool.
 runvil: 0
 ---
-
-# Grab loop
 
 ## Only
 
@@ -1887,8 +1845,6 @@ runvil: 0
 uses:
   - web
 ---
-
-# Handler calls
 
 ## Only
 
@@ -1954,8 +1910,6 @@ description: Shows a handler updating the block's locals.
 runvil: 0
 ---
 
-# Grab state
-
 ## Only
 
 ```lua
@@ -2002,8 +1956,6 @@ name: grab-returns
 description: Shows what handler return values become.
 runvil: 0
 ---
-
-# Grab returns
 
 ## Only
 
@@ -2057,8 +2009,6 @@ description: Catches an error an adhoc tool handler raises.
 runvil: 0
 ---
 
-# Grab raise
-
 ## Only
 
 ```lua
@@ -2087,8 +2037,6 @@ name: grab-raise-loop
 description: Catches a handler error raised during a conversation.
 runvil: 0
 ---
-
-# Grab raise loop
 
 ## Only
 
@@ -2143,8 +2091,6 @@ name: grab-jump
 description: Shows that jump waits until a handler returns.
 runvil: 0
 ---
-
-# Grab jump
 
 ## Only
 
@@ -2207,8 +2153,6 @@ runvil: 0
 uses:
   - web
 ---
-
-# Search loop
 
 ## Only
 
@@ -2362,8 +2306,6 @@ uses:
   - web
 ---
 
-# Mixed batch
-
 ## Only
 
 ```lua
@@ -2423,8 +2365,6 @@ uses:
   - web
 ---
 
-# Catch tool
-
 ## Only
 
 ```lua
@@ -2439,7 +2379,7 @@ return 'ok'
 The call passes no `url`, so the fetch tool fails with its own message, `web_fetch: missing url argument`, and the run result is:
 
 ````text
-could not run the tool: catch-tool.md:14: web_fetch: missing url argument
+could not run the tool: catch-tool.md:12: web_fetch: missing url argument
 ````
 
 A block catches a failing bound tool with `pcall(tools.call, tool, args)`, which returns `false` and an error value whose `kind` is `tool` and whose `tostring` reads `{file}:{line}: {message}`, the `tools.call` line and then the tool's own message.
@@ -2470,8 +2410,6 @@ runvil: 0
 uses:
   - web
 ---
-
-# Failing loop
 
 ## Only
 
@@ -2568,8 +2506,6 @@ description: Catches a model call to a tool outside the section entry's scope.
 runvil: 0
 ---
 
-# Scope check
-
 ## Only
 
 ```lua
@@ -2588,7 +2524,7 @@ return messages[#messages].content
 The round advertises one tool, `echo`. When the model calls `rogue` instead, the run result is:
 
 ````text
-the model asked for rogue: scope-check.md:16: tool "rogue" is not in this section's scope; aliases this section offers: ["echo"] (1)
+the model asked for rogue: scope-check.md:14: tool "rogue" is not in this section's scope; aliases this section offers: ["echo"] (1)
 ````
 
 The error is a hard error. It records the requested name, whether that name is the wire name of a tool in the run's tool catalog, and the aliases the section offers:
@@ -2654,8 +2590,6 @@ uses:
   - acme/issue-tracker
 ---
 
-# Ticket helper
-
 ## Only
 
 ```lua
@@ -2683,8 +2617,6 @@ runvil: 0
 uses:
   - acme/issue-tracker
 ---
-
-# Ticket twice
 
 ## First
 

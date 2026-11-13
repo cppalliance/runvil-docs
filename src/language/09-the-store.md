@@ -13,8 +13,6 @@ description: Writes a note to the store and reads it back.
 runvil: 0
 ---
 
-# Notebook
-
 ## Main
 
 ```lua
@@ -43,8 +41,6 @@ name: numbered
 description: Writes two lines to the store and reads them back numbered.
 runvil: 0
 ---
-
-# Numbered
 
 ## Main
 
@@ -80,8 +76,6 @@ name: presence
 description: Checks a store path before a write, after it, and after a delete.
 runvil: 0
 ---
-
-# Presence
 
 ## Main
 
@@ -124,8 +118,6 @@ description: Writes a store file in one section and reads it in the next.
 runvil: 0
 ---
 
-# Handoff
-
 ## Writer
 
 ```lua
@@ -147,27 +139,25 @@ handoff text
 
 Every section of a run shares one store. Each section entry starts in a fresh Lua VM and its context clears on the transition (see [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals)), but the store stays: a file that one section writes or appends is readable, and can be extended, in any later section. [Appending to a file](#appending-to-a-file) shows a file that grows by one line per section.
 
-### The store in the H1 body
+### The store in the preamble
 
-The H1 body's blocks use the store too:
+The preamble's blocks use the store too:
 
 ````markdown
 ---
 name: setup
-description: Writes a store file in the H1 body and reads it in a section.
+description: Writes a store file in the preamble and reads it in a section.
 runvil: 0
 ---
 
-# Setup
-
 ```lua
-store.write('h1.txt', 'x')
+store.write('setup.txt', 'x')
 ```
 
 ## Main
 
 ```lua
-return store.read('h1.txt')
+return store.read('setup.txt')
 ```
 ````
 
@@ -175,7 +165,7 @@ return store.read('h1.txt')
 x
 ````
 
-The `store` functions are available in the H1 body's blocks as well as in every section's blocks, because H1 blocks run the same way as any section's blocks (see [The H1 pass](04-how-a-prompt-runs.md#the-h1-pass)). A failed store call behaves the same way there too: an H1 block that runs `return store.read('missing.txt')` ends the run with a store error, just as a section block would (see [When a store call fails](#when-a-store-call-fails)).
+The preamble is the text between the frontmatter and the first heading, and when it holds a `lua` fence it is the first section the run enters (see [The preamble](02-file-structure.md#the-preamble)). The `store` functions work in its blocks as in any section's blocks, so the write to `setup.txt` is the run's first [effect](01-what-a-prompt-is.md#effects-and-harness-work), and `Main` reads the file back once the walk falls through to it. A failed store call behaves the same way there too: a preamble block that runs `return store.read('missing.txt')` ends the run with a store error, just as a block under a heading would (see [When a store call fails](#when-a-store-call-fails)).
 
 ### Files outlive the run
 
@@ -195,8 +185,6 @@ name: todo
 description: Writes a store file and reads it back.
 runvil: 0
 ---
-
-# Todo
 
 ## Main
 
@@ -296,8 +284,6 @@ description: Appends one line per section and reads the whole file at the end.
 runvil: 0
 ---
 
-# Order
-
 ## First
 
 ```lua
@@ -335,8 +321,6 @@ name: drafts
 description: Writes a store file under a directory that does not exist yet.
 runvil: 0
 ---
-
-# Drafts
 
 ## Main
 
@@ -377,8 +361,6 @@ description: Catches the error from reading a store file that does not exist.
 runvil: 0
 ---
 
-# Missing
-
 ## Main
 
 ```lua
@@ -388,7 +370,7 @@ return err.reason .. ': ' .. tostring(err)
 ````
 
 ````text
-not_found: missing.md:12: That path does not exist. Check the path, or list its directory to find the right one.
+not_found: missing.md:10: That path does not exist. Check the path, or list its directory to find the right one.
 ````
 
 `err.reason` is `not_found`, and `tostring(err)` gives the error value's message: the file and line of the failing `store.read`, then the fixed prose for `not_found`. The store's message reaches you only when nothing catches the failure, as the run's failure message followed by the call's location (see [Store failures that end the run](#store-failures-that-end-the-run)). [When a store call fails](#when-a-store-call-fails) lists every store reason and the fields each one has.
@@ -407,8 +389,6 @@ name: paths
 description: Writes and reads a store file under a directory.
 runvil: 0
 ---
-
-# Paths
 
 ## Main
 
@@ -589,8 +569,6 @@ description: Reads a store file from its second line to the end.
 runvil: 0
 ---
 
-# Slices
-
 ## Main
 
 ```lua
@@ -710,7 +688,7 @@ return err.reason .. ': ' .. tostring(err)
 ````
 
 ````text
-invalid_range: slices.md:13: That line range is not valid. Use a range within the file's lines.
+invalid_range: slices.md:11: That line range is not valid. Use a range within the file's lines.
 ````
 
 The error value has a string `path` field naming the file and no other range details, and its message gives only the call's location and the fixed prose for `invalid_range`, so the specific rule that failed appears only in the store's message, which an uncaught failure's run message shows. A range error gives one of three reasons:
@@ -746,8 +724,6 @@ name: editor
 description: Replaces one word in a store file.
 runvil: 0
 ---
-
-# Editor
 
 ## Main
 
@@ -795,8 +771,6 @@ description: Ticks off one entry in a store file by making its anchor unique.
 runvil: 0
 ---
 
-# Checklist
-
 ## Main
 
 ```lua
@@ -808,7 +782,7 @@ return tostring(err) .. '\n' .. store.read('notes.md')
 ````
 
 ````text
-checklist.md:13: The text to replace was empty, missing, or found more than once. Use text that appears exactly once in the file.
+checklist.md:11: The text to replace was empty, missing, or found more than once. Use text that appears exactly once in the file.
 TODO: draft
 DONE: docs
 TODO: release
@@ -863,8 +837,6 @@ description: Deletes a store file and then its directory.
 runvil: 0
 ---
 
-# Cleanup
-
 ## Main
 
 ```lua
@@ -896,7 +868,7 @@ return err.reason .. ': ' .. tostring(err)
 ````
 
 ````text
-directory_not_empty: cleanup.md:13: That directory is not empty. Remove it recursively, or empty it first.
+directory_not_empty: cleanup.md:11: That directory is not empty. Remove it recursively, or empty it first.
 ````
 
 So deleting `notes` fails while `notes/a.txt` exists, and succeeds once that file is gone. After `store.delete` removes a file, `store.read` on its path fails with the not-found message `file not found in store: {path}`. `store.delete` also fails when the policy denies it, when another access holds a conflicting claim that is not ordered before it, or when the storage behind the store fails for any reason other than the path being absent.
@@ -939,8 +911,6 @@ description: Lists the Rust files under src with store.glob.
 runvil: 0
 ---
 
-# List sources
-
 ## Main
 
 ```lua
@@ -965,8 +935,6 @@ name: count_arms
 description: Counts and reads the files a pattern matches.
 runvil: 0
 ---
-
-# Count arms
 
 ## Main
 
@@ -999,8 +967,6 @@ name: patterns
 description: Shows what several glob patterns match.
 runvil: 0
 ---
-
-# Patterns
 
 ## Main
 
@@ -1051,8 +1017,6 @@ description: Lists a directory's files and its subdirectories.
 runvil: 0
 ---
 
-# Listing
-
 ## Main
 
 ```lua
@@ -1081,8 +1045,6 @@ name: emptied
 description: Shows an emptied directory staying listed until it is deleted.
 runvil: 0
 ---
-
-# Emptied
 
 ## Main
 
@@ -1115,8 +1077,6 @@ description: Catches an invalid glob pattern and reads its fields.
 runvil: 0
 ---
 
-# Bad pattern
-
 ## Main
 
 ```lua
@@ -1127,7 +1087,7 @@ return err.kind .. ' ' .. err.reason .. ' ' .. err.rule .. ' ' .. err.path .. '\
 
 ````text
 store invalid_path wildcard a**b
-bad_pattern.md:12: That path is not valid. Use a relative path with no `.` or `..` segments, no backslashes, and no empty segments.
+bad_pattern.md:10: That path is not valid. Use a relative path with no `.` or `..` segments, no backslashes, and no empty segments.
 ````
 
 The failure is an error value of error kind `store`, the kind every store failure has (see [When a store call fails](#when-a-store-call-fails)). Its `reason` is `invalid_path`, its `path` field names the pattern, and its `rule` field names the rule the pattern broke. Its message is the call's location and the fixed prose for `invalid_path`, while the store's message for it has the form `invalid glob pattern "{path}": {reason}`, with the pattern shown in quotes and the broken rule's reason text after the colon, as in `invalid glob pattern "a**b": pattern contains invalid wildcard grammar`.
@@ -1161,8 +1121,6 @@ description: Catches a failed store read and reports it.
 runvil: 0
 ---
 
-# Careful
-
 ## Main
 
 ```lua
@@ -1172,12 +1130,12 @@ return tostring(ok) .. ' ' .. err.kind .. ' ' .. tostring(err)
 ````
 
 ````text
-false store careful.md:12: That path does not exist. Check the path, or list its directory to find the right one.
+false store careful.md:10: That path does not exist. Check the path, or list its directory to find the right one.
 ````
 
 A failing store call raises its failure at your own call site: the error comes out of your `store.*` call itself. Wrapped in `pcall` (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)), the call returns `false` plus the failure as its second return value instead of ending the run. Both the short form `pcall(store.read, 'missing.md')` and the wrapped form `pcall(function() return store.read('missing.txt') end)` work, and afterward `ok` is `false` and `err` can be read field by field.
 
-The second value is a store error value: an error value whose error kind is `store`, and that carries a `message` and a `reason` field alongside the fields specific to that failure, such as `path`. Its `message` is the file and line of the failing call, then the fixed prose the store reason has for a model to read, and `tostring(err)` returns that text, which is why `careful` returns `false store careful.md:12: That path does not exist. Check the path, or list its directory to find the right one.` The line is that of the `store.*` call itself, even inside a function that `pcall` runs (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). The store's own message for the failure, here `file not found in store: missing.md`, is what the run's failure message shows when nothing catches the error.
+The second value is a store error value: an error value whose error kind is `store`, and that carries a `message` and a `reason` field alongside the fields specific to that failure, such as `path`. Its `message` is the file and line of the failing call, then the fixed prose the store reason has for a model to read, and `tostring(err)` returns that text, which is why `careful` returns `false store careful.md:10: That path does not exist. Check the path, or list its directory to find the right one.` The line is that of the `store.*` call itself, even inside a function that `pcall` runs (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). The store's own message for the failure, here `file not found in store: missing.md`, is what the run's failure message shows when nothing catches the error.
 
 A store failure reaches you in one of two ways. A `pcall` around the call catches it as a store error value, or, when nothing catches it, it ends the run as a run error (see [Store failures that end the run](#store-failures-that-end-the-run)). Every store operation, `store.exists` included, raises its failure the same way, as an error value of error kind `store` that aborts the current Lua block unless the call is wrapped in `pcall`.
 
@@ -1193,8 +1151,6 @@ name: counter
 description: Counts with a store file that may not exist yet.
 runvil: 0
 ---
-
-# Counter
 
 ## Main
 
@@ -1237,8 +1193,6 @@ description: Reads a store error value field by field.
 runvil: 0
 ---
 
-# Fields
-
 ## Main
 
 ```lua
@@ -1249,7 +1203,7 @@ return err.kind .. '|' .. err.reason .. '|' .. err.path .. '|' .. tostring(err)
 ````
 
 ````text
-store|not_found|missing.txt|fields.md:12: That path does not exist. Check the path, or list its directory to find the right one.
+store|not_found|missing.txt|fields.md:10: That path does not exist. Check the path, or list its directory to find the right one.
 ````
 
 The fields you can read are `err.kind`, `err.reason`, `err.path`, `err.anchor`, the integer `err.count`, and the others listed below, and the string ones concatenate as the example shows. Every store error value has `kind`, `code`, `message`, and `reason`, and its `code` holds the same tag as `reason`. Besides those, it carries:
@@ -1276,8 +1230,6 @@ description: Adds context to a store error message.
 runvil: 0
 ---
 
-# Context
-
 ## Main
 
 ```lua
@@ -1287,7 +1239,7 @@ return 'context: ' .. err
 ````
 
 ````text
-context: context.md:12: That path does not exist. Check the path, or list its directory to find the right one.
+context: context.md:10: That path does not exist. Check the path, or list its directory to find the right one.
 ````
 
 `tostring(err)` returns the error value's `message` field, because its `__tostring` returns that field. For a store failure, that message is the file and line of the failing call, then the fixed prose for its reason, the text written for a model to read, which never carries the location itself. Concatenating the error value with a string, as in `'context: ' .. err`, gives the same message text as `tostring(err)`, so code that concatenates an error into a string works the same whether the error is a string or a store error value.
@@ -1312,8 +1264,6 @@ description: Hits a directory where a file is needed and a file where a director
 runvil: 0
 ---
 
-# Wrong kind
-
 ## Main
 
 ```lua
@@ -1328,7 +1278,7 @@ return e1.reason .. ' ' .. e1.path .. '\n' .. e2.reason .. ' ' .. e2.path .. '\n
 ````text
 is_a_directory notes
 not_a_directory a.txt
-wrong_kind.md:15: That path is not a directory. Use a directory path for this operation.
+wrong_kind.md:13: That path is not a directory. Use a directory path for this operation.
 ````
 
 Once `notes/a.txt` exists, `notes` is a directory, so reading it fails with `is_a_directory` rather than `not_found`. Writing `a.txt/b.txt` while `a.txt` is a file fails with `not_a_directory`, and the error's `path` names the file `a.txt` that sits where a directory is needed. The store's message for it is `not a directory in store: a.txt`. This table lists the store's messages for the reasons whose wording the store fixes, with the fields each carries beyond `kind`, `code`, `message`, and `reason`:
@@ -1365,8 +1315,6 @@ description: Shows that a store argument error has error kind lua.
 runvil: 0
 ---
 
-# Bad argument
-
 ## Main
 
 ```lua
@@ -1394,8 +1342,6 @@ description: Lets a failed store read end the run.
 runvil: 0
 ---
 
-# Uncaught
-
 ## Main
 
 ```lua
@@ -1403,9 +1349,9 @@ return store.read('missing.txt')
 ```
 ````
 
-This run never returns text. The failed read stops the block at that call, and the run fails with the error code `not_found`, the store code for a path that does not exist. The run's failure message is the store's message followed by the location of the failing call, here `file not found in store: missing.txt (at uncaught.md:12)`. Error codes as a whole are covered in [Run error codes](16-limits-and-errors.md#run-error-codes).
+This run never returns text. The failed read stops the block at that call, and the run fails with the error code `not_found`, the store code for a path that does not exist. The run's failure message is the store's message followed by the location of the failing call, here `file not found in store: missing.txt (at uncaught.md:10)`. Error codes as a whole are covered in [Run error codes](16-limits-and-errors.md#run-error-codes).
 
-An uncaught failure stops the block at the failing call, and the store operations that already ran keep their success events (see [How store calls run and what they report](#how-store-calls-run-and-what-they-report)). A block that writes, reads, then makes a failing `store.str_replace` records the write and the read as succeeded and the replace as failed, in statement order, and the block ends with an error. An uncaught store failure in the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) ends the run with its store code too, the same as in a section (see [The store in the H1 body](#the-store-in-the-h1-body)).
+An uncaught failure stops the block at the failing call, and the store operations that already ran keep their success events (see [How store calls run and what they report](#how-store-calls-run-and-what-they-report)). A block that writes, reads, then makes a failing `store.str_replace` records the write and the read as succeeded and the replace as failed, in statement order, and the block ends with an error. An uncaught store failure in the preamble ends the run with its store code too, the same as in any other section (see [The store in the preamble](#the-store-in-the-preamble)).
 
 Catching a store failure and raising it again keeps its code:
 
@@ -1415,8 +1361,6 @@ name: reraise
 description: Raises a caught store error again after another call.
 runvil: 0
 ---
-
-# Reraise
 
 ## Main
 
@@ -1433,7 +1377,7 @@ return 'tidied'
 ```
 ````
 
-The caught store error, raised again with `error(err)`, ends the run with its code, `not_found`, and the original store message, still placed on the `store.read` line: `file not found in store: missing.txt (at reraise.md:12)`. That holds even though another suspending call, `call('Cleanup', '')` (see [Calling a section](08-jump-and-call.md#calling-a-section)), ran in between.
+The caught store error, raised again with `error(err)`, ends the run with its code, `not_found`, and the original store message, still placed on the `store.read` line: `file not found in store: missing.txt (at reraise.md:10)`. That holds even though another suspending call, `call('Cleanup', '')` (see [Calling a section](08-jump-and-call.md#calling-a-section)), ran in between.
 
 Two failures happen before any block runs, and both end the run with a store code: a run whose Host handle declares no store fails before its first block, rather than on its first store call, with the code `no_store` and the message `this run declares no store, so no store operation can run`, and a store backend that fails as the run starts, for example by refusing its session, fails the run at its first step with the code of the store's own error, such as `backend`, and a message that starts `store operation failed: ` followed by the store's own error text. [When the store cannot start](#when-the-store-cannot-start) covers both.
 
@@ -1449,8 +1393,6 @@ name: research
 description: Reads a file that a called section wrote.
 runvil: 0
 ---
-
-# Research
 
 ## Main
 
@@ -1476,7 +1418,7 @@ Store writes made inside a `call` chain stay in the store after the chain return
 
 ### Called sections, jumps, and the main walk
 
-The store orders each chain's calls through an identity, the name its store calls are tracked under, and sections that share an identity never get in each other's way. The main walk runs one section at a time, so all its sections act in the store as a single identity. The H1 pass and the section walk that follows share that one identity too, so sections in the walk read freely what the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) wrote, and nothing the pass wrote falsely conflicts with the walk.
+The store orders each chain's calls through an identity, the name its store calls are tracked under, and sections that share an identity never get in each other's way. The main walk runs one section at a time, so all its sections act in the store as a single identity. The [preamble](02-file-structure.md#the-preamble), when the prompt has one, is the walk's first section and has that one identity too, so the sections after it read freely what the preamble wrote, and nothing it wrote falsely conflicts with them.
 
 A `call` chain shares its caller's identity, so a `call` needs no join, and a called section's store operations on paths the caller already touched never conflict with the caller. When `Main` appends to `ids.txt`, then calls `Sub`, which appends to the same file, then appends again and reads every line back, nothing conflicts.
 
@@ -1492,8 +1434,6 @@ name: summarize
 description: Hands files between tasks with spawns and joins.
 runvil: 0
 ---
-
-# Summarize
 
 ## Parent
 
@@ -1550,8 +1490,6 @@ description: Merges the files that fanout arms wrote.
 runvil: 0
 ---
 
-# Merge parts
-
 ## Parent
 
 ```lua
@@ -1586,22 +1524,20 @@ Joins carry writes along transitively. A section that joins a task which itself 
 
 A canceled task's store writes, however far the task got before [`tasks.cancel`](15-tasks.md#canceling-and-listing-tasks), are readable by its owner once a wait such as `tasks.join_any` delivers the task. So `tasks.cancel(a)`, then `tasks.join_any({ a })`, then `store.read('partial.txt')` returns whatever `a` wrote before it stopped. After an owner joins a finished task, a task it spawns next can write, glob, or delete the same paths without a conflict.
 
-### Tasks started in the H1 pass
+### Tasks started in the preamble
 
-A task spawned in the H1 pass is joined into the one identity the walk continues, so a section on the walk can deliver it and read its files:
+A task the preamble spawns is owned by the main walk, so a later section on the walk can deliver it and read its files:
 
 ````markdown
 ---
 name: configured
-description: Reads what the H1 pass and the task it spawned wrote.
+description: Reads what the preamble and the task it spawned wrote.
 runvil: 0
 ---
 
-# Configured
-
 ```lua
 store.write('config.md', 'configured')
-var.t = tasks.spawn('Task')
+var.t = tasks.spawn('../Task')
 ```
 
 ## Result
@@ -1623,7 +1559,7 @@ return 'written'
 configured/task wrote
 ````
 
-`Result` reads `config.md` freely because the H1 pass and the walk share one identity, and it reads `t.txt` because `tasks.join_any({ var.t })` delivered the task the H1 pass spawned. `Result` returns, which ends the run, so the walk never reaches `Task` on its own.
+The preamble and the sections after it are entries of one chain, the main walk, so a task the preamble spawns is still that chain's task in `Result`, which can wait on it. The spawn names `../Task` because the top-level sections are the preamble's siblings (see [Jump and call from the preamble](08-jump-and-call.md#jump-and-call-from-the-preamble)). `Result` reads `config.md` freely because the preamble and `Result` share one identity, and it reads `t.txt` because `tasks.join_any({ var.t })` delivered the task the preamble spawned. `Result` returns, which ends the run, so the walk never reaches `Task` on its own.
 
 ### Tools and the store
 
@@ -1646,8 +1582,6 @@ description: Two fanout arms append to one store file and race.
 runvil: 0
 ---
 
-# Race
-
 ## Main
 
 ```lua
@@ -1665,7 +1599,7 @@ store.append('log.txt', item .. ';')
 This run never reaches its `return`. Both arms append to `log.txt`, nothing orders one arm after the other, and the run fails with the error code `determinism` and a message of this form, where each identity names one of the two arms and the location is the losing arm's `store.append`:
 
 ````text
-store determinism violation: write on log.txt by {id} conflicts with a write claim by {other} (at race.md:19)
+store determinism violation: write on log.txt by {id} conflicts with a write claim by {other} (at race.md:17)
 ````
 
 Every store call claims what it touches for the chain that made it, so the store tracks which chain touches which region. That record is a claim. Two store accesses that touch the same region conflict only when at least one of them is a write and the two are concurrent, and such a clash is a claims conflict. Two accesses are concurrent when they come from different chains of the run and no spawn or join orders one before the other, or when they come from two runs sharing one Host store at the same time.
@@ -1753,7 +1687,7 @@ local ok, err = pcall(store.append, 'notes.md', item .. '\n')
 ```
 ````
 
-With this `Worker` in place of the one in `race`, and the same two members `alpha` and `beta`, the run still ends with the claims conflict. A claims conflict between two chains is never raised at the store call. It ends the run before the losing call returns, so the losing arm never resumes into Lua, and no Lua code or `pcall` can catch it. A claims conflict in the H1 pass still ends the run with `determinism`, not with `requirements_unmet` the way an H1 `lua_runtime` failure does (see [The H1 hard gate](04-how-a-prompt-runs.md#the-h1-hard-gate)).
+With this `Worker` in place of the one in `race`, and the same two members `alpha` and `beta`, the run still ends with the claims conflict. A claims conflict between two chains is never raised at the store call. It ends the run before the losing call returns, so the losing arm never resumes into Lua, and no Lua code or `pcall` can catch it. A claims conflict ends the run with `determinism` in whichever section it happens, the [preamble](02-file-structure.md#the-preamble) included.
 
 When a claims conflict ends the run, no task or arm counts as failed. Every other live task is abandoned with the run, and at most the arm whose access came first completes. Store writes still in flight when the run ends finish before the run completes, so the write that landed is in the store even though the run fails.
 
@@ -1796,8 +1730,6 @@ name: stock
 description: Writes a file in one section and reads it in the next
 runvil: 0
 ---
-
-# Stock
 
 ## First
 
@@ -1848,8 +1780,6 @@ description: Reads a seeded paper and writes a report on it
 runvil: 0
 ---
 
-# Report
-
 ## Main
 
 ```lua
@@ -1881,8 +1811,6 @@ name: mounted
 description: Reads a path that lies in another mount
 runvil: 0
 ---
-
-# Mounted
 
 ## Main
 
@@ -1929,7 +1857,7 @@ A prompt whose store cannot be set up fails to start: it runs none of its sectio
 
 When the Host's store has no working backend as the run starts, such as a backend that answers `the store backend refuses every session` when asked to open a session, the run's first step fails at once with the store code of the backend's error, here `backend`. This happens even when the prompt never calls `store`, so a run never quietly runs against a throwaway store instead.
 
-A store that fails while the run or a section sets up store access, such as at the start of the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass) or of the section walk, fails the run with the store code of the storage layer's error, such as `backend`, and the message `store operation failed: {error}`, where `{error}` is the storage layer's own text. When the Host's setup declares no store at all, the code is `no_store` and the message is `this run declares no store, so no store operation can run` instead.
+A store that fails while the run or a section sets up store access, such as at the start of the [section walk](04-how-a-prompt-runs.md#the-section-walk), fails the run with the store code of the storage layer's error, such as `backend`, and the message `store operation failed: {error}`, where `{error}` is the storage layer's own text. When the Host's setup declares no store at all, the code is `no_store` and the message is `this run declares no store, so no store operation can run` instead.
 
 A Host store whose root does not exist yet still passes the startup check. Any other error from looking at the root fails the run.
 
@@ -1943,8 +1871,6 @@ name: desk
 description: Writes one allowed file and one refused file
 runvil: 0
 ---
-
-# Desk
 
 ## Main
 
@@ -2014,8 +1940,6 @@ description: Reads a note and tries to change it
 runvil: 0
 ---
 
-# Ask mode
-
 ## Main
 
 ```lua
@@ -2041,8 +1965,6 @@ name: plan_mode
 description: Writes a markdown note and tries a binary file
 runvil: 0
 ---
-
-# Plan mode
 
 ## Main
 
@@ -2078,8 +2000,6 @@ description: Wraps stored text before a model sees it
 runvil: 0
 ---
 
-# Wrapped
-
 ## Main
 
 ```lua
@@ -2109,8 +2029,6 @@ name: verbatim
 description: Shows that store reads come back unwrapped
 runvil: 0
 ---
-
-# Verbatim
 
 ## Main
 
@@ -2145,8 +2063,6 @@ description: Checks that a store read was wrapped
 runvil: 0
 ---
 
-# Has tags
-
 ## Main
 
 ```lua
@@ -2173,8 +2089,6 @@ name: briefing
 description: Puts wrapped store notes into prose
 runvil: 0
 ---
-
-# Briefing
 
 ## Load
 
@@ -2213,7 +2127,7 @@ Ship on Friday.
 
 ### What `untrusted` accepts
 
-`untrusted` is a reserved [Engine global](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals) the Engine installs in every section entry's Lua VM and in the H1 block's VM. It is defined as soon as each section VM is built, ahead of every later setup step, and it stays defined for the entry's whole lifecycle, so every block in the entry can call it.
+`untrusted` is a reserved [Engine global](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals) the Engine installs in every section entry's Lua VM. It is defined as soon as each section VM is built, ahead of every later setup step, and it stays defined for the entry's whole lifecycle, so every block in the entry can call it.
 
 `untrusted` accepts any UTF-8 string, of any content and length, including the empty string, and always returns an envelope. `untrusted('')` gives an envelope with an empty body and the usual two live tags:
 
@@ -2281,8 +2195,6 @@ name: encoding
 description: Wraps text that mixes angle brackets and a bracket marker
 runvil: 0
 ---
-
-# Encoding
 
 ## Main
 
@@ -2368,8 +2280,6 @@ description: Writes and reads the store while a library loads
 runvil: 0
 ---
 
-# Loader
-
 ## Main
 
 ```lua
@@ -2394,9 +2304,9 @@ The library under `loader` writes `lib.md` and reads it back while `require` loa
 
 ### The `store` global in every VM
 
-`store` is the reserved Engine global from [The `store` table](#the-store-table), which the Engine installs in the Lua VM of every section entry and of the H1, so it is always there for you to call. A section entry's `store` table is installed once, when the entry's Lua VM is set up, and stays in place for the entry's whole lifetime, so the same `store` table keeps working in every Lua block the entry runs.
+`store` is the reserved Engine global from [The `store` table](#the-store-table), which the Engine installs in the Lua VM of every section entry, so it is always there for you to call. A section entry's `store` table is installed once, when the entry's Lua VM is set up, and stays in place for the entry's whole lifetime, so the same `store` table keeps working in every Lua block the entry runs.
 
-Store calls work in three places: in a section's blocks, in the blocks under the H1 during the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass), and in library code while `require` loads it. In all three, a call runs the same way and gives the same results, the same store errors, and the same [line-range](#reading-line-ranges-and-numbered-lines) rules, so an H1 block that runs `return store.read('missing.txt')` ends the run with the error code `not_found`, exactly as a section would (see [The store in the H1 body](#the-store-in-the-h1-body)).
+Store calls work in two places: in the blocks of any section, the [preamble](02-file-structure.md#the-preamble) included, and in library code while `require` loads it. In both, a call runs the same way and gives the same results, the same store errors, and the same [line-range](#reading-line-ranges-and-numbered-lines) rules, so a preamble block that runs `return store.read('missing.txt')` ends the run with the error code `not_found`, exactly as a block under a heading would (see [The store in the preamble](#the-store-in-the-preamble)).
 
 `require` is ready before the store functions take their run-time form, and that switch covers every reference to a store function, including any store function a [Pack prelude](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals) captured earlier.
 
@@ -2416,7 +2326,7 @@ A stop never cuts a `store` call short, because the Harness answers every `store
 
 ### Store calls under the chain's identity
 
-Store operations run under the identity of the [chain](04-how-a-prompt-runs.md#the-section-walk) making them, not a separate identity per section. The main walk keeps one identity for every section it runs, the walk reuses the identity of the H1 pass before it, and a `call` chain borrows its caller's identity because the two never run at once, so none of these false-conflict with each other in the store. [Called sections, jumps, and the main walk](#called-sections-jumps-and-the-main-walk) shows what that means for your files.
+Store operations run under the identity of the [chain](04-how-a-prompt-runs.md#the-section-walk) making them, not a separate identity per section. The main walk keeps one identity for every section it runs, the preamble included, and a `call` chain borrows its caller's identity because the two never run at once, so none of these false-conflict with each other in the store. [Called sections, jumps, and the main walk](#called-sections-jumps-and-the-main-walk) shows what that means for your files.
 
 ### Capturing a store function
 
@@ -2428,8 +2338,6 @@ name: saver
 description: Writes through a store function a library captured
 runvil: 0
 ---
-
-# Saver
 
 ## Main
 

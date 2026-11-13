@@ -13,8 +13,6 @@ description: Says hello to a model and returns its reply.
 runvil: 0
 ---
 
-# First chat
-
 ## Chat
 
 ```lua
@@ -40,7 +38,7 @@ This is the shortest loop pattern: add a user message, run the loop, and return 
 
 `messages` is an Engine global, so a prompt's Lua uses it with no import or declaration (see [Lua blocks, section VMs, and Engine globals](05-lua-environment.md#lua-blocks-section-vms-and-engine-globals)). It holds the section entry's conversation, a message list the Engine creates with the entry's VM, and that one list is what every `models.loop` call runs over. You fill it with builder methods, the list methods that append records, such as `messages:system(...)` and `messages:user(...)`.
 
-Every section entry gets a fresh, empty list, because every entry gets a fresh VM: each walked section, each `jump` target, each section a `call` chain runs, each task chain, and each fan-out arm. The H1 body's blocks get one too during [the H1 pass](04-how-a-prompt-runs.md#the-h1-pass), and that list drops with the H1 VM when the pass ends. A library loaded with `require` (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)) runs in the requiring section entry's VM, so it sees that entry's list. Two sections show the fresh start:
+Every section entry gets a fresh, empty list, because every entry gets a fresh VM: each walked section, each `jump` target, each section a `call` chain runs, each task chain, and each fan-out arm. The preamble, the text between the frontmatter and the first heading, is a section too when it holds Lua (see [The preamble](02-file-structure.md#the-preamble)), so its entry gets a list of its own, and that list drops with the entry's VM when its blocks end (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)). A library loaded with `require` (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)) runs in the requiring section entry's VM, so it sees that entry's list. Two sections show the fresh start:
 
 ````markdown
 ---
@@ -48,8 +46,6 @@ name: fresh-lists
 description: Shows that each section entry starts with an empty conversation.
 runvil: 0
 ---
-
-# Fresh lists
 
 ## First
 
@@ -117,8 +113,6 @@ description: Says hello to a model and returns its reply.
 runvil: 0
 ---
 
-# First chat
-
 ## Chat
 
 ```lua
@@ -169,8 +163,6 @@ description: Summarizes a person in one conversation.
 runvil: 0
 ---
 
-# Summarize
-
 ## Summary
 
 Summarize the person.
@@ -192,8 +184,6 @@ name: draft-and-refine
 description: Drafts with one round, then refines the draft in a conversation.
 runvil: 0
 ---
-
-# Draft and refine
 
 ## Draft
 
@@ -244,8 +234,6 @@ name: records
 description: Builds one message record for each message role.
 runvil: 0
 ---
-
-# Records
 
 ## Build
 
@@ -441,8 +429,6 @@ description: Builds a message list with every builder method.
 runvil: 0
 ---
 
-# Builders
-
 ## Build
 
 ```lua
@@ -546,8 +532,6 @@ description: Translates a phrase after one worked example.
 runvil: 0
 ---
 
-# Translate
-
 ## Phrase
 
 good night
@@ -575,8 +559,6 @@ description: Shows that system records lead the list.
 runvil: 0
 ---
 
-# System first
-
 ## Build
 
 ```lua
@@ -593,7 +575,7 @@ false|lua|3
 The error value (see [Error values](05-lua-environment.md#error-values)) has kind `lua`, and the list still holds its three records. Its message points at the line of the refused call and names the position the record would take, `messages[4]`:
 
 ````text
-system-first.md:13: messages[4] is a system message after a non-system message; system messages lead the list, and only a compactor can change the leading block. The Lua code failed at runtime. Fix the code at this location.
+system-first.md:11: messages[4] is a system message after a non-system message; system messages lead the list, and only a compactor can change the leading block. The Lua code failed at runtime. Fix the code at this location.
 ````
 
 `messages:append(record)` with a system record after a non-system record raises the same error. Any builder, `append`, or `replace` call that would leave a system record after a record of another message role fails, names the position of the first such record, and leaves the list unchanged. To change the leading block itself, call `replace` inside a compactor (see [Editing the leading system block](#editing-the-leading-system-block)).
@@ -696,8 +678,6 @@ name: read-records
 description: Reads a message list by length, position, and walk.
 runvil: 0
 ---
-
-# Read records
 
 ## Read
 
@@ -917,8 +897,6 @@ name: edit-list
 description: Rewrites one record of a message list.
 runvil: 0
 ---
-
-# Edit list
 
 ## Edit
 
@@ -1244,11 +1222,11 @@ The section's list carries across several `models.loop` calls, so you append a n
 
 When every reply is plain text with no tool calls, each `models.loop` call makes exactly one model request and returns, so two calls make two requests. Each such call adds exactly one `assistant` record, so two user records leave four records alternating `user` and `assistant`, with the replies at positions 2 and 4, as that chat's `4|first reply|second reply` shows.
 
-`models.loop` also works in the H1 body (see [The H1 pass](04-how-a-prompt-runs.md#the-h1-pass)), so a prompt can hold a model conversation before the walk starts.
+`models.loop` also works in the preamble (see [The preamble](02-file-structure.md#the-preamble)), so a prompt can hold a model conversation in the Lua above its first heading.
 
 ### Which model a loop round runs on
 
-`models.loop(compactor?)`, called with no model handle, runs each round on the chain's current model. A prompt's H1 pass starts on the model the Host gave the `default` role, and the walk continues on the model the pass ended on, so a prompt with no H1 pass starts its walk on `default` (see [Where a chain starts](10-models.md#where-a-chain-starts)). `models.use` changes the model from there (see [The current model](10-models.md#the-current-model) and [Selecting a role with `models.use`](10-models.md#selecting-a-role-with-modelsuse)). The current model belongs to the chain, so a `models.use` call lasts across sections until the next one. The loop reads the current model again each time it sends a round, the retry after a compaction included, so a compactor that calls `models.use` moves the retry to the model it selects. The list survives a model change, so one conversation can move between models:
+`models.loop(compactor?)`, called with no model handle, runs each round on the chain's current model. A run's first top-level section starts on the model the Host gave the `default` role (see [Where a chain starts](10-models.md#where-a-chain-starts)). `models.use` changes the model from there (see [The current model](10-models.md#the-current-model) and [Selecting a role with `models.use`](10-models.md#selecting-a-role-with-modelsuse)). The current model belongs to the chain, so a `models.use` call lasts across sections until the next one. The loop reads the current model again each time it sends a round, the retry after a compaction included, so a compactor that calls `models.use` moves the retry to the model it selects. The list survives a model change, so one conversation can move between models:
 
 ````markdown
 ---
@@ -1256,8 +1234,6 @@ name: second-opinion
 description: Drafts with one model role and reviews the draft with another.
 runvil: 0
 ---
-
-# Second opinion
 
 ## Chat
 
@@ -1288,8 +1264,6 @@ name: second-opinion
 description: Drafts with one model role and reviews the draft with another.
 runvil: 0
 ---
-
-# Second opinion
 
 ## Draft
 
@@ -1469,8 +1443,6 @@ uses:
   - web
 ---
 
-# Search chat
-
 ## Ask
 
 ```lua
@@ -1569,8 +1541,6 @@ uses:
   - web
 ---
 
-# Search chat
-
 ## Ask
 
 ```lua
@@ -1590,7 +1560,7 @@ return messages[#messages].content
 When the model keeps calling the search tool and never replies with text, the run result is:
 
 ````text
-search-chat.md:17: The tool-call limit was reached before a final reply. Stop calling tools and reply with what you have. after 5 records
+search-chat.md:15: The tool-call limit was reached before a final reply. Stop calling tools and reply with what you have. after 5 records
 ````
 
 When the model answers with text within its two rounds, the run result is that reply.
@@ -1620,7 +1590,7 @@ A final reply in the last round the cap allows ends the loop normally, with no `
 
 When `tool_loop_exhausted` is raised, the last allowed round's assistant tool-call record and its `tool` records are already on the list, and they stay there. The list holds only complete rounds, each with its assistant tool-call record and a `tool` record for each call, so one user record with `max_tool_iterations: 2` leaves 5 records, as in `search-chat`.
 
-The error value has its `kind` field set to `tool_loop_exhausted`, and it has only its kind, its `code`, also `tool_loop_exhausted`, and its message, with no extra fields. `tostring(err)` gives that message, which in `search-chat` reads `search-chat.md:17: The tool-call limit was reached before a final reply. Stop calling tools and reply with what you have.` You catch it at the call site with `pcall(models.loop)`, which returns `false` and that error value.
+The error value has its `kind` field set to `tool_loop_exhausted`, and it has only its kind, its `code`, also `tool_loop_exhausted`, and its message, with no extra fields. `tostring(err)` gives that message, which in `search-chat` reads `search-chat.md:15: The tool-call limit was reached before a final reply. Stop calling tools and reply with what you have.` You catch it at the call site with `pcall(models.loop)`, which returns `false` and that error value.
 
 Left uncaught, the `tool_loop_exhausted` error ends the block, so the section's later code never runs, and it fails the run with the error code `tool_loop_exhausted` (see [Run error codes](16-limits-and-errors.md#run-error-codes)) and the message `tool-call loop did not converge (at {file}:{line})`, pointing at the `models.loop` call. When the section has spawned a task that is still live, that task is abandoned, and abandoning it does not replace the `tool_loop_exhausted` error.
 
@@ -1645,8 +1615,6 @@ name: first-chat
 description: Says hello to a model and returns its reply.
 runvil: 0
 ---
-
-# First chat
 
 ## Chat
 
@@ -1827,8 +1795,6 @@ description: Says hello to a model and returns its reply.
 runvil: 0
 ---
 
-# First chat
-
 ## Chat
 
 ```lua
@@ -1842,7 +1808,7 @@ return err.kind .. '|' .. tostring(err.finish_reason) .. '|' .. tostring(err) ..
 When the model replies with no text and no tool calls, and the provider gives the finish reason `stop`, the run result is:
 
 ````text
-empty_model_reply|stop|first-chat.md:13: the model replied with no text and no tool calls|1
+empty_model_reply|stop|first-chat.md:11: the model replied with no text and no tool calls|1
 ````
 
 The round produced nothing, and no tool call came before it, so `models.loop` raises an error value of kind `empty_model_reply`. `pcall` catches it, returning `false` and the error value (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)). `err.finish_reason` holds the provider's finish reason, `tostring(err)` gives the message, which points at the `models.loop` line, and `#messages` is still 1 because the empty reply was not appended.
@@ -1968,8 +1934,6 @@ name: long-notes
 description: Sends notes far longer than the model's context window.
 runvil: 0
 ---
-
-# Long notes
 
 ## Send
 
@@ -2158,8 +2122,6 @@ description: Sends notes far longer than the model's context window.
 runvil: 0
 ---
 
-# Long notes
-
 ## Send
 
 ```lua
@@ -2281,7 +2243,7 @@ The compactor shortened the record and then raised, so the list is put back with
 
 ### The `compactors` global
 
-A prompt's Lua reads the `compactors` global, a table of the shipped compactor policies holding two keys, `fail` and `clear`. It is an Engine global, installed alongside `messages`, so every section and every H1 block runs with it already in place, and you use it, as in `compactors.fail`, without declaring it. `compactors.fail` is the default compactor for `models.loop`.
+A prompt's Lua reads the `compactors` global, a table of the shipped compactor policies holding two keys, `fail` and `clear`. It is an Engine global, installed alongside `messages`, so every section, the preamble included, runs with it already in place, and you use it, as in `compactors.fail`, without declaring it. `compactors.fail` is the default compactor for `models.loop`.
 
 ### Choosing a compactor for a call
 
@@ -2456,4 +2418,4 @@ attempt to call a number value
 
 Context exhaustion raises at the `models.loop` call site. Left uncaught, it fails the section, so code after the call never runs, and it ends the run with the error code `context_exhausted` (see [Run error codes](16-limits-and-errors.md#run-error-codes)) and a message of the form `context exhausted: {detail} (at {file}:{line})`, with the reason in that message and the line of the call that raised it. An uncaught `context_exhausted` error ends the block as that same `context_exhausted` error, with its fields, including `reason`, kept. A `context_exhausted` error value that escapes a block ends the run as a `context_exhausted` failure with the same `reason`, whether `models.loop` raised it, a direct `compactors.fail(reason)` call outside any loop raised it and went uncaught, or your Lua caught it with `pcall` and raised it again with `error(err)`. That holds for a reason of your own as well: a compactor that calls `compactors.fail('manual')` inside a loop, left uncaught, ends the run with `context_exhausted` and `manual` in its message.
 
-A compactor's own error takes a different path. An uncaught string raised by a compactor fails the section as an ordinary Lua runtime error holding the compactor's message, and the code after the call never runs. Left uncaught in a walked section, that error ends the run with the error code `lua_runtime`, with the compactor's error text in the message.
+A compactor's own error takes a different path. An uncaught string raised by a compactor fails the section as an ordinary Lua runtime error holding the compactor's message, and the code after the call never runs. That error ends the run with the error code `lua_runtime`, with the compactor's error text in the message.

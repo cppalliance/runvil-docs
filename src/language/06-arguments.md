@@ -1,6 +1,6 @@
 # Arguments
 
-Every run of a prompt starts with one argument string, the text the Host passes when it starts the run, and your Lua can read that string exactly as it was sent. A prompt can also declare typed arguments under the `args:` frontmatter key, and the argument string then arrives parsed as JSON in the `argv` global. This chapter covers declaring arguments, reading them through `args` and `argv`, and checking and repairing them in the H1 pass before any section runs, so you know exactly what your Lua sees for any argument string a Host sends.
+Every run of a prompt starts with one argument string, the text the Host passes when it starts the run, and your Lua can read that string exactly as it was sent. A prompt can also declare typed arguments under the `args:` frontmatter key, and the argument string then arrives parsed as JSON in the `argv` global. This chapter covers declaring arguments, reading them through `args` and `argv`, and checking them in your own Lua while `argv` stays read-only, so you know exactly what your Lua sees for any argument string a Host sends.
 
 ## Arguments at a glance
 
@@ -15,8 +15,6 @@ args:
   query:
     type: string
 ---
-
-# Paper search
 
 ## Search
 
@@ -66,7 +64,7 @@ The `args:` declaration advertises and documents the prompt's arguments to whoev
 
 ### Declarations are never enforced
 
-Declaration enforcement, checking a run's argument string against the `args:` declaration, is never done by Runvil at run time. A wrongly typed value or a missing required arg reaches the prompt unchanged, and the run does not fail. With `query` declared `type: string` and the argument string `{"query":5}`, the run succeeds and `tostring(argv.query)` returns `5`. Enforcement is the job of the Lua in the prompt's [H1 body](02-file-structure.md#the-h1-title-and-h1-body), as [Checking and repairing `argv` in the H1 pass](#checking-and-repairing-argv-in-the-h1-pass) shows.
+Declaration enforcement, checking a run's argument string against the `args:` declaration, is never done by Runvil at run time. A wrongly typed value or a missing required arg reaches the prompt unchanged, and the run does not fail. With `query` declared `type: string` and the argument string `{"query":5}`, the run succeeds and `tostring(argv.query)` returns `5`. Enforcement is the job of the prompt's own Lua, as [`argv` is read-only](#argv-is-read-only) shows.
 
 ### The implicit default declaration
 
@@ -82,8 +80,6 @@ name: greeter
 description: Greets whoever the argument string names
 runvil: 0
 ---
-
-# Greeter
 
 ## Greet
 
@@ -108,9 +104,9 @@ assert(args == 'hello there')
 return args
 ````
 
-### Where `argv` can change
+### `argv` cannot be changed
 
-`argv` is writable only in the [H1 pass](04-how-a-prompt-runs.md#the-h1-pass), the run of the Lua in the H1 body under the `#` title before the [walk](04-how-a-prompt-runs.md#the-section-walk) starts. Everywhere else it is read-only at every nesting depth, so the H1 body is the only place a prompt can change `argv`, and its value cannot change after the H1 pass. An H1 body that runs `argv = { query = 'repaired' }` hands that table to every later section. In an H2 section, `argv = ...` and `argv.query = ...` both fail with an error naming `argv is frozen`, and so does a nested write such as `argv.nested.hits = 3`. [Freezing `argv` after the H1 pass](#freezing-argv-after-the-h1-pass) covers the freeze in full.
+`argv` is read-only in every section and at every nesting depth, so a section always reads the arguments exactly as the argument string gave them. `argv = ...` and `argv.query = ...` both fail with an error naming `argv is read-only`, and so does a nested write such as `argv.nested.hits = 3`. A prompt that needs a different value builds it in Lua and keeps it in [`var`](05-lua-environment.md#keeping-state-in-var). [`argv` is read-only](#argv-is-read-only) covers the rule in full.
 
 ## Declaring arguments in frontmatter
 
@@ -125,8 +121,6 @@ args:
   query:
     type: string
 ---
-
-# Paper search
 
 ## Search
 
@@ -233,8 +227,6 @@ args:
     optional: true
 ---
 
-# Paper search
-
 ## Search
 
 ```lua
@@ -297,8 +289,6 @@ args:
     description: Most results to return
 ---
 
-# Paper search
-
 ## Search
 
 ```lua
@@ -339,7 +329,7 @@ You give an optional arg a `default:` in its declared type, as in `times: { type
 
 YAML quoting decides a default's type. A quoted value is always a string, so you quote a default only for a `string` arg and write `true`, `false`, and numbers bare. The quoted `'true'` is a string and fails on a `boolean` arg, and the bare `42` is an integer and fails on a `string` arg.
 
-The run never fills in a declared default. The default is advertised to Hosts but never applied to `argv`, which is built only from the args the argument string carries, so a missing optional arg stays absent unless the argument string sends a value. To use the default in your Lua, set it yourself in the H1 body, as [Checking and repairing `argv` in the H1 pass](#checking-and-repairing-argv-in-the-h1-pass) shows.
+The run never fills in a declared default. The default is advertised to Hosts but never applied to `argv`, which is built only from the args the argument string carries, so a missing optional arg stays absent unless the argument string sends a value. To use the default in your Lua, apply it yourself and keep the result in `var`, as [`argv` is read-only](#argv-is-read-only) shows.
 
 ### Describing an argument
 
@@ -403,8 +393,6 @@ args:
   use_mcp:
     type: boolean
 ---
-
-# Paper search
 
 ## Search
 
@@ -548,8 +536,6 @@ description: Returns its argument string unchanged
 runvil: 0
 ---
 
-# Echo
-
 ## Echo back
 
 ```lua
@@ -565,7 +551,7 @@ hello
 
 ### Where `args` is available
 
-You can read the `args` global in the Lua of every section, including the H1 body at the top of the prompt, because the Engine installs `args` in each of them once section setup ends.
+You can read the `args` global in the Lua of every section, including the [preamble](02-file-structure.md#the-preamble), the text between the frontmatter and the first heading, which is a section when it holds Lua, because the Engine installs `args` in each of them once section setup ends.
 
 ### The exact text, never parsed
 
@@ -587,8 +573,6 @@ name: greeter
 description: Greets whoever the argument string names
 runvil: 0
 ---
-
-# Greeter
 
 ## Greet
 
@@ -619,8 +603,6 @@ description: Stops in the first prologue
 runvil: 0
 ---
 
-# Early stop
-
 ## Stop Early
 
 ```lua
@@ -647,8 +629,6 @@ description: Reads the argument string through a library
 runvil: 0
 ---
 
-# Library reader
-
 ## Result
 
 ```lua
@@ -673,7 +653,7 @@ later canned value
 
 ### When to read `args` instead of `argv`
 
-Read `args` when you need the argument string exactly as the Host sent it: to echo it, to build text from it, or to rebuild `argv` in the H1 body when the argument string is not valid JSON, as [Checking and repairing `argv` in the H1 pass](#checking-and-repairing-argv-in-the-h1-pass) shows. Read `argv` when you want the parsed fields of a declared argument. In a prompt with no `args:` key, `args` and `argv.prose` hold the same string, as [Prompts with no `args:` key](#prompts-with-no-args-key) explains.
+Read `args` when you need the argument string exactly as the Host sent it: to echo it, to build text from it, or to build the values you need when the argument string is not valid JSON, as [`argv` is read-only](#argv-is-read-only) shows. Read `argv` when you want the parsed fields of a declared argument. In a prompt with no `args:` key, `args` and `argv.prose` hold the same string, as [Prompts with no `args:` key](#prompts-with-no-args-key) explains.
 
 ## Reading parsed input from `argv`
 
@@ -691,8 +671,6 @@ args:
     type: integer
     optional: true
 ---
-
-# Paper search
 
 ## Search
 
@@ -717,7 +695,7 @@ A JSON object in the argument string becomes an `argv` table with string keys na
 
 Reading a field the argument string does not carry, such as `argv.absent`, returns nil instead of raising an error.
 
-Outside the H1 body, you read nested fields of `argv` with ordinary dotted access at any depth, because a nested JSON object arrives as a nested table. The argument string `{ "nested": { "hits": 2 } }` gives `argv.nested.hits` the value `2`.
+You read nested fields of `argv` with ordinary dotted access at any depth, because a nested JSON object arrives as a nested table. The argument string `{ "nested": { "hits": 2 } }` gives `argv.nested.hits` the value `2`.
 
 ### Arrays
 
@@ -734,8 +712,6 @@ args:
   query:
     type: string
 ---
-
-# Item listing
 
 ## List
 
@@ -754,15 +730,15 @@ Run it with the argument string `{"query":"papers","items":["a","b"]}`:
 papers: a, b
 ````
 
-Outside the H1 body, the length operator `#`, `pairs`, and `next` see an empty table on any `argv` table, because each frozen table is an empty stand-in that forwards reads to the data. So `#argv.items` is `0` in the `List` section above, and `ipairs` or numeric indexing is how you read an array there. Inside the H1 body, `argv` is a plain table, and all three work normally.
+The length operator `#`, `pairs`, and `next` see an empty table on any `argv` table, because each `argv` table is an empty read-only stand-in that forwards reads to the data. So `#argv.items` is `0` in the `List` section above, and `ipairs` or numeric indexing is how you read an array.
 
 ### Strings, numbers, and booleans
 
-JSON strings, numbers, and booleans in the argument string reach you as plain Lua strings, numbers, and booleans, outside the H1 body as well as inside it.
+JSON strings, numbers, and booleans in the argument string reach you as plain Lua strings, numbers, and booleans in every section.
 
 ### Malformed input
 
-Malformed input is an argument string that is not valid JSON, or the JSON `null`, under an explicit `args:` declaration. It makes `argv` nil in the H1 body and in every section, and the run goes on because nothing refuses it, so the prompt detects malformed input by testing `if argv then` or `argv == nil`:
+Malformed input is an argument string that is not valid JSON, or the JSON `null`, under an explicit `args:` declaration. It makes `argv` nil in every section, and the run goes on because nothing refuses it, so the prompt detects malformed input by testing `if argv then` or `argv == nil`:
 
 ````markdown
 ---
@@ -773,8 +749,6 @@ args:
   query:
     type: string
 ---
-
-# Paper search
 
 ## Search
 
@@ -817,8 +791,6 @@ args:
     optional: true
 ---
 
-# Prose check
-
 ## Check
 
 ```lua
@@ -840,7 +812,7 @@ Run it with the argument string `{"prose":""}`:
 empty
 ````
 
-A JSON `null` nested inside the argument string reads as [`json.null`](05-lua-environment.md#null-values-and-jsonnull) in every section, the H1 body included, and a `null` element inside a JSON array keeps its index. So for the argument string `{"note":null,"ids":[1,null,3]}`, both `argv.note == json.null` and `argv.ids[2] == json.null` are true, `json.encode(argv)` gives back `{"ids":[1,null,3],"note":null}`, and a field the string leaves out still reads nil. `json.null` is a userdata and so it is truthy, which means `if argv.note then` passes for a null. Test for a null with `argv.note == json.null` and for an absent field with `argv.note == nil`. A whole argument string that is the JSON `null` is different: it makes `argv` itself nil, as [Malformed input](#malformed-input) describes.
+A JSON `null` nested inside the argument string reads as [`json.null`](05-lua-environment.md#null-values-and-jsonnull) in every section, and a `null` element inside a JSON array keeps its index. So for the argument string `{"note":null,"ids":[1,null,3]}`, both `argv.note == json.null` and `argv.ids[2] == json.null` are true, `json.encode(argv)` gives back `{"ids":[1,null,3],"note":null}`, and a field the string leaves out still reads nil. `json.null` is a userdata and so it is truthy, which means `if argv.note then` passes for a null. Test for a null with `argv.note == json.null` and for an absent field with `argv.note == nil`. A whole argument string that is the JSON `null` is different: it makes `argv` itself nil, as [Malformed input](#malformed-input) describes.
 
 ## Prompts with no `args:` key
 
@@ -852,8 +824,6 @@ name: echo
 description: Returns its argument string unchanged
 runvil: 0
 ---
-
-# Echo
 
 ## Echo back
 
@@ -897,8 +867,6 @@ description: Searches every source for one topic
 runvil: 0
 ---
 
-# Research
-
 ## Search
 
 ```lua
@@ -932,8 +900,6 @@ description: Greets whoever the argument string names
 runvil: 0
 ---
 
-# Greeter
-
 ## Greet
 
 ```lua
@@ -961,8 +927,6 @@ name: brief
 description: Restates its topic
 runvil: 0
 ---
-
-# Brief
 
 ## Topic
 
@@ -1007,8 +971,6 @@ args:
     description: Freeform input for this prompt
 ---
 
-# Echo
-
 ## Echo back
 
 ```lua
@@ -1029,11 +991,11 @@ An explicit empty map, `args: {}`, declares zero arguments and is still a struct
 
 ### Argument strings for calls and tasks
 
-The same `argv.prose` wrapping applies to the explicit argument string given to a [`call`](08-jump-and-call.md#calling-a-section) or to a task started with [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn), because that chain's `argv` is derived again from its own argument string under the default declaration. A fanout [arm](14-fanout.md#what-an-arm-sees) gets no argument string of its own and reads its caller's `args` and `argv` unchanged, as [Freezing `argv` after the H1 pass](#freezing-argv-after-the-h1-pass) explains.
+The same `argv.prose` wrapping applies to the explicit argument string given to a [`call`](08-jump-and-call.md#calling-a-section) or to a task started with [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn), because that chain's `argv` is derived again from its own argument string under the default declaration. A fanout [arm](14-fanout.md#what-an-arm-sees) gets no argument string of its own and reads its caller's `args` and `argv` unchanged, as [`argv` in calls, tasks, and arms](#argv-in-calls-tasks-and-arms) explains.
 
-## Checking and repairing `argv` in the H1 pass
+## `argv` is read-only
 
-You can check `argv` in the H1 body and repair or complete it before the walk starts, so every section sees arguments in the shape it expects.
+You can rely on `argv` staying exactly as the argument string gave it, because `argv` is read-only in every section: a write to it is refused, and a read still works.
 
 ````markdown
 ---
@@ -1045,7 +1007,114 @@ args:
     type: string
 ---
 
-# Paper search
+## Search
+
+```lua
+local wrote = pcall(function() argv.query = 'changed' end)
+if wrote then return 'written' end
+return 'refused, query is still ' .. argv.query
+```
+````
+
+Run it with the argument string `{"query":"papers"}`:
+
+````text
+refused, query is still papers
+````
+
+The write `argv.query = 'changed'` raises an error that `pcall` catches, and `argv.query` still reads `papers`. The rest of this section gives the error each write raises, then shows how a prompt checks its arguments and handles malformed or incomplete input while `argv` stays as it is.
+
+### `argv` in every section
+
+Every section's Lua has an `argv` global that the Engine installs, and it is read-only in all of them: in the [preamble](02-file-structure.md#the-preamble), in every section on the [walk](04-how-a-prompt-runs.md#the-section-walk), in a called chain, in a task started with `tasks.spawn`, and in a fanout arm. `argv` is there even when the run has no parsed arguments, in which case it holds nil. There is no way to change `argv`, so a section always reads the arguments its chain started with.
+
+The Engine guards the name `argv` on `_G`, so every read or write of the name goes through that guard. Each `argv` table is a read-only stand-in whose reads pass straight through to the parsed data. So `argv.query == 'papers'` and `argv.nested.hits == 2` read the data as given, and an absent field such as `argv.absent` reads nil.
+
+### What a write raises
+
+A write to `argv` raises a Lua error. Each one is listed below, and the subsections after the table explain them:
+
+| Write | Message |
+|---|---|
+| `argv = {}`, `argv = nil`, `argv = 'hijacked'`, `argv = 6` | ``argv is read-only: assign to `var` or a section global instead`` |
+| `argv.query = 1` | `argv is read-only: cannot set field 'query'` |
+| `argv[1] = 1` | `argv is read-only: cannot set field 1` |
+| `argv[2.5] = 1` | `argv is read-only: cannot set field number` |
+| `argv.a.b = 1` | `argv is read-only: cannot set field 'b'` |
+| `setmetatable` on any `argv` table | `cannot change a protected metatable`, after the calling position |
+
+### Assigning `argv`
+
+Assigning the `argv` global itself in any section, with any value, as in `argv = {}`, `argv = nil`, `argv = 'hijacked'`, or `argv = { query = 'hijacked' }`, raises a Lua runtime error with the Engine's refusal message:
+
+````text
+argv is read-only: assign to `var` or a section global instead
+````
+
+The refusal comes before the value is looked at, and it is the same in every section. It happens even when `argv` is nil, because a nil `argv` is read-only too, so `argv = {}` on a nil `argv` fails with the same message. Reassigning an `argv` that holds a scalar, as in `argv = 6`, raises it as well. The message names the two places for a value of your own: [`var`](05-lua-environment.md#keeping-state-in-var), which the sections after this one read too, and a global of the section, which lasts for that section entry.
+
+### Field write messages
+
+Writing a string-keyed field of `argv` raises a Lua error with the message `argv is read-only: cannot set field 'name'`, with the field name in single quotes. So `argv.query = 1` gives `argv is read-only: cannot set field 'query'`, and `argv.mode = "x"` gives `argv is read-only: cannot set field 'mode'`.
+
+Writing an integer key of `argv`, such as an array index, raises the same field write error with the integer shown without quotes, so `argv[1] = 1` gives `argv is read-only: cannot set field 1`.
+
+A write with a key that is neither a string nor an integer, such as a fractional number or a boolean, raises a refusal that names the key's Lua type in place of its value, so `argv[2.5] = 1` gives `argv is read-only: cannot set field number`, and `argv[true] = 1` gives `argv is read-only: cannot set field boolean`.
+
+Adding a new field to an `argv` table raises the same field write error as changing an existing field. On an `argv` holding only `query`, the new keys `argv[1]` and `argv[2.5]` get the same `argv is read-only: cannot set field ...` refusal as `argv.query`.
+
+### Nested writes
+
+`argv` is read-only at every depth: a nested table inside `argv` refuses writes the same way, so a write at any depth, such as `argv.a.b = 1` or `argv.nested.hits = 3`, raises the field write error. A nested field write names only the innermost key in its message, so `argv.a.b = 1` reports `cannot set field 'b'`, and `argv.opts.depth = 2` names `'depth'`.
+
+Writing a field of `argv` at any depth, including a new field, is a Lua runtime error whose message names the field written in place of `{field}`:
+
+````text
+argv is read-only: cannot set field {field}
+````
+
+### Metatables, length, and iteration on `argv` tables
+
+Each `argv` table carries the protection text `argv is read-only`. So `getmetatable(argv)`, or `getmetatable` on any table inside `argv`, returns the string `"argv is read-only"` in place of its real metatable.
+
+The length operator `#`, `pairs`, and `next` treat an `argv` table as empty, because each `argv` table is an empty stand-in that forwards reads to the data. `ipairs` and numeric indexing read an array's elements, as [Arrays](#arrays) shows.
+
+`setmetatable` on any `argv` table raises `cannot change a protected metatable`, prefixed with the calling position, because the table's metatable is protected. It is the same error `setmetatable` gives on the protected `sys` and `var` tables.
+
+### Catching a refused write with `pcall`
+
+A refused write is an ordinary Lua error, so you catch it with [`pcall`](05-lua-environment.md#raising-and-catching-errors). `tostring(err)` on the caught value gives the file and line of the write, then the refusal, then the fixed prose for a Lua runtime failure:
+
+````lua
+local ok, err = pcall(function() argv.query = 1 end)
+return tostring(err)
+````
+
+This block returns:
+
+````text
+{file}:{line}: argv is read-only: cannot set field 'query'. The Lua code failed at runtime. Fix the code at this location.
+````
+
+The prompt at the top of this section uses the same pattern with a flag: `local wrote = pcall(function() argv.query = 'changed' end)` leaves `wrote` false, so the block goes on to its last line and returns `refused, query is still papers`.
+
+### Uncaught write errors
+
+An uncaught write to `argv` ends the run with the [error code](16-limits-and-errors.md#run-error-codes) `lua_runtime`, the same code as any other runtime error in a section's Lua, and its message carries the refusal and the location of the write (see [Where an error points](16-limits-and-errors.md#where-an-error-points)).
+
+### Checking the arguments yourself
+
+Because the declaration advertises and documents the arguments but never enforces them, you check their shape and types in the prompt's own Lua, usually in the first code that runs. This prompt checks for `query` in its [preamble](02-file-structure.md#the-preamble), the Lua before its first heading:
+
+````markdown
+---
+name: search
+description: Searches for papers on one query
+runvil: 0
+args:
+  query:
+    type: string
+---
 
 ```lua
 assert(argv and argv.query, 'query is required')
@@ -1064,35 +1133,19 @@ Run it with the argument string `{"query":"papers"}`:
 Results for papers
 ````
 
-Run it with the argument string `{}`, and the check in the H1 body fails the run with an error that carries the message `query is required` and ends with ` (at search.md:13)`, the line of the `assert` (see [Where an error points](16-limits-and-errors.md#where-an-error-points)), so `Search` never runs.
+Run it with the argument string `{}`, and the `assert` fails. Nothing catches the error, so it ends the run with the error code `lua_runtime` and a message that carries `query is required` and ends with ` (at search.md:11)`, the line of the `assert` (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). The run starts at the preamble, so `Search` never runs. A prompt with no preamble makes the same check at the top of its first section.
 
 ### Nothing checks values against the declaration
 
 Nothing checks passed values against the `args:` declaration. A value whose shape disagrees with its declared type, such as `{"query":5}` for a `query` arg declared `type: string`, or `"five"` for an `integer` arg, does not fail the run, and `argv` holds the value exactly as passed. Under `{"query":5}`, `return tostring(argv.query)` gives `5`, and the prompt decides what a bad value means.
 
-### Checking the arguments yourself
+### Fields the declaration does not list
 
-Because the declaration advertises and documents the arguments but never enforces them, you check their shape and types in the prompt itself, usually in the Lua of the H1 body under the `#` title. A check such as `assert(argv and argv.query, 'query is required')` fails the run when the argument string is `{}`.
+Fields beyond the declared args, including arrays and nested objects, arrive in `argv` as passed, because the declaration is never enforced. With `query` as the only declared arg, the argument string `{"query":"papers","n":2}` renders through `{{ argv }}` as `{"n":2,"query":"papers"}`, and the `listing` prompt in [Reading parsed input from `argv`](#reading-parsed-input-from-argv) declares only `query` yet reads `argv.items` with `ipairs`.
 
-The H1 pass runs before the walk, so a failing check stops the run with an error before any `##` section runs. In the prompt above, run with `{}`, the `Search` section never runs.
+### Handling malformed or incomplete input
 
-### `argv` is writable in the H1 body
-
-In the H1 pass, `argv` is an ordinary writable global with no guard in the way, so you can assign `argv` itself and its fields without error. It is also a plain table there, so `#`, `pairs`, `next`, and `ipairs` work on it normally.
-
-### Repairing malformed input
-
-When the argument string is malformed input, such as `broken json`, `argv` reads nil in the H1 body, so you detect the problem there and supply a repaired value, as in `if argv == nil then argv = { query = 'repaired' } end`.
-
-The `argv` repair is replacing the parsed arguments in the H1 body by assigning a whole new table to the `argv` global, such as `argv = { query = 'repaired' }`. After it, `argv.query` reads `repaired`, and the arguments the H1 pass leaves behind are `{ "query": "repaired" }`.
-
-### Editing fields in place
-
-In the H1 body you can also edit `argv` in place, overwriting a field such as `argv.query = 'fixed'` or adding one such as `argv.extra = 1`. This works whether `argv` holds the parsed arguments or a table you just assigned, and the edits stay in the value the H1 pass leaves behind. The argument string `{ "query": "broken" }` with `argv.query = 'fixed'` reads back as `{ "query": "fixed" }`, and `argv.extra = 1` after `argv = { query = 'repaired' }` reads back as `{ "query": "repaired", "extra": 1 }`.
-
-### Repairing from the raw argument string
-
-The raw argument string is already in the `args` global beside the writable `argv`, so a repair can read it and assign `argv` a fixed-up value. This prompt turns an argument string that does not parse into a query:
+When the argument string is malformed or leaves a value out, the prompt reads `args`, builds the value it needs in Lua, and keeps it in [`var`](05-lua-environment.md#keeping-state-in-var), where the sections after it read it and a [`var` placeholder](07-substitution.md#inserting-var-and-sys-values) such as `{{ var.query }}` renders it. This prompt takes its query from `argv` when the argument string parsed, and from the raw argument string when it did not:
 
 ````markdown
 ---
@@ -1104,32 +1157,36 @@ args:
     type: string
 ---
 
-# Paper search
-
 ```lua
-if not argv then
-  argv = { query = args }
-end
+var.query = argv and argv.query or args
 ```
 
 ## Search
 
-Query: {{ argv.query }}
+Query: {{ var.query }}
 
 ```lua
 return prose
 ```
 ````
 
-Run it with the argument string `broken json`:
+Run it with the argument string `{"query":"papers"}`:
+
+````text
+Query: papers
+````
+
+Run it with the argument string `broken json`, which is not JSON:
 
 ````text
 Query: broken json
 ````
 
+The preamble tests `argv` first, because `argv` is nil when the argument string does not parse, and falls back to `args`, the raw argument string. `var` carries from the preamble into the sections after it (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)), so `Search` reads `var.query` in both runs. A value that only one section needs can stay in a local or a global of that section.
+
 ### Filling in a declared default
 
-A declared `default:` never reaches `argv` when the argument string leaves the arg out, so you fill it in in the H1 body. For a `limit` arg declared `default: 3`, this H1 body first makes sure `argv` is a table, then supplies the default:
+A declared `default:` never reaches `argv` when the argument string leaves the arg out, so the prompt applies the default in its own Lua. For a `limit` arg declared `default: 3`, this preamble keeps both values that `Search` needs in `var`:
 
 ````markdown
 ---
@@ -1145,21 +1202,15 @@ args:
     default: 3
 ---
 
-# Paper search
-
 ```lua
-if type(argv) ~= 'table' then
-  argv = { query = args }
-end
-if argv.limit == nil then
-  argv.limit = 3
-end
+var.query = argv and argv.query or args
+var.limit = argv and argv.limit or 3
 ```
 
 ## Search
 
 ```lua
-return 'Results for ' .. argv.query .. ', limit ' .. argv.limit
+return 'Results for ' .. var.query .. ', limit ' .. var.limit
 ```
 ````
 
@@ -1169,114 +1220,19 @@ Run it with the argument string `{"query":"papers"}`:
 Results for papers, limit 3
 ````
 
-### Clearing `argv`
-
-In the H1 body, you clear the arguments with `argv = nil`, after which `argv == nil` is true.
-
-### Keeping `argv` as JSON data
-
-In the H1 body, keep `argv` as [JSON data](05-lua-environment.md#keeping-state-in-var) or nil, meaning strings, numbers, booleans, and tables of them. The assignment itself accepts any value, so `argv = function() end` raises no error at that line, but a value that is not JSON data, such as a function, userdata other than `json.null`, or thread, fails the run once the H1 body finishes, with this message naming its Lua type in place of `{type}` and pointing at the H1 body's last Lua block:
-
-````text
-argv must be JSON data, got {type} (at {file}:{line})
-````
-
-The one userdata the freeze accepts is `json.null`, which freezes as JSON null, and later sections read it as `json.null` again, like any other JSON `null` in the arguments. So after an H1 body runs `argv = { a = json.null }`, a later section reads `argv.a` as `json.null`, and `argv.a == json.null` is true.
-
-### Your own `_G` metatable in the H1 pass
-
-In the H1 pass, a metatable you set on `_G`, as [Giving `_G` a metatable](05-lua-environment.md#giving-_g-a-metatable) describes, never sees `argv`. A nil `argv` reads as nil even under a strict `__index` that errors on undefined globals, and a repair such as `argv = repaired` lands in `_G` without reaching a `__newindex` hook, so the walk still reads the repaired value.
-
-### Fields the declaration does not list
-
-Fields beyond the declared args, including arrays and nested objects, arrive in `argv` as passed, because the declaration is never enforced. With `query` as the only declared arg, the argument string `{"query":"papers","n":2}` renders through `{{ argv }}` as `{"n":2,"query":"papers"}`, and the `listing` prompt in [Reading parsed input from `argv`](#reading-parsed-input-from-argv) declares only `query` yet reads `argv.items` with `ipairs`.
-
-## Freezing `argv` after the H1 pass
-
-You can rely on `argv` holding the same value in every section after the H1 pass, because the Engine freezes it when the H1 pass ends.
-
-````markdown
----
-name: search
-description: Searches for papers on one query
-runvil: 0
-args:
-  query:
-    type: string
----
-
-# Paper search
-
-```lua
-if argv == nil then
-  argv = { query = 'repaired' }
-end
-```
-
-## First
-
-```lua
-assert(argv.query == 'repaired', 'the repair reaches the first section')
-```
-
-## Second
-
-```lua
-assert(argv.query == 'repaired', 'the repair reaches every downstream section')
-return argv.query
-```
-````
-
 Run it with the argument string `broken json`:
 
 ````text
-repaired
+Results for broken json, limit 3
 ````
 
-### What the freeze reads back
+An argument string that sends `limit`, such as `{"query":"papers","limit":5}`, gives `Results for papers, limit 5`.
 
-The `argv` freeze happens when the H1 pass completes, before the walk starts: the Engine reads the value the H1 body left in `argv` back as JSON and freezes it for the rest of the run. So a repair the H1 body assigns to `argv` becomes the `argv` later sections see.
+### When `argv` is nil
 
-Whatever `argv` holds when the H1 pass finishes, the parsed arguments or a repair, is the `argv` every walked section reads, both in Lua and in `{{ argv }}` and `{{ argv.field }}` placeholders. In the prompt above, `First` and every section after it read `argv.query == 'repaired'`.
+`argv` is nil when the argument string is [malformed input](#malformed-input): under an explicit `args:` declaration, an argument string that is not valid JSON, or the JSON `null`. `argv` then reads nil in every section, so `assert(argv == nil, 'no argv reads nil')` holds in each of them.
 
-When the H1 body leaves `argv` untouched, later sections see the `argv` parsed from the argument string. An H1 body that only runs `require '/strict'` and never assigns `argv`, run with the argument string `{"query":"x"}`, leaves a later section reading `argv.query == 'x'`.
-
-Outside the H1 pass, `argv` is never a raw global, and reading it returns its frozen value, which on the walk is the value the H1 body left behind. `argv` is frozen in every walked section after the H1 pass ends.
-
-### Writes after the freeze
-
-Outside the H1 pass, assigning `argv` raises an error. This block in a walked section catches it and returns the error text:
-
-````lua
-local ok, err = pcall(function() argv = 'hijacked' end)
-return tostring(err)
-````
-
-The error contains this message:
-
-````text
-argv is frozen outside H1: assign it in H1 only
-````
-
-Writable `argv` is the H1 body's one privilege. Every other section gets `argv` read-only, including every section on the walk, in a called chain, in a task started with `tasks.spawn`, and in a fanout arm. In a called section, `local wrote = pcall(function() argv.query = 'x' end)` leaves `wrote` false.
-
-### Non-JSON values at the freeze
-
-Leave `argv` as JSON data, meaning strings, numbers, booleans, and tables of them, or as nil, when the H1 body finishes, because a function, userdata other than `json.null`, or thread is refused at the freeze. The run fails with a `lua_runtime` error when the H1 pass leaves `argv` holding data that is not JSON.
-
-Leaving `argv` as a function, userdata other than `json.null`, or thread when the H1 pass ends, as after `argv = function() end`, fails the freeze read-back with [error code](16-limits-and-errors.md#run-error-codes) `lua_runtime` and a message that names the Lua type `function`, `userdata`, or `thread` in place of `{type}` and ends with the location of the first line of the last `lua` block the H1 pass ran:
-
-````text
-argv must be JSON data, got {type} (at {file}:{line})
-````
-
-The code is `lua_runtime` even though the failure happens at the end of the H1 pass. Leaving `argv` as data that cannot be represented as JSON, such as a table holding a value that cannot be JSON, also fails the read-back with a `lua_runtime` error.
-
-### When the H1 pass leaves `argv` nil
-
-Leaving `argv` nil at the end of the H1 pass means the run has no `argv` value. Outside the H1 pass, `argv` then reads nil, so `assert(argv == nil, 'no argv reads nil')` holds there.
-
-NilArgv is the substitution kind a placeholder rooted at `argv` fails with when the run has no `argv` value. Placeholders in walked sections read the run's frozen `argv`, so when the H1 pass leaves `argv` nil, `{{ argv }}` and `{{ argv.field }}` in later sections fail with `NilArgv` when a block reads them through `prose`. This prompt has no H1 repair:
+NilArgv is the substitution kind a placeholder rooted at `argv` fails with when `argv` is nil. `{{ argv }}` and `{{ argv.field }}` then fail with `NilArgv` when a block reads them through `prose`, as in this prompt:
 
 ````markdown
 ---
@@ -1287,8 +1243,6 @@ args:
   query:
     type: string
 ---
-
-# Paper search
 
 ## Show
 
@@ -1299,15 +1253,13 @@ return prose
 ```
 ````
 
-Run with the argument string `not json`, it fails the run with the message `{{ argv }} is nil (argv holds no value) [NilArgv at byte 7] (at search.md:14)`, which names `argv` and the placeholder's line. [Substitution error kinds](07-substitution.md#substitution-error-kinds) lists the other substitution kinds.
+Run with the argument string `not json`, it fails the run with the message `{{ argv }} is nil (argv holds no value) [NilArgv at byte 7] (at search.md:12)`, which names `argv` and the placeholder's line. With `{{ argv.query }}` in place of `{{ argv }}`, the message reads `{{ argv.query }} is nil (argv holds no value) [NilArgv at byte 7] (at search.md:12)`. [Substitution error kinds](07-substitution.md#substitution-error-kinds) lists the other substitution kinds.
 
-### Placeholders in the H1 body
-
-Inside the H1 body, `{{ argv }}` and `{{ argv.field }}` placeholders render the `argv` parsed from the argument string, never a repair the H1 Lua assigned. So when the argument string does not parse, they fail with `NilArgv` even after the repair, and the repair reaches placeholders from the first walked section on.
+A `var` placeholder renders where an `argv` placeholder fails. The first prompt in [Handling malformed or incomplete input](#handling-malformed-or-incomplete-input) builds `var.query` from `args` when `argv` is nil, so its `Query: {{ var.query }}` renders for the argument string `broken json`.
 
 ### `argv` in calls, tasks, and arms
 
-A `call` or `tasks.spawn` given its own argument string gets a fresh `argv` parsed from that string and frozen in its chain, while one given no argument string inherits the caller's `args` and frozen `argv` whole, an H1 repair included:
+A `call` or `tasks.spawn` given its own argument string gets `args` and `argv` derived from that string, the same way the run's are derived from the run's argument string, while one given no argument string has its caller's `args` and `argv`:
 
 ````markdown
 ---
@@ -1318,14 +1270,6 @@ args:
   query:
     type: string
 ---
-
-# Paper search
-
-```lua
-if argv == nil then
-  argv = { query = 'repaired' }
-end
-```
 
 ## Main
 
@@ -1342,147 +1286,25 @@ return argv.query
 ```
 ````
 
-Run it with the argument string `broken json`. The first `call` gives `Sub` the `argv.query` value `chain`, and the second gives it the repaired `argv.query` value `repaired`:
+Run it with the argument string `{"query":"run"}`. The first `call` gives `Sub` the `argv.query` value `chain`, and the second gives it the caller's `argv.query` value `run`:
 
 ````text
-chain repaired
+chain run
 ````
 
-In `Sub`, a write to a field of `argv` still fails under either `call`, because the chain's `argv` is frozen.
+In `Sub`, a write to `argv` is refused under either `call`, because `argv` is read-only in every chain: `local wrote = pcall(function() argv.query = 'x' end)` leaves `wrote` false there.
 
-Every arm reads its caller's `args` and frozen `argv` unchanged, including an `argv` repaired in the H1 pass, because `tasks.fanout` passes no argument string of its own to the arms it spawns.
+Every arm reads its caller's `args` and `argv` unchanged, because `tasks.fanout` passes no argument string of its own to the arms it spawns.
 
-## Freeze errors and guard mechanics
+### Your own `_G` metatable
 
-You can tell each freeze error apart by its message, catch it with `pcall`, and know which operations on a frozen `argv` still work.
-
-````markdown
----
-name: search
-description: Searches for papers on one query
-runvil: 0
-args:
-  query:
-    type: string
----
-
-# Paper search
-
-## Search
-
-```lua
-local wrote = pcall(function() argv.mode = 'x' end)
-if wrote then return 'written' end
-return 'refused'
-```
-````
-
-Run it with the argument string `{"query":"papers"}`:
-
-````text
-refused
-````
-
-A freeze error is the Lua error a write to a frozen `argv` raises. Each one is listed below, and the rest of this section explains them:
-
-| Write outside the H1 pass | Message |
-|---|---|
-| `argv = {}`, `argv = nil`, `argv = 'hijacked'`, `argv = 6` | `argv is frozen outside H1: assign it in H1 only` |
-| `argv.query = 1` | `argv is frozen outside H1: cannot set field 'query'` |
-| `argv[1] = 1` | `argv is frozen outside H1: cannot set field 1` |
-| `argv[2.5] = 1` | `argv is frozen outside H1: cannot set field number` |
-| `argv.a.b = 1` | `argv is frozen outside H1: cannot set field 'b'` |
-| `setmetatable` on any `argv` table | `cannot change a protected metatable`, after the calling position |
-
-### `argv` in every section
-
-Every section and the H1 pass has an `argv` global that the Engine installs, guarded rather than a plain global outside the H1 pass. `argv` is there even when the run has no parsed arguments, in which case it holds nil.
-
-Every section's Lua gets `argv` when the Engine sets up the section, in one of two modes depending on whether the section is the H1 pass: writable in the H1 pass and frozen in every other section.
-
-### The guard proxy
-
-Outside the H1 pass, `argv` is not a plain entry of `_G`. The frozen value sits behind the guard proxy on `_G`, and every read or write of the name `argv` goes through that guard.
-
-Outside the H1 pass, each `argv` table is a read-only proxy whose reads pass straight through to the parsed data. So `argv.query == 'papers'` and `argv.nested.hits == 2` read the data as given, and an absent field such as `argv.absent` reads nil.
-
-### Writing to a frozen `argv`
-
-Outside the H1 pass, such as in an H2 section, writing a top-level field of `argv`, as in `argv.query = 'hijacked'`, raises an error whose message names the freeze with `argv is frozen`.
-
-Assigning the `argv` global itself in any section other than the H1 pass, with any value, as in `argv = {}`, `argv = nil`, `argv = 'hijacked'`, or `argv = { query = 'hijacked' }`, raises a Lua runtime error with the Engine's refusal message:
-
-````text
-argv is frozen outside H1: assign it in H1 only
-````
-
-The refusal comes before the value is looked at, and the same refusal happens in a later section and in a later fence. It happens even when `argv` is nil, because a nil `argv` is frozen too, so `argv = {}` on a nil `argv` fails with `argv is frozen outside H1: assign it in H1 only`. Reassigning an `argv` that holds a scalar, as in `argv = 6`, raises the freeze error `argv is frozen` as well.
-
-### Field write messages
-
-Writing a string-keyed field of `argv` outside the H1 pass raises a Lua error with the message `argv is frozen outside H1: cannot set field 'name'`, with the field name in single quotes. So `argv.query = 1` gives `argv is frozen outside H1: cannot set field 'query'`, and `argv.mode = "x"` gives `argv is frozen outside H1: cannot set field 'mode'`.
-
-Writing an integer key of `argv` outside the H1 pass, such as an array index, raises the same field write error with the integer shown without quotes, so `argv[1] = 1` gives `argv is frozen outside H1: cannot set field 1`.
-
-A write with a key that is neither a string nor an integer, such as a fractional number or a boolean, raises a refusal that names the key's Lua type instead of its value, so `argv[2.5] = 1` gives `argv is frozen outside H1: cannot set field number`.
-
-Adding a new field to an `argv` table raises the same field write error as changing an existing field. On an `argv` holding only `query`, the new keys `argv[1]` and `argv[2.5]` get the same `argv is frozen outside H1: cannot set field ...` refusal as `argv.query`.
-
-### Nested writes
-
-The freeze is deep: nested tables inside `argv` are frozen too, so a write at any depth, such as `argv.a.b = 1` or `argv.nested.hits = 3`, raises the freeze error. A nested field write names only the innermost key in its message, so `argv.a.b = 1` reports `cannot set field 'b'`, and `argv.opts.depth = 2` names `'depth'`.
-
-Writing a field of `argv` at any depth outside the H1 body, including a new field, is a Lua runtime error whose message names the field written in place of `{field}`:
-
-````text
-argv is frozen outside H1: cannot set field {field}
-````
-
-### Uncaught freeze errors
-
-An uncaught freeze error ends the run with the [error code](16-limits-and-errors.md#run-error-codes) `lua_runtime`, the same code as any other runtime error in a section's Lua.
-
-### Catching freeze errors with `pcall`
-
-The frozen-`argv` refusal is an ordinary Lua error, so you catch it with [`pcall`](05-lua-environment.md#raising-and-catching-errors). `tostring(err)` on the caught value gives the file and line of the write, then the refusal, then the fixed prose for a Lua runtime failure:
-
-````lua
-local ok, err = pcall(function() argv.query = 1 end)
-return tostring(err)
-````
-
-This block returns:
-
-````text
-{file}:{line}: argv is frozen outside H1: cannot set field 'query'. The Lua code failed at runtime. Fix the code at this location.
-````
-
-The prompt at the top of this section uses the same pattern with a flag instead: `local wrote = pcall(function() argv.mode = 'x' end)` followed by `if wrote then return 'written' end return 'refused'` returns `refused`.
-
-The `argv` of a called section is frozen, so writing one of its fields fails and `pcall` catches the failure:
-
-````lua
-local wrote = pcall(function() argv.query = 'x' end)
-assert(not wrote, 'the chain argv is frozen')
-````
-
-### Your own `_G` metatable outside the H1 pass
-
-Outside the H1 pass, a metatable you set on `_G` cannot lift the freeze and never sees an `argv` read or assignment, because the guard on `_G` handles that name first. After `setmetatable(_G, nil)`, `setmetatable(_G, {})`, `setmetatable(_G, mt)`, an `__newindex` of yours that captures writes, an `__index` that returns `'author'`, or any change to the table `getmetatable(_G)` returns, `argv.query` still reads the frozen value, such as `papers`, and assigning `argv` still raises the freeze error.
-
-### Metatables, length, and iteration on frozen tables
-
-Outside the H1 pass, each frozen `argv` table carries the protection text `argv is frozen`, separate from the field write message `argv is frozen outside H1: cannot set field {field}`. So `getmetatable(argv)`, or `getmetatable` on any `argv` table, returns the string `"argv is frozen"` instead of its real metatable.
-
-Outside the H1 body, the length operator `#`, `pairs`, and `next` treat an `argv` table as empty, because each frozen table is an empty stand-in that forwards reads to the data.
-
-Outside the H1 body, `setmetatable` on any `argv` table raises `cannot change a protected metatable`, prefixed with the calling position, because the table's metatable is protected. It is the same error `setmetatable` gives on the protected `sys` and `var` tables.
+A metatable you set on `_G`, as [Giving `_G` a metatable](05-lua-environment.md#giving-_g-a-metatable) describes, cannot free `argv` and never sees an `argv` read or assignment, because the guard on `_G` handles that name first. After `setmetatable(_G, nil)`, `setmetatable(_G, {})`, or `setmetatable(_G, mt)` with an `__newindex` of yours that captures writes and an `__index` that returns `'author'`, `argv.query` still reads the run's value, such as `papers`, and assigning `argv` still raises the read-only error. A nil `argv` reads as nil even under a strict `__index` that raises an error on undefined globals.
 
 ### Everything else stays writable
 
-The `argv` freeze guards only the name `argv`. In any section, including outside the H1 pass, you still define, read, and assign every other global normally, so `scratch = 42` followed by `assert(scratch == 42, 'a bare global still assigns')` works while `argv` is frozen.
+The read-only rule guards only `argv`. In any section you still define, read, and assign your own globals normally, so `scratch = 42` followed by `assert(scratch == 42, 'a bare global still assigns')` works beside the read-only `argv`.
 
-You keep using the [`prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global), the rendered Markdown above a fence, normally beside the frozen `argv`. In this prompt, `prose` reads as the Engine set it in the same fence where assigning `argv` is refused:
+You keep using the [`prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global), the rendered Markdown above a fence, normally beside `argv`. In this prompt, `prose` reads as the Engine set it in the same fence where assigning `argv` is refused:
 
 ````markdown
 ---
@@ -1493,8 +1315,6 @@ args:
   query:
     type: string
 ---
-
-# Paper search
 
 ## First
 
