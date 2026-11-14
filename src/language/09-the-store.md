@@ -227,7 +227,7 @@ ship it
 
 This block asks for two store operations, a write and then a read. `store.write(path, contents)` takes a store path and a text string, both required strings. It writes the text as UTF-8 to the file at the path, creating the file when it does not exist yet or replacing its whole text when it does, and it returns nil. `store.read(path)` with no line bounds reads an existing file whole and returns its text as a string. The block returns what the read gave it, so the file's text becomes the run result (see [The run result](04-how-a-prompt-runs.md#the-run-result)), just as `notebook` ends with `remember this`.
 
-Each call also reports how it went. A write reports `VFS_WRITE_SUCCEEDED`, or `VFS_WRITE_FAILED` when the write fails, and a read reports `VFS_READ_SUCCEEDED`, or `VFS_READ_FAILED` when the read fails. [How store calls run and what they report](#how-store-calls-run-and-what-they-report) covers these reports.
+Each call also reports how it went. A write reports `vfs_write_succeeded`, or `vfs_write_failed` when the write fails, and a read reports `vfs_read_succeeded`, or `vfs_read_failed` when the read fails. [How store calls run and what they report](#how-store-calls-run-and-what-they-report) covers these reports.
 
 ### A write replaces the whole file
 
@@ -330,7 +330,7 @@ First
 Second
 ````
 
-`store.append(path, contents)` takes the same two required string arguments as `store.write`. It adds the text to the end of the file at the path, so the next read returns the old and new text together, and it returns nil. When nothing exists at the path yet, the first append creates the file, as the one in `First` does, and later appends add to its end. An append reports `VFS_APPEND_SUCCEEDED`, or `VFS_APPEND_FAILED` when the append fails.
+`store.append(path, contents)` takes the same two required string arguments as `store.write`. It adds the text to the end of the file at the path, so the next read returns the old and new text together, and it returns nil. When nothing exists at the path yet, the first append creates the file, as the one in `First` does, and later appends add to its end. An append reports `vfs_append_succeeded`, or `vfs_append_failed` when the append fails.
 
 `store.append` adds no separator of its own between the existing text and the new text, so you write any newline between pieces yourself. Writing `'one'` and then appending `'two'` leaves `'onetwo'`, while appending `'one\n'` and then `'two'` leaves `'one\ntwo'`. An append also builds on whatever the last write left: writing `one`, then `two`, then appending `!` reads back `two!`, not `onetwo!`.
 
@@ -2127,14 +2127,14 @@ Each store operation has its own pair of events, one succeeded and one failed:
 
 | Call | Succeeded event | Failed event |
 |---|---|---|
-| `store.write` | `VFS_WRITE_SUCCEEDED` | `VFS_WRITE_FAILED` |
-| `store.append` | `VFS_APPEND_SUCCEEDED` | `VFS_APPEND_FAILED` |
-| `store.read` | `VFS_READ_SUCCEEDED` | `VFS_READ_FAILED` |
-| `store.read_numbered` | `VFS_READ_NUMBERED_SUCCEEDED` | `VFS_READ_NUMBERED_FAILED` |
-| `store.str_replace` | `VFS_REPLACE_SUCCEEDED` | `VFS_REPLACE_FAILED` |
-| `store.delete` | `VFS_DELETE_SUCCEEDED` | `VFS_DELETE_FAILED` |
-| `store.glob` | `VFS_GLOB_SUCCEEDED` | `VFS_GLOB_FAILED` |
-| `store.exists` | `VFS_EXISTS_SUCCEEDED` | `VFS_EXISTS_FAILED` |
+| `store.write` | `vfs_write_succeeded` | `vfs_write_failed` |
+| `store.append` | `vfs_append_succeeded` | `vfs_append_failed` |
+| `store.read` | `vfs_read_succeeded` | `vfs_read_failed` |
+| `store.read_numbered` | `vfs_read_numbered_succeeded` | `vfs_read_numbered_failed` |
+| `store.str_replace` | `vfs_replace_succeeded` | `vfs_replace_failed` |
+| `store.delete` | `vfs_delete_succeeded` | `vfs_delete_failed` |
+| `store.glob` | `vfs_glob_succeeded` | `vfs_glob_failed` |
+| `store.exists` | `vfs_exists_succeeded` | `vfs_exists_failed` |
 
 Every one of these operations raises an error through Lua and reports its own failed event when it fails.
 
@@ -2144,4 +2144,4 @@ A successful `store.write` reports a write-succeeded event in the run's event st
 
 Each store event names the section whose Lua block made the call, such as `Gather` for a write made in the `Gather` section. Beyond that, store events include only the operation's identity and outcome, never the store path, the file contents, the replacement text, or the section input. Writing `private contents` to `secret/path.txt` in a run whose input is `private input` produces store events that contain none of those strings, even when the operation fails. The path and the text are in the run's record with the store call itself, not in its event (see [One store call, one piece of Harness work](#one-store-call-one-piece-of-harness-work)).
 
-A store failure you catch with `pcall` is still reported as that operation's failed event. A block that catches a failed `store.exists` reports, in order, its block started, `VFS_EXISTS_FAILED`, and its block succeeded.
+A store failure you catch with `pcall` is still reported as that operation's failed event. A block that catches a failed `store.exists` reports, in order, its block started, `vfs_exists_failed`, and its block succeeded.
