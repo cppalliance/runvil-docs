@@ -2878,7 +2878,7 @@ The Pack's fully qualified name is `runvil/user`, and every Host has it built in
 
 ### A run with no user
 
-A run has a user when the Host that launches it has someone to answer its main chain, and the Host decides that for each run it launches. A run holds the `user` Pack only when it has a user. In any other run the Pack is unavailable, with the reason `this run has no user`, so a prompt that declares it is refused at the run's first step with code `requirements_unmet`, before any of its Lua runs. The [requirements notice](04-how-a-prompt-runs.md#the-requirements-notice) names the Pack and the reason and ends with where the prompt declares the Pack, here the `uses:` line of the `ask-once` prompt:
+A run has a user when the Host that launches it has someone to answer its main chain, and the Host decides that for each run it launches. The `user` Pack is available only in a run that has a user. In any other run the Pack is unavailable, with the reason `this run has no user`, so a prompt that declares it is refused at the run's first step with code `requirements_unmet`, before any of its Lua runs. The [requirements notice](04-how-a-prompt-runs.md#the-requirements-notice) names the Pack and the reason and ends with where the prompt declares the Pack, here the `uses:` line of the `ask-once` prompt:
 
 ````text
 the environment cannot satisfy this prompt:

@@ -255,7 +255,7 @@ Each form goes in a section's prose and takes effect when a Lua block reads `pro
 
 ## Pack tools
 
-Each Pack tool comes from a Pack you declare under `uses:` by its Pack id, here `web`, while Provided by gives the fully qualified name of the Pack, which a Host's Plugin adds. The built-in Packs `subagents` and `user` offer no tools, so neither has a row; the `user` Pack marks a prompt that needs an operator (see [Asking the operator](05-lua-environment.md#asking-the-operator)).
+Each Pack tool comes from a Pack that you can declare under `uses:` by its Pack id, here `web`, while Provided by gives the fully qualified name of the Pack, which a Host's Plugin adds. The built-in Packs `subagents` and `user` offer no tools, so neither has a row; the `user` Pack marks a prompt that needs an operator (see [Asking the operator](05-lua-environment.md#asking-the-operator)).
 
 | Tool | Provided by | Arguments | Returns | Taught in |
 |---|---|---|---|---|

@@ -67,7 +67,7 @@ The web Pack's Pack id is `web`, the second segment of its fully qualified name 
 
 The web Pack has no prelude, so it defines nothing in the prompt's Lua environment, and you work with the web tools by tool id (see [Pack preludes](12-tools.md#pack-preludes)). Declaring `web` under `uses:` makes the Pack a required Pack for the prompt, and because there is no prelude, the declaration adds no Lua names.
 
-You reach both web tools by id, as in `tools.call("web/search", ...)` or `tools.offer("web/fetch")`, whether or not the prompt declares the Pack, because a run receives the tools of every usable `runvil` Pack, declared or not, unless the prompt declares another vendor's Pack with the Pack id `web`. On a Host that has the web Pack, this prompt has no `uses:` key and gives the same run result as `fetch-page`:
+You reach both web tools by id, as in `tools.call("web/search", ...)` or `tools.offer("web/fetch")`, whether or not the prompt declares the Pack, because a run receives the tools of every usable Pack the Host has, declared or not. On a Host that has the web Pack, this prompt has no `uses:` key and gives the same run result as `fetch-page`:
 
 ````markdown
 ---

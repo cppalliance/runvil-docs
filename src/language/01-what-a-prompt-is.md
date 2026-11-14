@@ -306,7 +306,7 @@ The tool's answer is the block's return value, so it becomes the run result.
 
 ### Declaring a Pack
 
-A prompt that uses a Pack lists it under `uses:`. This frontmatter declares the `web` Pack:
+A prompt that needs a Pack lists it under `uses:`. This frontmatter declares the `web` Pack:
 
 ````markdown
 ---
@@ -433,7 +433,7 @@ The Host launches runs and sets run policy, the settings that govern a run, such
 
 ### Packs and the tool catalog
 
-A Pack is a bundle of tools, such as the web tools, that can also bring a Lua prelude. A Plugin is an entry point that adds zero or more Packs. The Host calls its Plugins once, when it sets up, and they add each Pack with its factory, the code that makes an instance of the Pack. Each run makes its own instance of each of its Packs through that Pack's factory. The Harness takes each run's tool catalog, the set of tools that run can use, from a snapshot of the run's Packs: every `runvil` Pack, plus each third-party Pack the prompt declares. The prompt itself installs no Packs, and it names the ones it needs under `uses:`.
+A Pack is a bundle of tools, such as the web tools, that can also bring a Lua prelude. A Plugin is an entry point that adds zero or more Packs. The Host calls its Plugins once, when it sets up, and they add each Pack with its factory, the code that makes an instance of the Pack. Each run makes its own instance of each of its Packs through that Pack's factory. The Harness takes each run's tool catalog, the set of tools that run can use, from a snapshot of the run's Packs: every Pack the Host has, whether or not the prompt declares it. The prompt itself installs no Packs, and it names the ones it needs under `uses:`.
 
 ### Seed, start time, and repeatable runs
 
