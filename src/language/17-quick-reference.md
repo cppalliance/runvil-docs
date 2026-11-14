@@ -183,7 +183,6 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `store.write` | function | Creates or replaces a file with a text string and returns `nil` | [Writing and reading files](09-the-store.md#writing-and-reading-files) |
 | `string` | global | Standard `string` library, including method calls such as `s:match` | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `sys` | global | Read-only table of run facts | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
-| `sys.execution` | field | The run's name, which the Harness assigns | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |
 | `sys.id` | field | Current section entry id, such as `0.0` in the first section the run enters | [Section entry ids](05-lua-environment.md#section-entry-ids) |
 | `sys.index` | field | An arm's 1-based position in collection order, or a task's `index` seed | [What an arm sees](14-fanout.md#what-an-arm-sees) |
 | `sys.model` | field | Name part of the current model's model id, such as `fast` for `gateway/fast`, readable after the section entry's first tool call | [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui) |

@@ -1622,14 +1622,12 @@ Each run of a prompt is recorded as its own run with its own run id, even when t
 | Value | What it holds |
 | --- | --- |
 | Run id | An id of its own, different for every run |
-| `name` | The run's name as the Host session gives it, such as `session-1` |
-| `prompt_hash` | A hash of the prompt text, written with the `sha256:` prefix that names its algorithm |
 | Seed | A fresh seed drawn for this run |
 | `started_at` | The run's start time, in UTC milliseconds since the Unix epoch |
 
 Beside these values, the record holds the run's history: every event the run reports, every piece of [Harness work](01-what-a-prompt-is.md#the-five-kinds-of-harness-work) the run asks for, and the answer to each.
 
-The run's name is the run metadata's `name` and also the `execution` field of every event the run records, from its first event through its last. The same prompt text always yields the same prompt hash across runs.
+Each event in that history names the section it was reported under and has a provenance: the task it came from and its position in that task.
 
 Each run draws its own fresh [seed](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host) from the operating system's cryptographic random source and records it at the start of the run, before anything else, so two runs of the same prompt get different seeds. The run's start time, `started_at`, is stamped once from the system wall clock when the Harness begins the run's record, because the Engine reads no clock of its own, and a later run never starts earlier. The Harness supplies both the seed and the start instant, drawing them when it begins the run's record, and a prompt cannot set either one.
 

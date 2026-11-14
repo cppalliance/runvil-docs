@@ -2384,7 +2384,7 @@ Every one of these operations raises an error through Lua and reports its own fa
 
 Each store call's event is reported as soon as the operation lands, before the next Lua statement runs, so store events appear in the same order as the block's statements. A [log checkpoint](05-lua-environment.md#logging-and-lifecycle-reports) placed between two writes shows up between their two reports.
 
-A successful `store.write` reports a write-succeeded event in the run's event stream, tagged with the execution id and the section, in the order the write happened. A write made after the section's model round is reported right after that model round's completed event.
+A successful `store.write` reports a write-succeeded event in the run's event stream, tagged with the section, in the order the write happened. A write made after the section's model round is reported right after that model round's completed event.
 
 Each store event names the section whose Lua block made the call, such as `Gather` for a write made in the `Gather` section. Beyond that, store events include only the operation's identity and outcome, never the store path, the file contents, the replacement text, or the section input. Writing `private contents` to `secret/path.txt` in a run whose input is `private input` produces store events that contain none of those strings, even when the operation fails.
 

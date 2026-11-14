@@ -437,7 +437,7 @@ A Pack is a bundle of tools, such as the web tools, that can also bring a Lua pr
 
 ### Seed, start time, and repeatable runs
 
-The Host names each run. The Harness draws the run's seed, a random value, from a secure random source, and takes the run's start time from the clock. A run given the same seed, the same start time, the same outside answers, and the same messages, each reaching the run at the same point, repeats exactly.
+The Host's record of runs gives each run an id of its own. The Harness draws the run's seed, a random value, from a secure random source, and takes the run's start time from the clock. A run given the same seed, the same start time, the same outside answers, and the same messages, each reaching the run at the same point, repeats exactly.
 
 ### Run inputs a prompt can read
 

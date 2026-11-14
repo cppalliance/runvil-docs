@@ -1322,7 +1322,7 @@ A served round reports in this order:
 
 When the model returns reasoning, the run reports a thinking event with the serving model's name and the reasoning text, always before that round's reply event. Each text reply is reported as an assistant reply event with the reply text, the provider's finish reason (see [Empty replies and finish reasons](#empty-replies-and-finish-reasons)), the name of the model that serves it, and usage metrics. A round that ends in a text reply answers the loop with the reply text, the finish reason, and the round's `turn`, and the final reply is reported as a `reply` record with its `turn`, the chat origin, the finish reason, and the text.
 
-Each content event from a loop round is stamped with the round's id and the chat reply origin, which sets it apart from a reply to a nested `infer` (see [What an infer round reports](10-models.md#what-an-infer-round-reports)). Every event the loop reports includes the run's execution id. When the Host shows live output, each round's text fragments reach it as they arrive, in the order the model streams them, and the terminal record holds the whole text of those fragments.
+Each content event from a loop round is stamped with the round's id and the chat reply origin, which sets it apart from a reply to a nested `infer` (see [What an infer round reports](10-models.md#what-an-infer-round-reports)). Every event the loop reports names the section it came from. When the Host shows live output, each round's text fragments reach it as they arrive, in the order the model streams them, and the terminal record holds the whole text of those fragments.
 
 ## Loop arguments and errors
 

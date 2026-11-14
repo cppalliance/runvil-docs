@@ -2287,7 +2287,7 @@ Every started task records exactly one start event and exactly one terminal even
 
 Spawning a section reports a `TaskStarted` event under the spawning section that names the task id, the target section's name, and the spawn seeds (see [Starting a task with `tasks.spawn`](#starting-a-task-with-tasksspawn)). With no options, `args`, `item`, and `index` are `null`, while `var` is still a copy of the spawner's `var`.
 
-The event includes the execution, the section, the provenance, the task id, the target, the spawn `args`, the `item`, the `index`, and a copy of `var`. Those last four are the seeds the task sees: the `args` object, the `item` value, the `index`, and a snapshot of `var`. The `args` field holds the JSON object the spawn gave the task: a table of named fields as that object, a string as `{"text":"..."}`, and `null` when the spawn gave none and the task reads its owner's `args`.
+The event includes the section, the provenance, the task id, the target, the spawn `args`, the `item`, the `index`, and a copy of `var`. Those last four are the seeds the task sees: the `args` object, the `item` value, the `index`, and a snapshot of `var`. The `args` field holds the JSON object the spawn gave the task: a table of named fields as that object, a string as `{"text":"..."}`, and `null` when the spawn gave none and the task reads its owner's `args`.
 
 A task's start event fires when the task gets a concurrency slot and first runs, not when it is spawned:
 

@@ -2136,7 +2136,7 @@ Only 0.0 of 1
 
 ### The `sys` fields
 
-Every section entry, each fanout arm's included, gets six `sys` fields: `sys.when`, `sys.id`, `sys.taskid`, `sys.section_name`, `sys.execution`, and `sys.section_count`. Two more fields, `sys.model` and `sys.index`, appear only in some section entries:
+Every section entry, each fanout arm's included, gets five `sys` fields: `sys.when`, `sys.id`, `sys.taskid`, `sys.section_name`, and `sys.section_count`. Two more fields, `sys.model` and `sys.index`, appear only in some section entries:
 
 | Field | Type | Example value | Present |
 |---|---|---|---|
@@ -2144,19 +2144,18 @@ Every section entry, each fanout arm's included, gets six `sys` fields: `sys.whe
 | `sys.id` | string | `0.1` | always |
 | `sys.taskid` | string | `0` | always |
 | `sys.section_name` | string | `Alpha` | always |
-| `sys.execution` | string | `execute-test` | always |
 | `sys.section_count` | number | `2` | always |
 | `sys.model` | string | `claude-sonnet-4-6` | after the section entry's first tool call |
 | `sys.index` | number | `7` | on a task's first section entry, when its spawn supplied one |
 
-A present `sys` field reads as a plain Lua value converted from its JSON value. `when`, `id`, `taskid`, `section_name`, `execution`, and `model` arrive as Lua strings, and `section_count` and `index` arrive as Lua numbers, so `sys.section_name == 'Alpha'` compares as a string and `sys.section_count == 2` as a number. The rest of this section takes the fields one at a time, and [Section entry ids](#section-entry-ids) covers `sys.id` in full.
+A present `sys` field reads as a plain Lua value converted from its JSON value. `when`, `id`, `taskid`, `section_name`, and `model` arrive as Lua strings, and `section_count` and `index` arrive as Lua numbers, so `sys.section_name == 'Alpha'` compares as a string and `sys.section_count == 2` as a number. The rest of this section takes the fields one at a time, and [Section entry ids](#section-entry-ids) covers `sys.id` in full.
 
-### Section name, section count, and run name
+### Section name and section count
 
 ````markdown
 ---
 name: two-sections
-description: Reads the section name, section count, and run name.
+description: Reads the section name and the section count.
 runvil: 0
 ---
 
@@ -2172,17 +2171,17 @@ assert(sys.section_count == 2)
 ```lua
 assert(sys.section_name == 'Beta')
 assert(sys.section_count == 2)
-return sys.execution
+return sys.section_name .. ' of ' .. sys.section_count
 ```
 ````
 
-In a run named `execute-test`, every assertion holds and the run result is:
+Every assertion holds, and the run result is:
 
 ````text
-execute-test
+Beta of 2
 ````
 
-`sys.section_name` is a string holding the section name of the section whose Lua is running, so it reads `'Alpha'` in section Alpha and `'Beta'` in section Beta. `sys.section_count` is a number holding the count of top-level sections in the prompt. `sys.execution` is a string holding the run's name, which the Harness assigns. Both read the same in every section.
+`sys.section_name` is a string holding the section name of the section whose Lua is running, so it reads `'Alpha'` in section Alpha and `'Beta'` in section Beta. `sys.section_count` is a number holding the count of top-level sections in the prompt. The count reads the same in every section.
 
 A [preamble](02-file-structure.md#the-preamble) that holds Lua is a top-level section with no name, so `sys.section_name` reads the empty string there, and `sys.section_count` counts the preamble with the other top-level sections:
 
@@ -2714,9 +2713,9 @@ Lua: prepare finished
 Lua: finish started
 ````
 
-Each `log` checkpoint is tagged with, and attributed to, the section name of the section whose Lua called `log`, and it is also tagged with the run's execution id. The preamble has no name, so a `log` call in it records its checkpoint under the empty section name, and `preamble ran` comes ahead of every later section's checkpoints. The next two are recorded under `Prepare`, and `finish started` under `Finish`.
+Each `log` checkpoint is tagged with, and attributed to, the section name of the section whose Lua called `log`. The preamble has no name, so a `log` call in it records its checkpoint under the empty section name, and `preamble ran` comes ahead of every later section's checkpoints. The next two are recorded under `Prepare`, and `finish started` under `Finish`.
 
-A checkpoint is attributed to the section whose code called `log`, including a section reached through `call`: when `Outer` runs `call('../Inner')`, `log('inner ran')` in `Inner` is attributed to `Inner`. Calling `log` inside a task's section records the message as a checkpoint under that section's name, and `log` records each message under the name of the section that logs it, in order, including inside a spawned child. When several runs execute at the same time, each run's checkpoints keep that run's execution id and appear in that run's call order.
+A checkpoint is attributed to the section whose code called `log`, including a section reached through `call`: when `Outer` runs `call('../Inner')`, `log('inner ran')` in `Inner` is attributed to `Inner`. Calling `log` inside a task's section records the message as a checkpoint under that section's name, and `log` records each message under the name of the section that logs it, in order, including inside a spawned child. When several runs execute at the same time, each run's checkpoints stay in that run's record and appear in that run's call order.
 
 ### Checkpoint order
 
@@ -3194,7 +3193,7 @@ Every failure the Engine raises into Lua reaches `pcall` as an error value, Engi
 
 - An argument error from an Engine call, such as a badly shaped argument to `models.infer`, `models.loop`, `call`, `tasks.fanout`, `tasks.spawn`, `tools.call`, or a `store` function, is raised at the calling line as a `lua` error value rather than failing the whole block, so a `pcall` around the call catches it.
 - A failed Harness request, such as a model round, arrives as an error value whose `kind` names the failure, such as `context_exhausted`, with the kind's own fields beside it and `tostring` giving the failure's own prose after the line that made the call. A chat call wrapped in `pcall` that a stop drops likewise comes back as `false` and an error value carrying both `kind` and `message`.
-- An Engine function that fails on the spot, such as a failing [`tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer), a read of an unknown `sys` field such as `sys.nothing`, or the `var` guard, gives the same indexable error value. `err.kind` and `err.message` work on it at the call site, and `tostring(err)` is the message, author prose after the line that was running when it failed, with no traceback appended. A refused `var` write gives a message containing `var is read-only` (see [Keeping state in `var`](#keeping-state-in-var)), and a runtime error raised inside a built-in call is kind `lua`.
+- An Engine function that fails on the spot, such as a failing [`tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer), a read of an unknown `sys` field such as `sys.nothing`, or the `var` guard, gives the same indexable error value. `err.kind` and `err.message` work on it at the call site, and `tostring(err)` is the message, author prose after the line that was running when it failed, with no traceback appended. A refused `var` write gives a message containing `must be JSON data` (see [When a value is not JSON data](#when-a-value-is-not-json-data)), and a runtime error raised inside a built-in call is kind `lua`.
 
 Apart from an argument error the Engine's own Lua raises, which has no location, each of these is placed on your own line: a suspending call on the line that made the call, an Engine function that fails on the spot, such as [`jump`](08-jump-and-call.md#jumping-to-a-section), on the line running when it failed, and a failure inside a function you pass to `pcall` or `xpcall` on the line of the failing call in that function, not the `pcall` line. [Where an error points](16-limits-and-errors.md#where-an-error-points) gives the full rules, tail calls included.
 
