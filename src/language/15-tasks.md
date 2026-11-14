@@ -1539,7 +1539,7 @@ end
 
 `section` names the section the task's chain is in now. It is set while the task is live and inside a section, and nil otherwise: nil before the task is admitted and enters a section, and nil after it ends. A queued task reads `section == nil`, because it has not entered any section yet. The name updates each time the task's chain enters a section. In `status-snapshot`, the task reads `section` nil when fresh, `Child` while it waits on its model round, and nil when done.
 
-`blocked` is present only while the task's chain is waiting on something, and it holds a string naming what that is. It is nil before the task starts, while it is running Lua, and after it ends. While the task waits, it reads one of these values:
+`blocked` is present only while the task's chain is waiting on something, and it holds a string naming what that is. It is nil before the task starts, while it is running Lua, and after it ends. It is nil too from the moment the answer that the task waited for arrives, before the task runs again: a task whose model reply is in reads `blocked` nil, with that round counted in `turns`. While the task waits, it reads one of these values:
 
 | `blocked` | The task is waiting on |
 |---|---|

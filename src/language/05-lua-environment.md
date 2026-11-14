@@ -1177,7 +1177,17 @@ yes lua
 
 Here the write raises `var.handler must be JSON data, got function`. The path is the field's full path, dotted for string keys of object fields and bracketed for any other key, with array elements counted from 1, as in `var.t.f` or `var.list[2]`. The `messages` list or a message record such as `messages[1]` (see [Building a message list](11-conversations.md#building-a-message-list)) is userdata, so assigning one to a `var` field raises the same error ending in `got userdata`. [`json.null`](#null-values-and-jsonnull) is the one userdata the guard accepts, and it stores JSON null: after `var.x = json.null`, `var` reads back as `{ "x": null }`, and `var.x == json.null` holds in Lua.
 
-`var` checks an assigned table deeply, so a table holding a function at any depth, such as `{ f = function() end }`, fails at the assigning line too. That error comes from the conversion to JSON, and its message names the offending type, such as `function`.
+`var` checks an assigned table deeply, so a table holding a function at any depth, such as `{ f = function() end }`, fails at the assigning line too. That error comes from the conversion to JSON, and its message gives the conversion's reason after the target path: `var.t = { f = function() end }` raises ``var.t must be JSON data: unsupported value type `function` ``, and `var.t = { [true] = 1 }` raises ``var.t must be JSON data: invalid type: boolean `true`, expected a string key``.
+
+The guard checks the key of a write too, because JSON data has a place only for a named field and for a list item. `var` itself takes string keys alone, so `var[true] = 1` raises `a key of var must be a string, got boolean`, and `var[1] = 'x'` raises the same message ending in `got integer`. A table inside `var` takes a string key or a list index: the index of an item the list holds, or of the next one. With `var.t = {}` and `var.list = { 'a' }`:
+
+| Write | Message |
+|---|---|
+| `var.t[2.5] = 1` | `a key of var.t must be a string or a list index, got number` |
+| `var.t[0] = 'x'` | `a list index of var.t must be 1 or more, got 0` |
+| `var.list[3] = 'c'` | `var.list[3] is past the end of the list, whose length is 1` |
+
+`var.list[2] = 'b'` appends, and `var.list[1] = 'z'` gives the first item a new value. Assigning `nil` removes a key and is never refused.
 
 A table that is shared at many levels can also be too large to store, because the conversion to JSON copies it once for every place it appears. Before it converts an assigned table, `var` spends the same value and byte budgets that [`json.encode`](#size-and-nesting-limits) does, and a table that runs the budget out raises this error at the assigning line, with the full target path in place of `{target}`:
 
