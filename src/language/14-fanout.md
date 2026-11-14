@@ -647,7 +647,7 @@ Inside an arm, and in a chain the arm starts with `call`, `sys.section_count` is
 
 A library loaded with [`require`](03-blocks-and-prose.md#sharing-code-with-require) inside a fanout arm runs in the arm's environment, so its top-level code reads the arm's `item`. [`call` and `require` inside an arm](#call-and-require-inside-an-arm) shows an example.
 
-A fanout arm sees every [Pack prelude](12-tools.md#pack-preludes) global, so where `greeter` is a prelude global, an arm block `return greeter.greet(item)` yields `hello arm`. Each arm runs every prelude afresh in its own Lua environment, so a prelude's install-time side effects happen once per arm. With `tasks.fanout('Worker', { 'alpha', 'beta' })`, a prelude whose install-time code writes a store file writes it in both arms, so the second arm's write is a [store conflict](#store-conflicts) that ends the run with error code `determinism`, even when the prelude wraps the write in `pcall`.
+A fanout arm sees every [Pack prelude](12-tools.md#pack-preludes) global, so where `greeter` is a prelude global, an arm block `return greeter.greet(item)` yields `hello arm`. Each arm runs every prelude afresh in its own Lua environment, so a prelude's top-level code runs once per arm. That code can make no store call (see [Store calls while a prelude loads](12-tools.md#store-calls-while-a-prelude-loads)): a prelude whose top level calls `store.write` fails to load, and the run ends with error code `lua_runtime` before any arm runs. With a `pcall` around that call the prelude installs in every arm of `tasks.fanout('Worker', { 'alpha', 'beta' })`, both arms run, and the store is untouched.
 
 ## Running arms on a model
 
@@ -1461,7 +1461,7 @@ Both arms write `shared.txt`, so the run never returns `alpha,beta`. It ends wit
 
 ### One store for every arm
 
-The arms of a fanout and the section that called `tasks.fanout` all use the run's one store (see [Writing and reading files](09-the-store.md#writing-and-reading-files)). The store is the exception to arm isolation, and whatever each arm writes stays in the store after the run, so when two arms write `arm-1.md` and `arm-2.md`, those files read `alpha` and `beta` afterward.
+The arms of a fanout and the section that called `tasks.fanout` all use the run's one store (see [Writing and reading files](09-the-store.md#writing-and-reading-files)). The store is the exception to arm isolation, and whatever each arm writes stays in the store after the arm ends, so when two arms write `arm-1.md` and `arm-2.md`, the section that called `tasks.fanout` reads `alpha` and `beta` from those files once the fanout returns.
 
 An arm can read the files the caller wrote before it called `tasks.fanout`, because starting an arm orders everything the caller did in the store before that point ahead of the arm's first step. It is the same rule that lets a `tasks.spawn` task build on the files its owner wrote. Any number of arms can read such a file, because two reads never conflict.
 
@@ -1473,9 +1473,9 @@ Two accesses make a store conflict when they touch the same store path, at least
 
 A cross-arm conflict is unconditional and never depends on timing. Sibling arms never join each other, and a claim on a path stands for the rest of the run, even after the arm that made it ends (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)). So whichever of two conflicting accesses runs second always meets the first one's claim, in every interleaving.
 
-Of two conflicting arm accesses, the second never reaches the store, so exactly one arm's change lands and can be read from the store after the failed run. Which arm wins is not fixed: when two arms each add their member and a newline to `notes.md`, the file ends as `alpha` or as `beta`, followed by a newline, never both.
+Of two conflicting arm accesses, the second never reaches the store, so exactly one arm's change lands, and the run's [store run events](09-the-store.md#store-run-events) show one call that succeeded and one that failed. Which arm wins is not fixed: when two arms each add their member and a newline to `notes.md`, the append that succeeds is the one for `alpha` or the one for `beta`, never both.
 
-A store conflict ends the run at once. The losing arm never resumes, no arm counts as failed, an arm still waiting when the conflict lands reports canceled, and at most the winning arm reports success. So two conflicting arms both report `Task started`, neither reports a failed task event, and at most one reports `Task succeeded`.
+A store conflict ends the run at once. The losing arm never resumes, no arm counts as failed, an arm that has not finished when the conflict lands is abandoned with the run, and at most the winning arm reports success. So two conflicting arms both report `Task started`, neither reports a failed task event, and at most one reports `Task succeeded`.
 
 A cross-arm store conflict cannot be caught with `pcall`, not even a `pcall` wrapped around the store call inside the arm, because the conflict never resumes into the arm. When the arms run `pcall(store.append, 'notes.md', item .. '\n')`, the run still ends with the store conflict instead of returning `alpha,beta`.
 
@@ -1623,7 +1623,7 @@ When an arm is canceled because a sibling failed, everything under it stops too,
 
 The events follow the same pattern (see [Task events and task errors](15-tasks.md#task-events-and-task-errors)). The failing arm reports one `Task failed` event, each running sibling the fanout cancels reports exactly one `Task canceled` event under its arm id, and a queued arm that never started reports no task event. The canceled sibling's `Task canceled` event fires before the calling section's Lua block fails with the fanout error.
 
-Store writes an arm made before it failed stay in the store and are not rolled back. An arm that appends `boom` and a newline to `log.txt` and then raises leaves `log.txt` holding that line after the run fails.
+Store writes an arm made before it failed stay in the store and are not rolled back, so a section that catches the fanout's failure reads them. When an arm appends `boom` and a newline to `log.txt` and then raises, a caller that wraps `tasks.fanout` in `pcall` reads that line from `log.txt` once the call has failed.
 
 ### Exhausted arms and the exhausted stub
 

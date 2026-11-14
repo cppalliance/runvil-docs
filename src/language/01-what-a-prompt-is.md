@@ -566,7 +566,7 @@ A render asks the Harness how each Pack the entry offered tools from shows those
 
 Waiting for the operator is not Harness work. The operator is the person who answers a run while it runs, and the run's main chain reads the operator's messages with `tasks.receive()` (see [Asking the operator](05-lua-environment.md#asking-the-operator)). The Host hands the run each message the operator sends, a message that arrives first waits in the main chain's inbox, and the wait issues no effect.
 
-Every store call a block makes, even a read, is a store operation that the Harness performs. That covers all eight `store.*` calls a prompt can make (see [Writing and reading files](09-the-store.md#writing-and-reading-files)), and the block that made the call waits for its answer. A store call a prelude makes while it installs is the one that does not wait: the store functions take their suspending form only after the preludes install, so an install-time call runs inside the Engine, reports its own event, and issues no effect.
+Every store call a block makes, even a read, is a store operation that the Harness performs. That covers all eight `store.*` calls a prompt can make (see [Writing and reading files](09-the-store.md#writing-and-reading-files)), and the block that made the call waits for its answer.
 
 ### Every effect gets one answer
 

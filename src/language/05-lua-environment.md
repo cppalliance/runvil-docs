@@ -153,7 +153,8 @@ An Engine global is a global the runtime installs in every section VM before any
 
 ````lua
 first_saw_args = args
-first_saw_store = store.read('seed.txt')
+store.write('note.md', 'hello')
+first_saw_store = store.read('note.md')
 ````
 
 Every section VM, the preamble's included, starts with these Engine globals:
@@ -178,14 +179,13 @@ Every section VM is set up in one fixed order. The same order applies to every s
 
 1. `untrusted`, when the VM is built
 2. `args`, `sys`, `var`, `tools`, `models`, `messages`, and `compactors`
-3. `log`, `store`, `json`, and `markdown`
+3. `log`, `json`, and `markdown`
 4. `ui`
 5. `item`
 6. `jump` and the `prompt` reads
-7. the suspending calls: `call`, the `tasks` table, `tools.call`, `models.infer`, `models.loop`, and `models.compact`
+7. the suspending calls: `call`, the `tasks` table, `tools.call`, `models.infer`, `models.loop`, `models.compact`, and the `store` table
 8. Pack preludes
 9. `require`
-10. the store's suspending calls
 
 ### Reserved names
 
@@ -1569,7 +1569,7 @@ return json.encode(rows)
 ```
 ````
 
-When the store holds no `rows.jsonl` yet, the run result is:
+The run result is:
 
 ````text
 [{"n":1,"tag":"a"},{"n":2,"tag":"b"},{"n":3,"tag":null}]
@@ -3041,7 +3041,7 @@ An error value's `kind` is always one of exactly sixteen strings. The set is clo
 
 You read a kind's fields from the same error value after branching on `kind`, with ordinary table access such as `err.reason`. They are plain fields with no metamethod behind them, so `err.kind`, `err.reason`, and `err.finish_reason` on an error from [`models.loop`](11-conversations.md#starting-a-conversation) read like any other table field. A kind with no fields gives a value holding only `kind`, `code`, and `message`.
 
-Every field is a string, except two `store` fields that are integers: `count`, on an anchor failure, and `valid_up_to`, on content that is not valid UTF-8 (see [When a store call fails](09-the-store.md#when-a-store-call-fails)). `type` returns `'number'` for these and `%` works on them, so `type(err.count) == 'number' and err.count % 1 == 0` holds.
+Every field is a string, except one `store` field that is an integer: `count`, on an anchor failure (see [When a store call fails](09-the-store.md#when-a-store-call-fails)). `type` returns `'number'` for it and `%` works on it, so `type(err.count) == 'number' and err.count % 1 == 0` holds.
 
 Each kind comes from the feature that raises it:
 
@@ -3050,7 +3050,7 @@ Each kind comes from the feature that raises it:
 - `tool` reports a tool failure from [`tools.call`](12-tools.md#calling-tools-from-lua-and-counting-calls).
 - `model_only_tool` comes from a script's `tools.call` of a tool that only a model may call, and its `name` field holds the name the script passed (see [Model-only tools](12-tools.md#model-only-tools)).
 - `tasks_live`, `task_not_owned`, and `task_consumed` come from the task functions (see [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) and [Waiting with `tasks.join_any` and `tasks.join`](15-tasks.md#waiting-with-tasksjoin_any-and-tasksjoin)).
-- `store` comes from store operations, and only from failures the store itself reports.
+- `store` comes from store operations, for the failures the store itself reports. A `tasks.spawn` or a tool call that the run's files refuse raises it too (see [Store codes](16-limits-and-errors.md#store-codes)).
 - `canceled` reports a cancellation, and carries `task` when what was canceled is a task.
 - `model_failure` comes from a model call's transport, backend, or decode failure, or a disabled gateway, through `models.infer` or `models.loop`.
 - `model_required` comes from a model call on a run whose Host gave it no model, the [missing-model error](10-models.md#infer-errors-and-the-missing-model-error).
@@ -3091,7 +3091,7 @@ return err.kind .. '|' .. tostring(err)
 
 A caught argument error names the argument in fixed text. When the Engine's own Lua raises it, as `models.infer` does here, the message is that text alone, with no location. When the Engine raises it from inside the call, the message gives that text as author prose after the line of your call. Argument errors from `tools.call` are worded and shaped exactly like the others, failures from the `tasks` functions, `tasks.fanout` included, arrive in the same shape as every other Engine failure, and so do the errors `models.loop` builds itself. Rendered as `err.kind .. ':' .. tostring(err)`, every argument error from `models.loop` starts with `lua:`, as in `lua:{file}:{line}: models.loop takes (compactor?) or (model, compactor?). The Lua code failed at runtime. Fix the code at this location.` (see [Argument errors](11-conversations.md#argument-errors)), and the errors the loop raises about the compactor passed as its argument are kind `lua` too.
 
-Argument type errors on every Engine function, the `store` functions included, are kind `lua`. Only failures the store itself reports are kind `store`, so `pcall(function() store.write(123, 'x') end)` catches `err.kind == 'lua'`.
+Argument type errors on every Engine function, the `store` functions included, are kind `lua`. Of a store call's failures, only the ones the store itself reports are kind `store`, so `pcall(function() store.write(123, 'x') end)` catches `err.kind == 'lua'`.
 
 A string argument has three messages:
 
@@ -3158,13 +3158,13 @@ return result
 ```
 ````
 
-When the store holds no `note.md`, the run result is:
+Nothing in this prompt writes `note.md`, so the run result is:
 
 ````text
 no note yet
 ````
 
-`pcall` runs [`store.read`](09-the-store.md#writing-and-reading-files) in protected mode. The read fails, so instead of the failure ending the block, `pcall` returns `false` and the error value. The block handles the one failure it expects, a missing note, and raises every other error value again unchanged with `error(result)`, which fails the run exactly as if the block had never caught it. When `note.md` exists, `pcall` returns `true` and the text, and the block returns the note. The same shape works for any kind, as in a block that catches `pcall(models.infer, prose)`, returns `'model unavailable: ' .. err.message` when `err.kind == 'model_failure'`, and otherwise raises the value again with `error(err)`.
+`pcall` runs [`store.read`](09-the-store.md#writing-and-reading-files) in protected mode. The read fails, so instead of the failure ending the block, `pcall` returns `false` and the error value. The block handles the one failure it expects, a missing note, and raises every other error value again unchanged with `error(result)`, which fails the run exactly as if the block had never caught it. In a prompt where an earlier block wrote `note.md`, `pcall` returns `true` and the text, and the block returns the note. The same shape works for any kind, as in a block that catches `pcall(models.infer, prose)`, returns `'model unavailable: ' .. err.message` when `err.kind == 'model_failure'`, and otherwise raises the value again with `error(err)`.
 
 `pcall(f, ...)` calls `f` in protected mode, passing on any arguments after it, and returns a success flag first: `true` followed by every value `f` returned, or `false` followed by an error value or the value your code raised. A re-raise is raising a caught error value again unchanged, with `error(err)` or `error(err, 0)`.
 

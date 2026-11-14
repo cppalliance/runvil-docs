@@ -610,7 +610,7 @@ args:
     files:
       type: array
       description: Files to search in
-      items: { type: string, description: One path in the store }
+      items: { type: string, description: One file path }
 ````
 
 ### How `required`, `default`, and `description` combine
@@ -1058,7 +1058,7 @@ These arguments hold three mismatches: `query` is missing, `limit` is not an int
 
 ### What every argument error shares
 
-Arguments that do not match the declaration end the run with the [error code](16-limits-and-errors.md#run-error-codes) `args_invalid`. The argument check is one of the start checks that the run's first step makes before any section runs, in this order: the `runvil` version, the arguments, the store, and the requirements (see [What the start checks look at](04-how-a-prompt-runs.md#what-the-start-checks-look-at)). Four things follow from that:
+Arguments that do not match the declaration end the run with the [error code](16-limits-and-errors.md#run-error-codes) `args_invalid`. The argument check is one of the start checks that the run's first step makes before any section runs, in this order: the `runvil` version, the arguments, and the requirements (see [What the start checks look at](04-how-a-prompt-runs.md#what-the-start-checks-look-at)). Four things follow from that:
 
 - No Lua has run when the check fails, so nothing in the prompt can catch the failure. A `pcall` in the preamble never gets its turn.
 - The run reports no [run events](04-how-a-prompt-runs.md#run-events-and-records), not even `run_started`.

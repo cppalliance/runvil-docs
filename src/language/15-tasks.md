@@ -42,7 +42,7 @@ A task runs beside the section that spawned it instead of in its place, and that
 
 Reach for tasks when the work is not one collection run through one worker section. That shape is a [fanout](14-fanout.md#fanout-in-one-call), which runs every member of one collection through one worker section. Tasks fit the rest, such as starting two different sections, `Alpha` and `Beta`, and waiting on both.
 
-Tasks need nothing in the frontmatter and have no command-line flags. The frontmatter keys are `name`, `description`, `runvil`, `max_tool_iterations`, `output`, `uses`, `args`, and `models`, and none of them is for tasks, so every task feature is a Lua call, an options table, a returned value, or text the model reads.
+Tasks need nothing in the frontmatter and have no command-line flags. The frontmatter keys are `name`, `description`, `runvil`, `max_tool_iterations`, `uses`, `args`, and `models`, and none of them is for tasks, so every task feature is a Lua call, an options table, a returned value, or text the model reads.
 
 ### The `tasks` namespace
 
@@ -2363,7 +2363,7 @@ Every spawn failure, including the depth cap, an unresolved target, and a setup 
 
 - When the target path names no section, `tasks.spawn` raises an error value whose `kind` is `lua`, and `pcall(tasks.spawn, '../Missing')` returns `false`. The refusal is exactly the one `call` gives for the same path, ``section `{path}` not found: {where}``, naming the path and then the section that was searched. The message puts the `tasks.spawn` line in front of it and the Lua runtime prose after it, so `tostring(err)` matches what `pcall(call, '../Missing')` gives on the same line (see [The not-found error](08-jump-and-call.md#the-not-found-error)).
 - The depth cap lets depths 1 through 8 start and refuses depth 9 with the refusal `recursion exceeded cap of 8`, on the line of that `tasks.spawn` (see [The recursion depth cap](08-jump-and-call.md#the-recursion-depth-cap)). A depth-cap refusal left uncaught ends the run with error code `call_depth_exceeded`.
-- Spawn failures are error values of kind `lua`, except a store refusal during task setup, which is kind `store`: its message is the `tasks.spawn` line and then the fixed prose for its store reason, as for any caught store failure, and left uncaught, the run's message starts `store operation failed: ` followed by the store's own failure text (see [When a store call fails](09-the-store.md#when-a-store-call-fails)). When a Host-supplied store refuses to open store access for a new task, `tasks.spawn` fails with that error value, `pcall` can catch it, and no task is left started. The run's own in-memory store never refuses (see [Host stores, policies, and modes](09-the-store.md#host-stores-policies-and-modes)).
+- Spawn failures are error values of kind `lua`, except a refusal by the run's files during task setup, which is kind `store`. The run's files are the filesystem the Host gives a run for its tool calls, and each task takes its own access to them when `tasks.spawn` starts it. When the run's files refuse that access, `tasks.spawn` fails with an error value whose `kind` is `store` and whose `code` names the files' failure, such as `backend`, `pcall` can catch it, and no task is started. Left uncaught, it ends the run with that code, and the run's message starts `file access failed: ` followed by the files' own failure text (see [Store codes](16-limits-and-errors.md#store-codes)). The store is no part of the run's files, so a store call still works after a refused spawn.
 
 ### Refusals the Engine raises
 
@@ -2374,7 +2374,7 @@ When the Engine refuses a `tasks` operation, the call raises the Engine's error 
 | `lua` | an argument is wrong, a target does not resolve, the depth cap is crossed, or `tasks.reply` runs on the main chain | `message` |
 | `task_not_owned` | code reaches for a task it does not own, a `tasks.send` included | `task` |
 | `task_consumed` | a wait asks for a task result that was already delivered, an idle task's taken reply included | `task` |
-| `store` | a Host-supplied store refuses during task setup | `message` |
+| `store` | the run's files refuse a task its access during task setup | `code` |
 
 Ownership and delivery refusals keep their own kinds, `task_not_owned` and `task_consumed`, rather than `lua` (see [Ownership, leaked tasks, and abandonment](#ownership-leaked-tasks-and-abandonment) and [Waiting with `tasks.join_any` and `tasks.join`](#waiting-with-tasksjoin_any-and-tasksjoin)). You read `err.task` on a `task_not_owned` error, a `task_consumed` error, or a canceled task's error value to get the task id. Put this block in the `Spawner` section of `task-events` in place of the first one:
 

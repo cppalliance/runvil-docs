@@ -51,7 +51,7 @@ The Harness performs every call to a catalog tool and sends back the result, whe
 
 So a tool call comes from one of two places: the section's own Lua, through `tools.call`, or a model round that asked for the tool. Each call to a catalog tool reaches the Harness naming the tool's id, the name the call used, and the arguments, and it gets back exactly one output or one error.
 
-A Pack's tools read and write the run's own files, the same files the store sees (see [What the store is](09-the-store.md#what-the-store-is)).
+A Pack's tools work in the run's files, the filesystem the Host gives a run for its tool calls. The store, the in-memory files your Lua reads and writes through the `store` table, is no part of the run's files: a tool sees no store file, and `store` sees no file of a tool (see [Tools and the store](09-the-store.md#tools-and-the-store)).
 
 ### The `tools` global
 
@@ -1083,11 +1083,12 @@ A block can call `tools.call` as a plain statement and discard its result, as in
 Your Lua can also pass a model reply into a tool and return the tool's output as the run result:
 
 ````lua
+store.write('note.md', 'Suggest a web search about Lua.')
 local reply = models.infer(store.read('note.md'))
 return tools.call('web/search', { query = reply })
 ````
 
-A model reply of `latest Lua release` makes the run search the web for that text, and the run result is the search tool's answer. [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer) covers `models.infer`, and [Writing and reading files](09-the-store.md#writing-and-reading-files) covers `store.read`.
+A model reply of `latest Lua release` makes the run search the web for that text, and the run result is the search tool's answer. [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer) covers `models.infer`, and [Writing and reading files](09-the-store.md#writing-and-reading-files) covers `store.write` and `store.read`.
 
 ### Naming the tool to call
 
@@ -2711,13 +2712,21 @@ Inside a prelude function, `pcall` and `xpcall` are the same coroutine-safe vers
 
 A tool call made through a helper goes to the tool id and argument table that the helper passes. The `tickets.open` helper passes `pack .. "/open"` and `{ title = title }`, so with `acme/issue-tracker` declared, a block that runs `return tickets.open('Fix login')` calls the tool `issue-tracker/open` with the arguments object `{"title":"Fix login"}`. Calling a helper that wraps `tools.call` suspends the block on that tool call, just as a direct `tools.call` does, and the tool's result comes back to the function and from it to the section like any Lua return value, which is how `tickets.open` returns the new ticket's id. Tool calls that a prelude function makes to its own Pack's tools succeed without anything else in the prompt naming those tools.
 
-A prelude function called from a block can also use the [store operations](09-the-store.md#writing-and-reading-files), such as `store.write('notes.md', text)` and `store.read('notes.md')`, because the suspending store functions land in the same `store` table the prelude reads. A helper that writes `kept` to `notes.md`, reads it back, and returns it gives `kept`, issuing a store write and then a store read.
+A prelude function called from a block can also use the [store operations](09-the-store.md#writing-and-reading-files), such as `store.write('notes.md', text)` and `store.read('notes.md')`, because the prelude reads the same `store` table your code uses, with the same suspending functions. A helper that writes `kept` to `notes.md`, reads it back, and returns it gives `kept`, issuing a store write and then a store read.
 
 #### Store calls while a prelude loads
 
-A prelude can call `store` operations at its top level while it loads. During the install they run directly instead of suspending, and once the install ends, any store function the prelude captured suspends like your own store calls.
+The `store` functions suspend the block that calls them, as `tools.call` does. A prelude's top-level code is not a block and cannot suspend, so a store call there fails the prelude's load exactly as a tool call there does (see [Calling a tool while loading](#calling-a-tool-while-loading)), and the run ends with the error code `lua_runtime` before it issues any effect. Suppose a prompt declares a Pack `seeder` whose prelude runs `store.write('seeded.txt', 'seed')` at its top level. The run fails with this message, and the Lua stack traceback follows it:
 
-Because a prelude's top-level code runs again in every section entry's VM, a top-level `store.write` repeats in every arm. With two arms, both installs run `store.write('seeded.txt', 'seed')`, the second arm's install-time write conflicts with the first, and the run ends with the error code `determinism` (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)). That happens even when the prelude wraps the write in `pcall`, as in `pcall(function() store.write('seeded.txt', 'seed') end)`.
+````text
+Pack `seeder`: its prelude failed to load: attempt to yield from outside a coroutine. A prelude only defines functions; it must not call tools or the store while loading.
+````
+
+Any other `store` function called there, such as `store.read` or `store.exists`, fails the load the same way.
+
+A `pcall` around the call catches the failure, and the prelude installs. After a top-level `local ok, err = pcall(function() store.write('seeded.txt', 'seed') end)`, `ok` is `false` and `tostring(err)` is `attempt to yield from outside a coroutine`. The store is untouched: no file is written, so a block's `store.exists('seeded.txt')` returns `false`. A prelude's top-level code runs again in every section entry's VM, so the caught call fails the same way in every arm and every task, and it never reaches the store. Under that prelude, a block that runs `tasks.fanout` over two items gets both arms' results, and `seeded.txt` does not exist afterward.
+
+A prelude may capture `store`, or one of its functions, while it loads, and call it from a function that a block calls later. Called from a block, it is an ordinary store call (see [Capturing a store function](09-the-store.md#capturing-a-store-function)). A prelude that captures two of them with `local write, read = store.write, store.read` can define `keeper.keep(text)` to run `write('kept.txt', text)` and return `read('kept.txt')`, and a block's `return keeper.keep('kept')` returns `kept`.
 
 ### `var` inside a prelude
 
@@ -2740,7 +2749,7 @@ A prelude failure ends the run before any section code runs. A prelude that does
 Either way, section setup fails with a message that names the Pack and the Lua message:
 
 ````text
-Pack `{pack}`: its prelude failed to load: {head}. A prelude only defines functions; it must not call tools while loading.
+Pack `{pack}`: its prelude failed to load: {head}. A prelude only defines functions; it must not call tools or the store while loading.
 ````
 
 The Lua stack traceback follows on the next lines when there is one, and this is the message the model sees. Lua errors and tracebacks raised by prelude code, including load failures and errors from prelude functions that a block calls later, name the prelude by its Pack's id, as `pack:{pack}`. A load failure's traceback names the failing line inside the prelude as `pack:{pack}:{line}:`, so a prelude whose second line raises an error fails with a message that starts `` Pack `{pack}`: its prelude failed to load: ``, includes the raised error, and has a traceback naming `pack:{pack}:2:`.
@@ -2750,8 +2759,10 @@ The Lua stack traceback follows on the next lines when there is one, and this is
 A prelude defines functions, and its functions call tools later. A prelude that calls a tool at its top level while loading fails the install and the run with the error code `lua_runtime`, because the prelude does not run as a coroutine and the call suspends. The failure surfaces as the prelude load error, with a message that starts `` Pack `{pack}`: its prelude failed to load: `` and states the rule:
 
 ````text
-A prelude only defines functions; it must not call tools while loading.
+A prelude only defines functions; it must not call tools or the store while loading.
 ````
+
+A store call at a prelude's top level fails the load the same way (see [Store calls while a prelude loads](#store-calls-while-a-prelude-loads)).
 
 `require` does not exist while preludes install, so a prelude that calls it fails the run with the code `lua_runtime` and a load-failure message that names the Pack and includes:
 

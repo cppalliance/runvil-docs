@@ -666,7 +666,7 @@ Each located failure points at one line:
 - A failure that reaches Lua, caught or not: the line that [Where a caught error's message points](#where-a-caught-errors-message-points) describes.
 - A chain that ends with tasks still running and not idle: the spawn line of the first task left running.
 - A `jump` to a missing heading: the line of the `jump`.
-- A claims conflict, a store call that cannot open its store view, and a malformed request that a block yields to the Engine: the line of the call.
+- A claims conflict and a malformed request that a block yields to the Engine: the line of the call.
 - A failed `var` read-back: the first Lua line of the last Lua block at or before the one running.
 - A failed `{{ }}` substitution: its placeholder's line, in a section's prose or a library's.
 - The call depth cap: the line of the `call`, `tasks.spawn`, or `tasks.fanout` that went too deep.
@@ -836,9 +836,9 @@ Every code also has a number, and the number's hundreds place the code in one of
 | Task codes (3xx) | `tasks_live`, `task_not_owned`, `task_consumed`, `task_canceled` | a chain ends with tasks still running and not idle, reaches for a task it does not own, or waits on a result twice, or a canceled task's error value is raised again |
 | Model codes (4xx) | `context_overflow`, `rate_limited`, `quota_exhausted`, `overloaded`, `refused`, `timeout`, `transport`, `server_error`, `rejected`, `malformed_response`, `empty_reply`, `unavailable`, `invalid_parts`, `context_exhausted`, `model_required` | a model call fails or gets an empty reply, the Harness cannot fetch the Host's list of models, a request overflows the model's context window and compaction does not make it fit, or a model round runs when the Host gave no model |
 | Tool codes (5xx) | `tool_invalid_arguments`, `tool_backend`, `tool_transport`, `tool_other`, `out_of_scope_tool`, `unbound_tool`, `model_only_tool`, `tool_loop_exhausted`, `tool_schema_invalid`, `tool_sets_invalid` | a tool fails, is out of scope or unknown, a script calls a model-only tool, the tool-call loop reaches its round cap, or a section entry's first loop round cannot freeze its tool sets |
-| Store codes (6xx) | `not_found`, `already_exists`, `not_a_directory`, `is_a_directory`, `directory_not_empty`, `not_utf8`, `invalid_path`, `invalid_range`, `anchor`, `permission_denied`, `approval_required`, `scope_ended`, `read_only`, `outside_root`, `root_protected`, `no_store`, `cross_mount`, `io`, `unsupported`, `conflict`, `backend`, `determinism` | a `store` operation fails uncaught, the run declares no store, the store backend fails as the run starts, or a store call meets a claims conflict |
+| Store codes (6xx) | `not_found`, `already_exists`, `not_a_directory`, `is_a_directory`, `directory_not_empty`, `not_utf8`, `invalid_path`, `invalid_range`, `anchor`, `permission_denied`, `approval_required`, `scope_ended`, `read_only`, `outside_root`, `root_protected`, `cross_mount`, `io`, `unsupported`, `conflict`, `backend`, `determinism` | a `store` operation fails uncaught, a store call meets a claims conflict, or the run's files refuse the run, a task, or a tool call |
 | Run codes (7xx) | `requirements_unmet`, `canceled`, `internal`, `stalled`, `args_invalid` | the environment falls short of what the prompt needs, the run is canceled, an Engine invariant breaks, no chain can move, or the run's arguments are not a JSON object or do not match the prompt's `args:` declaration |
-| Caller codes (8xx) | `recorder_failed`, `plugin_load_failed`, `no_output` | the code around a run fails, such as a recorder that refuses a write; a caller code never ends a run |
+| Caller codes (8xx) | `recorder_failed`, `plugin_load_failed` | the code around a run fails, such as a recorder that refuses a write; a caller code never ends a run |
 
 A failed `{{ }}` substitution is an ordinary Lua error that `pcall` can catch, and it ends the run with `substitution` when uncaught. A cancel ends the run with `canceled`, a run code, yet a canceled run is not a failed run, and Workshop's run log records it as `canceled`, not `failed`.
 
@@ -850,7 +850,7 @@ A failed run's message is its error's located message: the underlying error's ow
 
 A prompt that fails to parse fails before any run starts, so before any section or code runs and before the wait for Packs, and its parse error kind decides the code. `Frontmatter` is `frontmatter_invalid`, `Structure` is `structure_invalid`, and `Fence` is `fence_invalid`. A `Lua` parse failure, a block that does not compile, is `lua_compile`, a Lua code (see [Lua codes](#lua-codes)), and an `Internal` parser fault is `internal`, a run code. The failure message is the parse error followed by its chain of causes, then its location form, as [Where a run error's message points](#where-a-run-errors-message-points) describes.
 
-A file with no `runvil:` key also fails with `structure_invalid`, but its prompt parses: the version check is the first start check on the run's first step, after the wait for Packs and before the argument, store, and requirements checks. The run's record holds no events. The message is `not a runvil prompt: no runvil version (prompt {name})`, which ends with the prompt's frontmatter `name`.
+A file with no `runvil:` key also fails with `structure_invalid`, but its prompt parses: the version check is the first start check on the run's first step, after the wait for Packs and before the argument and requirements checks. The run's record holds no events. The message is `not a runvil prompt: no runvil version (prompt {name})`, which ends with the prompt's frontmatter `name`.
 
 A run fails with `unsupported_version` when the prompt's [`runvil:` key](02-file-structure.md#the-runvil-version-key) declares a major version other than `0`, and the message is `unsupported runvil version: {n} (this build supports major 0)` followed by ` (at {file}:{line})`, the line of the `runvil:` key, as `future` shows.
 
@@ -931,9 +931,11 @@ tool "{name}" ({id}) is model-only: a render shapes its arguments for the model 
 
 ### Store codes
 
-A run fails with a store code when a `store` operation fails and goes uncaught, and the code names how it failed, such as `not_found` or `read_only` (see [When a store call fails](09-the-store.md#when-a-store-call-fails)). A run that declares no store to operate on fails with `no_store`. A store backend that fails as the run starts also ends the run with its store code, even when the prompt never calls `store` (see [Host stores, policies, and modes](09-the-store.md#host-stores-policies-and-modes)). An uncaught `store.read('missing.txt')` fails the run with `not_found` and a message that includes `file not found in store: missing.txt`, and a store operation in a run that declares no store fails with `no_store` and a message that includes `this run declares no store, so no store operation can run`.
+A run fails with a store code when a `store` operation fails and goes uncaught, and the code names how it failed, such as `not_found` or `invalid_path` (see [When a store call fails](09-the-store.md#when-a-store-call-fails)). An uncaught `store.read('missing.txt')` fails the run with `not_found` and a message that includes `file not found in store: missing.txt`.
 
 A store call that meets a claims conflict fails the run with `determinism` (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)), and its message starts with `store determinism violation: `. Unlike other store failures, any claims conflict ends the run on the spot, so no `pcall` can catch it, not even a `pcall` a library runs while it loads, and no task or arm counts as failed.
+
+A store call gives eight of the store codes: `not_found`, `not_a_directory`, `is_a_directory`, `directory_not_empty`, `invalid_path`, `invalid_range`, and `anchor` for a failure that `pcall` can catch, and `determinism` for a claims conflict. The other thirteen name failures of real files, mounts, and policies, and no store call gives one, because the store is in memory and under no policy. One of them reaches a run only when the run's files, the filesystem the Host gives a run for its tool calls, refuse the run its access, or refuse a task or a tool call its own. Left uncaught, that failure ends the run with the code of the files' failure, such as `backend`, and a message that starts `file access failed: `.
 
 ### Run codes
 
@@ -985,7 +987,7 @@ Run it with the arguments `{"limit":5}`, which leave out `query`. The run fails 
 argument `query` is required
 ````
 
-The message names the argument at fault and what the declaration requires of it, and nothing follows it. An `args_invalid` failure has no file and no line, because the arguments come from the caller and no line of the prompt is at fault. The argument check is the second start check on the run's first step, after the version check and before the store and requirements checks. So the run is refused before any section runs: no Lua has run, nothing in the prompt can catch the failure, and the run's record holds no events.
+The message names the argument at fault and what the declaration requires of it, and nothing follows it. An `args_invalid` failure has no file and no line, because the arguments come from the caller and no line of the prompt is at fault. The argument check is the second start check on the run's first step, after the version check and before the requirements check. So the run is refused before any section runs: no Lua has run, nothing in the prompt can catch the failure, and the run's record holds no events.
 
 The check reports the first mismatch only, and it looks in a fixed order: text that is not JSON, then JSON that is not an object, then each object's declared fields in name order, then its undeclared fields in name order. Each of these runs of `lookup` fails with one message:
 
@@ -1011,7 +1013,7 @@ A stall with no task waiting on its inbox ends the run with `internal` instead, 
 
 ### Caller codes
 
-The caller codes name failures in the code around a run rather than in the run itself: `recorder_failed` when the Host's recorder refuses a write, `plugin_load_failed` when a Plugin's entry point does not open or load, and `no_output` when a run report has no output text, because the run did not complete or the prompt declares no `output:` file.
+The caller codes name failures in the code around a run rather than in the run itself: `recorder_failed` when the Host's recorder refuses a write, and `plugin_load_failed` when a Plugin's entry point does not open or load.
 
 A caller code never ends a run. `Harness::run` hands the Host the run's result, and it fails only when the Host's recorder refuses a write, with `recorder_failed`. A prompt that raises an error value whose `code` names a caller code ends the run with `internal`, keeping the message.
 
