@@ -1177,25 +1177,36 @@ yes lua
 
 Here the write raises `var.handler must be JSON data, got function`. The path is the field's full path, dotted for string keys of object fields and bracketed for any other key, with array elements counted from 1, as in `var.t.f` or `var.list[2]`. The `messages` list or a message record such as `messages[1]` (see [Building a message list](11-conversations.md#building-a-message-list)) is userdata, so assigning one to a `var` field raises the same error ending in `got userdata`. [`json.null`](#null-values-and-jsonnull) is the one userdata the guard accepts, and it stores JSON null: after `var.x = json.null`, `var` reads back as `{ "x": null }`, and `var.x == json.null` holds in Lua.
 
-`var` checks an assigned table deeply, so a table holding a function at any depth, such as `{ f = function() end }`, fails at the assigning line too. That error comes from the conversion to JSON, and its message gives the conversion's reason after the target path: `var.t = { f = function() end }` raises ``var.t must be JSON data: unsupported value type `function` ``, and `var.t = { [true] = 1 }` raises ``var.t must be JSON data: invalid type: boolean `true`, expected a string key``.
+`var` checks an assigned table deeply, by the rules of [`json.encode`](#when-jsonencode-refuses-a-value), so a table that JSON cannot hold fails at the assigning line too. The message names the failing part by its path under `var`:
 
-The guard checks the key of a write too, because JSON data has a place only for a named field and for a list item. `var` itself takes string keys alone, so `var[true] = 1` raises `a key of var must be a string, got boolean`, and `var[1] = 'x'` raises the same message ending in `got integer`. A table inside `var` takes a string key or a list index: the index of an item the list holds, or of the next one. With `var.t = {}` and `var.list = { 'a' }`:
+| Write | Message |
+|---|---|
+| `var.t = { f = function() end }` | `var.t.f must be JSON data, got function` |
+| `var.t = { [true] = 1 }` | `var.t has a boolean key; object keys must be strings` |
+| `var.t = { 'a', name = 'x' }` | `var.t mixes list items and named keys` |
+| `var.t = { [1] = 'a', [3] = 'c' }` | `var.t is missing list item [2]` |
+| `var.n = 0/0` | `var.n is not a finite number` |
+
+A float with no fractional part stays a float in `var`: after `var.x = 2.0`, `math.type(var.x)` is `float`.
+
+The guard checks the key of a write too, because a table of JSON data is an object, whose keys are strings, or a list, whose keys are the indexes 1 to its length. `var` itself is an object, so it takes string keys alone: `var[true] = 1` raises `a key of var must be a string, got boolean`, and `var[1] = 'x'` raises the same message ending in `got integer`. A table inside `var` takes a write that leaves it a list or an object. With `var.t = {}` and `var.list = { 'a' }`:
 
 | Write | Message |
 |---|---|
 | `var.t[2.5] = 1` | `a key of var.t must be a string or a list index, got number` |
 | `var.t[0] = 'x'` | `a list index of var.t must be 1 or more, got 0` |
 | `var.list[3] = 'c'` | `var.list[3] is past the end of the list, whose length is 1` |
+| `var.list.name = 'x'` | `var.list.name is a named field, and var.list is a list` |
+| `var.t.a = 1` and then `var.t[1] = 'x'` | `var.t[1] is a list item, and var.t holds named fields` |
 
-`var.list[2] = 'b'` appends, and `var.list[1] = 'z'` gives the first item a new value. Assigning `nil` removes a key and is never refused.
-
+`var.list[2] = 'b'` appends, and `var.list[1] = 'z'` gives the first item a new value. Assigning `nil` removes a named field, or the last item of a list. The removal of an earlier item would leave a gap, so with two items in `var.list`, `var.list[1] = nil` raises `var.list[1] is not the last item of the list, whose length is 2; remove it with table.remove`, and `table.remove(var.list, 1)` removes the item and moves the rest down.
 A table that is shared at many levels can also be too large to store, because the conversion to JSON copies it once for every place it appears. Before it converts an assigned table, `var` spends the same value and byte budgets that [`json.encode`](#size-and-nesting-limits) does, and a table that runs the budget out raises this error at the assigning line, with the full target path in place of `{target}`:
 
 ````text
 {target} is too large to store
 ````
 
-After `local t = {} for i = 1, 40 do t = { t, t } end`, the write `var.x = t` raises `var.x is too large to store`. Like any rejected write it stores nothing. A table that contains itself is not a size problem, so the conversion to JSON refuses it with its own message.
+After `local t = {} for i = 1, 40 do t = { t, t } end`, the write `var.x = t` raises `var.x is too large to store`. Like any rejected write it stores nothing. A table that contains itself is not a size problem, and it is refused as a cycle: after `local t = {} t.self = t`, the write `var.c = t` raises `var.c.self contains itself`.
 
 The guard raises its error at the assigning statement itself, not later when `var` is saved. That is why a `pcall` around that one write catches it, the block keeps running, and later `var` writes still work, as `var.kept = 'yes'` does in the `guarded` prompt. A rejected write stores nothing, so `var` holds only the writes that passed the guard: after a rejected `var.t.f = function() end` following `var.t.kept = 'yes'`, `var` reads back as exactly `{ "t": { "kept": "yes" } }`.
 
