@@ -9,22 +9,22 @@ After this section you can write Lua blocks that use the Engine globals, and you
 ````markdown
 ---
 name: shout
-description: Shouts the argument string.
+description: Shouts the text it is given.
 runvil: 0
 ---
 
 ```lua
-return string.upper(args)
+return string.upper(args.text)
 ```
 ````
 
-Run with the argument string `hi`, the run result is:
+Run with the arguments `{"text":"hi"}`, the run result is:
 
 ````text
 HI
 ````
 
-The block calls `string.upper`, a function from Lua's standard `string` library, on `args`, a global the Engine installs. Neither one needs an import. Every `lua` fence in a prompt runs real PUC Lua 5.5, with the Harness's work, the run's metadata, and the operator one plain function call away.
+The block calls `string.upper`, a function from Lua's standard `string` library, on `args.text`. `args` is a global the Engine installs: a read-only table that holds the run's checked arguments (see [Reading arguments from `args`](06-arguments.md#reading-arguments-from-args)), and a prompt with no `args:` key, like this one, takes one optional string named `text` (see [Prompts with no `args:` key](06-arguments.md#prompts-with-no-args-key)). Neither `string.upper` nor `args` needs an import. Every `lua` fence in a prompt runs real PUC Lua 5.5, with the Harness's work, the run's metadata, and the operator one plain function call away.
 
 ### Real Lua 5.5 in every block
 
@@ -158,26 +158,26 @@ first_saw_store = store.read('seed.txt')
 
 Every section VM, the preamble's included, starts with these Engine globals:
 
-- `args`, `argv`, `sys`, `var`, and `prose`
+- `args`, `sys`, `var`, and `prose`
 - `log`, `store`, `untrusted`, `json`, and `markdown`
 - `models`, `tools`, `messages`, and `compactors`
 - `call`, `jump`, `prompt`, and `require`
 - `tasks`
 
-Two more Engine globals are installed only in some section VMs. `ui` is installed when the run has an application-state snapshot (see [Run facts in `sys` and `ui`](#run-facts-in-sys-and-ui)), and `item` is installed in a spawned chain, such as a fanout arm (see [What an arm sees](14-fanout.md#what-an-arm-sees)). That makes 21 Engine globals in all.
+Two more Engine globals are installed only in some section VMs. `ui` is installed when the run has an application-state snapshot (see [Run facts in `sys` and `ui`](#run-facts-in-sys-and-ui)), and `item` is installed in a spawned chain, such as a fanout arm (see [What an arm sees](14-fanout.md#what-an-arm-sees)). That makes 20 Engine globals in all.
 
-Together they give every section's Lua logging through `log` (see [Logging and lifecycle reports](#logging-and-lifecycle-reports)), tool scoping through `tools`, store operations through `store`, and the `var` and `argv` globals, all inside the sandboxed section VM. `prose` is the global that reads pending prose (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)), `prompt` holds the section reads (see [Reading sections with `prompt.section` and `prompt.section_or`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptsection_or)), and `models` holds the model functions: [`models.infer`](10-models.md#running-a-round-with-modelsinfer), `models.loop`, and `models.compact` run model rounds, and `models.use`, `models.get`, and `models.current` choose and read the model (see [The `models` global](10-models.md#the-models-global)). The rest are taught where they are used: `args` in [The argument string in `args`](06-arguments.md#the-argument-string-in-args), `argv` in [Reading parsed input from `argv`](06-arguments.md#reading-parsed-input-from-argv), `store` in [What the store is](09-the-store.md#what-the-store-is), `untrusted` in [Handing store text to a model with `untrusted`](09-the-store.md#handing-store-text-to-a-model-with-untrusted), `json` in [Encoding and decoding JSON with `json`](#encoding-and-decoding-json-with-json), `markdown` in [Parsing Markdown with `markdown`](#parsing-markdown-with-markdown), `messages`, the section entry's own conversation that each new section VM starts empty, in [`messages` is the section entry's conversation](11-conversations.md#messages-is-the-section-entrys-conversation), `compactors` in [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion), `tools` in [The members of `tools`](12-tools.md#the-members-of-tools), and `tasks` in [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn).
+Together they give every section's Lua logging through `log` (see [Logging and lifecycle reports](#logging-and-lifecycle-reports)), tool scoping through `tools`, store operations through `store`, and the `var` and `args` globals, all inside the sandboxed section VM. `prose` is the global that reads pending prose (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)), `prompt` holds the section reads (see [Reading sections with `prompt.section` and `prompt.section_or`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptsection_or)), and `models` holds the model functions: [`models.infer`](10-models.md#running-a-round-with-modelsinfer), `models.loop`, and `models.compact` run model rounds, and `models.use`, `models.get`, and `models.current` choose and read the model (see [The `models` global](10-models.md#the-models-global)). The rest are taught where they are used: `args`, the read-only table that holds the run's checked arguments, in [Reading arguments from `args`](06-arguments.md#reading-arguments-from-args), `store` in [What the store is](09-the-store.md#what-the-store-is), `untrusted` in [Handing store text to a model with `untrusted`](09-the-store.md#handing-store-text-to-a-model-with-untrusted), `json` in [Encoding and decoding JSON with `json`](#encoding-and-decoding-json-with-json), `markdown` in [Parsing Markdown with `markdown`](#parsing-markdown-with-markdown), `messages`, the section entry's own conversation that each new section VM starts empty, in [`messages` is the section entry's conversation](11-conversations.md#messages-is-the-section-entrys-conversation), `compactors` in [Compactors and context exhaustion](11-conversations.md#compactors-and-context-exhaustion), `tools` in [The members of `tools`](12-tools.md#the-members-of-tools), and `tasks` in [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn).
 
-The Engine installs no global beyond these 21. Fanout is `tasks.fanout`, a function on the `tasks` table (see [Fanout in one call](14-fanout.md#fanout-in-one-call)), and reading a list kept in a section goes through `prompt.section`.
+The Engine installs no global beyond these 20. Fanout is `tasks.fanout`, a function on the `tasks` table (see [Fanout in one call](14-fanout.md#fanout-in-one-call)), and reading a list kept in a section goes through `prompt.section`.
 
-The preamble and every other section see the same set of globals, and `argv` is read-only in all of them (see [`argv` is read-only](06-arguments.md#argv-is-read-only)).
+The preamble and every other section see the same set of globals, and `args` is read-only in all of them (see [`args` is read-only](06-arguments.md#args-is-read-only)).
 
 The name of a [model role](10-models.md#model-roles-instead-of-models) and an offered tool never become globals of their own. `type(strong)` is `nil`. You read a role's model handle with [`models.get(role)`](10-models.md#getting-handles-with-modelsget), so `models.get('strong').name` reads `strong`, and you read a tool with [`tools.get(id)`](12-tools.md#tool-objects-pack-objects-and-toolspacks), so in a prompt that declares `web`, `tools.get('web/search').id` reads `web/search`.
 
 Every section VM is set up in one fixed order. The same order applies to every section entry, every fanout arm, and every spawned task chain:
 
 1. `untrusted`, when the VM is built
-2. `args`, `argv`, `sys`, `var`, `tools`, `models`, `messages`, and `compactors`
+2. `args`, `sys`, `var`, `tools`, `models`, `messages`, and `compactors`
 3. `log`, `store`, `json`, and `markdown`
 4. `ui`
 5. `item`
@@ -189,7 +189,7 @@ Every section VM is set up in one fixed order. The same order applies to every s
 
 ### Reserved names
 
-The Engine reserves the name of every global it installs in a section VM, and its reserved-name list matches that set exactly. The list holds 63 names: the 21 Engine globals, the 19 Lua globals the sandbox keeps (listed in [The sandbox](#the-sandbox)), and the 23 Lua 5.5 keywords. It classes each name as an Engine global, a Lua global, or a Lua keyword.
+The Engine reserves the name of every global it installs in a section VM, and its reserved-name list matches that set exactly. The list holds 62 names: the 20 Engine globals, the 19 Lua globals the sandbox keeps (listed in [The sandbox](#the-sandbox)), and the 23 Lua 5.5 keywords. It classes each name as an Engine global, a Lua global, or a Lua keyword.
 
 The 23 Lua 5.5 keywords in prompt Lua are `and`, `break`, `do`, `else`, `elseif`, `end`, `false`, `for`, `function`, `global`, `goto`, `if`, `in`, `local`, `nil`, `not`, `or`, `repeat`, `return`, `then`, `true`, `until`, and `while`. A Lua keyword never reads as a global. Every Engine global and Lua global on the list reads non-nil in a section entry once its conditional bindings apply, such as `ui` with a snapshot and `item` in a spawned chain.
 
@@ -281,7 +281,7 @@ Run on a Host that has the `acme/issue-tracker` Pack (see [Packs at prepare](04-
 function,function,function
 ````
 
-The `issue-tracker` prelude defines the global `tickets`, so `type(tickets.open)` reads `function`. A prelude global sits beside the Engine's globals without replacing them, so `type(store.read)` and `type(tools.call)` still give `function` when `acme/issue-tracker` is declared. Your code still sees the `ui`, `argv`, `sys`, and `models` globals when Pack preludes are installed.
+The `issue-tracker` prelude defines the global `tickets`, so `type(tickets.open)` reads `function`. A prelude global sits beside the Engine's globals without replacing them, so `type(store.read)` and `type(tools.call)` still give `function` when `acme/issue-tracker` is declared. Your code still sees the `ui`, `args`, `sys`, and `models` globals when Pack preludes are installed.
 
 A prelude can add any globals to a section entry's `_G` beyond the ones the Engine installs. A prelude that runs `answer = 42`, `label = 'kit'`, and `function shout(text) ... end` makes `answer`, `label`, and `shout` readable from your blocks.
 
@@ -301,7 +301,7 @@ A table global that a Pack's prelude defines is read-only at its top level. You 
 tickets is read-only: Pack `issue-tracker` defines it; cannot set 'extra'
 ````
 
-The message has the form `` {name} is read-only: Pack `{pack}` defines it; cannot set '{field}' ``, naming the table, the Pack id of the Pack that defines it, and the field. The table is sealed: `getmetatable(tickets)` returns `tickets is sealed`, and `pairs(tickets)` visits nothing.
+The message has the form `` {name} is read-only: Pack `{pack}` defines it; cannot set '{field}' ``, naming the table, the Pack id of the Pack that defines it, and the field. The table is sealed: `getmetatable(tickets)` returns `tickets is sealed`, while `pairs(tickets)` still visits the fields the prelude gave it.
 
 #### Which Packs add globals
 
@@ -365,7 +365,7 @@ Six of the base functions behave in a Runvil way:
 
 - `pairs` and `next` visit keys in a fixed order (see [Deterministic table iteration](#deterministic-table-iteration)).
 - `pcall` and `xpcall` deliver a failure raised by an Engine function as an [error value](#error-values), while passing your own raised value through unchanged, whether it is a string, a table of your own, or an error value already built (see [Raising and catching errors](#raising-and-catching-errors)).
-- `setmetatable` and `getmetatable` give `_G` an author metatable that never replaces the guard on `argv`, `prose`, and `messages` (see [Giving `_G` a metatable](#giving-_g-a-metatable)).
+- `setmetatable` and `getmetatable` give `_G` an author metatable that never replaces the guard on `args`, `prose`, and `messages` (see [Giving `_G` a metatable](#giving-_g-a-metatable)).
 
 On values other than `_G`, `getmetatable` and `setmetatable` behave as in stock Lua, so `setmetatable(t, mt) == t` and `getmetatable(t) == mt` both hold (see [`setmetatable` and `getmetatable` on other values](#setmetatable-and-getmetatable-on-other-values)). You can call `getmetatable` on a task handle from `tasks.spawn` too, as in `getmetatable(t) == nil`.
 
@@ -401,7 +401,7 @@ string,number,boolean,table,function,nil
 
 ### Turning values into text
 
-You build strings with the `..` concatenation operator, joining string literals with other values, as in `"Hello, " .. args .. "!"`. `..` joins strings and numbers, and an integer renders without a decimal point, so you can render a number such as the one [`tasks.concurrency`](14-fanout.md#concurrency-and-the-admission-window) returns: with `n` equal to `4`, `'clamped:' .. n` reads `clamped:4`, and a join beginning `#history .. '|' .. history[2].content ..` produces `4|first reply|second reply`. `..` also works on a value an Engine call returns, so `return "pcall:" .. result` gives `pcall:answer` when `result` is the reply `answer`.
+You build strings with the `..` concatenation operator, joining string literals with other values, as in `"Hello, " .. args.text .. "!"`. `..` joins strings and numbers, and an integer renders without a decimal point, so you can render a number such as the one [`tasks.concurrency`](14-fanout.md#concurrency-and-the-admission-window) returns: with `n` equal to `4`, `'clamped:' .. n` reads `clamped:4`, and a join beginning `#history .. '|' .. history[2].content ..` produces `4|first reply|second reply`. `..` also works on a value an Engine call returns, so `return "pcall:" .. result` gives `pcall:answer` when `result` is the reply `answer`.
 
 `tostring(v)` turns other values into text for joining or storing:
 
@@ -438,7 +438,7 @@ t7|6|t7|TASK ID=T7|ababab
 
 Strings share a metatable whose `__index` is the `string` library, so `getmetatable('').__index == string` holds, and every `string` function works with colon syntax on a string value. `s:match(pattern)` is `string.match(s, pattern)`, and `s:find(text, 1, true)` is `string.find(s, text, 1, true)`. The functions you reach for most:
 
-- `string.upper` and `string.lower` change case, so `return string.upper(args)` with the argument string `hi` returns `HI`, and `return string.lower(value)` lowers a value.
+- `string.upper` and `string.lower` change case, so `return string.upper(args.text)` with the arguments `{"text":"hi"}` returns `HI`, and `return string.lower(value)` lowers a value.
 - `string.match` matches a Lua pattern and returns its captures, so `string.match(s, '^(%d+):([%d%.]+)$')` returns two captures. Anchored patterns work on message content too, so `messages[2].content:match('^Answer: (.+)$')` returns the captured text after the prefix. Pattern escapes work as in standard Lua, as `%-` does in `tostring(err):match('read%-only')`.
 - `string.find` finds a pattern, as in `string.find(wrapped, "untrusted_input_")`. With its plain-find flag it searches for literal text: `string.find(m.content, 'Answer:', 1, true) == 1` tests for a prefix, and `err:find(']:2: undefined global undefined_here', 1, true)` finds that exact text. A plain search returns `nil` when the text is absent, so `tostring(err):find('appears exactly once', 1, true) ~= nil` tests whether a message contains that text.
 - `string.sub` takes negative indexes that count from the end, inside sections and fanout arms alike, as in `tostring(sys.index) == string.sub(item, -1)`. Its positions count bytes, not characters, so a cut can split a multibyte character, and [the `utf8` library](#the-utf8-library) finds the character boundaries to cut on.
@@ -591,7 +591,7 @@ Each absent name closes off one kind of direct work:
 
 Your code has no `coroutine` global either. The Engine loads the coroutine library only for its own suspending calls and removes the global before section setup ends, so a block cannot create coroutines or yield on its own, and every yield in a run comes from an Engine function (see [Suspending calls](#suspending-calls)).
 
-The raw-access functions are stripped after the Engine guard on `_G` captures `rawequal`, `rawget`, and `rawset` for its own use. With no `debug` library, no `rawset`, and no code loading, your code in a section VM has no route to the Engine guard on `_G`, to a raw `prose` global, or to a raw `argv` global (see [Giving `_G` a metatable](#giving-_g-a-metatable)).
+The raw-access functions are stripped after the Engine guard on `_G` captures `rawequal`, `rawget`, and `rawset` for its own use. With no `debug` library, no `rawset`, and no code loading, your code in a section VM has no route to the Engine guard on `_G`, to a raw `prose` global, or to a raw `args` global (see [Giving `_G` a metatable](#giving-_g-a-metatable)).
 
 Calling any of these absent names, for example `print("hi")`, fails with a Lua runtime error because the name holds nil. The message comes either from the Engine guard on `_G` or from stock Lua's error for calling a nil value.
 
@@ -735,6 +735,8 @@ Two kinds of scalar key go in that same trailing group with no fixed order: stri
 
 `pairs` and `next` read raw values without consulting `__index`, and they visit only keys actually stored in the table. Because the walk reads the table's raw contents, `__index` and `__len` metamethods do not change which keys are visited, where the array part ends, or the values returned.
 
+The exception is a sealed view, a table with no entries of its own that stands in for a table kept elsewhere, such as a table read from `var` or a table inside `args` (see [Encoding values with `json.encode`](#encoding-values-with-jsonencode)): `pairs` and `next` read through it and visit the entries of that table, in the same fixed order. After `var.t = { zeta = 1, alpha = 2, mid = 3, beta = 4 }`, a `pairs(var.t)` loop visits `alpha, beta, mid, zeta`.
+
 ### Changing a table during a `pairs` loop
 
 Clearing keys with `t[k] = nil` while a `pairs` loop runs is safe:
@@ -860,7 +862,7 @@ A stateless generic `for k in next, t do ... end` loop walks keys in the same de
 
 `next` keeps no hidden state between calls. It rebuilds the ordered key list from the live table on each call, so each step costs `O(n log n)` in the table's size. On large tables, prefer `pairs`, which builds the ordered list once when the loop starts.
 
-`next` works only on a table's own contents and never calls a `__pairs` metamethod. It accepts only a table and an optional key, so calling `next` with a first argument that is not a table raises a Lua argument error, whose wording comes from the underlying Lua binding rather than from Runvil's own text.
+`next` works only on a table's own contents, or on the data behind a sealed view, and never calls a `__pairs` metamethod. It accepts only a table and an optional key, so calling `next` with a first argument that is not a table raises a Lua argument error, whose wording comes from the underlying Lua binding rather than from Runvil's own text.
 
 ### Changing a table during a `next` loop
 
@@ -936,7 +938,7 @@ abc
 
 A value you assign to a `var` field stays in `var` after the block that set it ends. Whenever the run needs that state, it reads `var` back as JSON data, as [When the run reads `var` back](#when-the-run-reads-var-back) explains.
 
-`var` is present in every section, the preamble included. You can read and write it in every walked section, in every [arm](14-fanout.md#what-an-arm-sees) of [`tasks.fanout`](14-fanout.md#fanout-in-one-call), and in every chain that [`call`](08-jump-and-call.md#calling-a-section) runs. A chain is a walk with its own entries (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)). How a call, a fanout arm, or a task starts from its own copy of `var` is covered in [Call input and `var`](08-jump-and-call.md#call-input-and-var).
+`var` is present in every section, the preamble included. You can read and write it in every walked section, in every [arm](14-fanout.md#what-an-arm-sees) of [`tasks.fanout`](14-fanout.md#fanout-in-one-call), and in every chain that [`call`](08-jump-and-call.md#calling-a-section) runs. A chain is a walk with its own entries (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)). How a call, a fanout arm, or a task starts from its own copy of `var` is covered in [Call args and `var`](08-jump-and-call.md#call-args-and-var).
 
 ### Starting values and computed keys
 
@@ -1116,16 +1118,19 @@ end
 return table.concat(out) .. ' ' .. #var.items .. ' ' .. table.concat(var.items, '', 1, 3)
 ````
 
-As the Lua block of `Main` in the `greeting` prompt, this returns `abc 0 abc`. The values you store through `var` live in hidden storage behind a guard, so the `var` table itself stays empty, and so does every table you read from it. Your code cannot reach that hidden storage, because it lives in the Lua registry and the [sandbox](#the-sandbox) has no `debug` library.
+As the Lua block of `Main` in the `greeting` prompt, this returns `abc 3 abc`. The values you store through `var` live in hidden storage behind a guard, so the `var` table itself stays empty, and so does every table you read from it. Each one is a [sealed view](#encoding-values-with-jsonencode): a stand-in that passes every read to the stored data. Your code cannot reach that hidden storage directly, because it lives in the Lua registry and the [sandbox](#the-sandbox) has no `debug` library.
 
-Because a table read from `var` holds no entries of its own, a few Lua operations see it as empty:
+Because every read passes through, a table read from `var` measures and iterates like the table it stands for. With `var.items` as in the block above:
 
-- The length operator `#` on it returns `0`, even when it holds array entries, which is the `0` in the result above.
-- `table.concat` on it returns an empty string unless you pass the end index, as in `table.concat(var.items, '', 1, 3)`, because its default end index is `#`, which is `0` on a `var` table.
-- `pairs` over a `var` table yields nothing.
-- `next(var)`, or `next` on any nested `var` table, returns `nil` even when the table holds entries, so `next` cannot test whether a `var` table is empty.
+- The length operator `#` gives the length of the stored list, which is the `3` in the result above.
+- `table.concat` joins the stored items with or without an end index, so `table.concat(var.items, ', ')` gives `a, b, c`.
+- `ipairs` visits the items in order, as the loop above does, and `table.unpack(var.items)` returns `a`, `b`, and `c`.
+- `pairs` visits the stored entries in the [deterministic key order](#deterministic-table-iteration), so `pairs(var.items)` visits the keys `1`, `2`, and `3`, and `pairs(var)` visits the one key `items`.
+- `next` steps through the same entries, so `next(var.items)` returns `1` and `a`. On a `var` table that holds nothing it returns `nil`, so `next(t) == nil` tests whether a `var` table `t` is empty.
 
-`json.encode` does not see a `var` table as empty. It reads through it to the stored data, so in the block above, `json.encode(var.items)` gives `["a","b","c"]`, and `json.encode(var)` gives everything `var` holds as one JSON object (see [Encoding values with `json.encode`](#encoding-values-with-jsonencode)).
+You append to a list in `var` as you append to any list. After `var.items[#var.items + 1] = 'd'` and then `table.insert(var.items, 'e')`, `json.encode(var.items)` gives `["a","b","c","d","e"]`.
+
+`json.encode` reads through a `var` table to the stored data in the same way, so in the block above, `json.encode(var.items)` gives `["a","b","c"]`, and `json.encode(var)` gives everything `var` holds as one JSON object (see [Encoding values with `json.encode`](#encoding-values-with-jsonencode)).
 
 `getmetatable` on `var`, or on any table nested inside it, returns the string `var is guarded`, and your code cannot replace that guard, `setmetatable` included: `setmetatable(var, {})` raises the Lua error `cannot change a protected metatable` at your line.
 
@@ -1288,7 +1293,7 @@ end
 
 With `text` holding `x`, this block returns `bad JSON: {file}:{line}: json.decode: expected value at line 1 column 1. The Lua code failed at runtime. Fix the code at this location.`, where `{file}:{line}` names the line of `pcall(json.decode, text)`.
 
-You decode only JSON that arrives as text, such as a plain tool's output, a store file, the argument string, or a model reply. A [structured tool](12-tools.md#structured-output) already hands your Lua a parsed table built the same way, with marked lists and `json.null`. A web tool's text arrives inside the untrusted envelope, so you cut the JSON out with `string.match` before decoding it, as [Decoding a fetched JSON body](13-web-fetch-and-search.md#decoding-a-fetched-json-body) shows.
+You decode only JSON that arrives as text, such as a plain tool's output, a store file, or a model reply. A [structured tool](12-tools.md#structured-output) already hands your Lua a parsed table built the same way, with marked lists and `json.null`. A web tool's text arrives inside the untrusted envelope, so you cut the JSON out with `string.match` before decoding it, as [Decoding a fetched JSON body](13-web-fetch-and-search.md#decoding-a-fetched-json-body) shows.
 
 Decoded strings are plain Lua strings, never wrapped in the run's untrusted envelope, even when the JSON came from the web or a model. Before such text reaches a model, wrap it with [`untrusted`](09-the-store.md#handing-store-text-to-a-model-with-untrusted).
 
@@ -1324,7 +1329,7 @@ Every JSON `null` decodes to `json.null`, and `json.null` is what you put in a t
 
 `json.null` is a light userdata, so `type(json.null)` is `userdata`, and most error messages name its type `lightuserdata`. Like every userdata it is truthy, so `if row.note then` passes for a null, as the `truthy` in the result shows. Test for null with `v == json.null`, and for an absent field with `v == nil`.
 
-Outside `json.encode`, `json.null` passes the Engine's other conversions to JSON too. The `var` guard accepts it and stores JSON null (see [When a value is not JSON data](#when-a-value-is-not-json-data)), a `tools.call` argument table or a task's `item` can hold it, and a fanout member that is `json.null` runs its arm with `item == json.null`. A JSON null nested in the argument string reads as `json.null` in `argv` too, as [Missing fields and null values](06-arguments.md#missing-fields-and-null-values) shows. A prose placeholder still refuses it: naming a bare global that holds `json.null`, as in `{{ nothing }}` after `nothing = json.null`, fails with `missing {{ nothing }}` and substitution kind `NullValue`, the same failure a `var` field holding null gives (see [Substitution error kinds](07-substitution.md#substitution-error-kinds)).
+Outside `json.encode`, `json.null` passes the Engine's other conversions to JSON too. The `var` guard accepts it and stores JSON null (see [When a value is not JSON data](#when-a-value-is-not-json-data)), a `tools.call` argument table or a task's `item` can hold it, and a fanout member that is `json.null` runs its arm with `item == json.null`. A null that the arguments keep, in an undeclared field of an object that says `additionalProperties: true`, reads as `json.null` in `args` too, as [Missing fields and null values](06-arguments.md#missing-fields-and-null-values) shows. A prose placeholder still refuses it: naming a bare global that holds `json.null`, as in `{{ nothing }}` after `nothing = json.null`, fails with `missing {{ nothing }}` and substitution kind `NullValue`, the same failure a `var` field holding null gives (see [Substitution error kinds](07-substitution.md#substitution-error-kinds)).
 
 ### Keeping empty lists with `json.array`
 
@@ -1364,9 +1369,9 @@ A marked list carries a metatable whose only field is `__metatable = false`. So 
 `json.array` raises two errors:
 
 - `json.array expects a table or no argument, got {type}`, for any value other than a table or nil, so `json.array(5)` reports `got integer`.
-- `json.array: the table already has a metatable`, for a table whose metatable is anything other than the list marker. That covers `var` and every table read from it, `argv`, sealed Pack globals, fanout results, `_G`, and any table you gave a metatable yourself.
+- `json.array: the table already has a metatable`, for a table whose metatable is anything other than the list marker. That covers `var` and every table read from it, `args` and every table read from it, sealed Pack globals, fanout results, `_G`, and any table you gave a metatable yourself.
 
-The marker works beyond `json.encode`. Every place the Engine turns a Lua table into JSON honors it, so a marked list goes out as `[]` in a `tools.call` argument table, a task's `item`, a message record, and `var`, where a plain empty table goes out as `{}`. An empty list stored in `var` or held in `argv` keeps its marker, so after `var.items = json.array()`, `var` reads back as `{ "items": [] }`, and a `{{ var.items }}` placeholder renders `[]` (see [When the run reads `var` back](#when-the-run-reads-var-back)). `var.items = {}` still reads back as `{ "items": {} }`.
+The marker works beyond `json.encode`. Every place the Engine turns a Lua table into JSON honors it, so a marked list goes out as `[]` in a `tools.call` argument table, a task's `item`, a message record, and `var`, where a plain empty table goes out as `{}`. An empty list stored in `var` or held in `args` keeps its marker, so after `var.items = json.array()`, `var` reads back as `{ "items": [] }`, and a `{{ var.items }}` placeholder renders `[]` (see [When the run reads `var` back](#when-the-run-reads-var-back)). `var.items = {}` still reads back as `{ "items": {} }`.
 
 ### Encoding values with `json.encode`
 
@@ -1391,10 +1396,10 @@ return json.encode(var) .. ' ' .. #var.cfg.sizes .. ' ' .. json.encode(var.cfg.s
 The run result is:
 
 ````text
-{"cfg":{"mode":"fast","sizes":[2,1.5]},"empty":[]} 0 [2,1.5]
+{"cfg":{"mode":"fast","sizes":[2,1.5]},"empty":[]} 2 [2,1.5]
 ````
 
-`json.encode` reads `var` and its nested tables through to the data they store, even though `#var.cfg.sizes` sees an empty table, and the float `2.0` comes out as `2`. The only option is `debug`, which [Dumping any value in debug mode](#dumping-any-value-in-debug-mode) covers.
+`json.encode` reads `var` and its nested tables through to the data they store, `#var.cfg.sizes` counts the two sizes stored there, and the float `2.0` comes out as `2`. The only option is `debug`, which [Dumping any value in debug mode](#dumping-any-value-in-debug-mode) covers.
 
 Scalars encode this way:
 
@@ -1420,7 +1425,7 @@ Tables encode this way:
 
 Functions, threads, and every userdata other than `json.null` are not JSON data, so they raise an error. That includes Engine objects such as tool objects, the `messages` list, and the record views that `messages[i]` returns. To encode a message record, encode `messages[i].content` or a plain table you build from its fields.
 
-A sealed view is a table that holds no entries of its own and whose metatable has both `__index` and `__metatable`. `var` and every table read from it, `argv`, sealed Pack globals, and [fanout results](14-fanout.md#reading-the-results) are sealed views. When a view's `__index` is a table, `json.encode` encodes that table in the view's place, so `json.encode(var)` gives everything `var` holds. For a fanout arm over the member `alpha` whose worker returns `item .. '-' .. sys.index`, `json.encode(r[1])` gives `{"exhausted":false,"item":"alpha","ok":true,"text":"alpha-1"}`. When a view's `__index` is a function, as in `sys`, the view cannot be read, and `json.encode(sys)` raises this error:
+A sealed view is a table that holds no entries of its own and whose metatable has both `__index` and `__metatable`. `var` and every table read from it, `args` and every table read from it, sealed Pack globals, and [fanout results](14-fanout.md#reading-the-results) are sealed views, and each of them measures and iterates like the data it stands for: `#` gives the data's length, and `pairs` and `next` visit the data's entries. When a view's `__index` is a table, `json.encode` encodes that table in the view's place, so `json.encode(var)` gives everything `var` holds. For a fanout arm over the member `alpha` whose worker returns `item .. '-' .. sys.index`, `json.encode(r[1])` gives `{"exhausted":false,"item":"alpha","ok":true,"text":"alpha-1"}`. When a view's `__index` is a function, as in `sys`, the view cannot be read, and `json.encode(sys)` raises this error:
 
 ````text
 json.encode: value cannot be read (sys is sealed); copy the fields you need into a plain table
@@ -2258,7 +2263,7 @@ The run goes on whether or not the field is there. A caught unknown field error 
 
 ### `sys` is sealed and read-only
 
-The `sys` table itself holds no entries, so its values are reachable only by reading a named field, and iterating `sys` with `pairs` or `next` yields no entries. `sys` takes string keys only, so you read a field by its name, as in `sys.when` or `sys['when']`, and a read with any other key type raises `sys fields must be accessed by string key`.
+The `sys` table itself holds no entries, and a function answers each read instead of a table of data, so its values are reachable only by reading a named field: iterating `sys` with `pairs` or `next` yields no entries, and `#sys` is `0`. `sys` takes string keys only, so you read a field by its name, as in `sys.when` or `sys['when']`, and a read with any other key type raises `sys fields must be accessed by string key`.
 
 `sys` is read-only. Assigning any `sys` field, existing or new, raises a Lua error that names the key:
 
@@ -2794,7 +2799,7 @@ Each call costs 400 bytes, so exactly two checkpoints are recorded. A `log` call
 
 ### Lifecycle reports
 
-A lifecycle report is a run report that shows one stage of a section entry's Lua lifecycle. Lifecycle reports hold the section name and never any values, such as a shared global's value or the text the run was given.
+A lifecycle report is a run report that shows one stage of a section entry's Lua lifecycle. Lifecycle reports hold the section name and never any values, such as a shared global's value or the run's arguments.
 
 For one section with two blocks, the lifecycle reports come in this order:
 
@@ -2981,7 +2986,7 @@ Messages you meet through `tostring(err)` include these, shown without the `{fil
 - `the model replied with no text and no tool calls`
 - ``section `../Missing` not found: {where}. The Lua code failed at runtime. Fix the code at this location.``
 - ``recursion exceeded cap of 8. Calls nest deeper than the cap allows. Nest `call`, `tasks.spawn`, and `tasks.fanout` less deeply.``
-- ``argv is read-only: assign to `var` or a section global instead. The Lua code failed at runtime. Fix the code at this location.``
+- ``args is read-only: assign to `var` or a section global instead. The Lua code failed at runtime. Fix the code at this location.``
 
 Because `kind` is a string and `tostring` gives the message, one expression can report a failure in full:
 
@@ -3076,7 +3081,7 @@ A string argument has three messages:
 | A string argument has another type | `{name} must be a string, got {type}` |
 | A string argument holds bytes that are not valid UTF-8 | `{name} must be a valid UTF-8 string` |
 
-`{name}` is the argument's name, such as `prompt`, `input`, `path`, `contents`, `old`, `new`, `pattern`, or `text` for a task's note. `{type}` tells integers from floats, so `3` reports `got integer` and `2.5` reports `got number`, and a `prompt` given as `42` reports `prompt must be a string, got integer`. The wording is the same whichever part of the Engine raises the error. An optional string argument accepts a string, `nil`, or nothing at all, and any other type fails with `{name} must be a string, got {type}`.
+`{name}` is the argument's name, such as `prompt`, `path`, `contents`, `old`, `new`, `pattern`, or `text` for a task's note. `{type}` tells integers from floats, so `3` reports `got integer` and `2.5` reports `got number`, and a `prompt` given as `42` reports `prompt must be a string, got integer`. The wording is the same whichever part of the Engine raises the error. An optional string argument accepts a string, `nil`, or nothing at all, and any other type fails with `{name} must be a string, got {type}`.
 
 ### Engine errors keep their own kind
 
@@ -3181,7 +3186,7 @@ A failed Engine call raises the Engine's error value right at the call site, so 
 - `pcall(tasks.concurrency, value)` passes its argument on to the Engine function, and returns `false` and the error value when the call fails.
 - `pcall(require, '/broken_style')` returns `false` when a library raises, and `pcall(require, 'os')` lets the block recover from a sandbox refusal and keep running.
 
-Reading or assigning `prose` can fail with the read-only, recursive, and missing-key failures (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)), and `pcall(function() return prose end)` catches them as an error value whose `tostring` carries the message. The refusals of assignments to `argv` and `prose` are caught the same way, with the refusal on the first line of `tostring` of the caught error. A failed read through `prompt.section` or `prompt.section_or` (see [Reading sections with `prompt.section` and `prompt.section_or`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptsection_or)) is catchable with `pcall` too, and `tostring` on it gives text containing the message.
+Reading or assigning `prose` can fail with the read-only, recursive, and missing-key failures (see [Pending prose and the `prose` global](03-blocks-and-prose.md#pending-prose-and-the-prose-global)), and `pcall(function() return prose end)` catches them as an error value whose `tostring` carries the message. The refusals of assignments to `args` and `prose` are caught the same way, with the refusal on the first line of `tostring` of the caught error. A failed read through `prompt.section` or `prompt.section_or` (see [Reading sections with `prompt.section` and `prompt.section_or`](03-blocks-and-prose.md#reading-sections-with-promptsection-and-promptsection_or)) is catchable with `pcall` too, and `tostring` on it gives text containing the message.
 
 ### Which failures become error values
 
@@ -3500,7 +3505,7 @@ Tone: friendly.
 
 Your code reaches the global table as `_G`, a standard Lua global that [the sandbox](#the-sandbox) keeps. An author `_G` metatable is a metatable you give `_G` with `setmetatable(_G, mt)`, either in a block or in a library the block loads with `require`, to give missing globals a default, to raise an error for an undefined global, or to hook the writes of new globals. Here the `defaults` library sets `__index` to a table, so a read of a global that `_G` does not hold, such as `tone`, looks the key up in `defaults`. A `{{ name }}` placeholder (see [Placeholders in prose](07-substitution.md#placeholders-in-prose)) reads its global through your metatable, so the default renders in the prose too.
 
-Your metatable sits behind the Engine guard on `_G`, a metatable the Engine puts on `_G` before any of your code runs. `setmetatable(_G, mt)` records `mt` as your metatable behind that guard instead of replacing the guard, and reads of missing globals and writes of new globals reach your metatable as in standard Lua, apart from `argv`, `prose`, and `messages`, which the guard handles itself (see [What the Engine guard on `_G` still blocks](#what-the-engine-guard-on-_g-still-blocks)).
+Your metatable sits behind the Engine guard on `_G`, a metatable the Engine puts on `_G` before any of your code runs. `setmetatable(_G, mt)` records `mt` as your metatable behind that guard instead of replacing the guard, and reads of missing globals and writes of new globals reach your metatable as in standard Lua, apart from `args`, `prose`, and `messages`, which the guard handles itself (see [What the Engine guard on `_G` still blocks](#what-the-engine-guard-on-_g-still-blocks)).
 
 ### Defaults with `__index`
 
@@ -3620,7 +3625,7 @@ return table.concat(names, ',')
 
 ### What the Engine guard on `_G` still blocks
 
-The Engine guard on `_G` serves three names that your metatable never touches: `argv`, `prose`, and `messages`. Your code reads them as globals, even though a raw read of any of them from `_G` gives `nil`. The guard handles `argv`, `prose`, and `messages` before your metatable, so reads and assignments of those names never reach your `__index` or `__newindex`, whatever metatable you set, clear, or change. An assignment to `messages` always raises the refusal that [`messages` is the section entry's conversation](11-conversations.md#messages-is-the-section-entrys-conversation) shows.
+The Engine guard on `_G` serves three names that your metatable never touches: `args`, `prose`, and `messages`. Your code reads them as globals, even though a raw read of any of them from `_G` gives `nil`, which is why a [listing of the globals](#listing-globals) names none of the three. The guard handles `args`, `prose`, and `messages` before your metatable, so reads and assignments of those names never reach your `__index` or `__newindex`, whatever metatable you set, clear, or change. An assignment to `messages` always raises the refusal that [`messages` is the section entry's conversation](11-conversations.md#messages-is-the-section-entrys-conversation) shows.
 
 In an epilog that follows the prose `Hi.`, this block returns `Hi.` even though its `__index` raises for every undefined global and its `__newindex` records every new one:
 
@@ -3633,4 +3638,4 @@ setmetatable(_G, {
 return prose
 ````
 
-Because `setmetatable(_G, mt)` records `mt` behind the guard instead of replacing it, no `setmetatable(_G, ...)` call, whether it clears the metatable with `nil`, swaps in `{}`, or installs hooks, changes what `argv`, `prose`, and `messages` read or lets an assignment to any of them succeed where the Engine refuses it. Editing the table that `getmetatable(_G)` returns cannot free them either, whether you replace `__index`, add or replace `__newindex`, or clear `__metatable`.
+Because `setmetatable(_G, mt)` records `mt` behind the guard instead of replacing it, no `setmetatable(_G, ...)` call, whether it clears the metatable with `nil`, swaps in `{}`, or installs hooks, changes what `args`, `prose`, and `messages` read or lets an assignment to any of them succeed where the Engine refuses it. Editing the table that `getmetatable(_G)` returns cannot free them either, whether you replace `__index`, add or replace `__newindex`, or clear `__metatable`.

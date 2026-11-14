@@ -175,7 +175,7 @@ A role name means the same thing in every prompt, and the model that fills it is
 
 `min_context` takes a whole number of tokens from 1 to 4294967295, and any other value fails the parse with a `Frontmatter` error. The smallest minimum you can write is 1, so a role that wants no minimum leaves the key out. Leaving out `min_context`, or setting it to null, declares no context minimum, and the role sets no floor on the model's context window.
 
-Parsing a `models` declaration checks only its shape. The checks against a real model happen at the run's first step, after the version check and the store probe, once the Host's models fill the roles, and any shortfall refuses the run there. So a prompt declaring `strong` with `min_context: 200000` parses cleanly, and only a run whose model for `strong` has a smaller window refuses it, with `role 'strong': requires a context of at least 200000 tokens` (see [The context check](#the-context-check)).
+Parsing a `models` declaration checks only its shape. The checks against a real model happen at the run's first step, after the version check, the argument check, and the store probe, once the Host's models fill the roles, and any shortfall refuses the run there. So a prompt declaring `strong` with `min_context: 200000` parses cleanly, and only a run whose model for `strong` has a smaller window refuses it, with `role 'strong': requires a context of at least 200000 tokens` (see [The context check](#the-context-check)).
 
 ### The `thinking` key
 
@@ -340,7 +340,7 @@ The Harness passes a map with only a `default` entry, the one model the Host sel
 
 A role is served by the model that fills it, so a request made on the role goes to that model. A model request names the model by the name part of its id only. A request on a role filled by `gateway/m` sends `"model": "m"`, not the role name and not `gateway/m`, and a model filling a role as `gateway/fast` is requested as `fast`. The role's model handle reads back the same name part as `model_id`.
 
-The run fills its roles once, when it is built, and keeps that fill for its whole life. The requirements are checked against that fill later, at the run's first step, after the version check and the store probe. To serve a role with another model, or to clear a shortfall such as a window that is too small, the Host passes a different map when it starts the next run.
+The run fills its roles once, when it is built, and keeps that fill for its whole life. The requirements are checked against that fill later, at the run's first step, after the version check, the argument check, and the store probe. To serve a role with another model, or to clear a shortfall such as a window that is too small, the Host passes a different map when it starts the next run.
 
 ### What the run checks
 
@@ -378,7 +378,7 @@ The notice opens with the line `the environment cannot satisfy this prompt:`, fo
 
 ### The context check
 
-At the run's first step, after the version check and the store probe, a role's `min_context` is read as a token count and compared with the context window of the model that fills the role. The minimum is inclusive: a model whose window is at least the minimum, including exactly equal to it, meets the requirement. So `min_context: 200000` passes on a 200000-token model, `min_context: 100000` passes on a 200000-token model, and only a smaller window leaves the requirement unmet.
+At the run's first step, after the version check, the argument check, and the store probe, a role's `min_context` is read as a token count and compared with the context window of the model that fills the role. The minimum is inclusive: a model whose window is at least the minimum, including exactly equal to it, meets the requirement. So `min_context: 200000` passes on a 200000-token model, `min_context: 100000` passes on a 200000-token model, and only a smaller window leaves the requirement unmet.
 
 When a role's `min_context` is above the filling model's context window, the run records an unmet context-minimum requirement that names the role and gives the required and actual sizes, and the run is refused on its first step. The line takes this form:
 
@@ -979,7 +979,7 @@ The handle describes the role's own settings, whatever the chain has selected, s
 ````markdown
 ---
 name: ask-role
-description: Asks whichever role the argument string names
+description: Asks whichever role the text argument names
 runvil: 0
 ---
 
@@ -988,7 +988,7 @@ runvil: 0
 Say hello.
 
 ```lua
-local ok, h = pcall(models.get, args)
+local ok, h = pcall(models.get, args.text)
 if not ok then
   return 'unknown role: ' .. tostring(h)
 end
@@ -996,11 +996,13 @@ return models.infer(h, prose)
 ```
 ````
 
-The role name arrives as the run's argument string in `args` (see [The argument string in `args`](06-arguments.md#the-argument-string-in-args)). With the argument string `strong`, the block runs one round on the `strong` role. In a run without a Host-state snapshot, the argument string `reviewer` names none of the five roles, `pcall` catches the failure, and the block falls back instead of failing:
+The role name arrives as the run's `text` argument, which the block reads as `args.text` (see [Reading arguments from `args`](06-arguments.md#reading-arguments-from-args)). In a run without a Host-state snapshot, the arguments `{"text":"reviewer"}` name none of the five roles, `pcall` catches the failure, and the block falls back instead of failing:
 
 ````text
 unknown role: ask-role.md:12: models.get label "reviewer" is not a model role: expected default, strong, small, fast or creative. The Lua code failed at runtime. Fix the code at this location.
 ````
+
+With the arguments `{"text":"strong"}`, the block runs one round on the `strong` role.
 
 A failing `models.get` call caught by `pcall` or `xpcall` yields an error value whose `kind` is `lua`, whose `message` is the file and line of the call, then the rejection text, then the fixed prose for a Lua runtime failure, and whose `tostring` is that message. An `xpcall` handler sees the same error value.
 

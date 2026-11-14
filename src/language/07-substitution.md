@@ -1,6 +1,6 @@
 # Substitution
 
-A `{{ }}` placeholder in prose inserts a run value into the text that a Lua block reads through [`prose`](03-blocks-and-prose.md#pending-prose-and-the-prose-global), so the words you write for a model can hold the argument string, values your Lua computed, and facts about the run. This chapter covers every placeholder form, how each kind of value renders, the moment substitution happens, how to write literal braces, and the errors a placeholder can raise. With these rules you can write prose that renders the same way every time and fails loudly when a value is missing.
+A `{{ }}` placeholder in prose inserts a run value into the text that a Lua block reads through [`prose`](03-blocks-and-prose.md#pending-prose-and-the-prose-global), so the words you write for a model can hold the run's arguments, values your Lua computed, and facts about the run. This chapter covers every placeholder form, how each kind of value renders, the moment substitution happens, how to write literal braces, and the errors a placeholder can raise. With these rules you can write prose that renders the same way every time and fails loudly when a value is missing.
 
 ## Placeholders in prose
 
@@ -9,20 +9,20 @@ After this section you can put a run value into a section's prose with a placeho
 ````markdown
 ---
 name: greet
-description: Greets the argument string
+description: Greets the text argument
 runvil: 0
 ---
 
 ## Main
 
-hi {{ args }}!
+hi {{ args.text }}!
 
 ```lua
 return prose
 ```
 ````
 
-Run with the argument string `Acme Corp`, the run result is:
+Run with the arguments `{"text":"Acme Corp"}`, the run result is:
 
 ````text
 hi Acme Corp!
@@ -30,28 +30,27 @@ hi Acme Corp!
 
 A placeholder is `{{ path }}` written inside a section's prose. It runs from `{{` to the next `}}`, and the path between them is trimmed of surrounding spaces. When a Lua block reads `prose`, the Engine replaces each placeholder with a live value from the run, so the text the block gets already holds those values. A placeholder sits inline and is replaced in place, so the words around it, here `hi ` and `!`, stay exactly as written.
 
-`{{ args }}` inserts the argument string the run was given. Besides inline use like the one above, a prompt can put `{{ args }}` on its own line after an instruction that asks the model to analyze the following text:
+`{{ args.text }}` inserts the field `text` of the arguments the run was given. The arguments of a run are one JSON object, and a prompt with no `args:` key in its frontmatter, like this one, takes one optional string named `text` (see [Prompts with no `args:` key](06-arguments.md#prompts-with-no-args-key)). Besides inline use like the one above, a prompt can put `{{ args.text }}` on its own line after an instruction that asks the model to analyze the following text:
 
 ````markdown
 Analyze the following input:
 
-{{ args }}
+{{ args.text }}
 ````
 
 ### The substitution sources
 
-The first segment of a path names where the value comes from. That segment is the substitution source, and there are five built-in sources plus Lua globals:
+The first segment of a path names where the value comes from. That segment is the substitution source, and there are four built-in sources plus Lua globals:
 
 | Placeholder | Inserts |
 |---|---|
-| `{{ args }}` | The argument string |
-| `{{ argv }}`, `{{ argv.field }}` | The parsed arguments, whole or one field |
+| `{{ args }}`, `{{ args.field }}` | The arguments, whole or one field |
 | `{{ item }}` | The item seeded into a fanout arm or a task |
 | `{{ var.key }}` | A value in `var` |
 | `{{ sys.key }}` | A field of `sys` |
 | `{{ name }}`, `{{ name.field }}` | A section-local Lua global, whole or one field |
 
-Any first segment other than `args`, `argv`, `item`, `var`, or `sys` is read as the name of a Lua global. Each source has its own H2 later in this chapter: [Inserting `var` and `sys` values](#inserting-var-and-sys-values), [Inserting arguments with `args` and `argv`](#inserting-arguments-with-args-and-argv), [Inserting the fanout or task `item`](#inserting-the-fanout-or-task-item), and [Inserting Lua globals by bare name](#inserting-lua-globals-by-bare-name).
+Any first segment other than `args`, `item`, `var`, or `sys` is read as the name of a Lua global. Each source has its own H2 later in this chapter: [Inserting `var` and `sys` values](#inserting-var-and-sys-values), [Inserting arguments with `args`](#inserting-arguments-with-args), [Inserting the fanout or task `item`](#inserting-the-fanout-or-task-item), and [Inserting Lua globals by bare name](#inserting-lua-globals-by-bare-name).
 
 ### Prose only, never Lua source
 
@@ -65,31 +64,31 @@ runvil: 0
 ## Main
 
 ```lua
-return '{{ args }} stays literal; the input is ' .. args
+return '{{ args.text }} stays literal; the text is ' .. args.text
 ```
 ````
 
-Run with the argument string `docs`, the run result is:
+Run with the arguments `{"text":"docs"}`, the run result is:
 
 ````text
-{{ args }} stays literal; the input is docs
+{{ args.text }} stays literal; the text is docs
 ````
 
-Only a section's prose is substituted. Lua source never is, so `{{ }}` written inside Lua code, such as in a string literal, stays exactly as written. The block reads the argument string through the [`args` global](06-arguments.md#the-argument-string-in-args) instead.
+Only a section's prose is substituted. Lua source never is, so `{{ }}` written inside Lua code, such as in a string literal, stays exactly as written. The block reads the arguments through the [`args` global](06-arguments.md#reading-arguments-from-args) instead.
 
 ### Setting a value, then reading the rendered prose
 
 ````markdown
 ---
 name: subject
-description: Writes about the argument string
+description: Writes about the text argument
 runvil: 0
 ---
 
 ## Main
 
 ```lua
-var.subject = args
+var.subject = args.text
 ```
 
 Write about {{ var.subject }}.
@@ -99,7 +98,7 @@ return prose
 ```
 ````
 
-Run with the argument string `rivers`, the run result is:
+Run with the arguments `{"text":"rivers"}`, the run result is:
 
 ````text
 Write about rivers.
@@ -113,7 +112,7 @@ The rendered text can go straight to a model. This section, which needs a model 
 ## Main
 
 ```lua
-var.greeting = "Hello, " .. args .. "!"
+var.greeting = "Hello, " .. args.text .. "!"
 ```
 
 Repeat exactly, with no extra words: {{ var.greeting }}
@@ -219,13 +218,13 @@ The run result is:
 Hello Ada.
 ````
 
-This works the same under `var`, `sys`, and `argv`. A path with an empty or space-padded segment fails with substitution kind `EmptySegment`, which covers a trailing dot, two dots in a row, and a space next to a dot, as in `{{ var. }}`, `{{ var..x }}`, `{{ var. .x }}`, `{{ var.x. }}`, and `{{ var. .x .y }}`.
+This works the same under `var`, `sys`, and `args`. A path with an empty or space-padded segment fails with substitution kind `EmptySegment`, which covers a trailing dot, two dots in a row, and a space next to a dot, as in `{{ var. }}`, `{{ var..x }}`, `{{ var. .x }}`, `{{ var.x. }}`, and `{{ var. .x .y }}`.
 
-Every segment matches exactly, case included. Only the lowercase roots `args`, `argv`, `item`, `var`, and `sys` are built in, so any other spelling of the first segment is read as a global name, and each key after it must match the table's spelling exactly. A key that itself contains a dot cannot be reached by a path, because every dot starts a new segment before any lookup, so copy such a value to a plain key in Lua first and reference that key.
+Every segment matches exactly, case included. Only the lowercase roots `args`, `item`, `var`, and `sys` are built in, so any other spelling of the first segment is read as a global name, and each key after it must match the table's spelling exactly. A key that itself contains a dot cannot be reached by a path, because every dot starts a new segment before any lookup, so copy such a value to a plain key in Lua first and reference that key.
 
 ### Whole values and keys
 
-`{{ args }}`, `{{ argv }}`, `{{ item }}`, and a bare global name can each render a whole value, and a bare global with no key renders its whole value as JSON. `var` and `sys` always need a key, so `{{ var }}` and `{{ sys }}` each fail with substitution kind `BadPath`.
+`{{ args }}`, `{{ item }}`, and a bare global name can each render a whole value, and a bare global with no key renders its whole value as JSON. `var` and `sys` always need a key, so `{{ var }}` and `{{ sys }}` each fail with substitution kind `BadPath`.
 
 ### Computing values in Lua
 
@@ -327,7 +326,7 @@ runvil: 0
 ---
 
 ```lua
-var.topic = args
+var.topic = args.text
 ```
 
 ## Draft
@@ -339,7 +338,7 @@ return prose
 ```
 ````
 
-Run with the argument string `rivers`, the run result is:
+Run with the arguments `{"text":"rivers"}`, the run result is:
 
 ````text
 Plan for rivers.
@@ -390,154 +389,162 @@ When a block reads `prose`, each `var` placeholder renders from the section entr
 
 Prose in the [preamble](02-file-structure.md#the-preamble) can use `{{ var.key }}` too. When a Lua block of the preamble reads `prose`, the placeholder renders from the `var` values the preamble's blocks have written so far.
 
-## Inserting arguments with `args` and `argv`
+## Inserting arguments with `args`
 
-After this section you can insert the raw argument string, the whole parsed arguments, or one field of them.
+After this section you can insert the whole arguments or one field of them, at any depth.
 
 ````markdown
 ---
 name: raw
-description: Inserts the argument string exactly as passed
+description: Inserts a string argument exactly as written
 runvil: 0
-args: { query: { type: string } }
+args:
+  type: object
+  properties:
+    query: { type: string }
+  required: [query]
 ---
 
 ## Main
 
-Args: {{ args }}
+Query: {{ args.query }}
 
 ```lua
 return prose
 ```
 ````
 
-Run with the argument string `  spaced { not json `, which has two leading spaces and one trailing space, the run result keeps every one of them:
+Run with the arguments `{"query":" spaced { brace "}`, whose string has one leading space and one trailing space, the run result keeps both of them:
 
 ````text
-Args:   spaced { not json 
+Query:  spaced { brace 
 ````
 
-An `args` placeholder, `{{ args }}`, renders the run's single raw argument string exactly as passed: unparsed, unquoted, and with every character kept, leading spaces and stray braces included. It works whether or not the argument string is JSON, under any [`args:` declaration](06-arguments.md#declaring-arguments-in-frontmatter), as here, or in a prompt with no `args:` key at all, and `return prose` gives back the rendered text, as `hi {{ args }}!` showed at the start of this chapter.
+An `args` placeholder reads the arguments by a key path, the dotted keys that follow the root, so `{{ args.query }}` inserts the field `query` of the object that the [`args` global](06-arguments.md#reading-arguments-from-args) holds. A string renders as written: unquoted, and with every character kept, leading spaces and stray braces included. The Engine checks the run's arguments against the prompt's [`args:` declaration](06-arguments.md#declaring-arguments-in-frontmatter) at the run's first step, and arguments that do not match end the run there, before any prose renders (see [Argument errors](06-arguments.md#argument-errors)). A placeholder reads the arguments the same way under any declaration, as here, or in a prompt with no `args:` key at all, and `return prose` gives back the rendered text, as `hi {{ args.text }}!` showed at the start of this chapter.
 
-A common pattern puts `{{ args }}` on its own line after an instruction such as `Your input is a request about a person:`, and because `prose` already has the placeholder replaced, `models.infer(prose)` over the prose `Summarize in one word: {{ args }}` in a run with the argument string `quantum` sends `Summarize in one word: quantum` to the model.
+A common pattern puts `{{ args.text }}` on its own line after an instruction such as `Your input is a request about a person:`, and because `prose` already has the placeholder replaced, `models.infer(prose)` over the prose `Summarize in one word: {{ args.text }}` in a run with the arguments `{"text":"quantum"}` sends `Summarize in one word: quantum` to the model.
 
-### The whole parsed arguments
+### The whole arguments
 
 ````markdown
 ---
 name: query
-description: Inserts the parsed arguments whole and by field
+description: Inserts the arguments whole and by field
 runvil: 0
-args: { query: { type: string } }
+args:
+  type: object
+  properties:
+    query: { type: string }
+    n: { type: integer }
+  required: [query]
 ---
 
 ## Main
 
-Whole: {{ argv }}; Field: {{ argv.query }}
+Whole: {{ args }}; Field: {{ args.query }}
 
 ```lua
 return prose
 ```
 ````
 
-Run with the argument string `{"query":"papers","n":2}`, the run result is:
+Run with the arguments `{"query":"papers","n":2}`, the run result is:
 
 ````text
 Whole: {"n":2,"query":"papers"}; Field: papers
 ````
 
-`args` and `argv` are the two argument roots a placeholder can start from, and one line of prose can use both `argv` forms, as this one does. An `argv` placeholder, `{{ argv }}`, inserts the whole parsed arguments held in [`argv`](06-arguments.md#reading-parsed-input-from-argv), which under an explicit `args:` declaration is the decoded JSON of the argument string. An object or array renders as compact JSON with object keys in sorted order, not the order the argument string lists them, so the rendered value has no spaces, `n` comes before `query`, and the integer `2` has no decimal part. `got {{ argv }}` with the same argument string renders `got {"n":2,"query":"papers"}`. When the parsed value is a scalar, `{{ argv }}` renders it as its plain value, so the argument string `42` renders `42`.
+`args` is the root a placeholder reads arguments from, and one line of prose can use both of its forms, as this one does. `{{ args }}` with no key path inserts the whole arguments, the object held in [`args`](06-arguments.md#reading-arguments-from-args). It renders as compact JSON with object keys in sorted order, not the order the arguments list them, so the rendered value has no spaces, `n` comes before `query`, and the integer `2` has no decimal part. `got {{ args }}` with the same arguments renders `got {"n":2,"query":"papers"}`. A field the arguments leave out is not in the object, so with the arguments `{"query":"papers"}` the same prose renders `got {"query":"papers"}`.
 
 ### Fields at any depth
 
-`{{ argv.key }}` reads one field of the parsed arguments, and a longer dotted path walks nested objects one key at a time, at any depth:
+`{{ args.key }}` reads one field of the arguments, and a longer dotted path walks nested objects one key at a time, at any depth:
 
 ````markdown
-q={{ argv.query }} cell={{ argv.row.a }}
+---
+name: nested
+description: Reads a field inside a nested object
+runvil: 0
+args:
+  type: object
+  properties:
+    query: { type: string }
+    row:
+      type: object
+      properties:
+        a: { type: integer }
+      required: [a]
+  required: [query, row]
+---
+
+## Main
+
+q={{ args.query }} cell={{ args.row.a }}
+
+```lua
+return prose
+```
 ````
 
-As the prose of the `query` prompt's `Main` section, this line run with the argument string `{"query":"papers","row":{"a":1}}` renders `q=papers cell=1`. With the same argument string, `got {{ argv }}` renders `got {"query":"papers","row":{"a":1}}`.
+Run with the arguments `{"query":"papers","row":{"a":1}}`, the run result is:
+
+````text
+q=papers cell=1
+````
+
+A field renders by its type: a string as written, a number as text, and a list or an object as compact JSON. So `{{ args.row.a }}` renders the integer as `1`, `{{ args.row }}` with the same arguments renders `{"a":1}`, and `got {{ args }}` renders `got {"query":"papers","row":{"a":1}}`.
 
 ### Prompts with no `args:` key
 
-With no `args:` key, the [implicit default declaration](06-arguments.md#prompts-with-no-args-key) applies, and `argv` holds the argument string wrapped as `{"prose": ...}`, so `{{ argv.prose }}` renders the argument string and `{{ argv }}` renders the whole wrapper:
+With no `args:` key, a prompt takes one optional string named `text` (see [Prompts with no `args:` key](06-arguments.md#prompts-with-no-args-key)), so `{{ args.text }}` renders that string and `{{ args }}` renders the whole object:
 
 ````markdown
 ---
-name: wrapped
-description: Shows argv under the default declaration
+name: freeform
+description: Shows args in a prompt with no args key
 runvil: 0
 ---
 
 ## Main
 
-{{ argv.prose }} / {{ argv }}
+{{ args.text }} / {{ args }}
 
 ```lua
 return prose
 ```
 ````
 
-Run with the argument string `hello there`, the run result is:
+Run with the arguments `{"text":"hello there"}`, the run result is:
 
 ````text
-hello there / {"prose":"hello there"}
+hello there / {"text":"hello there"}
 ````
 
-Here `argv.prose` and `args` both equal `'hello there'`.
+Here `args.text` equals `'hello there'` in Lua too. With the arguments `{}`, `args.text` is nil, so `{{ args }}` renders `{}` and `{{ args.text }}` fails as [Dotted paths that fail](#dotted-paths-that-fail) describes.
 
 ### Dotted paths that fail
 
-`args` is a plain string, so a dotted path into it, such as `{{ args.x }}`, fails with substitution kind `NotATable` and the message `args is a string, not a table`. A dotted `argv` path that reaches a field `argv` does not have, or that continues into a scalar, fails with substitution kind `MissingKey` and a message of the form `missing {{ {path} }}`, and it never renders an empty string. So `{{ argv.x }}` fails when `argv` is the string `"scalar"`, and `{{ argv.query.x }}` with a string `query` fails with `missing {{ argv.query.x }}`.
+A dotted `args` path that names a field the arguments do not hold, or that continues past a string, a number, or a boolean, fails with substitution kind `MissingKey` and a message of the form `missing {{ {path} }}`, and it never renders an empty string. So `{{ args.note }}` fails with `missing {{ args.note }}` when the arguments leave the optional field `note` out, and `{{ args.query.x }}` with a string `query` fails with `missing {{ args.query.x }}`. A path does not index a list either: with the list `["a.md","b.md"]` in `files`, `{{ args.files }}` renders the whole list as `["a.md","b.md"]`, and `{{ args.files.1 }}` fails with `missing {{ args.files.1 }}`.
 
-### When `argv` is nil
+A path that lands on a null fails with substitution kind `NullValue` and a message of the same form. Only an object that says `additionalProperties: true`, which lets it take fields it does not declare, can hold a null, and only in such a field. In a declared field a null counts as the field left out, or ends the run when the field is required (see [Missing fields and null values](06-arguments.md#missing-fields-and-null-values)). So with `extra` declared as such an object, the arguments `{"extra":{"k":null}}` make `{{ args.extra.k }}` fail with `missing {{ args.extra.k }}` and substitution kind `NullValue`, while the arguments `{"note":null}` make `{{ args.note }}` fail with substitution kind `MissingKey`, the same as arguments with no `note` at all.
 
-Under an explicit declaration, `argv` is nil for substitution when the argument string does not parse as JSON or when it is the JSON `null`, so the argument strings `not json` and `null` both leave a nil `argv` under a `query` declaration. The default declaration always wraps the string instead. An `argv` placeholder never renders an empty string for a nil `argv`: `{{ argv }}` and every `{{ argv.field }}` fail with substitution kind `NilArgv`, the kind for a nil `argv` (see [`argv` is read-only](06-arguments.md#argv-is-read-only) for what a prompt does about malformed input), with a message of the form `{{ {path} }} is nil (argv holds no value)` that uses the placeholder's own path. Check `argv` in Lua first and read `prose` only when the argument string parsed:
+A field that has a `default` is never missing, because it gets the default when the arguments leave it out (see [Required arguments, defaults, and descriptions](06-arguments.md#required-arguments-defaults-and-descriptions)), so with `default: quick` on a string field `depth`, `{{ args.depth }}` renders `quick` under the arguments `{}`.
 
-````markdown
----
-name: guarded
-description: Falls back when the argument string does not parse
-runvil: 0
-args: { query: { type: string } }
----
-
-## Main
-
-Value: {{ argv }}
-
-```lua
-if not argv then return 'no usable input' end
-return prose
-```
-````
-
-Run with the argument string `not json`, the run result is:
-
-````text
-no usable input
-````
-
-Run with the argument string `{"query":"x"}`, the run result is:
-
-````text
-Value: {"query":"x"}
-````
-
-Without the guard, the read of `prose` under `not json` fails with an error naming `argv`, `{{ argv }} is nil (argv holds no value)`. The guard works because prose that a block never reads never renders, so even prose holding an unclosed `{{` or a missing key runs clean when the block never reads `prose`.
-
-### `argv` in placeholders
+### Keeping a value of your own in `var`
 
 ````markdown
 ---
 name: fallback
-description: Keeps its own query in var when the argument string does not parse
+description: Keeps its own query in var when the arguments hold none
 runvil: 0
-args: { query: { type: string } }
+args:
+  type: object
+  properties:
+    query: { type: string }
 ---
 
 ```lua
-if argv then var.query = argv.query else var.query = 'everything' end
+if args.query then var.query = args.query else var.query = 'everything' end
 ```
 
 ## First
@@ -549,24 +556,24 @@ return prose
 ```
 ````
 
-Run with the argument string `broken input`, the run result is:
+Run with the arguments `{}`, the run result is:
 
 ````text
 Query: everything
 ````
 
-Run with the argument string `{"query":"papers"}`, the run result is `Query: papers`.
+Run with the arguments `{"query":"papers"}`, the run result is `Query: papers`.
 
-Both `argv` placeholder forms read the parsed input, the same value the section's Lua reads from `argv`. No code can change that value, because `argv` is read-only in every section (see [`argv` is read-only](06-arguments.md#argv-is-read-only)), so `{{ argv.query }}` renders the `query` the argument string gave, and fails when the argument string gave none. A prompt that builds its own input keeps it in `var` and writes `{{ var.query }}`, as this one does: its preamble copies `argv.query` into `var.query` when the argument string parsed and stores a query of its own when it did not, and the prose of `First` renders whichever value `var` holds.
+An `args` placeholder reads the same value the section's Lua reads from `args`. No code can change that value, because `args` is read-only in every section (see [`args` is read-only](06-arguments.md#args-is-read-only)), so `{{ args.query }}` renders the `query` the arguments hold, and fails when they hold none. A prompt that builds its own value keeps it in `var` and writes `{{ var.query }}`, as this one does: its preamble copies `args.query` into `var.query` when the arguments hold a query and stores a query of its own when they do not, and the prose of `First` renders whichever value `var` holds.
 
 ### Arguments in called chains and tasks
 
-`{{ args }}` and `{{ argv }}` show the argument string of the chain the section runs in, and its parse. On the main walk that is the run's own argument string. A chain started by `call(target, input)` (see [Calling a section](08-jump-and-call.md#calling-a-section)) sees `input` as its argument string in every section of that chain, with `argv` parsed fresh from it (see [Call input and `var`](08-jump-and-call.md#call-input-and-var)):
+`{{ args }}` and every key path under it read the arguments of the chain the section runs in. On the main walk those are the run's own arguments. A chain started by `call(target, args)` (see [Calling a section](08-jump-and-call.md#calling-a-section)) reads the second argument of that call as its arguments in every section of the chain (see [Call args and `var`](08-jump-and-call.md#call-args-and-var)). A table of named fields becomes the chain's arguments, so `call('../Sub', { topic = 'rivers' })` makes `{{ args.topic }}` render `rivers` in `Sub`, and a string arrives as the field `text` (see [`args` in a called chain](08-jump-and-call.md#args-in-a-called-chain)):
 
 ````markdown
 ---
 name: chains
-description: Shows the argument string a called chain sees
+description: Shows the arguments a called chain reads
 runvil: 0
 ---
 
@@ -578,20 +585,20 @@ return call('../Sub', 'chain-args')
 
 ## Sub
 
-Args: {{ args }}
+Args: {{ args.text }}
 
 ```lua
 return prose
 ```
 ````
 
-Run with the argument string `run-args`, the run result is:
+Run with the arguments `{"text":"run-args"}`, the run result is:
 
 ````text
 Args: chain-args
 ````
 
-A chain started by `call` with no argument string, such as `call('../Inner')`, keeps the argument string of the chain that started it, and so does a fanout arm. With these two sections in place of `Sub` in the `chains` prompt, `Inner` still renders `Args: chain-args`, not the run's `run-args`:
+A chain started by `call` with no second argument, such as `call('../Inner')`, reads the arguments of the chain that started it, and so does a fanout arm. With these two sections in place of `Sub` in the `chains` prompt, `Inner` still renders `Args: chain-args`, not the run's `run-args`:
 
 ````markdown
 ## Sub
@@ -602,43 +609,43 @@ return call('../Inner')
 
 ## Inner
 
-Args: {{ args }}
+Args: {{ args.text }}
 
 ```lua
 return prose
 ```
 ````
 
-Such a chain also keeps its starter's `argv`, so `{{ argv }}` there renders the same parsed value as in the chain that started it. Every section of a task started by [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) with an `input` option sees that string through `{{ args }}` and `{{ argv }}`, as a `call` given an argument string does, so `tasks.spawn('../Child', ...)` with `input = 'child args'` among its options gives `Child` the argument string `child args`.
+Every section of a task started by [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) with an `args` option reads that value through `{{ args }}` and its key paths, as a chain that `call` gave a second argument does, so `tasks.spawn('../Child', ...)` with `args = 'child args'` among its options makes `{{ args.text }}` render `child args` in `Child`.
 
-### Placeholders ignore the `args` and `argv` globals
+### Placeholders ignore a local named `args`
 
-`{{ args }}` and `{{ argv }}` read the chain's argument string and its parse, never the `args` and `argv` Lua globals, so reassigning the `args` global leaves `{{ args }}` unchanged:
+`{{ args }}` and every key path under it read the chain's arguments, never a Lua variable, so a `local` named `args` leaves the placeholder unchanged:
 
 ````markdown
 ---
 name: original
-description: Shows that reassigning args leaves the placeholder alone
+description: Shows that a local named args leaves the placeholder alone
 runvil: 0
 ---
 
 ## Main
 
-Input: {{ args }}
+Input: {{ args.text }}
 
 ```lua
-args = 'changed'
+local args = { text = 'changed' }
 return prose
 ```
 ````
 
-Run with the argument string `original`, the run result is:
+Run with the arguments `{"text":"original"}`, the run result is:
 
 ````text
 Input: original
 ````
 
-Only placeholder names that are not built-in sources fall through to Lua globals, as [Inserting Lua globals by bare name](#inserting-lua-globals-by-bare-name) describes.
+The local hides the `args` global from the Lua after it, and the placeholder still reads the chain's arguments. No block can give the global itself another value, because an assignment such as `args = { text = 'changed' }` raises ``args is read-only: assign to `var` or a section global instead`` (see [`args` is read-only](06-arguments.md#args-is-read-only)). Only placeholder names that are not built-in sources fall through to Lua globals, as [Inserting Lua globals by bare name](#inserting-lua-globals-by-bare-name) describes.
 
 ## Inserting the fanout or task `item`
 
@@ -800,13 +807,13 @@ The run result is:
 The answer is 42; score 9; raw {"score":9}.
 ````
 
-Any placeholder whose first segment is not one of the built-in sources `args`, `argv`, `item`, `var`, or `sys` reads the section-local Lua global of that name. That is a bare global, a global set without `local`, such as `answer = 42`. `{{ name }}` with no further segments renders the global's whole value, with a table rendered as compact JSON with no spaces, so `{{ data }}` renders `{"score":9}` and the global `row = { a = 1 }` makes `{{ row }}` render `{"a":1}`. This is where bare globals differ from `var` and `sys`, where `{{ var }}` or `{{ sys }}` with no key stays an error.
+Any placeholder whose first segment is not one of the built-in sources `args`, `item`, `var`, or `sys` reads the section-local Lua global of that name. That is a bare global, a global set without `local`, such as `answer = 42`. `{{ name }}` with no further segments renders the global's whole value, with a table rendered as compact JSON with no spaces, so `{{ data }}` renders `{"score":9}` and the global `row = { a = 1 }` makes `{{ row }}` render `{"a":1}`. This is where bare globals differ from `var` and `sys`, where `{{ var }}` or `{{ sys }}` with no key stays an error.
 
 `{{ name.key }}` indexes into a bare global with the same dotted-path rules `var` and `sys` use, one key per segment, so `{{ data.score }}` inserts one field of the table held in `data`. A longer dotted path walks into nested tables held in the global, so with `row = { a = { b = 2 } }` the prose `cell {{ row.a.b }}` renders `cell 2`. A key that is not there fails with substitution kind `MissingKey`.
 
 ### Which values a bare global can hold
 
-A bare global that holds data, meaning a string, number, boolean, or table, is converted to its JSON form when a placeholder names it, and a global holding a function, userdata, or coroutine thread is refused. The one userdata that converts is [`json.null`](05-lua-environment.md#encoding-and-decoding-json-with-json), which becomes JSON null, so after `nothing = json.null` the placeholder `{{ nothing }}` fails with substitution kind `NullValue` and the message `missing {{ nothing }}`, the same failure as a `var` path that lands on JSON null. A `local` variable is not a global, so no placeholder reaches it, and a name held only in a `local` reads as unset. A global that holds nil counts as unset rather than as a value. The five built-in roots `args`, `argv`, `item`, `var`, and `sys` are matched before any global lookup and always win over a Lua global of the same name, so a global with one of those names is never reached by bare name.
+A bare global that holds data, meaning a string, number, boolean, or table, is converted to its JSON form when a placeholder names it, and a global holding a function, userdata, or coroutine thread is refused. The one userdata that converts is [`json.null`](05-lua-environment.md#encoding-and-decoding-json-with-json), which becomes JSON null, so after `nothing = json.null` the placeholder `{{ nothing }}` fails with substitution kind `NullValue` and the message `missing {{ nothing }}`, the same failure as a `var` path that lands on JSON null. A `local` variable is not a global, so no placeholder reaches it, and a name held only in a `local` reads as unset. A global that holds nil counts as unset rather than as a value. The four built-in roots `args`, `item`, `var`, and `sys` are matched before any global lookup and always win over a Lua global of the same name, so a global with one of those names is never reached by bare name.
 
 ### When the global is set
 
@@ -832,14 +839,14 @@ return require '/house_style'
 
 ## house_style
 
-Write in a {{ style }} voice for {{ args }}.
+Write in a {{ style }} voice for {{ args.text }}.
 
 ```lua
 return prose
 ```
 ````
 
-Run with the argument string `readers`, the run result is:
+Run with the arguments `{"text":"readers"}`, the run result is:
 
 ````text
 Write in a terse voice for readers.
@@ -937,15 +944,15 @@ A placeholder that resolves renders its value by type:
 | Empty list | `[]` | `json.array()` renders `[]` |
 | Empty table | `{}` | `{}` renders `{}` |
 
-Scalars render as strings, and tables and arrays render as compact JSON: JSON text with no spaces and no pretty printing, with keys in sorted order whatever order the author or the argument string wrote them in. So the argument string `{"query":"papers","n":2}` renders through `{{ argv }}` as `{"n":2,"query":"papers"}`. A placeholder that names a table, an array, or a table-valued global without indexing any further renders the whole value this way, so `{{ var.row }}` renders `{"a":1}` when `var.row = { a = 1 }`, `{{ var.arr }}` renders `[1,2,3]` when `var.arr = { 1, 2, 3 }`, `{{ row }}` renders `{"a":1}` for the global `row = { a = 1 }`, and `raw {{ data }}` renders `raw {"score":9}` for the global `data = { score = 9 }`.
+Scalars render as strings, and tables and arrays render as compact JSON: JSON text with no spaces and no pretty printing, with keys in sorted order whatever order the author wrote them in or the arguments list them in. So the arguments `{"query":"papers","n":2}` render through `{{ args }}` as `{"n":2,"query":"papers"}`. A placeholder that names a table, an array, or a table-valued global without indexing any further renders the whole value this way, so `{{ var.row }}` renders `{"a":1}` when `var.row = { a = 1 }`, `{{ var.arr }}` renders `[1,2,3]` when `var.arr = { 1, 2, 3 }`, `{{ row }}` renders `{"a":1}` for the global `row = { a = 1 }`, and `raw {{ data }}` renders `raw {"score":9}` for the global `data = { score = 9 }`.
 
 An empty list and an empty table look the same in Lua, so the list marker that [`json.array`](05-lua-environment.md#encoding-and-decoding-json-with-json) adds tells them apart. After `var.items = json.array()`, `{{ var.items }}` renders `[]`, and after `var.items = {}` it renders `{}`. An empty list decoded with `json.decode` carries the same marker, so it renders `[]` too.
 
 An integer renders as its plain digits wherever it comes from, so after `var.n = 2` the rendered prose reads `Second fence 2.`, and the globals `answer = 42` and `score = 9` render `42` and `9`. A number with a fractional part renders in decimal form, and `{{ item }}` uses the same rendering, so an item `1.5` renders `1.5`.
 
-A string renders bare when it is the whole value, but inside a rendered table or array it appears in double quotes as a JSON string. So `var.kind = "library"` makes `a {{ var.kind }} paper` render `a library paper`, while `papers` appears as `"papers"` inside the rendered `{{ argv }}` value `{"n":2,"query":"papers"}`.
+A string renders bare when it is the whole value, but inside a rendered table or array it appears in double quotes as a JSON string. So `var.kind = "library"` makes `a {{ var.kind }} paper` render `a library paper`, while `papers` appears as `"papers"` inside the rendered `{{ args }}` value `{"n":2,"query":"papers"}`.
 
-Nil never renders as empty text. A missing `var`, `sys`, or `argv` key fails with substitution kind `MissingKey`, a bare global that holds nil fails with substitution kind `UnknownNamespace`, and a path that lands on JSON null fails with substitution kind `NullValue`. Only an `item` holding JSON null renders, as the text `null`.
+Nil never renders as empty text. A missing `var`, `sys`, or `args` key fails with substitution kind `MissingKey`, a bare global that holds nil fails with substitution kind `UnknownNamespace`, and a path that lands on JSON null fails with substitution kind `NullValue`. Only an `item` holding JSON null renders, as the text `null`.
 
 ## When substitution happens
 
@@ -1069,7 +1076,7 @@ Markdown that no Lua block reads through `prose` never renders, so a malformed o
 
 ### Parsing keeps placeholders
 
-Parsing keeps every placeholder exactly as written, and nothing renders until the run reads `prose`. A section whose own text ends with `{{ x }}` parses with no substitution error for the unknown `x`. Even when a Lua block before the prose sets `var.before`, the parsed prose is still literally `Ask about {{ var.before }}.`, and during the run a placeholder resolves against the values as set just before the block's read. A placeholder in preamble prose stays verbatim in the parsed prompt too, as in `Plan {{ args }}.`, and so does `Write about {{ var.subject }}.` in a section.
+Parsing keeps every placeholder exactly as written, and nothing renders until the run reads `prose`. A section whose own text ends with `{{ x }}` parses with no substitution error for the unknown `x`. Even when a Lua block before the prose sets `var.before`, the parsed prose is still literally `Ask about {{ var.before }}.`, and during the run a placeholder resolves against the values as set just before the block's read. A placeholder in preamble prose stays verbatim in the parsed prompt too, as in `Plan {{ args.text }}.`, and so does `Write about {{ var.subject }}.` in a section.
 
 ### Prose in the preamble
 
@@ -1081,7 +1088,7 @@ runvil: 0
 ---
 
 ```lua
-var.topic = args
+var.topic = args.text
 ```
 
 Outline {{ var.topic }}.
@@ -1097,7 +1104,7 @@ return var.outline
 ```
 ````
 
-Run with the argument string `rivers`, the run result is:
+Run with the arguments `{"text":"rivers"}`, the run result is:
 
 ````text
 Outline rivers.
@@ -1131,7 +1138,7 @@ return prose
 ```
 ````
 
-Run with the argument string `docs`, the run result is:
+Run with the arguments `{"text":"docs"}`, the run result is:
 
 ````text
 literal {{ args }} here, close }} brace, back \ slash
@@ -1151,7 +1158,7 @@ A backslash before a single `{` or `}` is consumed too, so `\{` emits `{` and `\
 
 ### Placeholders inside code samples and comments
 
-Substitution works on the raw Markdown text and does no Markdown parsing, so placeholders render anywhere in the pending prose, including inline code, code blocks that are not `lua` fences, and HTML comments. An unescaped `{{` in a code sample is a live placeholder. Fences such as a `json` fence, or a fence whose info string is `text lua`, stay in the section prose exactly as written, and the comment `<!-- written for {{ args }} -->` run with the argument string `docs` renders `<!-- written for docs -->`.
+Substitution works on the raw Markdown text and does no Markdown parsing, so placeholders render anywhere in the pending prose, including inline code, code blocks that are not `lua` fences, and HTML comments. An unescaped `{{` in a code sample is a live placeholder. Fences such as a `json` fence, or a fence whose info string is `text lua`, stay in the section prose exactly as written, and the comment `<!-- written for {{ args.text }} -->` run with the arguments `{"text":"docs"}` renders `<!-- written for docs -->`.
 
 To show a placeholder literally, even inside inline code, escape the opening as `\{{`. The `}}` after it then closes nothing and passes through with no escape needed:
 
@@ -1167,7 +1174,7 @@ Insert a value with `{{ var.name }}`.
 
 ### Escapes next to live placeholders
 
-Escapes compose, and each one resolves on its own, so an escaped `\{{` can sit directly before a live placeholder that still resolves. With the argument string `Acme Corp`, `\{{x}}{{ args }}` renders `{{x}}Acme Corp`: the first delimiter is escaped, and the second is live and resolved. To put a literal backslash directly before a live placeholder, write `\\` there, as in `C:\\{{ var.dir }}`, which renders `C:\` followed by the value of `var.dir`. A single backslash before `{{` escapes it instead, so that placeholder is not resolved.
+Escapes compose, and each one resolves on its own, so an escaped `\{{` can sit directly before a live placeholder that still resolves. With the arguments `{"text":"Acme Corp"}`, `\{{x}}{{ args.text }}` renders `{{x}}Acme Corp`: the first delimiter is escaped, and the second is live and resolved. To put a literal backslash directly before a live placeholder, write `\\` there, as in `C:\\{{ var.dir }}`, which renders `C:\` followed by the value of `var.dir`. A single backslash before `{{` escapes it instead, so that placeholder is not resolved.
 
 ### Single pass
 
@@ -1183,7 +1190,7 @@ runvil: 0
 ## Main
 
 ```lua
-var.payload = '{{ args }}'
+var.payload = '{{ args.text }}'
 ```
 
 value: {{ var.payload }}
@@ -1193,10 +1200,10 @@ return prose
 ```
 ````
 
-Run with the argument string `SECRET`, the run result is:
+Run with the arguments `{"text":"SECRET"}`, the run result is:
 
 ````text
-value: {{ args }}
+value: {{ args.text }}
 ````
 
 The inserted text is verbatim and never scanned again, so the result never becomes `value: SECRET`. Prose outside placeholders and escapes is copied unchanged, multibyte UTF-8 characters included, so prose with no placeholders and no escapes, such as `plain text`, comes back from the `prose` read exactly as written.
@@ -1223,7 +1230,7 @@ return prose
 
 The read of `prose` fails with substitution kind `Unclosed`, and the run's error message contains `unclosed '{{' in prose`.
 
-A substitution kind classifies a substitution failure, and every failure has exactly one of ten. The ten form a stable classification:
+A substitution kind classifies a substitution failure, and every failure has exactly one of nine. The nine form a stable classification:
 
 | Substitution kind | Raised by | Message |
 |---|---|---|
@@ -1231,11 +1238,10 @@ A substitution kind classifies a substitution failure, and every failure has exa
 | `EmptySegment` | An empty or space-padded segment, as in `{{ var. }}` or `{{ }}` | `empty or padded path segment in {{ {path} }}` |
 | `BadPath` | `{{ var }}` or `{{ sys }}` with no key | `bad path: {{ var }}` or `bad path: {{ sys }}` |
 | `UnknownNamespace` | A first segment that is neither a root nor a set global, as in `{{ ghost }}` | `unknown namespace or global '{name}' in {{ {path} }}` |
-| `NotATable` | A dotted path after `args` or `item`, as in `{{ args.x }}` | `args is a string, not a table`, or `item takes no key path; {{ item }} renders the whole item` |
-| `MissingKey` | An absent key under `var`, `sys`, `argv`, or a global, as in `{{ sys.bogus }}` | `missing {{ {path} }}` |
+| `NotATable` | A dotted path after `item`, as in `{{ item.x }}` | `item takes no key path; {{ item }} renders the whole item` |
+| `MissingKey` | An absent key under `var`, `sys`, `args`, or a global, as in `{{ sys.bogus }}` | `missing {{ {path} }}` |
 | `NullValue` | A path that lands on JSON null, under every root except `item` | `missing {{ {path} }}` |
 | `NilItem` | `{{ item }}` where no item is seeded | `{{ item }} is nil (no item is seeded into this section)` |
-| `NilArgv` | Any `argv` placeholder while `argv` is nil | `{{ {path} }} is nil (argv holds no value)` |
 | `Serialize` | A global that is not JSON data, and `{{ prose }}` | `global '{name}' in {{ {path} }} is not JSON data` |
 
 In the messages, `{path}` stands for the placeholder's path, `{name}` for the global's name, and `{namespace}` for the root you wrote.
@@ -1248,19 +1254,19 @@ Substitution kind `Unclosed` comes from a `{{` with no `}}` anywhere later in th
 
 Substitution kind `BadPath` comes from `{{ var }}` or `{{ sys }}` with no key, because these two roots always need a key and only bare globals render whole values, and its message names the root you wrote, either `bad path: {{ var }}` or `bad path: {{ sys }}`.
 
-Substitution kind `UnknownNamespace` comes from a path whose first segment is neither a built-in root nor a set Lua global, bare or dotted, and it fails the read of `prose` as a hard error. The message names the missing segment and the path, so the prose `{{ ghost }} here.` fails with `unknown namespace or global 'ghost' in {{ ghost }}`, a placeholder naming an unset global `x` fails with `unknown namespace or global 'x' in {{ x }}`, and the prose `prefix {{ ghost.x }}` fails with a message that names the path `ghost.x`. `{{ reply }}` with no `reply` global fails the read the same way. A misspelled root, a `local` variable, and a nil global all produce it, because any first segment other than `var`, `sys`, `argv`, `args`, or `item` is looked up only among Lua globals, which never include a `local`, and a nil global counts as absent.
+Substitution kind `UnknownNamespace` comes from a path whose first segment is neither a built-in root nor a set Lua global, bare or dotted, and it fails the read of `prose` as a hard error. The message names the missing segment and the path, so the prose `{{ ghost }} here.` fails with `unknown namespace or global 'ghost' in {{ ghost }}`, a placeholder naming an unset global `x` fails with `unknown namespace or global 'x' in {{ x }}`, and the prose `prefix {{ ghost.x }}` fails with a message that names the path `ghost.x`. `{{ reply }}` with no `reply` global fails the read the same way. A misspelled root, a `local` variable, and a nil global all produce it, because any first segment other than `var`, `sys`, `args`, or `item` is looked up only among Lua globals, which never include a `local`, and a nil global counts as absent.
 
 ### NotATable, MissingKey, and NullValue
 
-Substitution kind `NotATable` comes from a dotted key after `args` or `item`, because both roots are used whole only, so `{{ args.x }}` fails with `args is a string, not a table` and `{{ item.x }}` fails with `item takes no key path; {{ item }} renders the whole item`.
+Substitution kind `NotATable` comes from a dotted key after `item`, because that root is used whole only, so `{{ item.x }}` fails with `item takes no key path; {{ item }} renders the whole item`.
 
-Substitution kind `MissingKey` comes from a dotted path whose key is absent under `var`, `sys`, `argv`, or a global, such as `{{ sys.bogus }}` with the message `missing {{ sys.bogus }}`. It also comes from a path that continues past a string, number, or boolean, so `{{ var.name.first }}` when `name` is a string fails with `missing {{ var.name.first }}`.
+Substitution kind `MissingKey` comes from a dotted path whose key is absent under `var`, `sys`, `args`, or a global, such as `{{ sys.bogus }}` with the message `missing {{ sys.bogus }}`. It also comes from a path that continues past a string, number, or boolean, so `{{ var.name.first }}` when `name` is a string fails with `missing {{ var.name.first }}`.
 
-Substitution kind `NullValue` comes from a path under `var`, `sys`, `argv`, or a global that lands on JSON null, such as `{{ var.n }}` when `var` holds `{ "n": null }`, or `{{ argv.note }}` with the argument string `{"note":null}`. Its message reads the same as a missing key, `missing {{ {path} }}`, so only the substitution kind tells the two apart.
+Substitution kind `NullValue` comes from a path under `var`, `sys`, `args`, or a global that lands on JSON null, such as `{{ var.n }}` when `var` holds `{ "n": null }`, or `{{ args.extra.k }}` with the arguments `{"extra":{"k":null}}`, where `extra` is an object that says `additionalProperties: true`. Its message reads the same as a missing key, `missing {{ {path} }}`, so only the substitution kind tells the two apart.
 
-### NilItem, NilArgv, and Serialize
+### NilItem and Serialize
 
-Substitution kinds `NilItem` and `NilArgv` come from their roots, as [Inserting the fanout or task `item`](#inserting-the-fanout-or-task-item) and [Inserting arguments with `args` and `argv`](#inserting-arguments-with-args-and-argv) show. Substitution kind `Serialize` comes from a bare global that cannot become JSON data, and also from a `{{ prose }}` placeholder inside prose, which is rejected as recursive:
+Substitution kind `NilItem` comes from its root, as [Inserting the fanout or task `item`](#inserting-the-fanout-or-task-item) shows. Substitution kind `Serialize` comes from a bare global that cannot become JSON data, and also from a `{{ prose }}` placeholder inside prose, which is rejected as recursive:
 
 ````markdown
 ---

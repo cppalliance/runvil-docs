@@ -100,7 +100,7 @@ Sections can also nest deeper than `##`. A `### Worker` heading under `## Parent
 
 You write the frontmatter in YAML at the very top of the file. The first line of the file must be `---`, and spaces before or after the dashes on that line are ignored. A file that starts any other way is rejected with the message `file must begin with a --- frontmatter delimiter`, which [Frontmatter delimiters, byte-order mark, and line endings](#frontmatter-delimiters-byte-order-mark-and-line-endings) covers with the other delimiter rules.
 
-The frontmatter declares the prompt's files with the optional `input` and `output` keys, its Packs with the `uses` list, its arguments with `args`, and requirements on its model roles with `models`. None of these is needed for a prompt to parse and run. A frontmatter of only `name`, `description`, and `runvil: 0` between the `---` lines is complete:
+The frontmatter declares the prompt's output file with the optional `output` key, its Packs with the `uses` list, its arguments with `args`, and requirements on its model roles with `models`. None of these is needed for a prompt to parse and run. A frontmatter of only `name`, `description`, and `runvil: 0` between the `---` lines is complete:
 
 ````markdown
 ---
@@ -110,7 +110,7 @@ runvil: 0
 ---
 ````
 
-This prompt leaves out `models`, `args`, `uses`, `input`, and `output`, and it still parses and runs. [Prompts without sections](#prompts-without-sections) explains how a prompt with nothing after its frontmatter ends. The `description` value can be a single character such as `d`, and `runvil: 0` is the version value. A frontmatter of `name: greeter`, `description: says hi`, and `runvil: 0` is just as complete.
+This prompt leaves out `models`, `args`, `uses`, and `output`, and it still parses and runs. [Prompts without sections](#prompts-without-sections) explains how a prompt with nothing after its frontmatter ends. The `description` value can be a single character such as `d`, and `runvil: 0` is the version value. A frontmatter of `name: greeter`, `description: says hi`, and `runvil: 0` is just as complete.
 
 ## Frontmatter delimiters, byte-order mark, and line endings
 
@@ -227,7 +227,7 @@ models: { strong: { min_context: 40000 } }
 ---
 ````
 
-Both files decode to the same frontmatter. Flow style suits short declarations, such as `uses: [web]`, `models: { strong: { thinking: true } }`, or `args: { times: { type: integer, optional: true, default: 1 }, name: { type: string } }`.
+Both files decode to the same frontmatter. Flow style suits short declarations, such as `uses: [web]`, `models: { strong: { thinking: true } }`, or `args: { type: object, properties: { times: { type: integer, default: 1 }, name: { type: string } } }`.
 
 The two styles mix, so a block-style `models:` key can hold a flow-style entry on its indented line:
 
@@ -317,7 +317,7 @@ Every parse error found past the frontmatter, a `Lua` compile failure included, 
 
 ### The `description` key
 
-Every prompt declares a `description:` string that summarizes what the prompt does, such as `description: Greet the named input using a Lua-computed value` or `description: Writes a note to the store and reads it back.` The value becomes the prompt's description as free text, kept exactly as written, down to its closing period. Even a one-letter value such as `description: d` is accepted.
+Every prompt declares a `description:` string that summarizes what the prompt does, such as `description: Greet a name using a Lua-computed value` or `description: Writes a note to the store and reads it back.` The value becomes the prompt's description as free text, kept exactly as written, down to its closing period. Even a one-letter value such as `description: d` is accepted.
 
 By convention, the description fits on one line. The parser also accepts a several-line `description: |` block value (see [Multi-line values](#multi-line-values)), so one line is a convention, not a rule.
 
@@ -338,7 +338,7 @@ description: d
 p
 ````
 
-Every other key, including `runvil`, `max_tool_iterations`, `input`, `output`, `uses`, `args`, and `models`, takes a default when you leave it out.
+Every other key, including `runvil`, `max_tool_iterations`, `output`, `uses`, `args`, and `models`, takes a default when you leave it out.
 
 A runnable prompt's frontmatter carries three keys: `name`, `description`, and `runvil: 0`. A run proceeds only when `runvil` is `0`. A prompt without `name` or `description` fails at parse time, while a prompt without `runvil` parses but stops at run time with `not a runvil prompt: no runvil version` (see [The `runvil` version key](#the-runvil-version-key)). You add optional keys next to the three when a prompt needs them, such as `uses:`:
 
@@ -403,7 +403,7 @@ The `runvil:` value must be a non-negative integer that fits in 32 bits, `0` thr
 
 ### When the version is checked
 
-A file parses whether or not it has a `runvil:` key, and the run checks the declared version on its first step, before any section runs. The run checks the version first, then its store, then its requirements, so a prompt with a missing or unsupported version reports the version failure even when the run also has no usable store or an environment that falls short of the prompt.
+A file parses whether or not it has a `runvil:` key, and the run checks the declared version on its first step, before any section runs. The run checks the version first, then its arguments, then its store, then its requirements, so a prompt with a missing or unsupported version reports the version failure even when the run also has arguments that do not match the prompt's `args:` declaration, no usable store, or an environment that falls short of the prompt.
 
 A prompt whose `runvil` version is missing or unsupported fails before any section runs. None of its sections run, nothing is reported beyond that one failure, and its own `return` never runs.
 
@@ -471,11 +471,11 @@ description: d
 p
 ````
 
-The frontmatter recognizes exactly nine top-level keys, and only `name` and `description` are required, so this file parses. You leave out the other seven when a prompt does not need them, and you add them alongside `name`, `description`, and `runvil: 0` when it does.
+The frontmatter recognizes exactly eight top-level keys, and only `name` and `description` are required, so this file parses. You leave out the other six when a prompt does not need them, and you add them alongside `name`, `description`, and `runvil: 0` when it does.
 
-### The nine keys
+### The eight keys
 
-This table lists the nine keys in the order this chapter teaches them, with what each one means when you leave it out:
+This table lists the eight keys in the order this chapter teaches them, with what each one means when you leave it out:
 
 | Key | Required | When you leave it out |
 |---|---|---|
@@ -483,50 +483,50 @@ This table lists the nine keys in the order this chapter teaches them, with what
 | `description` | yes | the parse fails |
 | `runvil` | no, but needed to run | no declared version: the file parses, and running it fails with `not a runvil prompt: no runvil version (prompt {name})` |
 | `max_tool_iterations` | no | the built-in round cap stays in force |
-| `input` | no | no declared input file |
 | `output` | no | no declared output file |
 | `uses` | no | no Packs |
-| `args` | no | the default declaration of one optional `string` argument named `prose` |
+| `args` | no | the default declaration of one optional `string` argument named `text` |
 | `models` | no | no requirements on any model role |
 
-Because every key besides `name` and `description` has a default, a frontmatter of just those two parses, and so does a prompt with none of the contract keys. `max_tool_iterations` accepts a value from 1 to 1000, and [Tool rounds and the round cap](11-conversations.md#tool-rounds-and-the-round-cap) covers what it controls. [Input and output file declarations](#input-and-output-file-declarations) teaches `input` and `output`.
+Because every key besides `name` and `description` has a default, a frontmatter of just those two parses, and so does a prompt with none of the contract keys. `max_tool_iterations` accepts a value from 1 to 1000, and [Tool rounds and the round cap](11-conversations.md#tool-rounds-and-the-round-cap) covers what it controls. [The output file declaration](#the-output-file-declaration) teaches `output`, and [Prompts with no `args:` key](06-arguments.md#prompts-with-no-args-key) covers the default declaration of `args`.
 
 ### Adding keys a prompt needs
 
-The `hello` prompt under [Flow style](#flow-style) shows the pattern. Its frontmatter holds only `name`, `description`, `runvil`, and `models`, and leaves out `max_tool_iterations`, `input`, `output`, `uses`, and `args` because it does not need them. Its `models:` key names a `fast: {}` role next to the usual three keys. The shipped `hello.md` prompt declares no model requirements, so it leaves out `models` too, and its frontmatter holds only `name`, `description`, and `runvil`.
+The `hello` prompt under [Flow style](#flow-style) shows the pattern. Its frontmatter holds only `name`, `description`, `runvil`, and `models`, and leaves out `max_tool_iterations`, `output`, `uses`, and `args` because it does not need them. Its `models:` key names a `fast: {}` role next to the usual three keys. The shipped `hello.md` prompt declares no model requirements, so it leaves out `models` too, and its frontmatter holds only `name`, `description`, and `runvil`.
 
-The optional `input:` and `output:` declarations sit in the same frontmatter block as the other keys, as in a prompt whose frontmatter reads `name: files`, `description: d`, `runvil: 0`, then an `input:` map and an `output:` map.
+The optional `output:` declaration sits in the same frontmatter block as the other keys, as in a prompt whose frontmatter reads `name: files`, `description: d`, `runvil: 0`, then an `output:` map.
 
 ### The contract keys
 
 The contract keys are `uses`, `args`, and `models` (see [Putting the parts together](01-what-a-prompt-is.md#putting-the-parts-together)). Together they declare what a prompt needs from its environment:
 
 - `uses` lists the Packs the prompt requires, and each one listed is required.
-- `args` types the arguments the prompt takes.
+- `args` declares the prompt's arguments. The arguments of a run are one JSON object, and the value of `args` is a declaration of that object's shape, written in a subset of JSON Schema (see [Declaring arguments in frontmatter](06-arguments.md#declaring-arguments-in-frontmatter)).
 - `models` attaches requirements to the five built-in model roles (see [Model roles instead of models](10-models.md#model-roles-instead-of-models)): a minimum context and a thinking switch for each role it names.
 
-Checking these declarations against the caller's environment happens on the run's first step, not at parse time. For example, a `small` role that sets `thinking: false` is reported as an unmet requirement when the model filling that role always thinks.
+Checking these declarations against the caller's environment and the run's arguments happens on the run's first step, not at parse time. For example, a `small` role that sets `thinking: false` is reported as an unmet requirement when the model filling that role always thinks, and arguments that do not match the `args:` declaration end the run there, before any section runs (see [Argument errors](06-arguments.md#argument-errors)).
 
-All three contract keys can sit together in one frontmatter block alongside `name`, `description`, and `runvil: 0`, next to `input:` and `output:`, and each reads back as declared:
+All three contract keys can sit together in one frontmatter block alongside `name`, `description`, and `runvil: 0`, next to `output:`, and each reads back as declared:
 
 ````markdown
 ---
 name: greeter
 description: says hi
 runvil: 0
-input: { path: names.md, description: The names to greet }
 output: { path: note.md, description: The note the greeter leaves }
 uses: [web]
-args: { times: { type: integer, optional: true, default: 1 }, name: { type: string } }
+args: { type: object, properties: { times: { type: integer, default: 1 }, name: { type: string } }, required: [name] }
 models: { strong: { min_context: 40000 } }
 ---
 ````
 
-A frontmatter with `uses: [web, user]`, an `args:` map holding `use_mcp`, and a `models:` map holding `strong` and `fast` parses and reads back the same way.
+Here the `args:` value declares an object with two fields: an optional integer `times`, which is 1 when the caller leaves it out, and a required string `name`.
+
+A frontmatter with `uses: [web, user]`, an `args:` declaration that holds the arg `use_mcp`, and a `models:` map holding `strong` and `fast` parses and reads back the same way.
 
 ### Unknown keys
 
-You spell frontmatter keys exactly as the language defines them. An unknown frontmatter key is any top-level key other than the nine, and it is never ignored: it fails the whole file with parse error kind `Frontmatter`, because any other key is treated as a prompt authoring error. The `greeter` prompt above parses with `uses: [web]`, but the same file with that key misspelled fails:
+You spell frontmatter keys exactly as the language defines them. An unknown frontmatter key is any top-level key other than the eight, and it is never ignored: it fails the whole file with parse error kind `Frontmatter`, because any other key is treated as a prompt authoring error. The `greeter` prompt above parses with `uses: [web]`, but the same file with that key misspelled fails:
 
 ````markdown
 ---
@@ -537,59 +537,60 @@ usse: [web]
 ---
 ````
 
-The message has the `invalid frontmatter: {message}` form, and `{message}` names the offending key, here `usse`.
+````text
+invalid frontmatter: unknown field `usse`, expected one of `name`, `description`, `runvil`, `max_tool_iterations`, `output`, `uses`, `args`, `models` at line 4 column 1
+````
 
-Unknown keys are rejected inside nested declarations too. An `input:` or `output:` declaration accepts only `path` and `description`, an arg entry and a model role each accept only their own fixed set of keys (a model role takes only `min_context` and `thinking`), and any other key inside them fails the parse with parse error kind `Frontmatter`.
+The message has the `invalid frontmatter: {message}` form, and `{message}` names the offending key, here `usse`, and lists the eight keys. It ends with the YAML reader's own position, which counts lines from the first line after the opening `---`, so its line 4 is line 5 of the file.
 
-## Input and output file declarations
+Unknown keys are rejected inside nested declarations too. An `output:` declaration accepts only `path` and `description`, an `args:` declaration accepts only the keywords of its subset of JSON Schema, both at its top level and in each arg it declares, a model role takes only `min_context` and `thinking`, and any other key inside them fails the parse with parse error kind `Frontmatter`.
 
-After this section you can declare the file a prompt reads when it starts and the file it leaves behind when it finishes.
+## The output file declaration
+
+After this section you can declare the file a prompt leaves behind when it finishes.
 
 ````markdown
 ---
 name: files
 description: d
 runvil: 0
-input: { path: paper.md, description: The input paper }
 output: { path: report.md, description: The output report }
 ---
 
 ## Main
 
 ```lua
-store.write('report.md', 'seen: ' .. store.read('paper.md'))
+store.write('report.md', 'seen: ' .. args.text)
+return store.read('report.md')
 ```
 ````
 
-Launched with the input text `# Paper`, this prompt leaves `report.md` in the store holding:
+Run with the arguments `{"text":"# Paper"}`, this prompt leaves `report.md` in the store holding:
 
 ````text
 seen: # Paper
 ````
 
-A prompt can declare an input file and an output file. The Harness puts the declared input file in place in the store before the run, and it reads the declared output file from the store after the run (see [Writing and reading files](09-the-store.md#writing-and-reading-files)). Here the launch text `# Paper` becomes the file `paper.md`, the section reads it and writes `report.md`, and the caller gets `seen: # Paper` as the output.
+A prompt can declare an output file. The Harness reads the declared output file from the store after the run (see [Writing and reading files](09-the-store.md#writing-and-reading-files)). Here the section writes `report.md` from the argument `text` and returns what the store then holds there, and the caller gets `seen: # Paper` as the output.
 
 ### File declarations
 
-You declare the two files in the frontmatter under the `input:` and `output:` keys. Each one holds a file declaration, which is a map with exactly two required strings:
+You declare the output file in the frontmatter under the `output:` key. It holds a file declaration, which is a map with exactly two required strings:
 
-- `path` is the file's store path, such as `paper.md` or `report.md`, which the prompt reads or writes.
+- `path` is the file's store path, such as `report.md`, which the prompt writes.
 - `description` documents the file's purpose in plain words, and the Workshop's Run window shows it beside the path.
 
-A file declaration accepts no keys besides `path` and `description`, and any other key fails the frontmatter parse. Both keys are required, so leaving out either one fails the frontmatter parse until you add the missing key. The parser keeps both values exactly as written: `paper.md` reads back as `paper.md`, and `The input paper` reads back as `The input paper`, inner spaces included.
+A file declaration accepts no keys besides `path` and `description`, and any other key fails the frontmatter parse. Both keys are required, so leaving out either one fails the frontmatter parse until you add the missing key. The parser keeps both values exactly as written: `report.md` reads back as `report.md`, and `The output report` reads back as `The output report`, inner spaces included.
 
-`input:` and `output:` are both optional, and each holds a single file declaration rather than a list. A prompt whose frontmatter holds only `name`, `description`, and `runvil: 0` parses with neither declared, so both read as absent.
+`output:` is optional, and it holds a single file declaration rather than a list. A prompt whose frontmatter holds only `name`, `description`, and `runvil: 0` parses with no output file declared, so `output` reads as absent.
 
-You can write a declaration as a one-line YAML flow map in `{ key: value }` form with unquoted values, as in `input: { path: paper.md, description: The input paper }`, or in block style:
+You can write a declaration as a one-line YAML flow map in `{ key: value }` form with unquoted values, as in `output: { path: report.md, description: The output report }`, or in block style:
 
 ````markdown
 ---
 name: files
 description: d
 runvil: 0
-input:
-  path: paper.md
-  description: The paper
 output:
   path: report.md
   description: The report
@@ -598,39 +599,17 @@ output:
 
 This is the frontmatter of the `files` prompt in block style; the rest of the file is unchanged.
 
-### The input file
-
-The input file is the one store file a prompt expects to find when it starts, declared with `input:`. You point the prompt at it by giving `input:` a `path`, and you explain it in plain words with a `description`, which you can write unquoted with spaces inside a flow map. So `input: { path: names.md, description: The names to greet }` reads back with the path `names.md` and the description `The names to greet`. A prompt without `input:` has no input file.
-
-The input file is an ordinary store file that is in place before the first section runs, so a section reads it with `store.read` at the declared path, as in `local paper = store.read('paper.md')`. The declared path is a logical store path: when the Host mounts the store at a directory such as `/store`, the staged input appears where `store.read('paper.md')` looks, and nothing is written at `/paper.md`.
-
-The input file can reach the store in two ways:
-
-- When the run is launched with input text, the Harness writes that text byte for byte into the store as the file at the declared `input:` path before the run starts. The text overwrites any file the store already holds at that path.
-- When the launch supplies no text, the prompt still prepares and runs if the store already holds a file at the declared path, because that file satisfies the declaration. A store seeded with `paper.md` holding `the paper body` lets `store.read('paper.md')` read that text.
-
-A prompt that declares neither `input:` nor `output:` prepares normally when no input text is supplied.
-
 ### The output file
 
 The output file is the one store file a prompt leaves behind when it finishes, declared with `output:`. You give it a store `path` and a `description` that says what the file is, as in `output: { path: report.md, description: The output report }` or `output: { path: note.md, description: The note the greeter leaves }`. A prompt without `output:` has no output file, so the caller gets no output path and has no output file to read.
 
-A prompt produces its declared output file by writing it with `store.write` at the declared path, because nothing else writes it. With `paper.md` holding `the paper body`, the call `store.write('report.md', 'report on: ' .. paper)` after `local paper = store.read('paper.md')` leaves `report.md` holding `report on: the paper body`. The Harness collects the file from the store after the run ends, and whatever the prompt wrote at the declared path is the file the caller reads as the run's output once the run completes.
+A prompt produces its declared output file by writing it with `store.write` at the declared path, because nothing else writes it. With a store file `paper.md` holding `the paper body`, the call `store.write('report.md', 'report on: ' .. paper)` after `local paper = store.read('paper.md')` leaves `report.md` holding `report on: the paper body`. The Harness collects the file from the store after the run ends, and whatever the prompt wrote at the declared path is the file the caller reads as the run's output once the run completes.
 
 The Harness's run report carries the output file's text only for a completed run. The report for a run that ends with an error, a canceled run included, skips the output file.
 
-### When the files cannot be put in place
+### When the output file cannot be read
 
-The parser accepts a declared `path` as written. The store's path rules (see [Store paths](09-the-store.md#store-paths)) apply only when the Harness stages the input or reads the output, so a path the store refuses shows up when the run starts, not at parse time.
-
-Each input problem refuses the run before any section runs, and the run fails. The error code and the message tell the problems apart:
-
-| Situation | Error code | What the message says |
-|---|---|---|
-| The launch supplies input text, but the prompt declares no `input:` file for it to go to | `requirements_unmet` | ``the launch supplied input text, but the prompt declares no `input:` file`` |
-| The prompt declares an `input:` file that is neither supplied at launch nor already in the store | `requirements_unmet` | the missing path, as in ``the prompt declares the input file `paper.md`, but the launch supplied no input text and the store has no such file`` |
-| The store refuses the write that stages the input, for example because the store requires approval for the write | the store code of the refusal, here `approval_required` | ``the input file `{path}` could not be staged``, then the store's own error (see [When a store call fails](09-the-store.md#when-a-store-call-fails)) |
-| The store refuses the declared `input:` path under its path rules | the store code of the refusal, such as `invalid_path` | ``the input file `{path}` could not be staged``, then the store's own error |
+The parser accepts a declared `path` as written. The store's path rules (see [Store paths](09-the-store.md#store-paths)) apply only when the prompt writes the file and when the Harness reads it, so a path the store refuses shows up during or after the run, not at parse time.
 
 A missing output file is not a run failure. A prompt that declares an `output:` file but never writes it still runs to success, and the run report then carries this error in place of the output text, naming the declared path:
 
@@ -647,12 +626,16 @@ After this section you can choose names for args and adhoc tools that both the p
 name: contract_names
 description: d
 runvil: 0
-args: { use_mcp: { type: boolean }, max_items: { type: integer, optional: true, default: 1 } }
+args:
+  type: object
+  properties:
+    use_mcp: { type: boolean }
+    max_items: { type: integer, default: 1 }
 models: { strong: {}, fast: {} }
 ---
 ````
 
-This frontmatter parses. The keys under `args:` are arg names, and the keys under `models:` are role names. An arg name is the key that names one argument, and the argument reaches Lua as a field of `argv`. An arg name follows the same name grammar as an adhoc tool name, which is the `name` Lua code gives an adhoc tool (see [Effects and Harness work](01-what-a-prompt-is.md#effects-and-harness-work)) in the attrs table of `tools.adhoc` (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)). A role name is one of the five built-in model roles, `default`, `strong`, `small`, `fast`, and `creative`, so the grammar does not apply to it.
+This frontmatter parses. The keys under `properties:` are arg names, and the keys under `models:` are role names. An arg name is a field name under `properties`, at any depth of the `args:` declaration. At the top level it is the key that names one argument, and the argument reaches Lua as a field of `args`. Deeper, under the `properties` of an object inside the declaration, it names one field of that object. An arg name follows the same name grammar as an adhoc tool name, which is the `name` Lua code gives an adhoc tool (see [Effects and Harness work](01-what-a-prompt-is.md#effects-and-harness-work)) in the attrs table of `tools.adhoc` (see [Adhoc tools with `tools.adhoc`](12-tools.md#adhoc-tools-with-toolsadhoc)). A role name is one of the five built-in model roles, `default`, `strong`, `small`, `fast`, and `creative`, so the grammar does not apply to it.
 
 ### The prompt-local alias grammar
 
@@ -677,7 +660,7 @@ Put the other way, a name fails the grammar when it is empty or longer than 64 c
 
 ### Where the grammar applies
 
-At parse time, the grammar applies to every key under `args:`, such as the arg name `use_mcp` above. Arg names such as `times` and `name` are valid too. A key under `models:` is not checked against the grammar. It must be one of the five role names, spelled exactly, so a key such as `reviewer` or `Fast` is rejected even though both fit the grammar. Lua code refers to a role by its name as a string, as in `models.use("strong")`.
+At parse time, the grammar applies to every key of every `properties` map in the `args:` declaration, at any depth, such as the arg name `use_mcp` above. Arg names such as `times` and `name` are valid too. A key under `models:` is not checked against the grammar. It must be one of the five role names, spelled exactly, so a key such as `reviewer` or `Fast` is rejected even though both fit the grammar. Lua code refers to a role by its name as a string, as in `models.use("strong")`.
 
 At run time, the Engine enforces the same grammar for the `name` Lua passes to `tools.adhoc`, with the same length, first-character, and later-character rules.
 
@@ -685,29 +668,34 @@ At run time, the Engine enforces the same grammar for the `name` Lua passes to `
 
 ### Contract maps and duplicate keys
 
-A contract map is the `models:` map or the `args:` map. The two share the uniqueness check: each key appears once within its map. Keys are compared exactly, so arg names that differ only in case, such as `Times` and `times`, are two distinct entries.
+A contract map is the `models:` map or a `properties` map of the `args:` declaration. They share the uniqueness check: each key appears once within its map. Keys are compared exactly, so arg names that differ only in case, such as `Times` and `times`, are two distinct entries.
 
-A repeated key fails the parse with parse error kind `Frontmatter`, and the message names the key kind and the repeated key, where the key kind `{what}` is `model role` for `models:` and `arg name` for `args:`:
+A repeated key fails the parse with parse error kind `Frontmatter`, and the message names the key kind and the repeated key, where the key kind `{what}` is `model role` for `models:` and `argument name` for a `properties` map:
 
 ````text
 duplicate {what} `{key}`: contract map keys must be unique
 ````
 
-The parser checks each key first, against the grammar for `args:` and against the five role names for `models:`, and for uniqueness second, and it checks a key before it reads the key's value. It walks the keys in source order and stops at the first bad one, so:
+The parser checks each key first, against the grammar for a `properties` map and against the five role names for `models:`, and for uniqueness second, and it checks a key before it reads the key's value. It walks the keys in source order and stops at the first bad one, so:
 
 - A map with several bad keys reports only the first one.
 - An entry with both a bad key and a bad value reports the key error.
 
 ### Reserved names
 
-A reserved name is a name that is already taken in a section entry's Lua environment, such as the global `store`, the Lua function `pairs`, or the keyword `end` (see [The sandbox](05-lua-environment.md#the-sandbox)). Arg names are not checked against reserved names, because an arg does not become a Lua global: it is a field of `argv`. So every reserved name the grammar allows works as an arg name, and `prose`, `store`, and `end` are all accepted:
+A reserved name is a name that is already taken in a section entry's Lua environment, such as the global `store`, the Lua function `pairs`, or the keyword `end` (see [The sandbox](05-lua-environment.md#the-sandbox)). Arg names are not checked against reserved names, because an arg does not become a Lua global: it is a field of `args`. So every reserved name the grammar allows works as an arg name, and `prose`, `store`, and `end` are all accepted:
 
 ````markdown
 ---
 name: reserved
 description: d
 runvil: 0
-args: { prose: { type: string }, store: { type: string }, end: { type: boolean } }
+args:
+  type: object
+  properties:
+    prose: { type: string }
+    store: { type: string }
+    end: { type: boolean }
 ---
 ````
 
@@ -715,10 +703,10 @@ This frontmatter declares three args, named `prose`, `store`, and `end`. A reser
 
 ### Parse-time name errors
 
-A key under `args:` that is outside the grammar fails the parse with parse error kind `Frontmatter`. The `{message}` of the `invalid frontmatter: {message}` message names the offending key and shows the grammar:
+A key under a `properties` map that is outside the grammar fails the parse with parse error kind `Frontmatter`. The `{message}` of the `invalid frontmatter: {message}` message names the offending key and shows the grammar:
 
 ````text
-invalid arg name `{key}`: expected [A-Za-z][A-Za-z0-9_-]{0,63}
+invalid argument name `{key}`: expected [A-Za-z][A-Za-z0-9_-]{0,63}
 ````
 
 A key under `models:` that is not one of the five role names fails the parse with parse error kind `Frontmatter` too. The message contains the YAML reader's own text for an unknown name, which names the key and lists the five roles:
@@ -733,15 +721,23 @@ Inside a role, a field other than `min_context` and `thinking` fails the same wa
 unknown field `{field}`, expected `min_context` or `thinking`
 ````
 
-So a role that carries a `description:` field is rejected, even though `input:`, `output:`, and the prompt itself take one.
+So a role that has a `description:` field is rejected, even though `output:` and the prompt itself take one.
 
-Writing `models:` or `args:` as something other than a map, such as a list or a scalar, fails with parse error kind `Frontmatter` and this detail, where `{found}` is the YAML reader's description of the value you gave and `{what}` is `model role` or `arg name`:
+Writing `models:` or a `properties` map as something other than a map, such as a list or a scalar, fails with parse error kind `Frontmatter` and this detail, where `{found}` is the YAML reader's description of the value you gave and `{what}` is `model role` or `argument name`:
 
 ````text
 invalid type: {found}, expected a map of {what} keys to declarations
 ````
 
-Each grammar, duplicate, and map-type error from `models:` and `args:` reports the file line and column of the offending entry, such as line 5, column 5.
+Writing `args:` itself as a list or a scalar fails the same way, with this detail:
+
+````text
+invalid type: {found}, expected a map of schema keywords
+````
+
+Each grammar, duplicate, and map-type error from `models:` and `args:` puts the YAML path of the map at fault in front of its detail: `models` for the roles, `args` for the declaration itself, and `args.properties` for the top-level arg names. A deeper `properties` map has a longer path, such as `args.properties.opts.properties` for the fields of an object argument named `opts`, so the path shows where in the declaration a bad name sits.
+
+Each of these errors also reports a file line and column. A key under `models:` that is not a role name is reported at the key itself, and a map-type error at the value. A grammar or duplicate error from a `properties` map, like a duplicate role, is reported where its map starts, which in block style is the map's first key: line 8, column 5 in the `contract_names` prompt above.
 
 Every arg name violation, whether an empty name, a name that is too long, a bad first character, or a bad later character, produces the same single message form. The message shows the grammar but not which rule failed, so check the name against every rule in [The prompt-local alias grammar](#the-prompt-local-alias-grammar).
 

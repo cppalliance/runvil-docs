@@ -70,7 +70,7 @@ planned
 
 A preamble holds any mix of plain `lua` fences and prose paragraphs before the first heading, and each becomes its own block in file order, so this preamble holds a Lua block, a prose block, and a Lua block. You can place a fence directly after the frontmatter, as here, or inside a section under a heading such as `## Main`, and a Lua block is one `lua` fence in either place.
 
-You can write an explanatory paragraph before the first heading to describe what the prompt does, such as `Returns the single input argument verbatim, entirely in Lua, with no model call.`. A preamble that holds no `lua` fence is commentary: it is no section, it has no blocks at all, and nothing reads it. A preamble holding only one `lua` fence is valid and has a single Lua block.
+You can write an explanatory paragraph before the first heading to describe what the prompt does, such as ``Returns its `text` argument verbatim, entirely in Lua, with no model call.``. A preamble that holds no `lua` fence is commentary: it is no section, it has no blocks at all, and nothing reads it. A preamble holding only one `lua` fence is valid and has a single Lua block.
 
 ### Writing Lua inside a fence
 
@@ -97,7 +97,7 @@ Which text becomes a prose block follows a few rules:
 - When anything other than blank lines comes before the first `lua` fence in the preamble or a section, that text becomes its own prose block ahead of the first Lua block. Blank or whitespace-only lines alone before the fence produce no block.
 - Prose after the last `lua` fence becomes a trailing prose block only when it is not empty after trimming. Markdown after the last fence is never an error and stays an ordinary prose block.
 - Every prose block is trimmed of leading and trailing whitespace.
-- Apart from that trimming, a prose block holds the prompt file's Markdown as written, so text like `Plan {{ args }}.` keeps its `{{ args }}` placeholder (see [Placeholders in prose](07-substitution.md#placeholders-in-prose)) exactly as written when the prompt loads.
+- Apart from that trimming, a prose block holds the prompt file's Markdown as written, so text like `Plan {{ args.text }}.` keeps its `{{ args.text }}` placeholder (see [Placeholders in prose](07-substitution.md#placeholders-in-prose)) exactly as written when the prompt loads.
 - A section with no `lua` fence is a single prose block.
 
 A section made only of prose is valid, and the prompt still loads. It can sit beside sections that use fences:
@@ -1289,7 +1289,7 @@ var.never = 'run'
 
 ---
 
-Closing line with {{ args }}.
+Closing line with {{ args.text }}.
 ````
 
 ````text
@@ -1303,10 +1303,10 @@ var.never = 'run'
 
 ---
 
-Closing line with {{ args }}.
+Closing line with {{ args.text }}.
 ````
 
-The result keeps the first line's leading indentation and the blank lines inside the body, and drops only the blank lines that separate the body from its heading and from the next heading. Inline Markdown such as `**bold**` and backtick code comes back raw, not rendered. The `lua` fence comes back as text, and the read does not run it. The `{{ args }}` [placeholder](07-substitution.md#placeholders-in-prose) comes back literally, without substitution. The thematic break stays in the Markdown too, even though the break resets the section's prose, as [A break never ends a section](#a-break-never-ends-a-section) explains.
+The result keeps the first line's leading indentation and the blank lines inside the body, and drops only the blank lines that separate the body from its heading and from the next heading. Inline Markdown such as `**bold**` and backtick code comes back raw, not rendered. The `lua` fence comes back as text, and the read does not run it. The `{{ args.text }}` [placeholder](07-substitution.md#placeholders-in-prose) comes back literally, without substitution. The thematic break stays in the Markdown too, even though the break resets the section's prose, as [A break never ends a section](#a-break-never-ends-a-section) explains.
 
 The result is a Lua string that string methods work on, such as `text:find('Mine text.', 1, true)`. A section with nothing under its heading reads as the empty string `''`.
 
@@ -1665,7 +1665,7 @@ runvil: 0
 
 ```lua
 local search = require '/search_tools'
-return search.search_all(argv.prose)
+return search.search_all(args.text)
 ```
 
 ## search_tools
@@ -1679,7 +1679,7 @@ return M
 ```
 ````
 
-Run it with the argument string `rust`, which arrives as [`argv.prose`](06-arguments.md#reading-parsed-input-from-argv):
+Run it with the arguments `{"text":"rust"}`, so that `args.text` reads `rust` (see [Reading arguments from `args`](06-arguments.md#reading-arguments-from-args)):
 
 ````text
 searched rust everywhere
@@ -1837,12 +1837,12 @@ return read_args()
 
 ```lua
 function read_args()
-  return args
+  return args.text
 end
 ```
 ````
 
-Run it with the argument string `later canned value`:
+Run it with the arguments `{"text":"later canned value"}`:
 
 ````text
 later canned value
@@ -1906,7 +1906,7 @@ return {
 ### Shout
 
 ```lua
-return args:upper()
+return args.text:upper()
 ```
 ````
 

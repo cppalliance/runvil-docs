@@ -50,7 +50,7 @@ The [section walk](04-how-a-prompt-runs.md#the-section-walk) enters `Check` firs
 
 `jump` and `call` are the control functions. The Engine installs both as Lua globals while it sets up every section, so every block can use them, and once setup finishes neither one is ever `nil`.
 
-Each one takes the target section's section path as its first argument, written as a Lua string, as in `call('Sub')` and `jump('../B')`. A section path names a neighbor of the section the code is written in: the bare name of a direct child, or `../` and the name of a sibling (see [Section paths](02-file-structure.md#section-paths)). Either quote style works, as in `call('Inner')` or `call("../Child")`. So `call('Answer')` runs the child named `Answer`, `jump('../Target')` moves to the sibling `Target`, and from `A`, `call('../S1')` runs the sibling `S1`. Both `call('../Sub', '{"query":"chain"}')` and `call('../Sub')` reach the same `Sub` section, because only the first argument names the target.
+Each one takes the target section's section path as its first argument, written as a Lua string, as in `call('Sub')` and `jump('../B')`. A section path names a neighbor of the section the code is written in: the bare name of a direct child, or `../` and the name of a sibling (see [Section paths](02-file-structure.md#section-paths)). Either quote style works, as in `call('Inner')` or `call("../Child")`. So `call('Answer')` runs the child named `Answer`, `jump('../Target')` moves to the sibling `Target`, and from `A`, `call('../S1')` runs the sibling `S1`. Both `call('../Sub', { query = 'chain' })` and `call('../Sub')` reach the same `Sub` section, because only the first argument names the target.
 
 ### What `jump` does
 
@@ -58,7 +58,7 @@ Each one takes the target section's section path as its first argument, written 
 
 ### What `call` does
 
-`call(target, input?)` runs another section as a contained chain: a chain that starts at the target and [falls through](04-how-a-prompt-runs.md#the-section-walk) the target's following siblings until a section returns or the level runs out. The second argument is an optional string, as in `call('../Sub', 'chain-args')`, `call("../Child", "override")`, or `call('../Sub', '{"query":"chain"}')`. Leaving it out, as in `call('../Child')`, passes no call input. [Call input and `var`](#call-input-and-var) covers what the called sections see in each case.
+`call(target, args?)` runs another section as a contained chain: a chain that starts at the target and [falls through](04-how-a-prompt-runs.md#the-section-walk) the target's following siblings until a section returns or the level runs out. The second argument is optional: a table of named fields, as in `call('../Sub', { query = 'chain' })`, or a string, as in `call('../Sub', 'chain-args')` or `call("../Child", "override")`. Leaving it out, as in `call('../Child')`, gives the chain no arguments of its own. [Call args and `var`](#call-args-and-var) covers what the called sections see in each case.
 
 `call` runs the section like a function and returns the contained chain's final text to the block as a plain Lua string, or `nil` when the chain ends with no text. Here `Main` calls its child `Sub`, which falls through to `After`:
 
@@ -890,7 +890,7 @@ return 'research-reply'
 found: research-reply
 ````
 
-`call(target, input?)` takes a section path for the target section, such as `'../Research'`, plus an optional call input string, and starts a called chain at that target. It runs the named section, such as a sibling, as a contained chain and returns that chain's final returned value to the calling block, so `local found = call('../Research')` gets `research-reply` because `Research` ends by returning that text. The optional call input reaches the called section as `args`, and the called section can read values the caller stored in `var` (see [Call input and `var`](#call-input-and-var)).
+`call(target, args?)` takes a section path for the target section, such as `'../Research'`, plus optional arguments for the called chain, and starts a called chain at that target. It runs the named section, such as a sibling, as a contained chain and returns that chain's final returned value to the calling block, so `local found = call('../Research')` gets `research-reply` because `Research` ends by returning that text. The optional arguments reach the called section as its `args`, and the called section can read values the caller stored in `var` (see [Call args and `var`](#call-args-and-var)).
 
 When the called chain returns, its result becomes the value of `call`, the calling block keeps running, and when that block finishes, the walk resumes at the section after the caller. Here `Main` returns, so the run ends with `found: research-reply`, and the walk never reaches `Research` on its own.
 
@@ -1131,16 +1131,16 @@ A called chain has no inbox of its own: it runs inside its caller's task, so it 
 
 A function from a `require`d library that runs `call` resolves the path from the library section, whichever section calls the function, so it runs the library's own child. When a library defines `later()` with `call('mine')` inside, and the library has a child `mine` that does `return 'mine'`, the `call` returns `mine` for every section that calls `later()`. The chain still runs as a child chain of the section that called the function. A library that means a section of the one using it writes `_G.call` (see [A library names its own sections](03-blocks-and-prose.md#a-library-names-its-own-sections)).
 
-A called section cannot call itself, and the only Lua values it gets from its caller are the ones [Call input and `var`](#call-input-and-var) describes.
+A called section cannot call itself, and the only Lua values it gets from its caller are the ones [Call args and `var`](#call-args-and-var) describes.
 
-## Call input and `var`
+## Call args and `var`
 
-After this section you can pass a call input to a called section and read it there, and know which `var` values and which `argv` the called chain starts with.
+After this section you can pass arguments to a called section and read them there, and know which `var` values and which `args` the called chain starts with.
 
 ````markdown
 ---
 name: pipeline
-description: Passes one section's text to the next as its call input.
+description: Passes one section's text to the next as its arguments.
 runvil: 0
 ---
 
@@ -1154,7 +1154,7 @@ return call('../Deliver', draft)
 ## Deliver
 
 ```lua
-return 'delivered: ' .. args
+return 'delivered: ' .. args.text
 ```
 ````
 
@@ -1162,22 +1162,22 @@ return 'delivered: ' .. args
 delivered: refined text
 ````
 
-### Passing a call input
+### Passing arguments to a call
 
-A call input is the string you pass as the second argument to `call`, as in `call('../Child', 'override')`. The called chain receives that string as its own argument string instead of the one it would otherwise inherit. In every section the chain runs, the [`args` global](06-arguments.md#the-argument-string-in-args) holds the call input instead of the run's own argument string, and the prose of any section in the chain reads the call input too. So in a run started with the argument string `{"query":"run"}`, `call('../Sub', '{"query":"chain"}')` makes `args` read `{"query":"chain"}` inside `Sub`. To build a call input from a table, encode it with [`json.encode`](05-lua-environment.md#encoding-and-decoding-json-with-json), as in `call('../Sub', json.encode({ query = 'chain' }))`, which passes the same text. The chain reads it back through `argv` under an explicit `args:` declaration, as [`argv` in a called chain](#argv-in-a-called-chain) shows, or with `json.decode(args)` under any declaration.
+A call's arguments are what you pass as the second argument to `call`: a table of named fields, as in `call('../Sub', { query = 'chain' })`, or a string, as in `call('../Child', 'override')`. The called chain receives them as its own arguments instead of the ones it would otherwise inherit. In every section the chain runs, the [`args` global](06-arguments.md#reading-arguments-from-args) holds the call's arguments instead of the run's own, and the prose of any section in the chain reads the call's arguments too. A table becomes the chain's `args`, so in a run started with the arguments `{"query":"run"}`, `call('../Sub', { query = 'chain' })` makes `args.query` read `chain` inside `Sub`. A string becomes a table with one field, `text`, that holds the string, so `call('../Child', 'override')` makes `args.text` read `override` inside `Child`, as `Deliver` reads `args.text` above. `text` is the same field a prompt with no `args:` key reads its one free text from (see [Prompts with no `args:` key](06-arguments.md#prompts-with-no-args-key)). [`args` in a called chain](#args-in-a-called-chain) shows what the chain reads in each case.
 
-A [placeholder](07-substitution.md#placeholders-in-prose) `{{ args }}` inside a called chain renders the call input instead of the run's argument string. In a run started with the argument string `run-args`, `call('../Sub', 'chain-args')` makes the chain's model round receive `chain-args` and not `run-args`. A `call` with a call input leaves the caller's own `args` unchanged, so the calling section's `args` still holds its own argument string after the call.
+A [placeholder](07-substitution.md#placeholders-in-prose) such as `{{ args.text }}` inside a called chain renders the call's arguments instead of the run's. In a run started with the arguments `{"text":"run-args"}`, `call('../Sub', 'chain-args')` makes the chain's model round receive `chain-args` and not `run-args`. A `call` with arguments of its own leaves the caller's `args` as they were, so the calling section's `args` still holds its own arguments after the call.
 
-You build a pipeline by passing a string one section produced as the next section's call input, as `Main` does above with `return call('../Deliver', draft)`. The run's own argument string makes no difference: when `Refine` ends with `return call('../Deliver', messages[#messages].content)`, the run's result is `delivered: refined text`, even though the run itself started with the argument string `quantum`.
+You build a pipeline by passing a string one section produced as the next section's arguments, as `Main` does above with `return call('../Deliver', draft)`. The run's own arguments make no difference: when `Refine` ends with `return call('../Deliver', messages[#messages].content)`, the run's result is `delivered: refined text`, even though the run itself started with the arguments `{"text":"quantum"}`.
 
 ### Inheriting the caller's arguments
 
-A `call` with no call input inherits its caller's argument string. From the main walk that is the run's argument string, and inside a called chain that was given a call input it is that chain's call input, not the run's, because a call input applies to the whole chain:
+A `call` with no second argument inherits its caller's arguments: the called chain reads the caller's `args`. From the main walk those are the run's arguments, and inside a called chain that was given arguments of its own they are that chain's arguments, not the run's, because a call's arguments apply to the whole chain:
 
 ````markdown
 ---
-name: inherit-input
-description: A nested call with no call input inherits the chain's call input.
+name: inherit-args
+description: A nested call with no arguments of its own reads the chain's arguments.
 runvil: 0
 ---
 
@@ -1196,7 +1196,7 @@ return call('../Inner')
 ## Inner
 
 ```lua
-return 'Inner saw ' .. args
+return 'Inner saw ' .. args.text
 ```
 ````
 
@@ -1204,61 +1204,109 @@ return 'Inner saw ' .. args
 Inner saw chain-args
 ````
 
-A `call` with the call input left out or passed as `nil` makes the called chain inherit the caller's arguments whole: both its `args` and its [`argv`](06-arguments.md#reading-parsed-input-from-argv), which is [read-only](06-arguments.md#argv-is-read-only) in the called chain as it is in every section. In a run started with the argument string `{"query":"run"}`, under an `args:` declaration with a `query` field, `argv.query` reads `run` in a `Sub` reached by `call('../Sub')`. A [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) without an argument string inherits the same way.
+A `call` with the second argument left out or passed as `nil` makes the called chain inherit the caller's arguments whole: it reads the caller's [`args`](06-arguments.md#reading-arguments-from-args), which is [read-only](06-arguments.md#args-is-read-only) in the called chain as it is in every section. In a run started with the arguments `{"query":"run"}`, under an `args:` declaration with a `query` field, `args.query` reads `run` in a `Sub` reached by `call('../Sub')`. `call('../Sub', args)` passes the caller's arguments on too, and so does a table built from parts of `args`, such as `call('../Sub', { query = args.query })`. A [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) with no `args` option inherits the same way.
 
-An empty string counts as a call input, so `call(path, '')` sets the called chain's `args` to `''` instead of inheriting the caller's argument string. Only a `nil` or missing call input inherits.
+An empty string counts as an argument, so `call(path, '')` gives the called chain an `args.text` of `''` instead of the caller's arguments. Only a `nil` or missing second argument inherits.
 
-### `argv` in a called chain
+### `args` in a called chain
 
-A call given its own call input gets a fresh `argv` built from that string under the prompt's `args:` declaration, and that `argv` is [read-only](06-arguments.md#argv-is-read-only) for the whole chain:
+A call given arguments of its own gives the called chain an `args` table of its own, built from what the call passed. That `args` is [read-only](06-arguments.md#args-is-read-only) for the whole chain:
 
 ````markdown
 ---
-name: chain-argv
-description: Gives a called chain its own argv.
+name: chain-args
+description: Gives a called chain its own args.
 runvil: 0
 args:
-  query:
-    type: string
+  type: object
+  properties:
+    query: { type: string }
 ---
 
 ## Main
 
 ```lua
-return call('../Sub', '{"query":"chain"}')
+return call('../Sub', { query = 'chain' })
 ```
 
 ## Sub
 
 ```lua
-local wrote = pcall(function() argv.query = 'x' end)
-return argv.query .. ':' .. tostring(wrote)
+local wrote = pcall(function() args.query = 'x' end)
+return args.query .. ':' .. tostring(wrote)
 ```
 ````
 
-Run with the argument string `{"query":"run"}`, the prompt returns:
+Run with the arguments `{"query":"run"}`, the prompt returns:
 
 ````text
 chain:false
 ````
 
-Inside `Sub`, `argv.query` reads `chain` from the call input, not `run` from the run's argument string. The chain's `argv` is read-only, so a field write such as `argv.query = 'x'` fails, and `pcall` catches it, leaving `wrote` false. How the call input becomes `argv` depends on the frontmatter:
+Inside `Sub`, `args.query` reads `chain` from the call, not `run` from the run's arguments. The chain's `args` is read-only, so a field write such as `args.query = 'x'` fails, and `pcall` catches it, leaving `wrote` false. What the chain's `args` holds depends on the second argument of the `call`:
 
-| Call input | `args` in the chain | `argv` in the chain |
-| --- | --- | --- |
-| Left out or `nil` | the caller's `args` | the caller's `argv` |
-| A string, no `args:` key | the string | the string as `argv.prose` (see [Prompts with no `args:` key](06-arguments.md#prompts-with-no-args-key)) |
-| A string, with an `args:` key | the string | the string parsed as JSON |
-| A string that is not JSON, or is JSON `null`, with an `args:` key | the string | `nil` |
+| Second argument | `args` in the chain |
+| --- | --- |
+| Left out or `nil` | the caller's `args` |
+| A table of named fields | the fields of that table |
+| A string | one field, `text`, that holds the string |
 
-Under an explicit `args:` declaration, a call input that does not parse as JSON, or parses as JSON `null`, gives the called chain a nil `argv`, while the chain's `args` still holds the string.
+The Engine does not check a call's arguments against the prompt's `args:` declaration, and it fills no defaults in them, because the declaration describes what a caller passes the prompt, not what one section passes another. Under the declaration above, `call('../Sub', { query = 5, extra = true })` starts the chain all the same, and there `args.query` is the integer `5` and `args.extra` is `true`. A string arrives as `args.text` under that declaration too, though it declares no `text`. Sent as the arguments of the run, the same fields end the run at its first step (see [Argument errors](06-arguments.md#argument-errors)).
 
-### Call input errors
+Every section of the chain reads the same `args`: the target, each section the chain falls through to, and the target of a `jump` inside the chain, because a jump stays in its chain. When the chain ends, the caller's `args` are what they were before the call. Here a call gives `Sub` a `query` of its own, `Sub` jumps to `Peer`, and each of the three sections reports the `query` and the `limit` it reads:
 
-A call input is a string, `nil`, or left out. Two errors fail the call at the call site:
+````markdown
+---
+name: chain-reads
+description: Shows which arguments each section reads around a call.
+runvil: 0
+args:
+  type: object
+  properties:
+    query: { type: string }
+    limit: { type: integer, default: 10 }
+  required: [query]
+---
 
-- Any other value fails with `input must be a string, got {type}`, where `{type}` is the Engine's type name, such as `integer` for `5`, `number` for `1.5`, or `table` for a table.
-- A call input string that is not valid UTF-8 fails with `input must be a valid UTF-8 string`.
+## Main
+
+```lua
+local seen = call('../Sub', { query = 'chain' })
+return seen .. ' | Main:' .. args.query .. ',' .. args.limit
+```
+
+## Sub
+
+```lua
+var.seen = 'Sub:' .. args.query .. ',' .. tostring(args.limit)
+jump('../Peer')
+```
+
+## Peer
+
+```lua
+return var.seen .. ' | Peer:' .. args.query .. ',' .. tostring(args.limit)
+```
+````
+
+Run it with the arguments `{"query":"run"}`:
+
+````text
+Sub:chain,nil | Peer:chain,nil | Main:run,10
+````
+
+`Sub` and `Peer` read the same `chain`, before the jump and after it. Neither reads a `limit`, because the call passed none, and the Engine fills the default of `10` only in the arguments of the run. After the chain ends, `Main` reads its own `run` and `10`.
+
+### Call args errors
+
+The second argument of `call` is a table of named fields, a string, `nil`, or left out. These refusals fail the call at the call site, before the chain starts:
+
+- A list fails with `args must be a table of named fields or a string, got a list`. That covers a list written in place, such as `{ 1, 2 }`, an empty marked list from [`json.array()`](05-lua-environment.md#keeping-empty-lists-with-jsonarray), and a list read from `args`, such as `args.files`. To pass a list, put it in a named field, as in `call('../Sub', { files = args.files })`.
+- A value of any other type fails with `args must be a table of named fields or a string, got {type}`, where `{type}` is the Engine's type name, such as `integer` for `5`, `number` for `1.5`, or `boolean` for `true`.
+- A table that holds a value with no JSON form fails with a message that names the value by its path. `call('../Sub', { f = function() end })` fails with `args: value.f must be JSON data, got function`.
+- A string that is not valid UTF-8 fails with `args must be a valid UTF-8 string`.
+
+An unmarked empty table, a plain `{}`, is the empty object, not a list, so `call('../Sub', {})` starts the chain, and the chain reads an `args` with no fields.
 
 ### The `var` snapshot
 

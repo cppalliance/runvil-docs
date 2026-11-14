@@ -42,7 +42,7 @@ A task runs beside the section that spawned it instead of in its place, and that
 
 Reach for tasks when the work is not one collection run through one worker section. That shape is a [fanout](14-fanout.md#fanout-in-one-call), which runs every member of one collection through one worker section. Tasks fit the rest, such as starting two different sections, `Alpha` and `Beta`, and waiting on both.
 
-Tasks need nothing in the frontmatter and have no command-line flags. The frontmatter keys are `name`, `description`, `runvil`, `max_tool_iterations`, `input`, `output`, `uses`, `args`, and `models`, and none of them is for tasks, so every task feature is a Lua call, an options table, a returned value, or text the model reads.
+Tasks need nothing in the frontmatter and have no command-line flags. The frontmatter keys are `name`, `description`, `runvil`, `max_tool_iterations`, `output`, `uses`, `args`, and `models`, and none of them is for tasks, so every task feature is a Lua call, an options table, a returned value, or text the model reads.
 
 ### The `tasks` namespace
 
@@ -248,12 +248,12 @@ The task enters `Sub`, which logs and has no `return`, then falls through to `Af
 
 ### Seeding a task with spawn options
 
-`tasks.spawn` accepts an options table as its second argument, with three optional keys, `input`, `item`, and `index`. These are the spawn seeds, and they give the task its own starting values:
+`tasks.spawn` accepts an options table as its second argument, with three optional keys, `args`, `item`, and `index`. These are the spawn seeds, and they give the task its own starting values:
 
 ````markdown
 ---
 name: seeded-task
-description: Starts a task with its own input, item, and index.
+description: Starts a task with its own args, item, and index.
 runvil: 0
 ---
 
@@ -261,7 +261,7 @@ runvil: 0
 
 ```lua
 var.k = 1
-local t = tasks.spawn('../Child', { input = 'child args', item = { name = 'alpha' }, index = 7 })
+local t = tasks.spawn('../Child', { args = 'child args', item = { name = 'alpha' }, index = 7 })
 local results = tasks.join({ t })
 return results[1].result
 ```
@@ -269,7 +269,7 @@ return results[1].result
 ## Child
 
 ```lua
-return 'index=' .. tostring(sys.index) .. ' item=' .. item.name .. ' args=' .. args .. ' k=' .. tostring(var.k)
+return 'index=' .. tostring(sys.index) .. ' item=' .. item.name .. ' args=' .. args.text .. ' k=' .. tostring(var.k)
 ```
 ````
 
@@ -277,17 +277,57 @@ return 'index=' .. tostring(sys.index) .. ' item=' .. item.name .. ' args=' .. a
 index=7 item=alpha args=child args k=1
 ````
 
-`Child` reads all three seeds, and it also reads `var.k`, which it gets from the `var` snapshot described below. The options table itself is optional: you can call `tasks.spawn` with a section path alone, such as `tasks.spawn('Gather')`, and a missing `opts` counts as an empty table. Leaving `input`, `item`, or `index` out starts the task without that seed, so `tasks.spawn(target)` alone gives no argument override, no `item`, and no `sys.index`, and it still copies `var`. The target, the `input`, `item`, and `index` seeds, the `var` snapshot, and the model the task starts on are all fixed on the task by the `tasks.spawn` call, before the task first runs.
+`Child` reads all three seeds, and it also reads `var.k`, which it gets from the `var` snapshot described below. The options table itself is optional: you can call `tasks.spawn` with a section path alone, such as `tasks.spawn('Gather')`, and a missing `opts` counts as an empty table. Leaving `args`, `item`, or `index` out starts the task without that seed, so `tasks.spawn(target)` alone gives the task no `args` of its own, no `item`, and no `sys.index`, and it still copies `var`. The target, the `args`, `item`, and `index` seeds, the `var` snapshot, and the model the task starts on are all fixed on the task by the `tasks.spawn` call, before the task first runs.
 
 The options argument is a table. Any other value raises an error of kind `lua` whose message names the type it got, `tasks.spawn opts must be a table, got {type}`, such as `tasks.spawn opts must be a table, got integer`. The error is raised at the call site, so `pcall` around the call catches it and gives `false` as its first value (see [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors)). The table has no key for a model, and [The model a task starts on](#the-model-a-task-starts-on) says which model a task uses.
 
-### Replacing the argument string with `input`
+### Giving a task its own `args`
 
-`input` is a string that replaces the task's argument string, so the task reads it as its [`args`](06-arguments.md#the-argument-string-in-args) global: `input = 'child args'` makes `' args=' .. args` give `args=child args` above. Giving a task its own argument string forks that task's `args` from its owner's, and the task's [`argv`](06-arguments.md#reading-parsed-input-from-argv) is derived again from `input` under the prompt's declaration, exactly as for a `call` with input.
+`args` takes a table of named fields, which becomes the task's [`args`](06-arguments.md#reading-arguments-from-args) global, or a string, which the task reads as `args.text`: `args = 'child args'` makes `' args=' .. args.text` give `args=child args` above. A `call` takes the same two forms as its second argument, with the same meaning (see [`args` in a called chain](08-jump-and-call.md#args-in-a-called-chain)). A task given its own `args` reads them in every section its chain runs.
 
-Without `input`, the task runs under its owner's own argument string, so it inherits the owner's `args` and `argv` whole. Either way, the task's `argv` is read-only, as it is in every section (see [`argv` is read-only](06-arguments.md#argv-is-read-only)).
+Without `args`, the task reads its owner's `args`. This prompt gives one task a table and spawns another with no `args` option:
 
-An `input` of another type fails with `input must be a string, got {type}`, and text that is not valid UTF-8 fails with `input must be a valid UTF-8 string`.
+````markdown
+---
+name: task-args
+description: Spawns one task with its own args and one that reads its owner's.
+runvil: 0
+args:
+  type: object
+  properties:
+    topic: { type: string }
+    depth: { type: string, default: quick }
+  required: [topic]
+---
+
+## Main
+
+```lua
+local own = tasks.spawn('../Child', { args = { topic = 'reefs' } })
+local same = tasks.spawn('../Child')
+local results = tasks.join({ own, same })
+return results[1].result .. '\n' .. results[2].result
+```
+
+## Child
+
+```lua
+return args.topic .. ' ' .. tostring(args.depth)
+```
+````
+
+Run it with the arguments `{"topic":"tides"}`:
+
+````text
+reefs nil
+tides quick
+````
+
+The first task reads the table its spawn gave it, so its `args.topic` is `reefs`. The Engine does not check a spawn's arguments against the prompt's [`args:` declaration](06-arguments.md#declaring-arguments-in-frontmatter), and it fills no defaults in them, so that task's `args.depth` is nil even though the declaration gives `depth` a default. A spawn can also give a field the declaration does not list, as in `{ args = { n = 5 } }`, or leave out `topic`, which the declaration requires, and the Engine starts the task with that table as its `args`. The declaration describes what a caller passes the prompt, not what one section passes another. The second task reads its owner's `args`, which here are the run's arguments, so it reads the `topic` the run started with and the default of `depth`.
+
+`{ args = args }` passes the owner's arguments on, and a table can hold parts of them, as in `{ args = { topic = args.topic } }`. A task's `args` is read-only, whether the spawn gave it or the task reads its owner's, as `args` is in every section (see [`args` is read-only](06-arguments.md#args-is-read-only)).
+
+A table that is a list fails with `args must be a table of named fields or a string, got a list`, which covers `{ 1, 2 }`, `json.array()`, and a list from the owner's `args` such as `args.files`. To pass a list, put it in a named field, as in `{ args = { files = args.files } }`. An empty table `{}` is the empty object, so `args = {}` gives the task an empty `args` instead of its owner's. A value of any other type fails with the same sentence ending in its type name, such as `got integer` for `5` or `got boolean` for `true`. A table that holds a value with no JSON form fails as in `args: value.f must be JSON data, got function`, for a function in its field `f`, and a string that is not valid UTF-8 fails with `args must be a valid UTF-8 string`.
 
 ### Seeding `item`
 
@@ -337,7 +377,7 @@ The `item` and `sys.index` seeds reach only the first section a task enters. A l
 
 ### The `var` snapshot at spawn time
 
-`tasks.spawn` seeds the task with a deep copy of the caller's [`var`](05-lua-environment.md#keeping-state-in-var), taken at the moment of the call and carried as plain JSON data, the same kind of [`var` snapshot](08-jump-and-call.md#call-input-and-var) a `call` takes. `var` is not an option you pass. The task and its owner never share one `var` table, and the task's changes to `var` are discarded when the task ends:
+`tasks.spawn` seeds the task with a deep copy of the caller's [`var`](05-lua-environment.md#keeping-state-in-var), taken at the moment of the call and carried as plain JSON data, the same kind of [`var` snapshot](08-jump-and-call.md#call-args-and-var) a `call` takes. `var` is not an option you pass. The task and its owner never share one `var` table, and the task's changes to `var` are discarded when the task ends:
 
 ````markdown
 ---
@@ -946,10 +986,10 @@ While a task waits on its inbox, `tasks.status(t).blocked` reads `inbox`, and th
 
 `tasks.reply(value)` hands `value` to the task's owner as the task's latest result, then waits on the task's inbox and returns the owner's next message, as `tasks.receive()` does. The owner takes the reply the way it takes a finished task's result, with `tasks.join_any` or `tasks.join`, so `ok` is `true` and the result is the reply's text. The task keeps its section entry while it waits, its locals and its `messages` list included, so a task that holds a conversation keeps it across follow-ups.
 
-A task can loop on its conversation and answer each message with the model's reply. Spawned with its first question as its `input`, a task that runs this block holds one conversation across every follow-up:
+A task can loop on its conversation and answer each message with the model's reply. Spawned with its first question as its `args`, a string the task reads as `args.text`, a task that runs this block holds one conversation across every follow-up:
 
 ````lua
-messages:user(args)
+messages:user(args.text)
 while true do
   models.loop()
   messages:user(tasks.reply(messages[#messages].content))
@@ -2245,9 +2285,9 @@ Every started task records exactly one start event and exactly one terminal even
 
 ### The `TaskStarted` event
 
-Spawning a section reports a `TaskStarted` event under the spawning section that names the task id, the target section's name, and the spawn seeds (see [Starting a task with `tasks.spawn`](#starting-a-task-with-tasksspawn)). With no options, `input`, `item`, and `index` are absent, while `var` is still a copy of the spawner's `var`.
+Spawning a section reports a `TaskStarted` event under the spawning section that names the task id, the target section's name, and the spawn seeds (see [Starting a task with `tasks.spawn`](#starting-a-task-with-tasksspawn)). With no options, `args`, `item`, and `index` are `null`, while `var` is still a copy of the spawner's `var`.
 
-The event includes the execution, the section, the provenance, the task id, the target, the spawn `input`, the `item`, the `index`, and a copy of `var`. Those last four are the seeds the task sees: the `input` string, the `item` value, the `index`, and a snapshot of `var`.
+The event includes the execution, the section, the provenance, the task id, the target, the spawn `args`, the `item`, the `index`, and a copy of `var`. Those last four are the seeds the task sees: the `args` object, the `item` value, the `index`, and a snapshot of `var`. The `args` field holds the JSON object the spawn gave the task: a table of named fields as that object, a string as `{"text":"..."}`, and `null` when the spawn gave none and the task reads its owner's `args`.
 
 A task's start event fires when the task gets a concurrency slot and first runs, not when it is spawned:
 
@@ -2256,7 +2296,7 @@ A task's start event fires when the task gets a concurrency slot and first runs,
 - Fanout arms still queued for a slot when they are canceled never report a start, while each arm that gets a slot within the concurrency window reports a start event when it begins (see [Arms as tasks, ids, and events](14-fanout.md#arms-as-tasks-ids-and-events)).
 - A task canceled before it ever starts reports neither a start event nor a terminal event, though its state still becomes canceled.
 
-The start event, reported when the task first runs, names the spawn's `input` and the section that called `tasks.spawn`, captured at spawn time. A task spawned in `Main` still reports `Main` even when the spawner calls `jump('../Next')` before the task first runs (see [Jumping to a section](08-jump-and-call.md#jumping-to-a-section)). The event appears in the spawner's own event sequence and names the section the task was spawned from, even when the spawner has moved on to another section by the time the task starts.
+The start event, reported when the task first runs, names the spawn's `args` and the section that called `tasks.spawn`, captured at spawn time. A task spawned in `Main` still reports `Main` even when the spawner calls `jump('../Next')` before the task first runs (see [Jumping to a section](08-jump-and-call.md#jumping-to-a-section)). The event appears in the spawner's own event sequence and names the section the task was spawned from, even when the spawner has moved on to another section by the time the task starts.
 
 ### Terminal task events
 
@@ -2293,7 +2333,7 @@ Argument checks made by the `tasks` functions themselves give messages that star
 What each function takes, and the `lua` error message it raises for anything else:
 
 - The `tasks.spawn` target must be a string, the same rule `call` applies to its target (see [Calling a section](08-jump-and-call.md#calling-a-section)), and any other type raises the byte-identical error `call` raises, `section target must be a string, got {type}`, such as `section target must be a string, got integer`.
-- `tasks.spawn` takes a string `opts.input`, JSON data in `opts.item`, and a Lua integer of 0 or more in `opts.index`. Otherwise the call raises an error naming the field: `input must be a string, got {type}`, `item must be JSON data, got {type}`, or `index must be a non-negative integer, got {index}` for an integer below 0, while an `index` of another type, floats included, ends in its type name, such as `got number`.
+- `tasks.spawn` takes a table of named fields or a string in `opts.args`, JSON data in `opts.item`, and a Lua integer of 0 or more in `opts.index`. Otherwise the call raises an error naming the field: `args must be a table of named fields or a string, got {type}`, `item must be JSON data, got {type}`, or `index must be a non-negative integer, got {index}` for an integer below 0, while an `index` of another type, floats included, ends in its type name, such as `got number`. The `args` message ends in `got a list` for a table that is a list, such as `{ 1, 2 }`, and in the type name for a number or a boolean, as in `got integer` for `5`, `got number` for `1.5`, and `got boolean` for `true`. A table in `args` that holds a value with no JSON form raises an error that names the value's place, such as `args: value.f must be JSON data, got function` for a function in the field `f`.
 - Every call that names a task, `tasks.join_any`, `tasks.join`, `tasks.ready`, `tasks.status`, `tasks.send`, and `tasks.cancel`, takes a task handle or a task id string such as `0.1`. Any other value raises `{call} expects a Task handle or task id, got {type}`, and a string that is not a dot-separated id raises an error whose refusal starts `` `{text}` is not a task id such as `0.1`: ``.
 - `tasks.join_any` and `tasks.join` take a non-empty table of tasks and an optional `opts` table whose `timeout` is a non-negative finite number of seconds. Otherwise they raise one of these before any wait starts: `{call} expects a set of tasks, got {type}`, `{call} requires at least one task`, `{call} opts must be a table, got {type}`, `{call} timeout must be a number, got {type}`, or `timeout must be a non-negative finite number of seconds, got {seconds}`.
 - `tasks.pending` takes no arguments, and any argument other than `nil` raises `tasks.pending takes no arguments, got {type}`, such as `tasks.pending takes no arguments, got table`.

@@ -442,7 +442,7 @@ uses:
 invalid frontmatter: Pack id web is declared more than once under uses
 ````
 
-A frontmatter key or value the prompt contract rejects fails with `Frontmatter` and that key's own message, with the line and column. That covers an unknown entry field, a bad arg name, type, or default, a malformed `uses:` entry, a `models:` key that is not one of the five [model roles](10-models.md#declaring-roles-under-models), an unknown field in a role declaration, a non-boolean `thinking`, a zero `min_context`, and an out-of-range `max_tool_iterations`. A role name outside the five gives a message that contains ``expected one of `default`, `strong`, `small`, `fast`, `creative` ``, and an unknown field in a role declaration, such as `tier`, gives one that contains ``unknown field `tier`, expected `min_context` or `thinking` ``.
+A frontmatter key or value the prompt contract rejects fails with `Frontmatter` and that key's own message, with the line and column. That covers an unknown keyword in the `args:` declaration, a bad argument name, type, or default (see [Declaration errors](06-arguments.md#declaration-errors)), a malformed `uses:` entry, a `models:` key that is not one of the five [model roles](10-models.md#declaring-roles-under-models), an unknown field in a role declaration, a non-boolean `thinking`, a zero `min_context`, and an out-of-range `max_tool_iterations`. A role name outside the five gives a message that contains ``expected one of `default`, `strong`, `small`, `fast`, `creative` ``, and an unknown field in a role declaration, such as `tier`, gives one that contains ``unknown field `tier`, expected `min_context` or `thinking` ``.
 
 A file whose frontmatter has no `runvil:` key still parses, but running it fails before any section runs, with code `structure_invalid` and a message that ends with the prompt's name:
 
@@ -657,9 +657,9 @@ A run error has an optional location of its own, and a failed run's message is t
 
 A failure with no location ends with its own text. A Lua runtime failure's text already names its place: it starts with a `{block}:{line}:` tag, where `{block}` is the block's location label, such as ``section `S` prologue`` (see [How errors name each block](03-blocks-and-prose.md#how-errors-name-each-block)), and a stack traceback follows it. The ` (at {file}:{line})` suffix comes after the traceback.
 
-These forms hold for every failed run, a parse failure that the Harness finds before the run starts included, so that failure ends with its location form just like a parse failure that the run's first step finds. A Lua compile failure, code `lua_compile`, ends with ` (at {file}:{line})` on the line its diagnostic names, and the `dup` prompt's repeated heading ends with ` (prompt dup, line 11, column 1)`. The parse error's own location fields stay beside the message as well, for a Host such as Workshop to read (see [Location fields](#location-fields)). A model lookup failure, an input staging failure, or a `stalled` run has no location, so its message is its own text.
+These forms hold for every failed run, a parse failure that the Harness finds before the run starts included, so that failure ends with its location form just like a parse failure that the run's first step finds. A Lua compile failure, code `lua_compile`, ends with ` (at {file}:{line})` on the line its diagnostic names, and the `dup` prompt's repeated heading ends with ` (prompt dup, line 11, column 1)`. The parse error's own location fields stay beside the message as well, for a Host such as Workshop to read (see [Location fields](#location-fields)). A model lookup failure, an `args_invalid` failure, or a `stalled` run has no location, so its message is its own text.
 
-The run's own first step finds a few failures of its own. A missing `runvil:` key fails with `structure_invalid`, with the prompt's name but no line, so the `version-zero` prompt without its `runvil:` line fails with `not a runvil prompt: no runvil version (prompt version-zero)` (see [A missing version](02-file-structure.md#a-missing-version)). An unsupported `runvil:` version fails with `unsupported_version` and ends with ` (at {file}:{line})` on the `runvil:` line, as `future` shows in [Run error codes](#run-error-codes), and a requirements refusal ends the same way when it is located (see [The requirements notice](04-how-a-prompt-runs.md#the-requirements-notice)).
+The run's own first step finds a few failures of its own. A missing `runvil:` key fails with `structure_invalid`, with the prompt's name but no line, so the `version-zero` prompt without its `runvil:` line fails with `not a runvil prompt: no runvil version (prompt version-zero)` (see [A missing version](02-file-structure.md#a-missing-version)). An unsupported `runvil:` version fails with `unsupported_version` and ends with ` (at {file}:{line})` on the `runvil:` line, as `future` shows in [Run error codes](#run-error-codes), and a requirements refusal ends the same way when it is located (see [The requirements notice](04-how-a-prompt-runs.md#the-requirements-notice)). A run whose arguments are not a JSON object, or do not match the prompt's `args:` declaration, fails with `args_invalid` and has no location, because the arguments come from the caller, whoever starts the run, so no line of the prompt is at fault (see [Run codes](#run-codes)).
 
 Each located failure points at one line:
 
@@ -836,8 +836,8 @@ Every code also has a number, and the number's hundreds place the code in one of
 | Task codes (3xx) | `tasks_live`, `task_not_owned`, `task_consumed`, `task_canceled` | a chain ends with tasks still running and not idle, reaches for a task it does not own, or waits on a result twice, or a canceled task's error value is raised again |
 | Model codes (4xx) | `context_overflow`, `rate_limited`, `quota_exhausted`, `overloaded`, `refused`, `timeout`, `transport`, `server_error`, `rejected`, `malformed_response`, `empty_reply`, `unavailable`, `invalid_parts`, `context_exhausted`, `model_required` | a model call fails or gets an empty reply, the Harness cannot fetch the Host's list of models, a request overflows the model's context window and compaction does not make it fit, or a model round runs when the Host gave no model |
 | Tool codes (5xx) | `tool_invalid_arguments`, `tool_backend`, `tool_transport`, `tool_other`, `out_of_scope_tool`, `unbound_tool`, `model_only_tool`, `tool_loop_exhausted`, `tool_schema_invalid`, `tool_sets_invalid` | a tool fails, is out of scope or unknown, a script calls a model-only tool, the tool-call loop reaches its round cap, or a section entry's first loop round cannot freeze its tool sets |
-| Store codes (6xx) | `not_found`, `already_exists`, `not_a_directory`, `is_a_directory`, `directory_not_empty`, `not_utf8`, `invalid_path`, `invalid_range`, `anchor`, `permission_denied`, `approval_required`, `scope_ended`, `read_only`, `outside_root`, `root_protected`, `no_store`, `cross_mount`, `io`, `unsupported`, `conflict`, `backend`, `determinism` | a `store` operation fails uncaught, the run declares no store, the store backend fails as the run starts, the store refuses to stage the input file, or a store call meets a claims conflict |
-| Run codes (7xx) | `requirements_unmet`, `canceled`, `internal`, `stalled` | the environment falls short of what the prompt needs, the run is canceled, an Engine invariant breaks, or no chain can move |
+| Store codes (6xx) | `not_found`, `already_exists`, `not_a_directory`, `is_a_directory`, `directory_not_empty`, `not_utf8`, `invalid_path`, `invalid_range`, `anchor`, `permission_denied`, `approval_required`, `scope_ended`, `read_only`, `outside_root`, `root_protected`, `no_store`, `cross_mount`, `io`, `unsupported`, `conflict`, `backend`, `determinism` | a `store` operation fails uncaught, the run declares no store, the store backend fails as the run starts, or a store call meets a claims conflict |
+| Run codes (7xx) | `requirements_unmet`, `canceled`, `internal`, `stalled`, `args_invalid` | the environment falls short of what the prompt needs, the run is canceled, an Engine invariant breaks, no chain can move, or the run's arguments are not a JSON object or do not match the prompt's `args:` declaration |
 | Caller codes (8xx) | `recorder_failed`, `plugin_load_failed`, `no_output` | the code around a run fails, such as a recorder that refuses a write; a caller code never ends a run |
 
 A failed `{{ }}` substitution is an ordinary Lua error that `pcall` can catch, and it ends the run with `substitution` when uncaught. A cancel ends the run with `canceled`, a run code, yet a canceled run is not a failed run, and Workshop's run log records it as `canceled`, not `failed`.
@@ -848,9 +848,9 @@ A failed run's message is its error's located message: the underlying error's ow
 
 ### Parse codes
 
-A prompt that fails to parse fails before any run starts, so before any section or code runs, before input staging, and before the wait for Packs, and its parse error kind decides the code. `Frontmatter` is `frontmatter_invalid`, `Structure` is `structure_invalid`, and `Fence` is `fence_invalid`. A `Lua` parse failure, a block that does not compile, is `lua_compile`, a Lua code (see [Lua codes](#lua-codes)), and an `Internal` parser fault is `internal`, a run code. The failure message is the parse error followed by its chain of causes, then its location form, as [Where a run error's message points](#where-a-run-errors-message-points) describes.
+A prompt that fails to parse fails before any run starts, so before any section or code runs and before the wait for Packs, and its parse error kind decides the code. `Frontmatter` is `frontmatter_invalid`, `Structure` is `structure_invalid`, and `Fence` is `fence_invalid`. A `Lua` parse failure, a block that does not compile, is `lua_compile`, a Lua code (see [Lua codes](#lua-codes)), and an `Internal` parser fault is `internal`, a run code. The failure message is the parse error followed by its chain of causes, then its location form, as [Where a run error's message points](#where-a-run-errors-message-points) describes.
 
-A file with no `runvil:` key also fails with `structure_invalid`, but its prompt parses: the version check is the first start check on the run's first step, after input staging and the wait for Packs and before the store and requirements checks. So an input refusal comes first when one applies, and either way the run's record holds no events. The message is `not a runvil prompt: no runvil version (prompt {name})`, which ends with the prompt's frontmatter `name`.
+A file with no `runvil:` key also fails with `structure_invalid`, but its prompt parses: the version check is the first start check on the run's first step, after the wait for Packs and before the argument, store, and requirements checks. The run's record holds no events. The message is `not a runvil prompt: no runvil version (prompt {name})`, which ends with the prompt's frontmatter `name`.
 
 A run fails with `unsupported_version` when the prompt's [`runvil:` key](02-file-structure.md#the-runvil-version-key) declares a major version other than `0`, and the message is `unsupported runvil version: {n} (this build supports major 0)` followed by ` (at {file}:{line})`, the line of the `runvil:` key, as `future` shows.
 
@@ -931,13 +931,13 @@ tool "{name}" ({id}) is model-only: a render shapes its arguments for the model 
 
 ### Store codes
 
-A run fails with a store code when a `store` operation fails and goes uncaught, and the code names how it failed, such as `not_found` or `read_only` (see [When a store call fails](09-the-store.md#when-a-store-call-fails)). A run that declares no store to operate on fails with `no_store`. A store backend that fails as the run starts also ends the run with its store code, even when the prompt never calls `store` (see [Host stores, policies, and modes](09-the-store.md#host-stores-policies-and-modes)), and so does a store that refuses to stage the declared input file before the run starts. An uncaught `store.read('missing.txt')` fails the run with `not_found` and a message that includes `file not found in store: missing.txt`, and a store operation in a run that declares no store fails with `no_store` and a message that includes `this run declares no store, so no store operation can run`.
+A run fails with a store code when a `store` operation fails and goes uncaught, and the code names how it failed, such as `not_found` or `read_only` (see [When a store call fails](09-the-store.md#when-a-store-call-fails)). A run that declares no store to operate on fails with `no_store`. A store backend that fails as the run starts also ends the run with its store code, even when the prompt never calls `store` (see [Host stores, policies, and modes](09-the-store.md#host-stores-policies-and-modes)). An uncaught `store.read('missing.txt')` fails the run with `not_found` and a message that includes `file not found in store: missing.txt`, and a store operation in a run that declares no store fails with `no_store` and a message that includes `this run declares no store, so no store operation can run`.
 
 A store call that meets a claims conflict fails the run with `determinism` (see [Races, claims, and determinism](09-the-store.md#races-claims-and-determinism)), and its message starts with `store determinism violation: `. Unlike other store failures, any claims conflict ends the run on the spot, so no `pcall` can catch it, not even a `pcall` a library runs while it loads, and no task or arm counts as failed.
 
 ### Run codes
 
-A run fails with `requirements_unmet` when the environment falls short of what the prompt needs: a required Pack is missing or unavailable, the model that fills a role fails a [requirement the prompt declared](10-models.md#what-the-run-checks) for it, a `min_context` or a `thinking` setting, the Host gave a role map that holds models but has no `default` entry, or a tool in the run's catalog or a Pack in its roster has a Pack id the Engine reserves, `adhoc` or `dynamic`. Before the run starts, the Harness also ends a run with `requirements_unmet` when the launch input does not match the prompt's `input:` declaration, or when the Host's selected model is missing from its list of models. These start checks are the whole of `requirements_unmet`: a check that a section's own Lua makes, and fails with `error` or `assert`, ends the run with `lua_runtime`, as any uncaught Lua error does (see [Lua codes](#lua-codes)).
+A run fails with `requirements_unmet` when the environment falls short of what the prompt needs: a required Pack is missing or unavailable, the model that fills a role fails a [requirement the prompt declared](10-models.md#what-the-run-checks) for it, a `min_context` or a `thinking` setting, the Host gave a role map that holds models but has no `default` entry, or a tool in the run's catalog or a Pack in its roster has a Pack id the Engine reserves, `adhoc` or `dynamic`. Before the run starts, the Harness also ends a run with `requirements_unmet` when the Host's selected model is missing from its list of models. These start checks are the whole of `requirements_unmet`: a check that a section's own Lua makes, and fails with `error` or `assert`, ends the run with `lua_runtime`, as any uncaught Lua error does (see [Lua codes](#lua-codes)).
 
 The message of a refused run starts with `the environment cannot satisfy this prompt:` and adds one line for each gap. Pack lines come first, then the model lines in role order (`default`, `strong`, `small`, `fast`, `creative`), and for one role the context line comes before the thinking line. When a gap is one the prompt caused, the message ends with ` (at {file}:{line})` after its last line, naming the `uses:` line when a declared Pack is missing or unavailable, and otherwise the `models:` line of a declared role requirement that falls short. A model requirement that the filling model fails reads like one of these, and the thinking line names the required setting, `thinking: true` or `thinking: false`, and the model's thinking capability, `Never` or `Always`:
 
@@ -956,6 +956,46 @@ A role map that holds models but has no `default` entry gives one model line and
 That gap is the caller's, as a reserved Pack id is, so a refusal made only of the caller's gaps points at no line.
 
 [How the Host fills and checks roles](10-models.md#how-the-host-fills-and-checks-roles) covers each check. The run is refused at its first step, before any section runs.
+
+A run fails with `args_invalid` when its arguments are not a JSON object, or do not match the prompt's `args:` declaration. The arguments of a run are one JSON object, which the caller passes as text when it starts the run, and the frontmatter key `args:` declares the shape of that object (see [Declaring arguments in frontmatter](06-arguments.md#declaring-arguments-in-frontmatter)). This prompt declares two arguments and requires `query`:
+
+````markdown
+---
+name: lookup
+description: Looks up papers that match a query.
+runvil: 0
+args:
+  type: object
+  properties:
+    query: { type: string }
+    limit: { type: integer, default: 10 }
+  required: [query]
+---
+
+## Search
+
+```lua
+return 'looking up ' .. args.query .. ', at most ' .. args.limit
+```
+````
+
+Run it with the arguments `{"limit":5}`, which leave out `query`. The run fails with code `args_invalid` and this message:
+
+````text
+argument `query` is required
+````
+
+The message names the argument at fault and what the declaration requires of it, and nothing follows it. An `args_invalid` failure has no file and no line, because the arguments come from the caller and no line of the prompt is at fault. The argument check is the second start check on the run's first step, after the version check and before the store and requirements checks. So the run is refused before any section runs: no Lua has run, nothing in the prompt can catch the failure, and the run's record holds no events.
+
+The check reports the first mismatch only, and it looks in a fixed order: text that is not JSON, then JSON that is not an object, then each object's declared fields in name order, then its undeclared fields in name order. Each of these runs of `lookup` fails with one message:
+
+- The argument text `papers` is not JSON, and the message is `the arguments are not valid JSON: expected value at line 1 column 1`, where the text after the colon is the JSON parser's own reason.
+- The argument text `["papers"]` is JSON but not an object, and the message is `the arguments must be a JSON object, got array`.
+- The arguments `{"limit":"five"}` have two mismatches, a `limit` that is not an integer and a missing `query`, and the message is only ``argument `limit` must be an integer, got string``, because `limit` comes before `query` in name order.
+
+A prompt with no `args:` key takes one optional string named `text` (see [Prompts with no `args:` key](06-arguments.md#prompts-with-no-args-key)), so the check holds for it too. The `steady` prompt at the start of this chapter, run with the arguments `{"query":"papers"}`, fails with ``argument `query` is not declared; the declared arguments are `text` ``.
+
+[Argument errors](06-arguments.md#argument-errors) lists every message an argument failure gives.
 
 A run ends with `canceled` when the Host cancels it, or when the canceled error from a stop goes uncaught. A canceled run is not a failed run, and Workshop reports it as `the agent run was canceled` (see [Canceled runs and runs that end before they start](#canceled-runs-and-runs-that-end-before-they-start) and [Cancellation and stops](#cancellation-and-stops)).
 
@@ -979,7 +1019,7 @@ A caller code never ends a run. `Harness::run` hands the Host the run's result, 
 
 A run the Host cancels ends with the canceled error, whose code is `canceled`, rather than as a failed run, and Workshop's run log records its status as `canceled`, not `failed`. That holds even for a cancel that comes before the run starts or while the Harness looks up the model.
 
-A frontmatter parse failure ends the run with `frontmatter_invalid`, and a parse failure in the prompt body ends it with its own code, such as `structure_invalid` or `fence_invalid`. A run that ends before it starts (see [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run)) ends with a model code when the Harness cannot fetch the Host's list of models, `requirements_unmet` when that list does not hold the selected model, the code of its parse failure, such as `structure_invalid` or `lua_compile`, when the prompt does not parse, `requirements_unmet` when the launch input does not match the prompt's `input:` declaration, or a store code when the store refuses to stage the input. Its message is the full chain of causes, followed by its location form when it has one: a parse failure ends with its location form, while a model lookup failure or an input staging failure has no location, so its message is its own text.
+A frontmatter parse failure ends the run with `frontmatter_invalid`, and a parse failure in the prompt body ends it with its own code, such as `structure_invalid` or `fence_invalid`. A run that ends before it starts (see [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run)) ends with a model code when the Harness cannot fetch the Host's list of models, `requirements_unmet` when that list does not hold the selected model, or the code of its parse failure, such as `structure_invalid` or `lua_compile`, when the prompt does not parse. Its message is the full chain of causes, followed by its location form when it has one: a parse failure ends with its location form, while a model lookup failure has no location, so its message is its own text.
 
 Each of these codes belongs to one of the eight code families, and the Harness adds no code of its own.
 
@@ -1308,6 +1348,7 @@ Every failure other than a transient model call failure is never retryable, and 
 - a required model that is missing
 - an unsupported version
 - unmet requirements
+- arguments that do not match what the prompt declares
 - tool failures
 - internal failures
 - a spent Lua quota

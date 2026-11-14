@@ -392,6 +392,8 @@ return item
 m1025
 ````
 
+A list read from [`args`](06-arguments.md#reading-arguments-from-args) or from `var` is a collection like any list: in a prompt that declares `files` as an array of strings, run with the arguments `{"files":["a.md","b.md"]}`, `tasks.fanout('Worker', args.files)` runs one arm for each item, so a worker section that returns `item .. '-done'` yields `a.md-done` and `b.md-done`, and after `var.files = args.files`, `tasks.fanout('Worker', var.files)` yields the same two texts.
+
 ### What a member can be
 
 A member can be a string, a number, a boolean, or a nested table. One collection can mix all four in the same list, and each array-part member reaches its arm as `item` with the same value and its own type:
@@ -588,7 +590,7 @@ In the arm for `alpha`, the prose `Reply about {{ item }}.` becomes `Reply about
 
 ### Where `item` and `sys.index` exist
 
-The `item` global exists only in the first section an arm or a spawned task enters with an item. For an arm, that is its worker section. For a task, it is the target of a [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) given an `item` option, so after `tasks.spawn('../Child', { input = 'child args', item = { name = 'alpha' }, index = 7 })` the child reads `item.name` as `alpha`. After a `jump` from the worker section, the next section, such as `Child`, passes `assert(item == nil)`.
+The `item` global exists only in the first section an arm or a spawned task enters with an item. For an arm, that is its worker section. For a task, it is the target of a [`tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) given an `item` option, so after `tasks.spawn('../Child', { args = 'child args', item = { name = 'alpha' }, index = 7 })` the child reads `item.name` as `alpha`. After a `jump` from the worker section, the next section, such as `Child`, passes `assert(item == nil)`.
 
 A section the normal walk reaches has no `item` global, so `item` there is nil and `assert(item == nil)` passes. The main walk and a chain started with `call` have neither `item` nor `sys.index`, even when the `call` is made from inside an arm, so a `Sub` that an arm reaches with `call('../Sub')` passes `assert(item == nil)`.
 
@@ -623,13 +625,13 @@ not an arm: careful.md:10: unknown sys field 'index'. The Lua code failed at run
 
 Each arm starts from its own fresh copy of the caller's `var` as it stood when `tasks.fanout` was called, so it reads every entry the caller had, including values set in the preamble. In `arm-view`, the preamble sets `var.from_preamble = 'seeded'`, and every arm passes `assert(var.from_preamble == 'seeded')`.
 
-The snapshot is copied out as plain data, the same way a `call` gets a copy of the caller's `var` (see [Call input and `var`](08-jump-and-call.md#call-input-and-var)), so an arm whose caller has an empty `var` starts with an empty `var`. One snapshot, taken when `tasks.fanout` is called, serves every arm, so all arms of one fanout start from the same `var`. The caller cannot change `var` in between, because it is paused inside the `tasks.fanout` call.
+The snapshot is copied out as plain data, the same way a `call` gets a copy of the caller's `var` (see [Call args and `var`](08-jump-and-call.md#call-args-and-var)), so an arm whose caller has an empty `var` starts with an empty `var`. One snapshot, taken when `tasks.fanout` is called, serves every arm, so all arms of one fanout start from the same `var`. The caller cannot change `var` in between, because it is paused inside the `tasks.fanout` call.
 
 An arm can write to its own copy of `var` without error, so `var[item] = true` runs in each arm of `arm-view` and the arm still returns its text. The copy is deep, so an arm's writes never reach its sibling arms or the caller, and the arm's changes are discarded when the arm ends. Each arm passes `assert(var[sibling] == nil)`, the caller still passes `assert(var.alpha == nil and var.beta == nil)` once `tasks.fanout` returns, and `tasks.fanout` hands back only the result list. To get data out of an arm, return it, as [Returning, jumping, and nesting inside an arm](#returning-jumping-and-nesting-inside-an-arm) shows.
 
-### `args`, `argv`, and call input in an arm
+### `args` in an arm
 
-A fanout arm starts with no call input of its own (see [Call input and `var`](08-jump-and-call.md#call-input-and-var)). Every arm reads [`args`](06-arguments.md#the-argument-string-in-args) too, because it runs under its caller's `args`. Every arm also inherits its caller's read-only [`argv`](06-arguments.md#reading-parsed-input-from-argv), the same way a `call` without an argument string does.
+A fanout arm reads its caller's [`args`](06-arguments.md#reading-arguments-from-args), the same read-only table the caller reads (see [`args` is read-only](06-arguments.md#args-is-read-only)), the way a chain started by a `call` with no second argument does. `tasks.fanout` hands an arm no arguments of its own, and the member the arm runs for is `item`. So in a prompt with [no `args:` key](06-arguments.md#prompts-with-no-args-key), run with the arguments `{"text":"hello"}`, a worker section that returns `args.text .. ':' .. item` over `{'alpha', 'beta'}` gives `hello:alpha` and `hello:beta`. A `call` made inside an arm can give the called chain its own arguments, as anywhere (see [Call args and `var`](08-jump-and-call.md#call-args-and-var)).
 
 ### Models, tools, and libraries in an arm
 
@@ -1131,9 +1133,9 @@ sealed:alpha-1:2
 
 Assigning `r[1].text = 'forged'` raises a Lua error reported at the assigning line, with a message containing `tasks.fanout results are read-only`, and `pcall` catches it. A result cannot be written through raw table access either, because the sandbox removes `rawset` from the globals before your code runs.
 
-`getmetatable` on a result returns a decoy table that holds only a `__tostring` function and no `__index` or `__newindex`, so the result's hidden fields cannot be reached or changed through it. `setmetatable` on a result raises an error instead of replacing its protection: `setmetatable(r[1], nil)` fails with a message containing `protected metatable`, and `setmetatable(r[1], {})` fails too. A result keeps its original fields and its `tostring` text after refused writes and refused metatable changes, and rebinding base globals such as `setmetatable` in your own code does not change how `tasks.fanout` builds its results.
+`getmetatable` on a result returns a decoy table that holds only a `__tostring` function and no `__index` or `__newindex`, so the result's fields cannot be reached or changed through it. `setmetatable` on a result raises an error instead of replacing its protection: `setmetatable(r[1], nil)` fails with a message containing `protected metatable`, and `setmetatable(r[1], {})` fails too. A result keeps its original fields and its `tostring` text after refused writes and refused metatable changes, and rebinding base globals such as `setmetatable` in your own code does not change how `tasks.fanout` builds its results.
 
-Iterating a result with `pairs` visits no fields, because the result is an empty table whose fields sit in a hidden `__index` table, so you read result fields by name.
+Iterating a result with `pairs` visits its four fields in sorted key order, `exhausted`, `item`, `ok`, and `text`, and `next` steps through the same four. A result has no numbered entries, so `#r[1]` is 0 and `ipairs(r[1])` visits nothing.
 
 The list `tasks.fanout` returns is an ordinary Lua table, so you can sort it, append to it, or replace its entries, while the result objects inside it stay read-only. In `sealed-results`, `r[#r + 1] = 'extra'` appends a string to the list, so `#r` becomes 2.
 
@@ -1266,10 +1268,10 @@ In the main walk, the limit starts at the run's concurrency limit, and lowering 
 
 ### When `tasks.concurrency` refuses a limit
 
-An argument that is not a positive whole number fails at the call site with an error value of kind `lua` whose message, `tasks.concurrency limit must be a positive whole number, got {type}`, names only the value's type, not the value. This matters when the limit comes from data, such as a number parsed from the argument string. Passing `nil` is the same as passing no argument and only reads the limit, so this block turns an argument string that is not a number into `0`, which is refused:
+An argument that is not a positive whole number fails at the call site with an error value of kind `lua` whose message, `tasks.concurrency limit must be a positive whole number, got {type}`, names only the value's type, not the value. This matters when the limit comes from data, such as a number parsed from [`args.text`](06-arguments.md#prompts-with-no-args-key), the one optional string a prompt with no `args:` key takes. Passing `nil` is the same as passing no argument and only reads the limit, so this block turns a text that is missing or is not a number into `0`, which is refused:
 
 ````lua
-local ok, err = pcall(tasks.concurrency, tonumber(args) or 0)
+local ok, err = pcall(tasks.concurrency, tonumber(args.text) or 0)
 if not ok then
   assert(err.kind == 'lua')
   assert(tostring(err):find('positive whole number', 1, true))

@@ -1112,7 +1112,7 @@ tools.call: "web_fetch" is not a tool id
 
 ### Passing arguments to a tool
 
-The second argument is a plain Lua table, and it reaches the tool as a JSON object with the same keys and values. So `{ url = 'https://www.lua.org/' }` arrives as `{ "url": "https://www.lua.org/" }`, which matches the parameter schema of `web/fetch`, whose one required property is the string `url`.
+The second argument is a plain Lua table, and it reaches the tool as a JSON object with the same keys and values. So `{ url = 'https://www.lua.org/' }` arrives as `{ "url": "https://www.lua.org/" }`, which matches the parameter schema of `web/fetch`, whose one required property is the string `url`. A table you read from `var` or from the global `args`, which holds the run's arguments (see [Reading arguments from `args`](06-arguments.md#reading-arguments-from-args)), works as the second argument too, and the tool receives its data.
 
 Omitting `args`, or passing `nil`, sends the tool the empty JSON object `{}`, the empty-argument call every tool accepts, and passing an empty table, as in `tools.call(none, {})` with `none` holding the Tool object of an adhoc tool that takes no arguments, also calls a tool with no arguments. An empty table nested inside the arguments is sent as `{}` too, so an empty list needs `json.array()` to reach the tool as `[]`, as in `{ include_domains = json.array() }` (see [Encoding and decoding JSON with `json`](05-lua-environment.md#encoding-and-decoding-json-with-json)). You call a tool that takes no arguments, one whose parameter schema lists no properties, by passing only the tool, as in `tools.call(none)` or `tools.call('adhoc/none')`, where the adhoc tool `none` leaves out its `parameters` (see [Describing parameters](#describing-parameters)).
 
@@ -1811,7 +1811,7 @@ return messages[3].content .. '|' .. messages[3].tool_call_id
 ```
 ````
 
-When the model calls `grab` as `call_1` with the arguments `{"value":"x"}` and then replies with text, the run result is:
+When the model calls `grab` as `call_1` with `{"value":"x"}` and then replies with text, the run result is:
 
 ````text
 grabbed x|call_1
@@ -1824,6 +1824,8 @@ grabbed x|call_1
 A handler receives exactly one argument: a table holding the call's arguments under their argument names. The table is built fresh from the call's JSON arguments on every call, whether the model or a block made the call. For a model call the JSON is the model's arguments object, so `{"value":"hi"}` reads as `args.value`. For a script call, the table you pass to `tools.call` is turned into JSON first and a new table is built from that JSON, so your own table never reaches the handler.
 
 The argument names are the ones the tool's parameter schema declares. The `decide` tool from [An adhoc tool as a decision channel](#an-adhoc-tool-as-a-decision-channel), defined with the parameters `{ choice = 'string' }`, reads its argument as `args.choice`, so a model call with `{"choice":"use_mcp"}` gives `args.choice` the value `use_mcp`, and the model's call gets the handler's result `recorded`.
+
+Inside a handler written `function(args)`, the name `args` is that tool call's arguments, because a Lua parameter hides the global of the same name, which holds the run's arguments (see [Reading arguments from `args`](06-arguments.md#reading-arguments-from-args)). A handler that also needs the run's arguments gives its parameter another name, as in `function(params)`, or the block copies what it needs from the run's `args` into a local before it defines the handler.
 
 ### Where a handler runs
 
@@ -2664,11 +2666,12 @@ A prelude global that is not a table, such as a number, a string, or a function,
 
 A prelude global that is a table installs as a read-only proxy sealed at its top level. Your code still reads its fields and calls its functions through that proxy as usual, which is how `ticket-helper` calls `tickets.open` on the `issue-tracker` prelude's `tickets` table.
 
-The seal shows in three ways:
+The seal shows in two ways:
 
 - The table's metatable is protected. `getmetatable(tickets)` returns the string `tickets is sealed`, of the form `{name} is sealed`, instead of the real metatable, and `setmetatable` on it fails.
-- `pairs` over a sealed table yields no entries, because the installed value is an empty proxy, so your code cannot list its fields. After `local n = 0` and `for _ in pairs(tickets) do n = n + 1 end`, `n` is still `0`.
 - Assigning any field raises a read-only error, so `tickets.open = nil` raises a Lua error.
+
+The seal leaves reads alone. `pairs` over a sealed table visits the fields of the table it stands for, so a loop such as `for name in pairs(tickets) do ... end` reaches `open` among the names.
 
 Sealing applies only at the top level of a prelude table, the same way `sys` is sealed, so tables nested inside it are not sealed by this step. Tables that a Pack function returns keep their metatables in your code, so an `__index` metamethod on a returned table still answers your field reads.
 
@@ -2698,7 +2701,7 @@ A prelude runs in a restricted environment of its own, and its functions keep th
 - the `tools`, `store`, `untrusted`, and `json` globals, which are the same values your code uses
 - a read-only `var`, covered in [`var` inside a prelude](#var-inside-a-prelude)
 
-Every other global reads as nil inside a prelude and its functions, including Engine globals such as `sys`, `log`, `models`, and `require`. A helper cannot read the `ui`, `argv`, `sys`, or `models` globals even when your code calls it, so those values reach a helper only as arguments. A prelude function that returns `type(ui)`, `type(argv)`, `type(sys)`, `type(models)` joined with commas gives `nil,nil,nil,nil` when your block calls it, though the block itself sees all four. Global names inside prelude functions resolve through the prelude's environment, not the section entry's globals.
+Every other global reads as nil inside a prelude and its functions, including Engine globals such as `sys`, `log`, `models`, and `require`. A helper cannot read the `ui`, `args`, `sys`, or `models` globals even when your code calls it, so those values reach a helper only as arguments. A prelude function that returns `type(ui)`, `type(args)`, `type(sys)`, `type(models)` joined with commas gives `nil,nil,nil,nil` when your block calls it, though the block itself sees all four. Global names inside prelude functions resolve through the prelude's environment, not the section entry's globals.
 
 A helper also does not see the globals another Pack's prelude defines, even one installed earlier in the same section, so it cannot call another prelude's helpers. Your code sees the globals of every prelude.
 
@@ -2769,13 +2772,13 @@ A prelude never replaces or shadows an Engine global for your code. Before any o
 
 A collision with another prelude fails the run even when the prompt's only section just returns a value. When two declared Packs' preludes define the same global, the message names the Pack whose prelude installs later as `{pack}` and the Pack whose prelude installed first as `{owner}`.
 
-In the reserved-name message, `{kind}` is `an Engine global`, `a Lua standard-library global`, or `a Lua keyword`. The 20 Engine global names a prelude global may not take are `args`, `argv`, `call`, `compactors`, `item`, `json`, `jump`, `log`, `messages`, `models`, `prompt`, `prose`, `require`, `store`, `sys`, `tasks`, `tools`, `ui`, `untrusted`, and `var`. The sandbox's Lua standard-library globals, such as `string`, `pairs`, `_G`, and `_VERSION`, are reserved too, and so are the Lua 5.5 keywords, `global` included (see [The sandbox](05-lua-environment.md#the-sandbox)).
+In the reserved-name message, `{kind}` is `an Engine global`, `a Lua standard-library global`, or `a Lua keyword`. The 20 Engine global names a prelude global may not take are `args`, `call`, `compactors`, `item`, `json`, `jump`, `log`, `markdown`, `messages`, `models`, `prompt`, `prose`, `require`, `store`, `sys`, `tasks`, `tools`, `ui`, `untrusted`, and `var`. The sandbox's Lua standard-library globals, such as `string`, `pairs`, `_G`, and `_VERSION`, are reserved too, and so are the Lua 5.5 keywords, `global` included (see [The sandbox](05-lua-environment.md#the-sandbox)).
 
 The reserved names hold in every section:
 
 - A prelude that defines `tools`, `store`, or `models` fails with `` Pack `{pack}`: its prelude defines the global `tools`, which is reserved as an Engine global ``, with the global it defined in place of `tools`, and the refused prelude leaves the Engine's global bound exactly as it was before the install.
 - A prelude that defines a global `require`, such as with `function require() return 'mine' end`, fails the run with the code `lua_runtime` and a message that contains `` Pack `{pack}`: its prelude defines the global `require` `` and `which is reserved as an Engine global`.
-- A prelude that defines `argv` or `prose` fails the install as reserved, even though neither is a raw global.
+- A prelude that defines `args` or `prose` fails the install as reserved, even though neither is a raw global.
 - A prelude that defines `ui` or `item` fails the run as reserved, even in a section that binds neither, with a message that names the Pack and the name in backticks.
 
 A prelude global may share its name with a tool's wire name, such as `web_fetch`, or with the name of a model role, such as `strong`, because neither tools nor model roles are bound as globals. A prelude that runs `web_fetch = 'mine'` installs, and so does one that runs `strong = 'mine'`, so a block reads either global as `mine`.

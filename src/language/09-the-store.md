@@ -1414,7 +1414,7 @@ three sources agree
 
 A run has one store, and every chain of the run uses it. A chain is a walk with its own entries, as the main walk, each `call`, and each task have (see [The section walk](04-how-a-prompt-runs.md#the-section-walk)). So the file `Gather` writes inside the `call` chain is readable by `Main` as soon as `call` returns.
 
-Store writes made inside a `call` chain stay in the store after the chain returns, so the caller and every later section read them. `var` writes made inside the call are discarded instead (see [Call input and `var`](08-jump-and-call.md#call-input-and-var)), which makes the store the place to put anything a called section needs to hand back besides its return value. Writes made by child-level sections and by sections in a `call` chain are visible to the caller and to later sections of the outer walk in the same run.
+Store writes made inside a `call` chain stay in the store after the chain returns, so the caller and every later section read them. `var` writes made inside the call are discarded instead (see [Call args and `var`](08-jump-and-call.md#call-args-and-var)), which makes the store the place to put anything a called section needs to hand back besides its return value. Writes made by child-level sections and by sections in a `call` chain are visible to the caller and to later sections of the outer walk in the same run.
 
 ### Called sections, jumps, and the main walk
 

@@ -31,8 +31,8 @@ This run is as short as a run gets. The start checks find nothing missing, becau
 Every run goes through these stages, in this order:
 
 1. Parse. The whole file is parsed and every Lua block in it is compiled, and nothing runs yet. See [Parsing comes first](#parsing-comes-first).
-2. Prepare. The Harness stages the declared input file, readies the run's Packs, and builds the run. See [Preparing the run](#preparing-the-run).
-3. The start checks. The run's first step checks the `runvil` version, the store, and the requirements, and refuses a run that fails one of them. See [Preparing the run](#preparing-the-run).
+2. Prepare. The Harness readies the run's Packs and builds the run. See [Preparing the run](#preparing-the-run).
+3. The start checks. The run's first step checks the `runvil` version, the arguments, the store, and the requirements, and refuses a run that fails one of them. See [Preparing the run](#preparing-the-run).
 4. The section walk. The top-level sections run in file order, starting at the first one. See [The section walk](#the-section-walk).
 5. The result. The run ends with its text or with the error that ended it. See [The run result](#the-run-result).
 
@@ -147,7 +147,7 @@ the environment cannot satisfy this prompt:
 - missing required Pack: web
 ````
 
-Each check stops the prompt before the next one starts, so the order of failures is fixed. A parse failure is reported ahead of any failed model lookup, a failed model lookup ahead of any input failure, and an input failure ahead of the start checks, which check the version, then the store, then the requirements.
+Each check stops the prompt before the next one starts, so the order of failures is fixed. A parse failure is reported ahead of any failed model lookup, and a failed model lookup ahead of the start checks, which check the version, then the arguments, then the store, then the requirements.
 
 ### Lua blocks compile in source order
 
@@ -177,7 +177,7 @@ A prompt that breaks a Lua fence rule (see [Exact fence rules and fence errors](
 
 Parsing happens before the run exists. A prompt that does not parse starts no run: none of its Lua or prose runs, no model is asked for anything, and no run record is made. The Host gets the parse error and reports it. Its code is a parse code such as `fence_invalid`, or `lua_compile` when a Lua block does not compile. Its message is the parse error's full cause chain, followed by where the parse failed (see [Where a run error's message points](16-limits-and-errors.md#where-a-run-errors-message-points)).
 
-Parsing reports no run events. A run's events begin with `run_started`, which the run reports once it passes its start checks (see [Run events and records](#run-events-and-records)). A run that stops before then reports no events, so its record holds none, only the run's own values and the error that ended it. That is the case when a cancel comes before the run or during the model lookup, when the model lookup fails, when the input is refused, and when a start check fails on the run's first step.
+Parsing reports no run events. A run's events begin with `run_started`, which the run reports once it passes its start checks (see [Run events and records](#run-events-and-records)). A run that stops before then reports no events, so its record holds none, only the run's own values and the error that ended it. That is the case when a cancel comes before the run or during the model lookup, when the model lookup fails, and when a start check fails on the run's first step.
 
 ## Preparing the run
 
@@ -201,11 +201,11 @@ return 'no Packs'
 no Packs
 ````
 
-Prepare is the stage before a run starts in which the Harness sets up everything the frontmatter asks for and builds the run. The run's first step then makes the start checks, which make sure the environment provides what the prompt needs. This prompt declares no Packs under `uses:` and has no `models:` key, so the requirements check finds no gaps and never refuses it. A prompt like this one, which also calls no model, runs to completion on a Host with no Packs and no model configured.
+Prepare is the stage before a run starts in which the Harness sets up everything the frontmatter asks for and builds the run. The run's first step then makes the start checks, which make sure the arguments match what the prompt declares and the environment provides what the prompt needs. This prompt declares no Packs under `uses:` and has no `models:` key, so the requirements check finds no gaps and never refuses it. A prompt like this one, which also calls no model, runs to completion on a Host with no Packs and no model configured.
 
 ### What the start checks look at
 
-The run's first step makes three start checks before any section runs, in this order: the `runvil` version, the store, which the run must declare and whose backend must pass its probe, and the requirements. The requirements check compares the Packs the prompt declares with the Packs the Harness took for the run, and compares the requirements the prompt declares for its model roles with the models that fill those roles. A start check that fails ends the run on that first step, and the run reports no run events.
+The run's first step makes four start checks before any section runs, in this order: the `runvil` version, the arguments, the store, which the run must declare and whose backend must pass its probe, and the requirements. The argument check compares the run's arguments with the prompt's `args:` declaration (see [Declaring arguments in frontmatter](06-arguments.md#declaring-arguments-in-frontmatter)). The requirements check compares the Packs the prompt declares with the Packs the Harness took for the run, and compares the requirements the prompt declares for its model roles with the models that fill those roles. A start check that fails ends the run on that first step, and the run reports no run events.
 
 A prompt the environment cannot satisfy is refused before any of its blocks run. `requirements_unmet` is the error code of that refusal: the run fails with that error, and its message is the requirements notice, which lists what is missing, one line per gap, and which ends by pointing at a frontmatter line when a gap is one the prompt caused. The requirements check refuses the run with `requirements_unmet` when any of these holds:
 
@@ -217,7 +217,7 @@ A prompt the environment cannot satisfy is refused before any of its blocks run.
 
 An unavailable Pack is one the Host has that cannot serve the run, a declared `vendor/name` entry the Host lacks, or a bare entry whose reason tells you which vendor's Pack to write instead. The run proceeds only when every model role requirement is met, the Host has every required Pack, each one can serve, and nothing in the run takes a reserved Pack id. [Packs at prepare](#packs-at-prepare) shows each Pack case.
 
-The refusal comes on the run's first step, after the version and store checks pass. So when the environment cannot provide what the prompt requires, such as a model with a large enough context window for one of its roles, no section runs, no Lua runs, and nothing in the prompt can catch the refusal. The refusal's message is the notice text, line for line, followed by ` (at {file}:{line})` when a gap is one the prompt caused (see [The requirements notice](#the-requirements-notice)). The notice opens with the line `the environment cannot satisfy this prompt:` and then gives one `- ` line per gap, in this order, with each `{...}` standing for the value the line names:
+The refusal comes on the run's first step, after the version, argument, and store checks pass. So when the environment cannot provide what the prompt requires, such as a model with a large enough context window for one of its roles, no section runs, no Lua runs, and nothing in the prompt can catch the refusal. The refusal's message is the notice text, line for line, followed by ` (at {file}:{line})` when a gap is one the prompt caused (see [The requirements notice](#the-requirements-notice)). The notice opens with the line `the environment cannot satisfy this prompt:` and then gives one `- ` line per gap, in this order, with each `{...}` standing for the value the line names:
 
 ````text
 the environment cannot satisfy this prompt:
@@ -238,24 +238,46 @@ Before any section runs, the Harness and the run work in a fixed order:
 1. The Harness parses the prompt. A prompt that does not parse starts no run.
 2. It draws the run's seed and start time and begins the run's record (see [The Engine, the Harness, and the Host](01-what-a-prompt-is.md#the-engine-the-harness-and-the-host)).
 3. It looks up the Host's current model.
-4. It stages the input file the prompt declares.
-5. It picks the run's Packs from the prompt's `uses:` entries.
-6. It waits for the run's Packs to be ready.
-7. It takes the snapshot of the run's Packs.
-8. It builds the run with a role map that holds the Host's current model under `default`, which fills the five model roles.
-9. The run's first step checks the `runvil` version, then the store, then the requirements, and refuses the run when one of them fails.
+4. It picks the run's Packs from the prompt's `uses:` entries.
+5. It waits for the run's Packs to be ready.
+6. It takes the snapshot of the run's Packs.
+7. It builds the run with a role map that holds the Host's current model under `default`, which fills the five model roles.
+8. The run's first step checks the `runvil` version, then the arguments, then the store, then the requirements, and refuses the run when one of them fails.
 
 The model lookup lists the Host's models and finds the one the Host selected, or takes the first model listed when the Host selected none. When the list cannot be fetched, the run fails with the model code the listing failed with, such as `transport`, and when the list does not hold the selected model, the run fails with `requirements_unmet`. The message is the lookup error with its chain of causes, such as ``the selected model `{id}` is absent from the fetched catalog``. A cancel that comes before the run or during the lookup ends the run with the canceled error. A run that ends here never started, so its record holds no events.
 
-The version check is the first start check (see [The `runvil` version key](02-file-structure.md#the-runvil-version-key)). Version `0` proceeds, and any other version is refused as unsupported, with a message that ends with ` (at {file}:{line})`, the line of the `runvil:` key. A missing version fails with the message `not a runvil prompt: no runvil version (prompt {name})`, where `{name}` is the prompt's frontmatter `name`. Either way, a prompt with an unsupported or missing version produces no section result. The run then checks its store: a run that declares no store fails with the store code `no_store`, and a run whose store backend fails its probe fails with the store code of that failure. The requirements check comes last. A run that a start check refuses reports no run events, so its record holds no events. When the run's cancel flag is set as a start check fails, the run ends with the canceled error instead of the check's own error.
+The version check is the first start check (see [The `runvil` version key](02-file-structure.md#the-runvil-version-key)). Version `0` proceeds, and any other version is refused as unsupported, with a message that ends with ` (at {file}:{line})`, the line of the `runvil:` key. A missing version fails with the message `not a runvil prompt: no runvil version (prompt {name})`, where `{name}` is the prompt's frontmatter `name`. Either way, a prompt with an unsupported or missing version produces no section result.
 
-### Staging the input file
+The argument check is the second start check. The arguments of a run are one JSON object, which the caller, whoever starts the run, passes as text. The check reads that argument text as one JSON object and checks the object against the prompt's `args:` declaration (see [Declaring arguments in frontmatter](06-arguments.md#declaring-arguments-in-frontmatter)). A prompt with no `args:` key takes one optional string named `text` (see [Prompts with no `args:` key](06-arguments.md#prompts-with-no-args-key)). This prompt declares one argument, `query`, and requires it:
 
-Input staging happens during prepare, before the run starts. The launch's input text is placed at the path the frontmatter's `input:` key names (see [Input and output file declarations](02-file-structure.md#input-and-output-file-declarations)), so the first section's Lua can already read the input file. Prepare fails the run before it starts in three cases:
+````markdown
+---
+name: needs-query
+description: Requires an argument named query.
+runvil: 0
+args:
+  type: object
+  properties:
+    query: { type: string }
+  required: [query]
+---
 
-- The launch supplies input text, but the prompt declares no `input:` file. The error code is `requirements_unmet`, and the message is ``the launch supplied input text, but the prompt declares no `input:` file``.
-- The prompt declares an `input:` file that the launch did not supply and the store does not already hold. The error code is `requirements_unmet`, and the message is ``the prompt declares the input file `{path}`, but the launch supplied no input text and the store has no such file``, with the declared path in place of `{path}`.
-- The store refuses the write that stages the input, or the check that the file is there. The error code is the store code of the refusal, such as `approval_required`, and the message is ``the input file `{path}` could not be staged``, followed by `: ` and the store's own error.
+## Main
+
+```lua
+return 'query: ' .. args.query
+```
+````
+
+Run it with the arguments `{}`, and the run is refused on its first step, before any section runs, with error code `args_invalid` and this message:
+
+````text
+argument `query` is required
+````
+
+The message names the first mismatch the check finds. It names no file and no line, because the arguments come from the caller, so no line of the prompt is at fault. Argument text that is not one JSON object ends the run the same way, and [Argument errors](06-arguments.md#argument-errors) has the full list of messages. With the arguments `{"query":"papers"}`, the check passes and the run returns `query: papers`.
+
+After the argument check, the run checks its store: a run that declares no store fails with the store code `no_store`, and a run whose store backend fails its probe fails with the store code of that failure. The requirements check comes last. A run that a start check refuses reports no run events, so its record holds no events. When the run's cancel flag is set as a start check fails, the run ends with the canceled error instead of the check's own error.
 
 ### Waiting for Packs and taking the snapshot
 
@@ -553,11 +575,11 @@ Each gap appears once. The check looks up each declared Pack once in the run's r
 
 ### How the gaps are gathered
 
-The requirements are gathered once, when the run is built, and the run's first step reports them after the version and store checks pass. The check looks at every Pack the prompt declares, every reserved Pack id in the run's catalog and roster, and every requirement a declared model role carries, so one refusal names every gap. Unmet requirements never make prepare fail: the run is built all the same, and its first step fails with the notice. When the notice would have no lines, nothing blocks the run.
+The requirements are gathered once, when the run is built, and the run's first step reports them after the version, argument, and store checks pass. The check looks at every Pack the prompt declares, every reserved Pack id in the run's catalog and roster, and every requirement a declared model role carries, so one refusal names every gap. Unmet requirements never make prepare fail: the run is built all the same, and its first step fails with the notice. When the notice would have no lines, nothing blocks the run.
 
 ### When a cancel comes first
 
-When the run's cancel flag is set by the time a start check fails, for example because a cancel cut short the wait while a declared Pack was still starting, no notice is reported: the cancel decides the run's result, which is the canceled error rather than `requirements_unmet`, as [Waiting for Packs and taking the snapshot](#waiting-for-packs-and-taking-the-snapshot) explains. A failed version or store check that meets a cancel ends the run with the canceled error in the same way.
+When the run's cancel flag is set by the time a start check fails, for example because a cancel cut short the wait while a declared Pack was still starting, no notice is reported: the cancel decides the run's result, which is the canceled error rather than `requirements_unmet`, as [Waiting for Packs and taking the snapshot](#waiting-for-packs-and-taking-the-snapshot) explains. A failed version, argument, or store check that meets a cancel ends the run with the canceled error in the same way.
 
 ## The section walk
 
@@ -1439,7 +1461,7 @@ Every run ends with exactly one result, which is one of two things:
 - Its final text, when the run completes. A run that finishes gives back its final text, and that text is recorded as the run's result.
 - The error that ended it, when the run does not complete. The error has a code that names the cause, such as `lua_runtime` for an uncaught Lua error, together with a self-contained message for people to read. A cancel is one of these errors: the one whose code is `canceled`.
 
-Whatever ends a run first decides its result, and a later error or cancel never replaces it. A cancel that lands after the run's first step has refused the run leaves the run with error code `requirements_unmet`.
+Whatever ends a run first decides its result, and a later error or cancel never replaces it. A cancel that lands after the run's first step has refused the run leaves the run with the refusal's own error code, such as `requirements_unmet`.
 
 ### Canceling a run
 
@@ -1447,7 +1469,7 @@ When the Host cancels a run, the run ends with the canceled error, whose code is
 
 A cancel that lands while every chain is waiting takes effect at the run's next step, which tears down every chain, while Lua code that is already running sees the cancel as it runs. A run canceled while a `tools.call` to a script tool is suspended ends with the canceled error rather than a text result or the tool's own error. A model request cut short by a cancel is not reported as a failed model call.
 
-A start check that fails after the run's cancel fired, whether on the version, the store, or the requirements, ends the run with the canceled error instead of the check's own error, as when a cancel cuts the wait short while a needed Pack is still starting (see [Waiting for Packs and taking the snapshot](#waiting-for-packs-and-taking-the-snapshot)). A cancel that comes before the run, or while the Harness looks up the model, ends the run with the canceled error before the Harness prepares it.
+A start check that fails after the run's cancel fired, whether on the version, the arguments, the store, or the requirements, ends the run with the canceled error instead of the check's own error, as when a cancel cuts the wait short while a needed Pack is still starting (see [Waiting for Packs and taking the snapshot](#waiting-for-packs-and-taking-the-snapshot)). A cancel that comes before the run, or while the Harness looks up the model, ends the run with the canceled error before the Harness prepares it.
 
 ### Failed runs and error codes
 
@@ -1512,7 +1534,7 @@ A run that ends before the walk still has a record, because the Harness begins t
 
 - The model code the listing failed with, such as `transport`, when the Harness cannot fetch the Host's list of models, and `requirements_unmet` when that list does not hold the selected model.
 - `structure_invalid` when the prompt's `runvil:` version is missing, and `unsupported_version` when the version is unsupported.
-- `requirements_unmet` when the launch input does not match the prompt's [input file](02-file-structure.md#input-and-output-file-declarations) declaration, and the store code of the refusal, such as `approval_required`, when the store refuses to stage the input.
+- `args_invalid` when the run's arguments are not one JSON object, or do not match the prompt's `args:` declaration.
 - `no_store` when the run declares no store, and the store code of the failure when its store fails the probe.
 - `requirements_unmet` when the environment falls short of the prompt's requirements.
 
@@ -1591,7 +1613,7 @@ A `log` checkpoint is recorded under the name of the section whose Lua wrote it,
 
 ### Events from a run that ends early
 
-A run that ends before it starts has no events in its record, only the values below and the error that ended it. That holds for a run refused on its input or by a start check, and for one that ended on a failed model lookup or an early cancel.
+A run that ends before it starts has no events in its record, only the values below and the error that ended it. That holds for a run refused by a start check, and for one that ended on a failed model lookup or an early cancel.
 
 ### What a run's record holds
 

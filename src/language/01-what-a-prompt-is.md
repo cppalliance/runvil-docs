@@ -239,12 +239,17 @@ Here you walk one complete prompt from its frontmatter to its run result and see
 name: greet
 description: Has the model repeat a greeting.
 runvil: 0
+args:
+  type: object
+  properties:
+    name: { type: string, description: The name to greet }
+  required: [name]
 ---
 
 ## Main
 
 ```lua
-var.greeting = "Hello, " .. args .. "!"
+var.greeting = "Hello, " .. args.name .. "!"
 ```
 
 Repeat exactly, with no extra words: {{ var.greeting }}
@@ -254,7 +259,7 @@ return models.infer(prose)
 ```
 ````
 
-Run with the argument `Ada`, the model receives this text, and its reply is the run result:
+Run with the arguments `{"name":"Ada"}`, the model receives this text, and its reply is the run result:
 
 ````text
 Repeat exactly, with no extra words: Hello, Ada!
@@ -262,19 +267,19 @@ Repeat exactly, with no extra words: Hello, Ada!
 
 ### The frontmatter and the contract keys
 
-The frontmatter holds `name`, `description`, and `runvil: 0`. `uses:`, `models:`, and `args:` are the contract keys, three optional keys that state what the prompt needs from its run, and this prompt uses none of them:
+The frontmatter holds `name`, `description`, `runvil: 0`, and `args:`. `uses:`, `models:`, and `args:` are the contract keys, three optional keys that state what the prompt needs from its run, and this prompt uses one of them, `args:`:
 
 - `uses:` names the Packs the run requires (see [Tools, Packs, and the `uses:` key](12-tools.md#tools-packs-and-the-uses-key)).
 - `models:` attaches requirements to the five built-in model roles, `default`, `strong`, `small`, `fast`, and `creative` (see [Declaring roles under `models:`](10-models.md#declaring-roles-under-models)).
-- `args:` types the prompt's arguments (see [Declaring arguments in frontmatter](06-arguments.md#declaring-arguments-in-frontmatter)).
+- `args:` declares the prompt's arguments, the one JSON object a run starts with (see [Declaring arguments in frontmatter](06-arguments.md#declaring-arguments-in-frontmatter)). This prompt declares one required string argument, `name`.
 
-The parser checks only the shape of these keys. The run checks them against its environment on its first step (see [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run)).
+The parser checks only the shape of these keys. On its first step, the run checks its arguments against `args:` and its environment against `uses:` and `models:` (see [Preparing the run](04-how-a-prompt-runs.md#preparing-the-run)).
 
 A prompt without a `models:` key declares no model requirements. Its `models.infer(prose)` round runs on the Host's model, the model of the `default` role.
 
 ### Prose and Lua in one section
 
-`## Main` holds a Lua block, a line of prose, and a second Lua block. The first block computes a value and stores it in `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)) with `var.greeting = "Hello, " .. args .. "!"`, where `args` holds the argument string (see [The argument string in `args`](06-arguments.md#the-argument-string-in-args)).
+`## Main` holds a Lua block, a line of prose, and a second Lua block. The first block computes a value and stores it in `var` (see [Keeping state in `var`](05-lua-environment.md#keeping-state-in-var)) with `var.greeting = "Hello, " .. args.name .. "!"`, where the global `args` holds the run's arguments and `args.name` reads the argument `name` (see [Reading arguments from `args`](06-arguments.md#reading-arguments-from-args)).
 
 The prose then uses the placeholder `{{ var.greeting }}` (see [Placeholders in prose](07-substitution.md#placeholders-in-prose)), which renders the stored value into the text. The last block passes that prose to `models.infer(prose)`, and `return` makes the model's reply the run result. Data moves from Lua, through prose, to the model.
 
@@ -436,7 +441,7 @@ The Host names each run. The Harness draws the run's seed, a random value, from 
 
 ### Run inputs a prompt can read
 
-A prompt can observe three run inputs, the values from outside that shape a run. This prompt reads two of them:
+A prompt can observe four run inputs, the values from outside that shape a run. This prompt reads two of them:
 
 ````markdown
 ---
@@ -452,8 +457,9 @@ return sys.when .. '|' .. untrusted('data')
 ```
 ````
 
-The run result is the run's start time in RFC 3339 form, a `|`, and the envelope that `untrusted('data')` returns, which carries a nonce of 32 hex digits drawn from the seed. The three run inputs are:
+The run result is the run's start time in RFC 3339 form, a `|`, and the envelope that `untrusted('data')` returns, which carries a nonce of 32 hex digits drawn from the seed. The four run inputs are:
 
+- The arguments, one JSON object that Lua reads from the global `args` (see [Reading arguments from `args`](06-arguments.md#reading-arguments-from-args)).
 - The seed, which a prompt sees through the nonce in each `untrusted()` envelope (see [Handing store text to a model with `untrusted`](09-the-store.md#handing-store-text-to-a-model-with-untrusted)).
 - The start time, read as `sys.when` (see [Run facts in `sys` and `ui`](05-lua-environment.md#run-facts-in-sys-and-ui)).
 - The Host's UI snapshot, served by `ui()`.
@@ -579,10 +585,10 @@ Here you find the example prompts that ship with Runvil, so you can open a worki
 The smallest of them, `echo.md`, does all its work in one Lua block under `## Main`:
 
 ````lua
-return args
+return args.text
 ````
 
-Run with the argument `hello`, it ends with:
+Run with the arguments `{"text":"hello"}`, it ends with:
 
 ````text
 hello
@@ -590,13 +596,13 @@ hello
 
 Every prompt shipped in the repository's `prompts` directory, including the prompts in its subdirectories, parses as written, so you can open any of them as a working example. The directory ships these small examples:
 
-- `echo.md` returns its argument unchanged with `return args` and makes no model round; [The argument string in `args`](06-arguments.md#the-argument-string-in-args) teaches `args`.
+- `echo.md` has no `args:` key, so it takes one optional string argument named `text` (see [Prompts with no `args:` key](06-arguments.md#prompts-with-no-args-key)). It returns that argument unchanged with `return args.text` and makes no model round; [Reading arguments from `args`](06-arguments.md#reading-arguments-from-args) teaches `args`.
 - `hello.md` has the model say hello through the prose `Say "Hello, world!"` and `return models.infer(prose)`; [Running a round with `models.infer`](10-models.md#running-a-round-with-modelsinfer) teaches `models.infer`.
-- `greet.md` builds a greeting from its argument with `var.greeting = "Hello, " .. args .. "!"` and has the model repeat it through `{{ var.greeting }}` in its prose; [Placeholders in prose](07-substitution.md#placeholders-in-prose) teaches placeholders.
+- `greet.md` builds a greeting from its `name` argument with `var.greeting = "Hello, " .. args.name .. "!"` and has the model repeat it through `{{ var.greeting }}` in its prose; [Placeholders in prose](07-substitution.md#placeholders-in-prose) teaches placeholders.
 - `analyst-example.md` sets `min_context: 40000` for the `strong` role under `models:` and calls `models.use("strong")` before `return models.infer(prose)`; [Model roles instead of models](10-models.md#model-roles-instead-of-models) teaches model roles.
 
 Each of these four opens with a preamble of commentary, a paragraph before its first heading that describes the prompt.
 
 Runvil also ships `research-person.md`, which researches a person. Its `## Research` section calls `tools.offer({"web/search", "web/fetch"})` (see [Offering tools and Packs with `tools.offer`](12-tools.md#offering-tools-and-packs-with-toolsoffer)), and the prompt runs end to end to a factual summary. [What the web Pack gives a prompt](13-web-fetch-and-search.md#what-the-web-pack-gives-a-prompt) teaches `web/search` and `web/fetch`.
 
-The research prompt takes the person to research as its argument. Its prose puts `{{ args }}` after the line `Your input is a request about a person:`, so a run given the argument `Ada Lovelace` places that name into the prose right after that line.
+The research prompt takes the person to research as its one argument, a required string named `text`. Its prose puts `{{ args.text }}` after the line `Your input is a request about a person:`, so a run given the arguments `{"text":"Ada Lovelace"}` places that name into the prose right after that line.
