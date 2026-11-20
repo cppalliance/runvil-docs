@@ -4,11 +4,13 @@ This chapter teaches you to get the gateway running on your machine: how to inst
 
 ## Install the binary
 
-The gateway is a single binary named `runvil-gateway`. It serves an OpenAI-shaped inference API. Install it with cargo:
+The gateway is a single binary named `runvil-gateway`. It serves an OpenAI-shaped inference API. On macOS and Linux, install it with the shell installer from the latest release:
 
 ````
-cargo install gateway
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/cppalliance/runvil-gateway/releases/latest/download/gateway-installer.sh | sh
 ````
+
+On Windows, download `gateway-x86_64-pc-windows-msvc.zip` from the [releases page](https://github.com/cppalliance/runvil-gateway/releases) and unzip it. To build from source instead, follow the Install section of the [runvil-gateway README](https://github.com/cppalliance/runvil-gateway#install).
 
 Confirm the install by printing the version:
 
