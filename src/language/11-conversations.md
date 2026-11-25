@@ -601,7 +601,7 @@ Errors inside a record add a second position:
 
 A record's rules run in a fixed order, so you see the first rule the record breaks in that order:
 
-1. JSON form. Every value in a record, including values in extra fields that get dropped, must be JSON-representable: strings, numbers, booleans, `json.null`, and nested tables. This check runs first, so a record holding a function anywhere fails with it, whatever else is wrong. A builder converts each non-nil argument from Lua to JSON first, so a field value can be any JSON-representable Lua value, which the record check then accepts or refuses.
+1. JSON form. Every value in a record, including values in extra fields that get dropped, must be JSON-representable: strings, numbers, booleans, `json.null`, and nested tables. This check runs first, so a record holding a function anywhere fails with it, whatever else is wrong. A builder converts each non-nil argument from Lua to JSON first, so a field value can be any JSON-representable Lua value, which the record check then accepts or refuses. A list with a gap, a weak table, and a table nested more than 127 deep are not JSON-representable (see [Tables that become data](05-lua-environment.md#tables-that-become-data)).
 2. Table shape. The record must be a table.
 3. Role.
 4. Content, including each content part.
@@ -609,6 +609,8 @@ A record's rules run in a fixed order, so you see the first rule the record brea
 6. Whether the message role and `tool_call_id` go together.
 7. `tool_calls`, within each call `id` before `name`, so a call missing both reports the `id` message, and then whether the record's message role is `assistant`.
 8. The size of `meta`.
+9. How deep the record nests as a whole.
+10. How many values the record holds as a whole.
 
 A record that passes these rules then joins the list only if it keeps the system records leading.
 
@@ -663,6 +665,14 @@ Tool calls:
 Metadata:
 
 - `messages[{index}] meta is {size} bytes as JSON; the limit is 8192 bytes` comes from a `meta` whose compact JSON form takes more than 8192 bytes, where `{size}` is that form's length in bytes.
+
+Nesting:
+
+- `messages[{index}] is nested {depth} levels deep as JSON; the limit is 127 levels` comes from a record whose JSON form nests more than 127 arrays and objects deep, where `{depth}` is that form's depth. The count includes the record's own object and the arrays and objects around a field's value, so a `meta` nests at most 126 deep and the `arguments` of a tool call at most 124. A record you read back from the list is data of that same depth, so this rule keeps every record you add one that `append` takes again. A record that `models.loop` adds holds a model's tool calls as the model gave them and does not pass this check.
+
+Size:
+
+- `messages[{index}] holds {values} values as JSON; the limit is {limit} values` comes from a record whose JSON form holds more values than one conversion to data may hold, where `{values}` is that form's count and `{limit}` is one eighth of the VM's memory limit in bytes, 8,388,608 at the default of 64 MiB (see [Tables that become data](05-lua-environment.md#tables-that-become-data)). Each string, number, boolean, null, array, and object is one value, the record's own object and its `role` included. A builder converts each field by itself, so each field can be within the limit and the record past it. A record you read back from the list is data of that same size, so this rule keeps every record you add one that `append` takes again. A record that `models.loop` adds does not pass this check.
 
 System placement:
 

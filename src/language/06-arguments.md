@@ -1769,7 +1769,7 @@ A write with a key that is neither a string nor an integer names the key's Lua t
 
 `table.insert`, `table.remove`, and `table.sort` write into the list they are given, so on a list inside `args` each raises the field refusal for the first index it tries to set. With the two files above, `table.insert(args.files, 'c.md')` raises `args is read-only: cannot set field 3`, `table.remove(args.files)` raises `args is read-only: cannot set field 2`, and `table.sort(args.files)` raises `args is read-only: cannot set field 1`.
 
-`table.sort` writes only when it moves an item, and on a list of four or more items it always moves one, even when the list is already in order. On a shorter list that is already in order, such as `["a.md","b.md"]`, it leaves every item in place and returns normally, so do not count on it to raise. Sort a copy instead, as [Keeping a value of your own](#keeping-a-value-of-your-own) shows.
+`table.sort` writes every item back after it has sorted them, so it raises on any list of two or more items, even when the list is already in order, as `["a.md","b.md"]` is. A list of fewer than two items has nothing to sort, so on an empty list or a list of one item it returns normally. Sort a copy instead, as [Keeping a value of your own](#keeping-a-value-of-your-own) shows.
 
 ### Catching a refused write with `pcall`
 

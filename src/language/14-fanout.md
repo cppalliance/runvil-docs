@@ -396,7 +396,7 @@ A list read from [`args`](06-arguments.md#reading-arguments-from-args) or from `
 
 ### What a member can be
 
-A member can be a string, a number, a boolean, or a nested table. One collection can mix all four in the same list, and each array-part member reaches its arm as `item` with the same value and its own type:
+A member can be a string, a number, a boolean, or a nested table. One collection can mix all four in the same list, and each list member reaches its arm as `item` with the same value and its own type:
 
 ````markdown
 ---
@@ -429,7 +429,7 @@ string:b,number:2,boolean:true,table:x
 
 ### Keyed members
 
-A keyed collection stores its members under keys in the table's hash part, and each of those is a keyed member. A keyed collection runs one arm per key and value pair, and each arm's `item` is a pair table that you read as `item.key` and `item.value`:
+A keyed collection stores its members under keys other than the list indices from 1 up, and each of those is a keyed member. A keyed collection runs one arm per key and value pair, and each arm's `item` is a pair table that you read as `item.key` and `item.value`:
 
 ````markdown
 ---
@@ -462,35 +462,38 @@ A worker section that returns `item.key .. '=' .. tostring(item.value)` over `{a
 
 ### The order of members
 
-Member order is fixed and never depends on Lua's string hash seed. The [array part](05-lua-environment.md#deterministic-table-iteration), positions 1 through `#t`, comes first in index order, and then every hash-part member follows as a `{ key, value }` pair, sorted by key. So `{'a', 'b', extra = 'c'}` fans out as `'a'`, `'b'`, and then `{ key = 'extra', value = 'c' }`, and the arm order is the same on every run. The number of arms equals the length of the array part plus the number of remaining keys in the table.
+Member order is fixed and never depends on Lua's string hash seed. The list comes first in index order: the members at the indices from 1 up to the first index that holds nothing. Every other member then follows as a `{ key, value }` pair, sorted by key (see [How keys sort](#how-keys-sort)). So `{'a', 'b', extra = 'c'}` fans out as `'a'`, `'b'`, and then `{ key = 'extra', value = 'c' }`, and the arm order is the same on every run. The number of arms equals the number of list members plus the number of remaining keys in the table.
 
-Only integer keys from 1 through `#t` count as array-part members. An integer key outside the array part, such as `{[5] = 'five'}`, is a keyed member, so its arm gets the pair table `{ key = 5, value = 'five' }` as `item`. A float key such as `2.5` is a hash-part member too and arrives as a pair table, so `[2.5] = 'half'` gives an `item` of `{ key = 2.5, value = 'half' }`.
+Only the integer keys of that list count as list members. An integer key outside it, such as `{[5] = 'five'}`, is a keyed member, so its arm gets the pair table `{ key = 5, value = 'five' }` as `item`. A float key such as `2.5` is a keyed member too and arrives as a pair table, so `[2.5] = 'half'` gives an `item` of `{ key = 2.5, value = 'half' }`.
 
-An arm's position follows member order, with array-part members at positions 1 to `#t` and the sorted keyed members after them. That position is the arm's `sys.index` and its place in the result list, as the `keyed-collection` prompt shows.
+The list ends at the first gap, and a member past the gap is a keyed member. So `{ 'a', nil, 'c' }` fans out as `'a'` and then `{ key = 3, value = 'c' }`, two arms. A member past the gap comes before every keyed member whose key is not an integer from `1` up, so `{ 'a', nil, 'c', [false] = 'f' }` fans out as `'a'`, the pair for `3`, and the pair for `false`. `tasks.fanout` never measures the collection by `#t`, which for a table with a gap can differ from one run to the next (see [The length of a table with a gap](05-lua-environment.md#the-length-of-a-table-with-a-gap)), so a collection with a gap fans out the same way on every run.
 
-`tasks.fanout` reads the collection's length and the members in its array part raw, so `__len` and `__index` metamethods do not change which members it sees.
+An arm's position follows member order, with the list members first and the sorted keyed members after them. That position is the arm's `sys.index` and its place in the result list, as the `keyed-collection` prompt shows.
+
+`tasks.fanout` reads the collection's members raw, so `__len` and `__index` metamethods do not change which members it sees.
 
 ### How keys sort
 
-Keyed members sort by key type first and then by value within each type:
+Keyed members come in the order `pairs` visits their keys: the integer keys from `1` up first, and then the other keys by type and by value within each type:
 
-| Key type | Order within the type |
+| Key | Order within the group |
 |---|---|
+| integer from `1` up | rising order |
 | boolean | `false` before `true` |
-| number | exact numeric order |
+| other number | exact numeric order |
 | string | byte order |
 
-Booleans come before numbers, and numbers come before strings. So `{[true] = 't', [7] = 'seven', b = 'bee', [false] = 'f', [2.5] = 'half', a = 'ay'}` orders its keys `false`, `true`, `2.5`, `7`, `'a'`, `'b'`.
+An integer key from `1` up that is not in the list, such as an index past a gap, comes before the booleans. The other numbers are the integers below `1` and the float keys, and they come after the booleans and before the strings. So `{[true] = 't', [7] = 'seven', b = 'bee', [false] = 'f', [2.5] = 'half', a = 'ay'}` orders its keys `7`, `false`, `true`, `2.5`, `'a'`, `'b'`.
 
 String keys are sorted whatever order the table literal uses, so `{zeta = 1, alpha = 'two', mid = true, beta = 4, omega = 5}` runs arms for `alpha`, `beta`, `mid`, `omega`, and `zeta`, in that order, on every run.
 
-Number keys sort exactly. Integers compare as integers, so large integer keys that round to the same float, such as `9007199254740992` and `9007199254740993`, stay distinct and in order. A float key sorts exactly among the integers, and a float beyond the 64-bit integer range sorts past every integer. Together these rules give the key order `-1e300`, `2`, `2.5`, `3`, `9007199254740992`, `9007199254740993`, `1e300`.
+Number keys sort exactly. Integers compare as integers, so large integer keys that round to the same float, such as `9007199254740992` and `9007199254740993`, stay distinct and in order. A float key sorts exactly among the integers below `1`, and a float beyond the 64-bit integer range sorts past every one of them. Together these rules give the key order `2`, `3`, `9007199254740992`, `9007199254740993`, `-1e300`, `-2`, `-1.5`, `-1`, `0`, `2.5`, `1e300`.
 
-This is the same shared order in which the deterministic `pairs` and `next` visit a table that has no `__pairs` metamethod (see [Deterministic table iteration](05-lua-environment.md#deterministic-table-iteration)), so a keyed table that `tasks.fanout` accepts fans out in the order `pairs` visits its keys. A `__pairs` metamethod on a table's metatable still takes over what `pairs` visits.
+These are the rules by which the deterministic `pairs` and `next` order the keys of a table (see [Deterministic table iteration](05-lua-environment.md#deterministic-table-iteration)). So a `pairs` loop over a collection visits its keys in the order of the arms: the indices of the list members, and then the key of each keyed member. A `__pairs` metamethod on the collection's metatable takes over what `pairs` visits, and `tasks.fanout` does not call it.
 
 ### The collection rule
 
-The collection must be a Lua table with at least one member, so an empty table raises an error at the call instead of returning an empty result list. Every member, whether it sits in the array part or under a key, must be data: a string, a number, a boolean, or a table whose contents convert to JSON, so a function, a thread, or any userdata other than `json.null` is never a member. `json.null` is data, so it is a member, and its arm reads `item == json.null` (see [Encoding and decoding JSON with `json`](05-lua-environment.md#encoding-and-decoding-json-with-json)). Every key outside the array part must be a string of valid UTF-8, a finite number, or a boolean. A collection that breaks this rule raises a collection error, and [Collection and argument errors](#collection-and-argument-errors) gives the message for each part of the rule.
+The collection must be a Lua table with at least one member, so an empty table raises an error at the call instead of returning an empty result list. Every member, whether it sits in the list or under a key, must be data: a string, a number, a boolean, or a table whose contents convert to JSON, so a function, a thread, or any userdata other than `json.null` is never a member. `json.null` is data, so it is a member, and its arm reads `item == json.null` (see [Encoding and decoding JSON with `json`](05-lua-environment.md#encoding-and-decoding-json-with-json)). Every key outside the list must be a string of valid UTF-8, a finite number, or a boolean. The collection must not be a weak table, one whose metatable sets `__mode`. A collection that breaks this rule raises a collection error, and [Collection and argument errors](#collection-and-argument-errors) gives the message for each part of the rule.
 
 ## What an arm sees
 
@@ -543,7 +546,7 @@ Inside a fanout arm, the global `item` holds the member the arm runs for. It is 
 - `require('/helpers').label(item)` passes it to a function from a library.
 - Over `{'alpha', 'beta'}`, a worker section returning `item .. '-' .. sys.index` gives `alpha-1` and `beta-2`.
 
-Each array-part member reaches its arm as `item` with the same value and keeps its type: a string stays a string, a number a number, a boolean a boolean, and a table a table. A worker section that returns `type(item) .. ':' .. tostring(item)` yields `string:b`, `number:2`, and `boolean:true`, as the `mixed-members` prompt in [What a member can be](#what-a-member-can-be) shows. A whole-number member arrives as an integer, so `tostring(item)` on the member `2` prints `2` rather than `2.0`, and the arm text reads `number:2`.
+Each list member reaches its arm as `item` with the same value and keeps its type: a string stays a string, a number a number, a boolean a boolean, and a table a table. A worker section that returns `type(item) .. ':' .. tostring(item)` yields `string:b`, `number:2`, and `boolean:true`, as the `mixed-members` prompt in [What a member can be](#what-a-member-can-be) shows. A whole-number member arrives as an integer, so `tostring(item)` on the member `2` prints `2` rather than `2.0`, and the arm text reads `number:2`.
 
 A keyed member reaches its arm as a pair table, with the key in `item.key` and the value in `item.value`, as [Keyed members](#keyed-members) shows. A nested table member arrives as a table whose fields the worker section reads directly, so the member `{nested = 'x'}` with `if type(item) == 'table' then return 'table:' .. item.nested end` gives `table:x`.
 
@@ -1696,7 +1699,7 @@ The empty collection raises a collection error, the ordinary error value of kind
 
 `tasks.fanout` checks its collection at the call. It checks every rule except whether values nested inside a member can be represented as JSON before it spawns any arm, so a broken collection never runs the worker section.
 
-The checks run in a fixed order, and the first broken rule is the one reported: first the argument count and, with three arguments, the check that the first one is a model handle (see [Argument errors](#argument-errors)), then the check that the collection is a table, then each array-part member in position order, then each keyed pair with its key checked before its member, then the empty check. Only then does `tasks.fanout` spawn arms.
+The checks run in a fixed order, and the first broken rule is the one reported: first the argument count and, with three arguments, the check that the first one is a model handle (see [Argument errors](#argument-errors)), then the check that the collection is a table, then the check that it is not a weak table, then each list member in index order, then the keyed pairs, then the empty check. Among the keyed pairs, the one reported is the pair whose key comes first: booleans, then numbers by value, then strings in byte order, and last a key of another type, by its type name. A pair's key is checked before its member. Only then does `tasks.fanout` spawn arms.
 
 The empty-collection error fires at the call site before any arm is spawned. The worker section never runs, so the store and the run's task events stay as they were, and the call raises instead of handing back a zero-result list. An empty collection means no work, which is likely a bug, such as a table a loop never filled or a wrong variable.
 
@@ -1711,6 +1714,7 @@ Every broken collection rule raises an error value of kind `lua` whose `message`
 | Rule | A call that breaks it | Message |
 |---|---|---|
 | The collection is a table | `tasks.fanout('Worker', 'Items')` | `tasks.fanout's second parameter is a collection, got string; for the items of a list in a section, pass prompt.section(path, "list").items` |
+| The collection is not a weak table | `tasks.fanout('Worker', setmetatable({'a'}, { __mode = 'v' }))` | `tasks.fanout's collection is a weak table, one whose metatable sets __mode: the entries the collector leaves in it are not the same in two runs` |
 | Every member is data | `tasks.fanout('Worker', {'a', function() end})` | `fanout collection member at index 2 is a function; members must be data` |
 | Every key is a string, number, or boolean | `tasks.fanout('Worker', t)` after `t[{}] = 'x'` | `fanout collection key must be a string, number, or boolean, got table` |
 | Every number key is finite | `tasks.fanout('Worker', {[1/0] = 'x'})` | `fanout collection key is not a finite number` |
@@ -1720,7 +1724,7 @@ Every broken collection rule raises an error value of kind `lua` whose `message`
 
 The collection argument to `tasks.fanout` must be a Lua table, and any other value, such as the string `'Items'`, the number `5`, `true`, or `nil`, raises that message with the value's Lua type after `got`. The message says `second parameter` in the three-argument form too. To fan out over a list kept in a section, pass the list's items as the collection, as in `local replies = tasks.fanout('Worker', prompt.section('Topics', 'list').items)`. Passing the section's path itself fails with this message.
 
-Members must be data, so a member that is a function, userdata, or thread raises `fanout collection member at index {index} is a {type}; members must be data`. For an array-part member, `{index}` is its position, as in the table above. For a keyed member, `{index}` is the key as plain text: a string key's own text, `true` or `false`, an integer's decimal digits, or a float in its usual form such as `2.5`. So a function stored under the key `cb`, as in `{cb = function() end}`, raises `fanout collection member at index cb is a function; members must be data`. A `json.null` member passes this check, so `tasks.fanout('Worker', { json.null })` runs one arm, and in that arm `item == json.null` is true and `item == nil` is false.
+Members must be data, so a member that is a function, userdata, or thread raises `fanout collection member at index {index} is a {type}; members must be data`. For a list member, `{index}` is its position, as in the table above. For a keyed member, `{index}` is the key as plain text: a string key's own text, `true` or `false`, an integer's decimal digits, or a float in its usual form such as `2.5`. So a function stored under the key `cb`, as in `{cb = function() end}`, raises `fanout collection member at index cb is a function; members must be data`. A `json.null` member passes this check, so `tasks.fanout('Worker', { json.null })` runs one arm, and in that arm `item == json.null` is true and `item == nil` is false.
 
 Every collection key must be a string, number, or boolean, and a key of any other type raises `fanout collection key must be a string, number, or boolean, got {type_name}`, naming the key's Lua type. Every number key must be finite, since a number has a place in the key order only when it is finite. Every string key must be valid UTF-8, and a key whose bytes are not valid UTF-8 raises a `lua` error that has the Lua runtime's own string conversion message, with no fanout-specific wording.
 

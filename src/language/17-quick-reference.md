@@ -108,7 +108,9 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `markdown.section (blocks, path, selector, n)` | form | Returns one block of that section, picked by a selector such as `fence json` and an optional index; raises on a miss | [Parsing Markdown with `markdown`](05-lua-environment.md#parsing-markdown-with-markdown) |
 | `markdown.section_or` | function | The same lookup as `markdown.section`, in both forms; returns `nil` when the section or the block is not there | [Parsing Markdown with `markdown`](05-lua-environment.md#parsing-markdown-with-markdown) |
 | `markdown.select` | function | Returns a new list of every block that matches a selector, at any depth; the selector `*` matches every block | [Parsing Markdown with `markdown`](05-lua-environment.md#parsing-markdown-with-markdown) |
-| `math` | global | Standard `math` library, as in Lua 5.5 | [The sandbox](05-lua-environment.md#the-sandbox) |
+| `math` | global | Standard `math` library, as in Lua 5.5, with a generator of random numbers seeded from the run | [The sandbox](05-lua-environment.md#the-sandbox) |
+| `math.random` | function | Draws a random number; a run repeated with the same seed draws the same numbers | [The `math` library](05-lua-environment.md#the-math-library) |
+| `math.randomseed` | function | Seeds the generator with a number; with no argument, seeds it from its own next draws | [The `math` library](05-lua-environment.md#the-math-library) |
 | `messages` | global | The section entry's conversation, a message list created empty at each entry; cannot be reassigned | [`messages` is the section entry's conversation](11-conversations.md#messages-is-the-section-entrys-conversation) |
 | `#messages` | method | Number of records in the message list | [Reading records](11-conversations.md#reading-records) |
 | `messages:append` | method | Appends a record table that names its own `role`, with optional `meta`; returns the list | [Building a message list](11-conversations.md#building-a-message-list) |
@@ -129,10 +131,10 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `models.use` | function | Takes a role name or a model handle as the chain's current model until the next `models.use`, and returns a handle for it | [Selecting a role with `models.use`](10-models.md#selecting-a-role-with-modelsuse) |
 | `models.use (max_tokens)` | option | Response token limit, a whole number from 1 to 4294967295 | [Sampling options on `models.use`](10-models.md#sampling-options-on-modelsuse) |
 | `models.use (temperature)` | option | Sampling temperature, a finite number from 0.0 to 2.0 | [Sampling options on `models.use`](10-models.md#sampling-options-on-modelsuse) |
-| `next` | function | Steps through keys in the same fixed order as `pairs` | [Deterministic table iteration](05-lua-environment.md#deterministic-table-iteration) |
+| `next` | function | Steps through keys in the same fixed order as `pairs`; refuses the same tables | [Deterministic table iteration](05-lua-environment.md#deterministic-table-iteration) |
 | `os` | not loaded | Never loaded; no `os.time`, `os.clock`, `os.getenv`, or `os.execute` | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `package` | not loaded | Never loaded; no `package.path`, `package.loaded`, or search paths | [The sandbox](05-lua-environment.md#the-sandbox) |
-| `pairs` | function | Visits keys in a fixed sorted order on every run | [Deterministic table iteration](05-lua-environment.md#deterministic-table-iteration) |
+| `pairs` | function | Visits boolean, number, and string keys in a fixed sorted order on every run; refuses a table with a key of another type and a weak table | [Deterministic table iteration](05-lua-environment.md#deterministic-table-iteration) |
 | `pairs(messages)` | method | Visits each record in order with its 1-based position | [Reading records](11-conversations.md#reading-records) |
 | `pcall` | function | Catches errors, suspending calls included; Engine failures arrive as error values | [Raising and catching errors](05-lua-environment.md#raising-and-catching-errors) |
 | `pack.name` | field | The Pack's Pack id as a string | [Tool objects, Pack objects, and `tools.packs`](12-tools.md#tool-objects-pack-objects-and-toolspacks) |
@@ -180,6 +182,7 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `store.str_replace` | function | Replaces the single anchor `old` with `new` and returns `nil` | [Editing, deleting, and checking files](09-the-store.md#editing-deleting-and-checking-files) |
 | `store.write` | function | Creates or replaces a file with a text string and returns `nil` | [Writing and reading files](09-the-store.md#writing-and-reading-files) |
 | `string` | global | Standard `string` library, including method calls such as `s:match` | [The sandbox](05-lua-environment.md#the-sandbox) |
+| `string.format` | function | Builds text from a format string; `%s` gives a table or a function as its name alone, and `%p` raises | [The `string` library](05-lua-environment.md#the-string-library) |
 | `sys` | global | Read-only table of run facts | [Run facts in `sys`](05-lua-environment.md#run-facts-in-sys) |
 | `sys.id` | field | Current section entry id, such as `0.0` in the first section the run enters | [Section entry ids](05-lua-environment.md#section-entry-ids) |
 | `sys.index` | field | An arm's 1-based position in collection order, or a task's `index` seed | [What an arm sees](14-fanout.md#what-an-arm-sees) |
@@ -190,6 +193,7 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `sys.when` | field | Run start instant as an RFC 3339 UTC string | [Run facts in `sys`](05-lua-environment.md#run-facts-in-sys) |
 | `table` | global | Standard `table` library, as in Lua 5.5 | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `table.concat` | function | Joins strings, numbers, and `__tostring` values with a separator | [The sandbox](05-lua-environment.md#the-sandbox) |
+| `table.sort` | function | Sorts a list in place with a stable sort; a failed sort leaves the list as it was | [Sorting with `table.sort`](05-lua-environment.md#sorting-with-tablesort) |
 | `tasks` | global | Table holding every task function, `fanout` included | [Starting a task with `tasks.spawn`](15-tasks.md#starting-a-task-with-tasksspawn) |
 | `tasks.cancel` | function | Ends a task the caller owns and returns nothing | [Canceling and listing tasks](15-tasks.md#canceling-and-listing-tasks) |
 | `tasks.concurrency` | function | Sets or reads the chain's concurrency limit, returning the effective limit | [Concurrency and the admission window](14-fanout.md#concurrency-and-the-admission-window) |
@@ -228,7 +232,7 @@ Every global, function, field, and error kind a Lua block can use, plus the stan
 | `tools.stats.packs` | field | Read-only call counts keyed by Pack id; `GetDynamicTools` calls and discovery refusals count under `dynamic` | [Counting calls with `tools.stats`](12-tools.md#counting-calls-with-toolsstats) |
 | `tools.stats.tools` | field | Read-only call counts keyed by catalog or adhoc tool id | [Counting calls with `tools.stats`](12-tools.md#counting-calls-with-toolsstats) |
 | `tools.stats.total` | field | Every tool call the section entry has made, counted at dispatch | [Counting calls with `tools.stats`](12-tools.md#counting-calls-with-toolsstats) |
-| `tostring` | function | Turns a value such as a number into text | [The sandbox](05-lua-environment.md#the-sandbox) |
+| `tostring` | function | Turns a value such as a number into text; a table, a function, or a userdata becomes its name alone, without a memory address | [Turning values into text](05-lua-environment.md#turning-values-into-text) |
 | `type` | function | Returns a value's Lua type name, such as `'table'` | [The sandbox](05-lua-environment.md#the-sandbox) |
 | `untrusted` | function | Wraps a string in the run's untrusted envelope and returns it | [Handing store text to a model with `untrusted`](09-the-store.md#handing-store-text-to-a-model-with-untrusted) |
 | `utf8` | global | Standard `utf8` library, as in Lua 5.5 | [The sandbox](05-lua-environment.md#the-sandbox) |
@@ -270,9 +274,10 @@ Each row gives a limit, its default, and who can change it, and the Pack tools t
 | Limit | Default | Set by | Taught in |
 |---|---|---|---|
 | `json` nesting limit | 127 levels of nested tables, arrays, and objects, on encode and decode | fixed | [Size and nesting limits](05-lua-environment.md#size-and-nesting-limits) |
+| `var` nesting limit | 127 levels of nested tables, with `var` itself as the first, however the tables were written | fixed | [When `var` rejects a write](05-lua-environment.md#when-var-rejects-a-write) |
 | `json.decode` input cap | 8,388,608 bytes per `json.decode` or `json.decode_lines` call | fixed | [Size and nesting limits](05-lua-environment.md#size-and-nesting-limits) |
 | `json.encode` key limit | 100,000 keys that are not numbers or booleans on one path, per `json.encode` or `json.encode_lines` call | fixed | [Size and nesting limits](05-lua-environment.md#size-and-nesting-limits) |
-| `json.encode` size budget | One eighth of `lua_memory_bytes` in values and `lua_memory_bytes` in bytes of text per `json.encode`, `json.encode_lines`, or `var` write, so 8,388,608 values and 67,108,864 bytes by default | Harness, through `lua_memory_bytes` | [Size and nesting limits](05-lua-environment.md#size-and-nesting-limits) |
+| `json.encode` size budget | One eighth of `lua_memory_bytes` in values and `lua_memory_bytes` in bytes of text per `json.encode`, `json.encode_lines`, `var` write, or [table that becomes data](05-lua-environment.md#tables-that-become-data), so 8,388,608 values and 67,108,864 bytes by default | Harness, through `lua_memory_bytes` | [Size and nesting limits](05-lua-environment.md#size-and-nesting-limits) |
 | log byte quota | 256 bytes per allowed `log` event, 262,144 bytes by default | Harness | [Logging and lifecycle reports](05-lua-environment.md#logging-and-lifecycle-reports) |
 | log message limit | 256 Unicode characters | fixed | [Logging and lifecycle reports](05-lua-environment.md#logging-and-lifecycle-reports) |
 | `lua_log_events` | 1024 `log` events per section VM | Harness | [Lua memory and log quotas](16-limits-and-errors.md#lua-memory-and-log-quotas) |

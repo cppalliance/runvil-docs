@@ -864,7 +864,7 @@ A bare name with no global of its own resolves through your `_G` metatable (see 
 
 A bare name whose global reads as nil at the `prose` read, whether it was never assigned or was assigned nil, fails with substitution kind `UnknownNamespace`, and the message names the global, so the prose `{{ ghost }} here.` read by `return prose` fails with a message containing `unknown namespace or global 'ghost'`.
 
-A bare name whose global cannot become JSON data fails with substitution kind `Serialize` and the message `global '{name}' in {{ {path} }} is not JSON data`. That covers a global holding a function, userdata other than `json.null`, or coroutine thread, and a table that contains one of those or refers to itself:
+A bare name whose global cannot become JSON data fails with substitution kind `Serialize` and the message `global '{name}' in {{ {path} }} is not JSON data`. That covers a global holding a function, userdata other than `json.null`, or coroutine thread, and a table that contains one of those or refers to itself. It also covers a list with a gap, a weak table, and a table nested more than 127 deep (see [Tables that become data](05-lua-environment.md#tables-that-become-data)). A global that holds a function fails this way:
 
 ````markdown
 ---

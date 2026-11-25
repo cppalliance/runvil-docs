@@ -784,7 +784,7 @@ tools.offer(tools.packs)
 - A Pack object's `tools` array works as an array, so passing it offers every tool in it one by one.
 - An array that another function returns works the same way, so `tools.offer(tools.packs.extras())` offers every extra Pack, and `tools.offer(tools.packs)` offers every Pack the section knows, the adhoc Pack included.
 
-An array is its `#t` entries, from index 1 to `#t`, each read the way Lua indexing reads it, which is why `tools.packs` works as one. An array with a gap, a nested table, or a key outside `1` to `#t` is refused, so a `nil` entry, a table entry, or a key such as `name` raises (see [Errors from `tools.offer`](#errors-from-toolsoffer)).
+An array is the entries that the table itself holds from index 1 up to the first index it lacks. The array ends at that index wherever `#t` puts the end of a table with a gap, so `tools.offer` reads such a table the same way on every run (see [The length of a table with a gap](05-lua-environment.md#the-length-of-a-table-with-a-gap)). A table with a `__len` metamethod is the other kind of array: it has as many entries as `__len` gives, each read the way Lua indexing reads it, through `__index`, which is why `tools.packs` works as one. Without a `__len`, an `__index` metamethod has no part in the read, so `setmetatable({ [1] = 'web', [2] = 'web', [3] = 'web', [5] = 'web' }, { __index = { [4] = 'web' } })` is refused for the key `5` on every run. A nested table or a key outside the array is refused, so a table entry, an entry after a gap, or a key such as `name` raises (see [Errors from `tools.offer`](#errors-from-toolsoffer)).
 
 Calling `tools.offer()` with no argument, or `tools.offer({})` with an empty array, succeeds and leaves the scope unchanged. An explicit `nil` raises, because `nil` is an argument of the wrong type. So a lookup that may miss, such as `tools.packs.get` or `tools.get`, is guarded with `if` before you offer what it returns, as [Offering a Pack behind a guard](#offering-a-pack-behind-a-guard) shows.
 
@@ -1115,9 +1115,11 @@ Every entry of one `tools.offer` call is checked before any is recorded, so a ca
 
 - A second argument raises an error that names that argument's type, whether the first argument is one entry or an array: `tools.offer takes one tool or Pack, or an array of them, got extra {type}`, such as `got extra string` for `tools.offer('web/search', 'web/fetch')`. To offer several entries in one call, put them in one array.
 - An argument that is not a string, a Tool object, a Pack object, or a table raises an error that names the accepted forms and the value's type: `tools.offer takes tool ids, Pack ids, tool objects, Pack objects, or an array of them, got {kind}`, such as `got integer` for `tools.offer(42)` and `got nil` for `tools.offer(nil)`. A userdata other than a Tool object or a Pack object, such as a model handle, ends it with `got userdata`.
-- An array entry that is not a string, a Tool object, or a Pack object raises an error that also names the entry's index: `tools.offer takes tool ids, Pack ids, tool objects, or Pack objects in an array, got {kind} at index {index}`. A `nil` inside the array's length and a nested table both raise it, so `tools.offer({ { 'web' } })` raises `tools.offer takes tool ids, Pack ids, tool objects, or Pack objects in an array, got table at index 1`.
-- A table with a key outside `1` to `#t` raises `tools.offer takes an array, got a table with the key {key}`, so `tools.offer({ name = 'web' })` raises `tools.offer takes an array, got a table with the key name`.
-- An array longer than 100,000 entries raises `tools.offer takes an array of at most 100000 entries, got {len}` before any entry is read, so an array whose `#t` is 100,001 raises `tools.offer takes an array of at most 100000 entries, got 100001`.
+- An array entry that is not a string, a Tool object, or a Pack object raises an error that also names the entry's index: `tools.offer takes tool ids, Pack ids, tool objects, or Pack objects in an array, got {kind} at index {index}`. A nested table raises it, so `tools.offer({ { 'web' } })` raises `tools.offer takes tool ids, Pack ids, tool objects, or Pack objects in an array, got table at index 1`.
+- A table with a key outside the array raises `tools.offer takes an array, got a table with the key {key}`, so `tools.offer({ name = 'web' })` raises `tools.offer takes an array, got a table with the key name`. An entry after a gap is such a key, because the array ends at the gap: `tools.offer({ 'web', nil, 'mcp' })` raises `tools.offer takes an array, got a table with the key 3`. Of several such keys the message names the first one: booleans come first, then numbers by value, then strings in bytewise order. A key that is neither a string nor an integer is named by its type, as in `got a table with the key boolean`.
+- An array whose `__len` metamethod counts an index that holds nothing raises the entry error for that index, so an array of one entry whose `__len` returns `3` raises `tools.offer takes tool ids, Pack ids, tool objects, or Pack objects in an array, got nil at index 2`.
+- An array longer than 100,000 entries raises `tools.offer takes an array of at most 100000 entries, got {len}` before any entry is checked, so an array of 100,001 entries raises `tools.offer takes an array of at most 100000 entries, got 100001`.
+- A weak table, one whose metatable has a `__mode` string with `k` or `v` in it, raises `tools.offer takes an array, got a weak table, one whose metatable sets __mode: the entries the collector leaves in it are not the same in two runs`, before any other check of the array (see [Weak tables](05-lua-environment.md#weak-tables)). A table whose metatable is a weak table raises `tools.offer takes an array, got a table whose metatable is a weak table: the fields the collector leaves in that metatable are not the same in two runs`. The array is checked again after each call of its `__len` and `__index` metamethods, so an array that one of them makes weak raises the same errors.
 
 A shape error refuses the whole call too, so a `tools.offer` refused for an extra argument leaves the scope as it was, and a later valid offer of the same tool before the first loop round still lands. `tools.offer_dynamic` raises every one of these errors with its own name in place of `tools.offer`.
 
@@ -1201,7 +1203,7 @@ Each mistake in the arguments raises a Lua error at the `tools.call` line:
 - A first argument other than a string or a Tool object raises `tools.call takes a tool id or a tool object, got {type}`. A plain table ends the message with `got table`, even a record with `id` and `name` fields, because a plain record is not a tool, and a userdata that is not a Tool object, such as a model handle, ends it with `got userdata` alone.
 - A string without a slash raises `tools.call: "{name}" is not a tool id`, as above.
 - An `args` value that is not a table, such as a string, number, or boolean, raises `args must be a table, got {type}`, such as `args must be a table, got string`.
-- An `args` table that holds a value with no JSON form, such as a function, raises `args must be a JSON-representable table: {error}`, where `{error}` explains why the table could not become JSON.
+- An `args` table that holds a value with no JSON form, such as a function, raises `args must be a JSON-representable table: {error}`, where `{error}` explains why the table could not become JSON. A list with a gap, a weak table, and a table nested more than 127 deep have no JSON form either (see [Tables that become data](05-lua-environment.md#tables-that-become-data)).
 
 Every one of these errors comes back as the call's own answer, so it raises at the `tools.call` line and a `pcall` around the call catches it there. All four have the same shape, a `lua`-kind error value whose message is `{file}:{line}: {refusal}. The Lua code failed at runtime. Fix the code at this location.`, so you see one error form whichever argument is wrong. The type at the end of the refusal is the Lua type of the bad value, so passing `42` as the tool or as `args` ends the refusal with `got integer`, not `got number`.
 
@@ -1586,7 +1588,7 @@ tools.offer(42)                                        -- not a tool, a Pack, or
 tools.offer(nil)                                       -- nil is not a tool or a Pack; a lookup that may miss is guarded with if
 tools.offer(tools.get('web/serch'))                    -- the same: tools.get returned nil
 tools.offer({ 'web', nil, 'mcp' })                     -- an array has no gaps
-tools.offer({ name = 'web' })                          -- an array has only the keys 1 to #t
+tools.offer({ name = 'web' })                          -- an array has no key outside its entries
 tools.offer({ { 'web' } })                             -- arrays do not nest
 tools.packs.get({ 'web', 'subagents' })                -- get takes one Pack id
 tools.packs.get = nil                                  -- tools.packs is read-only
@@ -1678,7 +1680,7 @@ end)
 
 The schema for `find` has properties `query` and `limit`, a `required` list of `["limit", "query"]`, and `type` of `object`. The description reaches the schema only when you supply one, so `limit = { 'integer', 'maximum hits' }` becomes `"limit": { "type": "integer", "description": "maximum hits" }`, while the bare type string `query = 'string'` gives `query` its type alone.
 
-The array form is positional: the type is the table's first element and the description its second, and only those two elements are read. The description is optional, so `{ 'string' }` declares a typed parameter without one, and entries past the second are ignored.
+The array form is positional: the type is the table's first element and the description its second, and only those two elements are read. Both are strings. The description is optional, so `{ 'string' }` declares a typed parameter without one, and entries past the second are ignored. Every parameter name is a string too, so a positional entry such as `{ 'string' }` in the `parameters` table itself, which sits under the key `1`, is refused.
 
 Every short-form parameter is required, and an optional parameter needs the other form, a JSON Schema object. The names in `properties` and `required` are listed in sorted bytewise order, so an adhoc tool's schema text is identical on every run and a stored tool definition replays. For example, parameters named `zulu`, `alpha`, `mike`, `bravo`, `yankee`, `charlie`, `oscar`, and `delta` give `required = ["alpha", "bravo", "charlie", "delta", "mike", "oscar", "yankee", "zulu"]`.
 
@@ -1823,7 +1825,8 @@ the tools adhoc/web_search of the adhoc Pack in the Static Set and web/search of
 
 The attrs hold only `name`, `description`, and `parameters`:
 
-- Any other key raises `tools.adhoc: unknown key "{key}"; accepted keys are name, description, parameters`, so `run = 1` reports `unknown key "run"`. When several keys are unknown, the message names the first in sorted order.
+- Any other key raises `tools.adhoc: unknown key "{key}"; accepted keys are name, description, parameters`, so `run = 1` reports `unknown key "run"`. When several keys are unknown, the message names the first: boolean keys, then number keys by value, then string keys in bytewise order. A key that is neither a string nor an integer is named by its type.
+- An attrs table that is a weak table raises `tools.adhoc: the attributes are a weak table, one whose metatable sets __mode: the entries the collector leaves in it are not the same in two runs`, and a weak `parameters` table raises the same text with `parameters are` in place of `the attributes are` (see [Weak tables](05-lua-environment.md#weak-tables)). A parameter spec that is a weak table raises `tools.adhoc: param "{name}" is a weak table, one whose metatable sets __mode: the entries the collector leaves in it are not the same in two runs`, whatever the table holds.
 - A missing `name` or `description` raises `tools.adhoc: "{key}" is required`, as in `tools.adhoc: "name" is required`.
 - A `name` or `description` that is not a string raises `tools.adhoc: "{key}" must be a string, got {type}`.
 - A `name` outside the name grammar raises `tools.adhoc: invalid name "{name}": expected [A-Za-z][A-Za-z0-9_-]{0,63}`.
@@ -1834,8 +1837,13 @@ The attrs hold only `name`, `description`, and `parameters`:
 A short-form `parameters` table that fails the schema check raises one of these:
 
 - A parameter type outside the four raises `tools.adhoc: param "{name}" has unsupported type "{ty}": expected "string", "integer", "number", or "boolean"`.
-- A parameter spec that is neither a type string nor a table, such as a bare number, raises `tools.adhoc: param "{name}" must be a type string or a {type, description} array`, where `{type, description}` is literal text in the message.
-- A spec table with no first element raises a Lua conversion error rather than the named param error, because the type is read from the first element.
+- A parameter name that is not a string raises `tools.adhoc: a parameter's name must be a string, got {type}`, so `parameters = { 'string' }` reports `got integer`.
+- A parameter spec that is neither a type string nor an array of a type string and an optional description string raises `tools.adhoc: param "{name}" must be a type string or a {type, description} array`, where `{type, description}` is literal text in the message. A bare number raises it, and so do an empty table, `{ 'string', 5 }`, and `{ 5, 'a description' }`.
+- A `parameters` table too large to convert raises `tools.adhoc: parameters are too large to convert`.
+
+When several parameters are refused, the message is about the one whose name comes first: boolean keys, then number keys by value, then string names in bytewise order. So `parameters = { b = 5, a = 'nope' }` reports the unsupported type of `a` on every run.
+
+A message quotes at most the first 64 bytes of a key, a name, or a type, and gives the length of a longer one, so a name of 1000 letters `a` appears as 64 of them followed by `... (1000 bytes)`.
 
 A JSON Schema `parameters` table that has no JSON form, such as one holding a function, raises `tools.adhoc: parameters schema cannot be encoded as JSON: {path} {reason}`, where `{path}` names the value that failed, starting at `value` for the `parameters` table, and `{reason}` is the JSON encoder's own explanation, such as `must be JSON data, got function`.
 
@@ -2861,6 +2869,8 @@ A prelude never replaces or shadows an Engine global for your code. Before any o
 | a global an earlier prelude of the same prompt already defines | `` Pack `{pack}`: its prelude defines the global `{name}`, which Pack `{owner}`'s prelude already defines `` |
 | a reserved name | `` Pack `{pack}`: its prelude defines the global `{name}`, which is reserved as {kind} `` |
 | a global under a key that is not a valid UTF-8 string | `` Pack `{pack}`: its prelude defines a global under {key}; a global's name must be a UTF-8 string `` |
+
+Before these checks, the Engine refuses a prelude that made its own environment a weak table, as `getmetatable(_ENV).__mode = 'v'` does, with ``Pack `{pack}`: its prelude set __mode on the metatable of its environment; the environment must not be a weak table``. The garbage collector can take a value out of a weak table at any moment, so the globals such a prelude leaves would differ from run to run (see [Weak tables](05-lua-environment.md#weak-tables)).
 
 A collision with another prelude fails the run even when the prompt's only section just returns a value. When the preludes of two Packs that one prompt declares define the same global, the message names the Pack whose prelude installs later as `{pack}` and the Pack whose prelude installed first as `{owner}`. Two such Packs collide only in a prompt that declares both: when a prompt declares one of them and a prompt it executes declares the other, each prompt reads the global of its own Pack (see [Packs and preludes in an executed prompt](#packs-and-preludes-in-an-executed-prompt)).
 

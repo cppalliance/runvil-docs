@@ -876,6 +876,7 @@ Every sampling option error is an error value of kind `lua` raised by `models.us
 | Problem | Message |
 | --- | --- |
 | The second argument is neither a table nor `nil` | `models.use options must be a table, got {type}` |
+| The options table is a [weak table](05-lua-environment.md#weak-tables) | `models.use options must not be a weak table, one whose metatable sets __mode: the entries the collector leaves in it are not the same in two runs` |
 | A key is not a string, including a positional entry | `models.use option names must be strings, got {type}` |
 | A string key other than `temperature` or `max_tokens` | `models.use option "{other}" is unknown: expected temperature or max_tokens` |
 | `temperature` is not a number | `models.use option temperature must be a number, got {actual}` |
@@ -885,7 +886,7 @@ Every sampling option error is an error value of kind `lua` raised by `models.us
 
 In these messages, `{type}` is the Lua type name of the value given, such as `string` or `integer`, and `{other}` is the unknown option name. When `temperature` is not a number, `{actual}` is the Lua type name of the value given, and in the finite message, `{actual}` is the value given, such as `NaN`. Finiteness is checked before the range, so an infinite temperature gets the finite message rather than the range message. In the range message, `{value}` prints the way a float prints, so a trailing `.0` is dropped: `temperature = 3` and `temperature = 3.0` both give `3`, and `temperature = 2.5` gives `2.5`. In the `max_tokens` message, `{actual}` is the number given, such as `0`, `-1`, or `1.5`, or the type name of a value that is not a number, such as `string`.
 
-When an options table holds more than one bad entry, `models.use` reports the same one on every run, whatever order Lua's `pairs` visits the keys in. It checks keys that are not strings first, sorted by type name, so a `boolean` key is reported before an `integer` key. It then checks string names in bytewise order, so a bad `max_tokens` is reported before a bad `temperature`, and any other name is reported at its own place in that order.
+When an options table holds more than one bad entry, `models.use` reports the same one on every run: the one whose key comes first. Boolean keys come first, then number keys by value, then string names in bytewise order, and then every other key by its type name. So a `boolean` key is reported before an `integer` key, the key `1.5` before the key `2`, a number key before a bad `temperature`, a bad `max_tokens` before a bad `temperature`, and a table key last of all.
 
 ## Model handles
 

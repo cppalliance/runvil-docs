@@ -361,19 +361,20 @@ Each section's Lua runs in a sandbox whose only standard libraries are `string`,
 
 Those 15 names and the four libraries are the 19 Lua globals on the reserved-name list (see [Reserved names](#reserved-names)), and that list is the whole toolkit. Every section VM runs Lua 5.5 with these libraries and base functions. The safe base functions a block calls are exactly the kept base globals other than the `math`, `string`, `table`, and `utf8` libraries. File access, the operating system, loading code from files or search paths, and loading code from strings are all outside the toolkit. `_G` is the global table, and `_VERSION` holds the Lua version string.
 
-Six of the base functions behave in a Runvil way:
+Seven of the base functions behave in a Runvil way:
 
 - `pairs` and `next` visit keys in a fixed order (see [Deterministic table iteration](#deterministic-table-iteration)).
-- `pcall` and `xpcall` deliver a failure raised by an Engine function as an [error value](#error-values), while passing your own raised value through unchanged, whether it is a string, a table of your own, or an error value already built (see [Raising and catching errors](#raising-and-catching-errors)).
+- `tostring` gives a table, a function, or a userdata as its name alone, without a memory address (see [Turning values into text](#turning-values-into-text)).
+- `pcall` and `xpcall` deliver a failure raised by an Engine function as an [error value](#error-values), while passing your own raised value through unchanged, whether it is a string, a table of your own, or an error value already built. The one exception is a string that starts with the position of an Engine file, which loses that start (see [Raising and catching errors](#raising-and-catching-errors)).
 - `setmetatable` and `getmetatable` give `_G` an author metatable that sits behind the guard on `args`, `prose`, and `messages` (see [Giving `_G` a metatable](#giving-_g-a-metatable)).
 
 On values other than `_G`, `getmetatable` and `setmetatable` behave as in stock Lua, so `setmetatable(t, mt) == t` and `getmetatable(t) == mt` both hold (see [`setmetatable` and `getmetatable` on other values](#setmetatable-and-getmetatable-on-other-values)). You can call `getmetatable` on a task handle from `tasks.spawn` too, as in `getmetatable(t) == nil`.
 
-The other base functions work as in standard Lua 5.5. You call `ipairs(t)`, `select(n, ...)`, and `tonumber(v)` as in any Lua program, and `select('#', ...)` and `select(2, pcall(...))` give the same results as in stock Lua. `tonumber` turns a numeric string read from the store into a number, as in `tonumber(ok and v or '0') + 1`. `assert(cond, message)` checks a condition with a message. `ipairs` walks an array table, such as a table literal, in order, so `for _, text in ipairs({ 'first question', 'second question' }) do` handles `first question` before `second question`.
+The other base functions work as in standard Lua 5.5. Inside the libraries, `string.format`, `table.concat`, `table.sort`, and `math.randomseed` are Runvil's own, and the section on each library says how it differs. You call `ipairs(t)`, `select(n, ...)`, and `tonumber(v)` as in any Lua program, and `select('#', ...)` and `select(2, pcall(...))` give the same results as in stock Lua. `tonumber` turns a numeric string read from the store into a number, as in `tonumber(ok and v or '0') + 1`. `assert(cond, message)` checks a condition with a message. `ipairs` walks an array table, such as a table literal, in order, so `for _, text in ipairs({ 'first question', 'second question' }) do` handles `first question` before `second question`.
 
 The standard functions `string.rep`, `select`, `table.concat`, `ipairs`, `type`, `tostring`, `getmetatable`, and `assert` work around Engine calls too, `models.loop` included, as in `select('#', models.loop())` and `getmetatable(err) == nil`. Section Lua combines them freely, as in `assert(not pcall(require, '/broken'), 'the broken library raises')`, which checks that requiring a broken library raises.
 
-The kept globals are ordinary globals, so you can reassign one in prompt code. `error = function() end` runs without complaint.
+The kept globals are ordinary globals, so you can reassign one in prompt code. `error = function() end` runs without complaint. Only your own code calls the function you put there: the Engine's own Lua code took every global it uses before your code ran, so `tasks.join` reads its set with the stock `ipairs` whatever `ipairs` is by then.
 
 ### Checking types
 
@@ -410,6 +411,30 @@ You build strings with the `..` concatenation operator, joining string literals 
 - `nil` becomes the string `nil`, so `tostring(print) .. ':' .. tostring(warn)` returns `nil:nil`.
 - An error value becomes its message, so `tostring(err)` gives the error message.
 - A tool result or a model reply becomes its text, so `tostring(reply)` gives `pong` when the model replies `pong`.
+- Any other table, function, or userdata becomes its name alone: `table`, `function`, `userdata`, or the `__name` of its metatable when that is a string.
+
+````markdown
+---
+name: names
+description: Turns tables and functions into text.
+runvil: 0
+---
+
+```lua
+local point = setmetatable({}, { __name = 'Point' })
+return tostring({}) .. '|' .. tostring(type) .. '|' .. tostring(point) .. '|' .. tostring(messages) .. '|' .. tostring({} == {})
+```
+````
+
+The run result is:
+
+````text
+table|function|Point|MessageList|false
+````
+
+Stock Lua adds the value's memory address to the name, as in `table: 0x55d0c0a1e2f0`. The address is where the value happens to sit in memory, so it differs from run to run, and Runvil leaves it out so that a text built from such a value is the same on every run. Two different tables therefore turn into the same text, and code that must tell them apart compares the tables themselves with `==`, as `{} == {}` does here. A value with a `__tostring` metamethod turns into what that metamethod returns, as in stock Lua.
+
+`tostring`, `string.format`, `table.concat`, and `table.sort` are Runvil's own functions, and each one runs your code as the stock function does. Your code here is a `__tostring`, `__len`, `__lt`, `__index`, or `__newindex` metamethod, or the comparison function of a sort. That code may make a [suspending call](#suspending-calls), such as `store.read`, where the same call in stock Lua raises `attempt to yield across a C-call boundary`: in a `__tostring` that `tostring` or `string.format` runs, in the `__len` and `__index` of a list that `table.concat` joins, and in the code that a sort runs (see [Sorting with `table.sort`](#sorting-with-tablesort)). An error that code raises names the line that raised it, and it reaches the message handler of an `xpcall` around the call before a `<close>` variable of that code closes. A level counts as under the stock function, which is a C function with no line: `error(message, 2)` in that code adds no position to the message, and `error(message, 3)` adds the line of your call to `tostring`, `string.format`, `table.concat`, or `table.sort`. When that call is the whole of a `return` inside a function, as in `return tostring(value)`, Lua makes it a tail call and drops your function from the levels, so level 3 is the line that called your function, where stock Lua gives the line of the `return`. When Lua cannot run the code, the error has stock Lua's text, as in `attempt to call a number value` for a `__tostring` that holds a number. Calls that nest without end, such as a `__tostring` that passes its own value to `tostring`, fail with Lua's `stack overflow` or `C stack overflow`. The error names your line when the stack runs out in your function, and has no position when it runs out inside one of Runvil's functions. A metamethod that Lua runs for an operator, such as a `__len` that sorts its own table, fails with `C stack overflow` at about 200 levels, as in stock Lua. When that limit is met while one of the four functions handles a userdata such as `messages`, to print it, to join or sort it as a list, or to compare it in a sort, `pcall` returns an [error value](#error-values) whose message contains `C stack overflow`, where stock Lua gives the string. A `stack overflow` that is met at that point comes back as an error value too, with `stack overflow` in its message. The same holds when the limit of about 200 levels is met inside another Runvil function, such as `json.encode`, or while `tostring` prints an error value. With a memory limit below the default of 64 MiB (see [Lua memory and log quotas](16-limits-and-errors.md#lua-memory-and-log-quotas)), such a nest can fill the Lua heap before the stack, and it then fails with `not enough memory`: a `__tostring` that passes its own value to `string.format` does at 48 MiB.
 
 ### The `string` library
 
@@ -443,6 +468,7 @@ Strings share a metatable whose `__index` is the `string` library, so `getmetata
 - `string.find` finds a pattern, as in `string.find(wrapped, "untrusted_input_")`. With its plain-find flag it searches for literal text: `string.find(m.content, 'Answer:', 1, true) == 1` tests for a prefix, and `err:find(']:2: undefined global undefined_here', 1, true)` finds that exact text. A plain search returns `nil` when the text is absent, so `tostring(err):find('appears exactly once', 1, true) ~= nil` tests whether a message contains that text.
 - `string.sub` takes negative indexes that count from the end, inside sections and fanout arms alike, as in `tostring(sys.index) == string.sub(item, -1)`. Its positions count bytes, not characters, so a cut can split a multibyte character, and [the `utf8` library](#the-utf8-library) finds the character boundaries to cut on.
 - `string.rep(s, n)` repeats `s` `n` times, so `messages:user(string.rep('x', 100000))` builds a 100000-character user message.
+- `string.format` builds text from a format string, with two differences from stock Lua. `%s` gives a table, a function, or a userdata the way [`tostring`](#turning-values-into-text) does, as its name alone, so `string.format('%s has %d', {}, 3)` returns `table has 3`. `%p` is not available, because it prints nothing but a memory address: a format that holds it raises `string.format: conversion '%p' is not available, it prints a memory address`.
 - `string.char` builds a string from raw byte values, which can produce bytes that are not valid UTF-8. `log` rejects the string from `string.char(255)` as not UTF-8 (see [Logging and lifecycle reports](#logging-and-lifecycle-reports)).
 
 ### The `table` library
@@ -476,10 +502,10 @@ at (1,2) 3
 
 `table.concat(list, sep, i, j)` joins `list[i]` through `list[j]`, with `i` defaulting to `1`, `j` defaulting to `#list`, and `sep` defaulting to the empty string. So `table.concat(list)` joins the whole list end to end, and `table.concat(items, ', ')` over `alpha` and `beta` gives `alpha, beta`. When the range is empty, such as an empty list or an `i` greater than `j`, `table.concat` returns an empty string. It works in sections and fanout arms alike, and `table.concat(r, '|')` over ten results can produce `1|2|3|4|5|6|7|8|9|10`.
 
-String and number elements join as they are, as in stock Lua. `table.concat` also joins elements that render through `tostring`, converting each one with `tostring` first:
+String and number elements join as they are, as in stock Lua. `table.concat` also joins these elements, each as `tostring` gives it:
 
-- Every userdata element, such as an Engine handle with a `__tostring` metamethod. `table.concat` decides by type alone here, because `getmetatable` cannot read an Engine handle's metatable, so a userdata element always joins. This covers the Engine's own values.
-- Every table element whose `getmetatable` result is a table with a `__tostring` field. This covers fanout result entries and your own objects made with `setmetatable(t, { __tostring = f })`, such as `point` above, where `table.concat({ 'at', point }, ' ')` returns `at (1,2)`.
+- Every userdata element. One with a `__tostring` metamethod joins as what that metamethod returns, and one without joins as its name, so a record of the message list joins as `RecordView`. This covers the Engine's own values.
+- Every table element whose metatable has a `__tostring` field. This covers fanout result entries and your own objects made with `setmetatable(t, { __tostring = f })`, such as `point` above, where `table.concat({ 'at', point }, ' ')` returns `at (1,2)`. A `__metatable` field in that metatable changes nothing here, because `table.concat` finds `__tostring` as Lua does and not through `getmetatable`.
 
 So `table.concat` over a [`tasks.fanout`](14-fanout.md#fanout-in-one-call) result list joins each arm's text with the separator: `table.concat(r, ',')` over three arms returns `a:x1+y2+z3,b:x1+y2+z3,c:x1+y2+z3`.
 
@@ -495,15 +521,77 @@ invalid value (boolean) at index 3 in table for 'concat'
 
 An index in the range that holds nil, such as a hole in the list or a `j` past `#list`, gives `invalid value (nil) at index {k} in table for 'concat'`, where `{k}` is the index inside `i..j`. A `j` past the end therefore reports index `#list + 1`.
 
-A table element whose metatable holds a non-table `__metatable` field, such as `'sealed'` or `false`, fails with `invalid value (table) at index {k} in table for 'concat'` even when that metatable has `__tostring`. `table.concat` reads the metatable through `getmetatable`, which returns the `__metatable` value instead.
-
-A list argument that is not indexable, such as nil, fails with a Lua runtime error from taking `#list` or reading `list[k]`, rather than with stock Lua's bad-argument message. When Lua adds a position prefix to an element error, it points into the sandbox's own `table.concat` code rather than at your calling line (see [Error line numbers and locations](#error-line-numbers-and-locations)).
+The arguments are checked as stock Lua checks them. The list must be a table, or a value whose metatable has both `__index` and `__len`, such as the message list, so `table.concat(nil)` raises `bad argument #1 to 'concat' (table expected, got nil)`. A bound that is not a whole number, as in `table.concat({ 1, 2 }, '', 1.5)`, raises `bad argument #3 to 'concat' (number has no integer representation)`. The position prefix of each of these errors names your calling line (see [Error line numbers and locations](#error-line-numbers-and-locations)). An argument error names the function as you write the call, as stock Lua does. `pcall(table.concat, nil)`, where no Lua code of yours makes the call, gives `bad argument #1 to 'table.concat' (table expected, got nil)`, and a call through a local variable gives the name of the variable. The same holds for `table.sort`, `string.format`, `tostring`, `math.randomseed`, `pcall`, `xpcall`, `setmetatable`, and `getmetatable`. A method call such as `('%d'):format('x')` leaves the string out of the count and names argument 1. A tail call and a `__call` metamethod read otherwise than in stock Lua. When the call is the whole of a `return` inside a function, as in `return join(nil)` for a local `join` that holds `table.concat`, the error names the function `concat`, where stock Lua says `join`, and a method call written that way counts its value. Runvil calls an `__index` or `__newindex` function that you set on `_G` in the same way, so when that function is one of these, the error names it by its field, as in `format`, where stock Lua says `index` or `newindex`. Runvil calls the message handler of an `xpcall` in the same way too, so a handler that is one of these functions is named by its field, as in `format`, where stock Lua says `string.format`. When the function is the `__call` metamethod of a value you call, that value counts as argument 1, so each number is one higher than in stock Lua.
 
 Each of these is an ordinary Lua runtime error. `pcall` catches it, and left uncaught it ends the run with code `lua_runtime` (see [What an uncaught error ends](#what-an-uncaught-error-ends)).
 
+#### Sorting with `table.sort`
+
+`table.sort(list)` sorts a list in place by `<`, and `table.sort(list, before)` sorts it by your comparison function, which returns true when its first argument must come before its second:
+
+````markdown
+---
+name: sorted
+description: Sorts records by weight and keeps ties in their order.
+runvil: 0
+---
+
+```lua
+local list = { { n = 'pear', w = 2 }, { n = 'fig', w = 1 }, { n = 'plum', w = 2 }, { n = 'kiwi', w = 1 }, { n = 'lime', w = 2 } }
+table.sort(list, function(a, b) return a.w < b.w end)
+local names = {}
+for i, item in ipairs(list) do names[i] = item.n end
+return table.concat(names, ' ')
+```
+````
+
+The run result is the same on every run:
+
+````text
+fig kiwi pear plum lime
+````
+
+Runvil's `table.sort` is a stable sort: items that compare equal keep the order they had, so `fig` stays ahead of `kiwi`, and `pear`, `plum`, and `lime` stay in the order the list gave them. The result therefore depends only on the list and the comparison. Stock Lua's sort makes no such promise, and it sorts this list to `kiwi fig pear plum lime`.
+
+The sort reads every item once, compares, and then writes every item back once. This gives it four properties that stock Lua's sort lacks:
+
+- A sort that fails leaves the list as it was. With `local t = { 3, 1, 2 }`, a comparison function that raises leaves `t` as `3, 1, 2`, and so does `table.sort({ 3, 'a', 1 })`, which raises `attempt to compare string with number`.
+- A sort of two or more items always writes, even when the list is already in order, so a list that refuses writes, such as a list inside `args`, always raises (see [Table functions that write](06-arguments.md#table-functions-that-write)). A list of fewer than two items has nothing to sort, and the call returns without a read or a write.
+- A comparison function may make a [suspending call](#suspending-calls), such as `store.exists`, because the sort is Lua code, and so may the `__lt` and `__len` metamethods the sort uses and the `__index` and `__newindex` metamethods of the sorted list. In stock Lua the same call raises `attempt to yield across a C-call boundary`.
+- A comparison function that contradicts itself, such as one that always returns true, gives the list some order, the same on every run. It never raises stock Lua's `invalid order function for sorting`.
+
+The list must be a table, or a value whose metatable has `__index`, `__newindex`, and `__len`, as in stock Lua. A record of the message list has no `__len`, so `table.sort(messages[1])` raises `bad argument #1 to 'sort' (table expected, got RecordView)`. The message list has all three, so `table.sort(messages)` is taken and fails at its work once the list holds two records: with `attempt to compare two RecordView values`, or, with a comparison function, with the refusal of the write, `messages cannot be assigned to by index; add records with append(record), or rewrite history with models.compact(compactor, reason)`. A comparison that is not a function raises `bad argument #2 to 'sort' (function expected, got {type})`, where `{type}` is the `__name` of the value's metatable when that is a string, as in stock Lua. The error names the function as you write the call (see [When `table.concat` fails](#when-tableconcat-fails)). The sort measures the list by `#list`, so keep the list without a gap (see [The length of a table with a gap](#the-length-of-a-table-with-a-gap)). Each of these errors is an ordinary Lua runtime error that names your calling line.
+
 ### The `math` library
 
-The sandbox keeps the `math` library. A block calls it as `math.{name}(...)`, and it works as in standard Lua 5.5.
+The sandbox keeps the `math` library. A block calls it as `math.{name}(...)`, and it works as in standard Lua 5.5, except for where its random numbers start.
+
+`math.random` draws from a generator that the Engine seeds for each section entry, from the run's [seed](01-what-a-prompt-is.md#seed-start-time-and-repeatable-runs) and the [section entry's id](#section-entry-ids). So the draws differ from one run to the next and from one section entry to the next, and a run repeated with the same seed draws the same numbers again. Stock Lua seeds the generator from the clock and a memory address, which a later run cannot repeat. A library loaded with `require` and a [Pack prelude](#pack-preludes) draw from the generator of the section VM they run in.
+
+`math.randomseed(n)` seeds the generator yourself, as in stock Lua, and the draws after it follow from `n` alone:
+
+````markdown
+---
+name: reseed
+description: Seeds the generator twice with one number.
+runvil: 0
+---
+
+```lua
+math.randomseed(42)
+local first = math.random(1, 100)
+math.randomseed(42)
+return tostring(first == math.random(1, 100))
+```
+````
+
+The run result is:
+
+````text
+true
+````
+
+`math.randomseed()` with no argument does not read the clock as stock Lua does. It seeds the generator from the generator's own next two draws, so the draws after it still follow from the run's seed. The generator is Lua's own and is not cryptographic, so a draw is no secret: do not use one as a token or a key.
 
 ### The `utf8` library
 
@@ -622,7 +710,7 @@ function|false|nil|nil
 
 ## Deterministic table iteration
 
-After this section you can predict the exact order in which `pairs` and `next` visit a table's keys, and change a table safely while you walk it.
+After this section you can predict the exact order in which `pairs` and `next` visit a table's keys, tell which tables they refuse to walk, and change a table safely while you walk it.
 
 ````markdown
 ---
@@ -646,9 +734,9 @@ The run result is the same on every run:
 alpha, beta, mid, zeta
 ````
 
-`pairs` visits a table's string, number, and boolean keys in a fixed sorted order instead of Lua's hash order, so the same table iterates the same way on every run. This fixed order is the deterministic key order. Write the same table as `{ beta = 4, mid = 3, alpha = 2, zeta = 1 }` and the walk is still `alpha, beta, mid, zeta`, because the order depends only on the keys and not on the table's hash state or on the order you inserted them.
+`pairs` visits a table's string, number, and boolean keys in a fixed order instead of Lua's hash order, so the same table iterates the same way on every run. This fixed order is the deterministic key order. Write the same table as `{ beta = 4, mid = 3, alpha = 2, zeta = 1 }` and the walk is still `alpha, beta, mid, zeta`, because the order depends only on the keys and not on the table's hash state or on the order you inserted them.
 
-The order comes from sorting each key on its type and then on its value. A table with every kind of scalar key shows the whole order:
+The order comes from each key alone, from its type and its value. A table with every kind of key the walk takes shows the whole order:
 
 ````markdown
 ---
@@ -669,43 +757,45 @@ return table.concat(seen, ' ')
 The run result is always:
 
 ````text
-1 2 true 10 z
+1 2 10 true z
 ````
 
-Table iteration visits the array part first, keys `1` through `#t` in index order. Then it visits the rest of the table's keys, its hash part: boolean keys with `false` before `true`, then number keys by value, then string keys bytewise. The sections below give each rule.
+Table iteration visits the integer keys from `1` up first, in rising order. Then it visits the rest of the table's keys: boolean keys with `false` before `true`, then the other number keys by value, then string keys bytewise. The sections below give each rule.
 
-### The array part comes first
+### Integer keys from 1 up come first
 
-The array part of a table is its keys `1` through `n` in ascending order, where `n` is `#t`, and `pairs` visits the array part before any other key. `{10, 20, 30, extra = 'x', another = 'y'}` visits `1, 2, 3, another, extra`.
+`pairs` visits every integer key from `1` up before any other key, in rising order. So a list comes out in index order, ahead of every named field: `{10, 20, 30, extra = 'x', another = 'y'}` visits `1, 2, 3, another, extra`.
 
-Every array-part key comes before every hash-part key, booleans included, even though booleans rank first inside the hash part. `{[true] = 1, "x"}` visits `1, true`, and `{10, 20, [false] = 'f', [true] = 't'}` visits `1, 2, false, true`.
+These keys come before the booleans too, even though booleans come first among the other keys. `{[true] = 1, "x"}` visits `1, true`, and `{10, 20, [false] = 'f', [true] = 't'}` visits `1, 2, false, true`.
 
-The array part ends at the table's raw length border, ignoring any `__len` metamethod, so which integer keys count as array keys follows Lua's `#t` border for that table. An integer key inside `1..#t` appears once, in the array part alone. A nil slot inside `1..#t` is skipped, so iterating a table with holes never yields a nil value. In a table with holes, Lua may report any border, so integer keys past a hole may walk either in the array part or among the number keys after the booleans.
+A key's place depends on the key alone and never on the table's length, so a gap in the indices changes nothing. `{"a", [10] = "c", [true] = "x", flag = 1}` walks `1`, `10`, `true`, `flag`, and `{ [false] = 'b', [3] = 'c', [7] = 'y' }`, which has no key `1`, walks `3, 7, false`. An index that holds nil is not a key, so iterating a table with gaps never yields a nil value.
 
-Integer keys outside `1..#t`, such as `0`, negative integers, or integers past the border, are ordered as number keys in the hash part, after the array part and after any boolean keys, and they sort among the other numbers by value. So array-part integers come before booleans, while integers that are not part of the array sequence come after them. `{"a", [10] = "c", [true] = "x", flag = 1}` walks `1`, `true`, `10`, `flag`, and `{ [false] = 'b', [3] = 'c', [7] = 'y' }`, whose array part is empty, walks `false, 3, 7`.
+The integer keys below `1`, which are `0` and the negative integers, are not in this group. They are ordered with the other number keys, after any boolean keys.
 
-### Then booleans, numbers, and strings
+### Then booleans, the other numbers, and strings
 
-After the array part, the walk visits the boolean, number, and string keys sorted by type: booleans first, then numbers, then strings. Between keys of different types, the type alone decides the order. Every boolean key precedes every number key, and every number key precedes every string key, so a table that mixes the three types still gets one order and iterates without error:
+After the integer keys from `1` up, the walk visits the boolean keys, the number keys that are left, and the string keys, sorted by type: booleans first, then numbers, then strings. Between keys of different types, the type alone decides the order. Every boolean key precedes every one of those number keys, and every one of those number keys precedes every string key, so a table that mixes the types still gets one order and iterates without error:
 
 ````lua
 local t = { [true] = 't', [7] = 'seven', b = 'bee', [false] = 'f', [2.5] = 'half', a = 'ay' }
 ````
 
-`pairs(t)` visits `false, true, 2.5, 7, a, b`. Among boolean keys, `false` comes before `true`, whatever order they appear in the table constructor, and here `[true]` is written first. Keys of the same type come in one shared sorted order, so their sequence never depends on insertion order or hashing.
+`pairs(t)` visits `7, false, true, 2.5, a, b`. The key `7` comes first, as an integer from `1` up. Among boolean keys, `false` comes before `true`, whatever order they appear in the table constructor, and here `[true]` is written first. Keys of the same type come in one shared sorted order, so their sequence never depends on insertion order or hashing.
 
-Boolean keys, integer keys, finite float keys, and valid UTF-8 string keys each get a sortable position. Their iteration order depends only on which keys a table holds, never on the order they were assigned or inserted. Two tables holding the same such keys iterate in the same order, as long as any positive integer keys run from `1` in an unbroken sequence.
+Every boolean, number, and string key has a place in the order, and the place depends only on the key. So the iteration order depends only on which keys a table holds, never on the order they were assigned or inserted, and two tables holding the same keys iterate in the same order.
 
 #### Number keys
 
-Number keys iterate in ascending numeric value, with integer and float keys sorted together in one sequence by exact numeric value. In the table above, `[7]` is written before `[2.5]`, yet the walk visits `2.5` before `7`. Integer and float keys interleave strictly by value rather than grouping by subtype, negative keys included:
+The number keys of this group are `0`, the negative integers, and every float key. They iterate in ascending numeric value, with integer and float keys sorted together in one sequence by exact numeric value:
 
-- `1`, `1.5`, and `2` iterate in that order, and so do `2`, `2.5`, and `3`.
-- `-1.5` comes before `-1`, `-1` comes before `-0.5`, and `-0.5` comes before `0`.
+- `-1.5` comes before `-1`, `-1` comes before `-0.5`, `-0.5` comes before `0`, and `0` comes before `0.5`.
+- A float key above `1`, such as `1.5` or `2.5`, is in this group as well, so it comes after every integer key from `1` up and after the booleans. A table with the keys `1`, `1.5`, `2`, and `false` walks `1, 2, false, 1.5`.
 
-Comparing an integer key with a float key uses the integer's exact value. `math.maxinteger`, which is `9223372036854775807`, sorts before the float key `2^63`, even though converting the integer to a float would round it to that same value. Very large integer keys past 2^53 keep their integer identity, so two different integers keep distinct, exact positions and never tie, however large they are.
+A float key with a whole value is the same key as the integer, as in stock Lua: `t[2.0]` and `t[2]` name one entry, and the walk yields the integer `2`.
 
-Float keys outside the 64-bit integer range sort beyond every integer key. A float key at or above 2^63, such as `1e19` or `1e300`, sorts after every integer key including `math.maxinteger`, and a float key below -2^63, such as `-1e300`, sorts before every integer key.
+A float key outside the 64-bit integer range sorts by its value like any other: `1e19` and `1e300` come after every integer key of this group, and `-1e300` comes before `math.mininteger`. The infinite keys have places too: `-math.huge` sorts before every other number key of this group, and `math.huge` after every other one.
+
+Integer keys from `1` up keep their integer identity however large they are. Keys past 2^53, such as `9007199254740992` and `9007199254740993`, keep distinct, exact positions and never tie. `math.maxinteger`, which is `9223372036854775807`, is the last key the first group can hold, so it comes before every boolean and before every float, the float key `2^63` included.
 
 #### String keys
 
@@ -715,17 +805,60 @@ String keys come after boolean and number keys, and a `for k in pairs(t)` loop v
 - `"10"` comes before `"9"`.
 - `"a"` comes before `"ab"`, and `"ab"` comes before `"b"`.
 
-`{ zeta = 1, alpha = 2, mid = 3, beta = 4, omega = 5 }` visits `alpha, beta, mid, omega, zeta`.
+`{ zeta = 1, alpha = 2, mid = 3, beta = 4, omega = 5 }` visits `alpha, beta, mid, omega, zeta`. A string key whose bytes are not valid UTF-8, such as `"\255"`, sorts by its bytes like any other string key.
 
-### Keys visited last, in any order
+### Keys that cannot be walked
 
-Keys that are not strings, numbers, or booleans, such as tables, functions, userdata, and threads, are still visited, after every scalar key. Their order among themselves is not fixed: it is whatever Lua's own traversal produced, so you cannot rely on which of two table-valued keys comes first. A table holding the key `a` and two table keys walks `a` first, then both table keys in either order.
+A key that is a table, a function, or a userdata has nothing to sort by except its memory address, and the address differs from run to run. So `pairs` and `next` raise an error for a table that holds such a key, instead of visiting it in an order that could change:
 
-Two kinds of scalar key go in that same trailing group with no fixed order: string keys whose bytes are not valid UTF-8, such as `"\255"`, and infinite number keys, `math.huge` and `-math.huge`. They are visited without error. Only boolean keys, finite number keys, and valid UTF-8 string keys have an order that is guaranteed to match across runs.
+````markdown
+---
+name: object-keys
+description: Looks up object keys and tries to walk them.
+runvil: 0
+---
+
+```lua
+local a, b = { name = 'a' }, { name = 'b' }
+local seen = { [a] = true, [b] = true }
+local ok, err = pcall(pairs, seen)
+return tostring(seen[a]) .. '|' .. tostring(ok) .. '|' .. err.kind
+```
+````
+
+The run result is:
+
+````text
+true|false|lua
+````
+
+The refusal names the function you called and the type of the key:
+
+````text
+'pairs' walks boolean, number, and string keys only: the table has a table key, which has no order that is the same in two runs
+````
+
+`next` raises the same refusal under its own name. It also raises `'next' walks boolean, number, and string keys only: got a {type} key to go on from` when the key you pass it to go on from is one of these. `{type}` is `table`, `function`, or `userdata`, and it is `lightuserdata` for `json.null`. When a table holds such keys of several types, the refusal names the type that comes first by name, so a table with a function key and a table key reports the function key on every run. Each is a Lua runtime error: `pcall` catches it as an [error value](#error-values) of kind `lua`, and left uncaught it ends the run with code `lua_runtime`.
+
+Such a table still reads and writes by key, so a set of objects works as a lookup, as `seen[a]` does above. A block that must also walk the objects keeps them in a list as well, or gives the table a [`__pairs` metamethod](#tables-with-a-__pairs-metamethod) that walks that list.
+
+### Weak tables
+
+`pairs` and `next` also refuse a weak table, one whose metatable has a `__mode` string with `k` or `v` in it. Lua's garbage collector takes entries out of a weak table at moments a prompt does not choose, so what a walk would find there differs from run to run. The refusal is `'pairs' does not walk a weak table, one whose metatable sets __mode: the entries the collector leaves in it are not the same in two runs`, with `'next'` in place of `'pairs'` when `next` raises it. A weak table still reads and writes by key, and a `__pairs` metamethod on it still takes over `pairs`. `ipairs` and the functions of `table` read a table by its indices, as `t[i]` does, so they take a weak table too.
+
+A weak table is never read as a [sealed view](#encoding-values-with-jsonencode). A sealed view is a table with no entry of its own, and the collector decides whether a weak table has one, so an empty weak table whose metatable has `__index` and `__metatable` raises the refusal. This holds for `pairs` and `next` and for every Engine function that refuses a weak table: `json.encode`, a write to `var`, `models.use`, `tools.adhoc`, `tools.offer`, `tasks.fanout`, the other [`tasks` functions](15-tasks.md#argument-errors-from-the-tasks-functions), the `markdown` functions, and each place where [a table becomes data](#tables-that-become-data).
+
+A sealed view whose `__index` leads to a weak table raises the refusal wherever the Engine reads through a sealed view: in `pairs`, `next`, `json.encode` for its value, a write to `var`, `tasks.fanout`, the other `tasks` functions, the `markdown` functions, the array of a `tools.adhoc` parameter, and each place where a table becomes data. `models.use`, the attributes and the parameters of `tools.adhoc`, and the options of `json.encode` read only the entries that their table itself holds, so to them a sealed view is an empty table, whatever its `__index` leads to. `tools.offer` reads the entries that its array itself holds, or as many as a `__len` gives through the `__index` of the array, and such a read by index takes a weak table, as `t[i]` in your own code does.
+
+A table whose metatable is a weak table is refused as well, wherever the Engine asks a metatable what its table is. The fields of a metatable are its entries, so the collector takes `__index`, `__metatable`, and `__len` out of a weak one, and the table would be a sealed view in one run and an empty table in the next. `pairs`, `next`, `json.encode`, a write to `var`, `tasks.fanout`, the other `tasks` functions, the `markdown` functions, the array of a `tools.adhoc` parameter, `tools.offer`, and each place where a table becomes data put `a table whose metatable is a weak table: the fields the collector leaves in that metatable are not the same in two runs` where the refusal of a weak table has its own words, as in `'pairs' does not walk a table whose metatable is a weak table: the fields the collector leaves in that metatable are not the same in two runs`. Such a table is refused whether it holds entries or not.
+
+The Engine checks a table when it reads it. A table that was weak earlier and no longer is reads as the collector left it. `pairs` checks its table when the loop begins, so a table that the body of the loop makes weak reads as the collector leaves it.
+
+For the check the Engine reads the `__mode` string up to its first `k`, `v`, or zero byte, each time it meets the table. A `__mode` can be as long as the VM's memory limit allows, and any number of tables can share one metatable, so one walk of a value, one call of `pairs`, `next`, `tasks.fanout`, or `tools.offer`, and one check that another `tasks` function makes of a table, may read as many bytes of `__mode` as that limit, 64 MiB by default, and then to the end of the one `__mode` that passes it, which is at most twice the limit. A place where a table becomes data walks a value that it refuses a second time, so it reads at most four times the limit. Past the limit, `pairs`, `next`, `tasks.fanout`, `tools.offer`, and the other `tasks` functions put `a table with {scanned} bytes of __mode to scan: one call scans at most {limit} bytes` where the refusal of a weak table has its own words, with the bytes of `__mode` the call came to and the limit, as in `tasks.join expects a set of tasks, got a table with 68157440 bytes of __mode to scan: one call scans at most 67108864 bytes`. The short form of `tools.adhoc` parameters and each place where a table becomes data raise their error for a value that is too large, whatever else is wrong with the value. `json.encode`, a write to `var`, and the `markdown` functions stop at the first fault of their walk, so they raise their error for a value that is too large when the walk meets no other fault before the limit. Each of these counts the bytes of `__mode` toward the same limit as the bytes of strings. A `__mode` of a few bytes never comes near the limit.
 
 ### The same order everywhere
 
-`pairs` and `next` visit a table's keys in the same order on every run, in every section's fresh Lua state, the preamble's included, and in libraries loaded with `require`, instead of stock Lua's unspecified hash order. Two sections that walk the same table see the same key sequence. The same deterministic key order applies wherever Runvil reads a table's keys in order: [`tasks.fanout`](14-fanout.md#fanout-in-one-call) uses it when it enumerates a table's members, array part first and then the sorted keys.
+`pairs` and `next` visit a table's keys in the same order on every run, in every section's fresh Lua state, the preamble's included, and in libraries loaded with `require`, instead of stock Lua's unspecified hash order. Two sections that walk the same table see the same key sequence. [`tasks.fanout`](14-fanout.md#fanout-in-one-call) runs the arms of a collection in the order `pairs` visits its keys (see [The order of members](14-fanout.md#the-order-of-members)).
 
 ### How `pairs` walks a table
 
@@ -733,7 +866,7 @@ Two kinds of scalar key go in that same trailing group with no fixed order: stri
 
 `pairs` fixes the key order once, when it is called, and the loop then advances through that captured order by position. The iterator function keeps its own position and ignores its arguments, so each call to it advances one key, and calls after the last key keep returning `nil, nil`.
 
-`pairs` and `next` read raw values without consulting `__index`, and they visit only keys actually stored in the table. Because the walk reads the table's raw contents, `__index` and `__len` metamethods do not change which keys are visited, where the array part ends, or the values returned.
+`pairs` and `next` read raw values without consulting `__index`, and they visit only keys actually stored in the table. Because the walk reads the table's raw contents and never its length, `__index` and `__len` metamethods do not change which keys are visited, their order, or the values returned.
 
 The exception is a sealed view, an empty table that stands in for a table kept elsewhere, such as a table read from `var` or a table inside `args` (see [Encoding values with `json.encode`](#encoding-values-with-jsonencode)): `pairs` and `next` read through it and visit the entries of that table, in the same fixed order. After `var.t = { zeta = 1, alpha = 2, mid = 3, beta = 4 }`, a `pairs(var.t)` loop visits `alpha, beta, mid, zeta`.
 
@@ -767,9 +900,9 @@ a, c
 
 Setting a key's value to nil during a `pairs` loop skips that key if the loop has not reached it yet, whatever the key's type, so the loop never visits it with a nil value. Here clearing `b` when `k == 'a'` visits `a` and `c`.
 
-Clearing the current key is allowed too, and the walk moves on to the next live key without an error. Clearing each key of `{a = 1, b = 2, c = 3}` as it is visited still visits `a`, `b`, and `c`. The loop runs to the end whatever the cleared key's type: clearing the boolean key `false` inside a loop over `{10, 20, [false] = 'f'}` still visits each key exactly once, `1, 2, false`, without revisiting the array part. The walk also goes on after the current table-valued key is cleared, so the remaining table-valued keys are still visited before the loop ends.
+Clearing the current key is allowed too, and the walk moves on to the next live key without an error. Clearing each key of `{a = 1, b = 2, c = 3}` as it is visited still visits `a`, `b`, and `c`. The loop runs to the end whatever the cleared key's type: clearing the boolean key `false` inside a loop over `{10, 20, [false] = 'f'}` still visits each key exactly once, `1, 2, false`.
 
-Keys added to a table during a `pairs` loop are not visited by that loop, because the loop sees only the keys captured when it started. Values are different: the loop reads each value when it reaches the key, so a new value assigned to an existing key the loop has not reached yet is read live.
+Keys added to a table during a `pairs` loop are not visited by that loop, because the loop sees only the keys captured when it started. For the same reason, a table key added during the loop does not stop it: `pairs` looks for [keys that cannot be walked](#keys-that-cannot-be-walked) once, when it is called. Values are different: the loop reads each value when it reaches the key, so a new value assigned to an existing key the loop has not reached yet is read live.
 
 ### Tables with a `__pairs` metamethod
 
@@ -814,7 +947,7 @@ A userdata whose metatable holds `__pairs` can be passed to `pairs` as well, whi
 
 #### When `pairs` fails
 
-`pairs` raises a Lua runtime error in two cases. When `__pairs` holds any value other than nil or a function, a callable table included, `pairs` raises `attempt to call a {type} value (metamethod '__pairs')`, naming the type it found. A table there gives:
+Besides the refusals of [keys that cannot be walked](#keys-that-cannot-be-walked) and of [weak tables](#weak-tables), `pairs` raises a Lua runtime error in two cases. When `__pairs` holds any value other than nil or a function, a callable table included, `pairs` raises `attempt to call a {type} value (metamethod '__pairs')`, naming the type it found. A table there gives:
 
 ````text
 attempt to call a table value (metamethod '__pairs')
@@ -856,28 +989,55 @@ The run result is:
 1, 2, false, true|only=1|true
 ````
 
-A stateless generic `for k in next, t do ... end` loop walks keys in the same deterministic order as `pairs`, array part first and then boolean keys, so `{10, 20, [false] = 'f', [true] = 't'}` visits `1, 2, false, true`.
+A stateless generic `for k in next, t do ... end` loop walks keys in the same deterministic order as `pairs`, integer keys from `1` up first and then boolean keys, so `{10, 20, [false] = 'f', [true] = 't'}` visits `1, 2, false, true`.
 
 `next(t)` or `next(t, nil)` returns the first key and its value in the order `pairs` uses, so `next({ only = 1 })` returns `only, 1`. For an empty table it returns `nil`, so `next(t) == nil` tests whether a table is empty. `next(t, k)` returns the key strictly after `k` in that order, along with its value, and when `k` comes last it returns two values, `nil, nil`.
 
-`next` is stateless between calls. It rebuilds the ordered key list from the live table on each call, so each step costs `O(n log n)` in the table's size. On large tables, prefer `pairs`, which builds the ordered list once when the loop starts.
+`next` is stateless between calls. It reads every key of the live table on each call to find the one that follows `k`, so a whole loop of `next` over `n` keys costs `n` times `n` reads. On large tables, prefer `pairs`, which sorts the keys once when the loop starts.
 
-`next` works only on a table's own contents, or on the data behind a sealed view, and never calls a `__pairs` metamethod. It accepts only a table and an optional key, so calling `next` with a first argument that is not a table raises a Lua argument error, whose wording comes from the underlying Lua binding rather than from Runvil's own text.
+`next` works only on a table's own contents, or on the data behind a sealed view, and never calls a `__pairs` metamethod. It accepts only a table and an optional key, so calling `next` with a first argument that is not a table raises a Lua argument error, whose wording comes from the underlying Lua binding rather than from Runvil's own text. It refuses [keys that cannot be walked](#keys-that-cannot-be-walked) and [weak tables](#weak-tables) as `pairs` does.
 
 ### Changing a table during a `next` loop
 
-`next` accepts a key that is not in the table, whether it was cleared mid-loop or was never present. The walk resumes at the first key that sorts after that key's position. So during a `next` loop, a scalar key cleared to nil is skipped, and the walk resumes at the first key after the cleared key's sort position.
+`next` accepts a key that is not in the table, whether it was cleared mid-loop or was never present. The walk resumes at the first key that sorts after that key's place. So during a `next` loop, a key cleared to nil is skipped, and the walk goes on from the cleared key's place.
 
-Clearing keys while stepping with `next`, in `for k in next, t` or in a manual `next(t, k)` loop, never loses a key. Clearing array or boolean keys visits each key exactly once:
+Clearing keys while stepping with `next`, in `for k in next, t` or in a manual `next(t, k)` loop, never loses a key and never visits one twice, because every key keeps its place whatever happens to the others:
 
-- Clearing the current boolean key with `t[k] = nil` still visits every key exactly once and ends the walk normally, without replaying the array part. Clearing each boolean key of `{10, 20, [false] = 'f', [true] = 't'}` as it is visited gives `1, 2, false, true`.
-- The walk goes on past cleared array elements, so later boolean keys are still visited. Clearing every key of `{10, 20, [false] = 'f'}` as it is visited gives `1, 2, false`, and of `{10, [false] = 'f'}` gives `1, false`.
+- Clearing each boolean key of `{10, 20, [false] = 'f', [true] = 't'}` as it is visited gives `1, 2, false, true`.
+- Clearing every key of `{10, 20, [false] = 'f'}` as it is visited gives `1, 2, false`, and of `{10, [false] = 'f'}` gives `1, false`.
+- Over `{ [false] = 'b', [3] = 'c', [7] = 'y' }`, clearing `t[7]` when `k == 7` visits `3, 7, false`.
 
-A cleared integer key of `1` or more resumes as if it were in the array part, so the walk continues at the same place whatever the current `#t`. The same rule means that clearing an integer key that was in the hash part makes the walk replay the scalar keys that sort after the array part. Over `{ [false] = 'b', [3] = 'c', [7] = 'y' }`, clearing `t[7]` when `k == 7` visits `false, 3, 7, false, 3`, so booleans and smaller numbers can be visited more than once. Every key is still visited, and a `pairs` loop never replays one.
+A key added during a `next` loop is visited when its place lies after the current key and skipped when it lies before, because each step reads the live table.
 
-Clearing a non-scalar key, such as a table key, makes the walk resume at the start of the trailing group of keys with no fixed order, without ending, so the remaining table-valued keys are still visited before the walk ends. When the cleared key is not first in that group, the walk restarts at the group's first remaining key, so an earlier table key the loop left in place is visited again, and the loop still ends.
+Both functions are safe for a loop that clears or edits keys while it walks. `pairs` advances a snapshot of the keys taken when the loop starts, so it never visits a key added later, while a raw `next` loop re-reads the live table at each step and costs more on a large table.
 
-For a loop that clears or edits keys while it walks, use `pairs`. `pairs` advances a captured snapshot, so you get the exact captured order, while a raw `next` loop re-reads the live table and can replay keys after a hash-part integer key is cleared.
+### The length of a table with a gap
+
+`#t` is the number of items in a list, a table that holds a value at every index from `1` up to its last. For a table with a gap in those indices, `#t` is some index that holds a value and whose next index holds none, and Lua does not say which. Two runs with the same inputs can get different ones: `#t` of `{ [1] = 1, [2] = 2, [3] = 3, [5] = 5 }` is `3` on one run and `5` on another.
+
+`pairs`, `next`, and `ipairs` do not use the length, so they walk such a table the same way on every run, and `ipairs` stops at the first gap. Everything that measures a table by `#t` follows the length Lua gives: a loop such as `for i = 1, #t do`, and `table.insert`, `table.remove`, `table.concat`, `table.unpack`, and `table.sort`.
+
+A block that needs the same result on every run keeps its lists without a gap. Every other Engine function treats a gap the same way on every run, whatever `#t` says. `json.encode` raises `json.encode: value is missing list item [4]` for the table above (see [When `json.encode` refuses a value](#when-jsonencode-refuses-a-value)). An assignment of it to `var.x` raises `var.x is missing list item [4]` (see [When `var` rejects a write](#when-var-rejects-a-write)). A table that the Engine turns into data, such as the [`item` of a `tasks.spawn`](15-tasks.md#seeding-item), raises an error that names the missing item too (see [Tables that become data](#tables-that-become-data)). [`tasks.fanout`](14-fanout.md#the-order-of-members) ends the list at the first gap, and so does the array of [`tools.offer`](12-tools.md#what-toolsoffer-accepts).
+
+### Tables that become data
+
+The Engine turns a Lua value into JSON data in four places: the `args` of [`tools.call`](12-tools.md#passing-arguments-to-a-tool), the [`item` of a `tasks.spawn`](15-tasks.md#seeding-item) and of each [`tasks.fanout`](14-fanout.md) member, a field of a [message](11-conversations.md), and a global that prose names. A table that holds a value at index `1`, or that `json.array` marked, becomes a list of its items, and what its other keys hold is left out, whether the key is a name, a boolean, a number with a fraction, or a whole number below 1. Any other table becomes an object, whose keys must be strings.
+
+Three kinds of table have no JSON form here, and each raises an error at the call:
+
+- A list with a gap. The reason names the place and the first missing item: `{ rows = { [1] = 'a', [2] = 'b', [3] = 'c', [5] = 'e' } }` gives `value.rows is missing list item [4]`, and `{ [2] = 'b' }` gives `value is missing list item [1]`.
+- A weak table. The reason reads `value.w is a weak table, one whose metatable sets __mode: the entries the collector leaves in it are not the same in two runs` (see [Weak tables](#weak-tables)).
+- A table nested more than 127 tables deep, the outermost being the first. The reason ends `is nested more than 127 levels deep`. A value 127 deep is the deepest whose JSON text reads back.
+
+A table that contains itself has no JSON form either, and its reason reads `recursive table detected`. That holds when the table contains itself through a sealed table too, such as a view of its own data. A sealed table that only a function can read, such as `sys`, becomes an empty object and counts as one level of the 127.
+
+Each place puts its own words in front of the reason, as `tasks.spawn` does in `item must be a JSON-representable value: deserialize error: value.rows is missing list item [4]`. The three rules apply to the tables that become data, so what another key of a list holds is not checked. A number that is NaN or an infinity becomes `null` with no error, so `{ 0/0, 1/0 }` becomes `[null,null]`, where `json.encode` and a write to `var` refuse such a number.
+
+A [record view](11-conversations.md#what-a-record-view-allows) inside the value becomes the record's data, and counts as that data. Its nesting adds to the tables it sits under, so `{ prev = messages[1] }` is one level deeper than the record is, and a view whose record would end more than 127 levels deep raises the same error as a table there. Its values and the bytes of its strings count toward the two size limits below.
+
+When several entries of one table cannot become data, the error is about the entry whose key comes first: boolean keys, then number keys by value, then string keys in bytewise order. So `{ a = { [1] = 1, [3] = 3 }, b = function() end }` is refused for the gap in the list under `a` on every run, with `value.a is missing list item [2]`. A key that is a table, a function, a userdata, or a thread has no place in that order, so its error names only the key's type and the table that holds it: `{ rows = { [{}] = 1 } }` gives `value.rows has a table key; object keys must be strings`, whatever the key table holds. Of several such keys, the error names the type that comes first by name.
+
+One value may hold as many values as one eighth of the VM's memory limit, 8,388,608 at the default of 64 MiB, and a larger one raises `the value is too large to convert`. A value also has a limit on its text: when its strings, keys included and each counted every time it occurs, hold more bytes than the memory limit, the error is `the value is too large to convert`, in place of any reason above. Both limits count what a list holds under its other keys too, though that is left out of the data. Every string key is the name of a field, whatever its text.
 
 ## Keeping state in `var`
 
@@ -1048,7 +1208,7 @@ Say hi there to the reader.
 
 ### What `var` can hold
 
-JSON data is the set of values JSON can express: numbers, strings, booleans, and tables of arrays and objects built from them, nested to any depth. A `var` field holds only JSON data. With this block as the Lua block of `Main` in the `greeting` prompt, the run succeeds:
+JSON data is the set of values JSON can express: numbers, strings, booleans, and tables of arrays and objects built from them, nested to any depth. A `var` field holds only JSON data, and `var` as a whole nests at most 127 levels deep (see [When `var` rejects a write](#when-var-rejects-a-write)). With this block as the Lua block of `Main` in the `greeting` prompt, the run succeeds:
 
 ````lua
 var.n = 1
@@ -1199,6 +1359,10 @@ The guard checks the key of a write too, because a table of JSON data is an obje
 | `var.list.name = 'x'` | `var.list.name is a named field, and var.list is a list` |
 | `var.t.a = 1` and then `var.t[1] = 'x'` | `var.t[1] is a list item, and var.t holds named fields` |
 
+A path in these messages shows a key longer than 64 bytes as its first 64 bytes, without a character that the cut would split, and its length, as in `var.kkk... (1000 bytes)`.
+
+A string key must be valid UTF-8. `var['\xff'] = 1` raises `var.{key} is not valid UTF-8`, where the path shows each byte that is not UTF-8 as the replacement character U+FFFD. A write to a table inside `var` raises it the same way, as `var.t['\xff'] = 1` does.
+
 `var.list[2] = 'b'` appends, and `var.list[1] = 'z'` gives the first item a new value. Assigning `nil` removes a named field, or the last item of a list. The removal of an earlier item would leave a gap, so with two items in `var.list`, `var.list[1] = nil` raises `var.list[1] is not the last item of the list, whose length is 2; remove it with table.remove`, and `table.remove(var.list, 1)` removes the item and moves the rest down.
 A table that is shared at many levels can also be too large to store, because the conversion to JSON copies it once for every place it appears. Before it converts an assigned table, `var` spends the same value and byte budgets that [`json.encode`](#size-and-nesting-limits) does, and a table that runs the budget out raises this error at the assigning line, with the full target path in place of `{target}`:
 
@@ -1207,6 +1371,8 @@ A table that is shared at many levels can also be too large to store, because th
 ````
 
 After `local t = {} for i = 1, 40 do t = { t, t } end`, the write `var.x = t` raises `var.x is too large to store`. Like any rejected write it is dropped whole. A table that contains itself is refused for another reason, as a cycle: after `local t = {} t.self = t`, the write `var.c = t` raises `var.c.self contains itself`.
+
+`var` as a whole nests at most 127 levels deep, and `var` itself is the first level. So a value in a field of `var` nests at most 126 tables deep, one fewer than [`json.encode`](#size-and-nesting-limits) accepts. A write that would put a table at level 128 raises `{path} is nested more than 127 levels deep` at the assigning line, with the path of that table. The levels count the same whether one write nests the tables or each write adds one: after `local t = var for i = 1, 126 do t.n = {} t = t.n end`, one more `t.n = {}` raises it, and so does `var.n = v` for a `v` that is 127 tables deep. The limit keeps `var` within the nesting that JSON text reads back, because the Engine hands `var` whole to a called chain and to a task.
 
 The guard raises its error at the assigning statement itself, not later when `var` is saved. That is why a `pcall` around that one write catches it, the block keeps running, and later `var` writes still work, as `var.kept = 'yes'` does in the `guarded` prompt. A rejected write is dropped whole, so `var` holds only the writes that passed the guard: after a rejected `var.t.f = function() end` following `var.t.kept = 'yes'`, `var` reads back as exactly `{ "t": { "kept": "yes" } }`.
 
@@ -1477,7 +1643,7 @@ The run result is:
 lua|encode-refused.md:8: json.encode: value.items[2] must be JSON data, got function. The Lua code failed at runtime. Fix the code at this location.
 ````
 
-Every message names the failing value by its path. The path starts at `value`, the value you passed, and adds `.name` for each string key and `[k]` for any other key, so `value.items[2]` is the second item of the `items` field. A string key that is not valid UTF-8 appears in the path with replacement characters. The size refusal is the one message with no path, because the walk stops wherever the budget runs out. These are the messages:
+Every message names the failing value by its path. The path starts at `value`, the value you passed, and adds `.name` for each string key and `[k]` for any other key, so `value.items[2]` is the second item of the `items` field. A string key that is not valid UTF-8 appears in the path with replacement characters, and a key longer than 64 bytes appears as its first 64 bytes, without a character that the cut would split, and its length, as in `value.kkk... (1000 bytes)` with 64 letters `k`. The size refusal is the one message with no path, because the walk stops wherever the budget runs out. These are the messages:
 
 | Problem | Message |
 | --- | --- |
@@ -1489,6 +1655,8 @@ Every message names the failing value by its path. The path starts at `value`, t
 | An unmarked table with a key that is neither an integer nor a string | `json.encode: {path} has a {kind} key; object keys must be strings` |
 | A marked list with a key that is not an integer | `json.encode: {path} is marked as a list but has a {kind} key` |
 | A table that contains itself | `json.encode: {path} contains itself` |
+| A [weak table](#weak-tables) | `json.encode: {path} is a weak table, one whose metatable sets __mode: the entries the collector leaves in it are not the same in two runs` |
+| A table whose metatable is a [weak table](#weak-tables) | `json.encode: {path} is a table whose metatable is a weak table: the fields the collector leaves in that metatable are not the same in two runs` |
 | A table more than 127 levels deep | `json.encode: {path} is nested more than 127 levels deep` |
 | A walk that spends more than the size budget | `json.encode: value is too large to encode` |
 | A sealed view whose `__index` is a function | `json.encode: {path} cannot be read ({label}); copy the fields you need into a plain table` |
@@ -1497,11 +1665,12 @@ Every message names the failing value by its path. The path starts at `value`, t
 
 A table that breaks more than one rule reports the same error on every run. An unmarked table reports a key that is neither an integer nor a string first, then a mix of integer and string keys, then a missing list item. Because keys are checked before values, `{ [1] = function() end, a = 1 }` reports `mixes list items and named keys`, not the function. For a missing item, `{item}` is the first of 1 to n that is absent, where n is the table's count of integer keys: `{ [1] = 'a', [3] = 'c' }` reports `[2]`, `{ [0] = 'a' }` reports `[1]`, and `{ [-1] = 'a', [1] = 'b' }` reports `[2]`.
 
-Within a table, `json.encode` visits keys in one fixed order: booleans, then numbers by value, then strings bytewise, as [Then booleans, numbers, and strings](#then-booleans-numbers-and-strings) describes. Unlike `pairs`, it also gives a fixed place to the two kinds of scalar key that [Keys visited last, in any order](#keys-visited-last-in-any-order) leaves unordered: a string key that is not valid UTF-8 sorts bytewise among the strings, and an infinite number key sorts by value among the numbers, so `-math.huge` comes first and `math.huge` last. Table, function, userdata, and thread keys come last, ranked by type name, so a table with both a table key and a function key always reports `has a function key`.
+Within a table, `json.encode` visits keys in one fixed order: booleans, then numbers by value, then strings bytewise. A string key that is not valid UTF-8 sorts bytewise among the strings, and an infinite number key sorts by value among the numbers, so `-math.huge` comes first and `math.huge` last. This is the order [Then booleans, the other numbers, and strings](#then-booleans-the-other-numbers-and-strings) describes, with one difference: `json.encode` sorts every number key by value, where `pairs` visits the integer keys from `1` up ahead of the booleans. Table, function, userdata, and thread keys come last, ranked by type name, so a table with both a table key and a function key always reports `has a function key`.
 
 The options argument is checked before the value, so `json.encode(function() end, 5)` raises the options error, not the function's. Options must be nil or a table whose only key is `debug`:
 
 - A value that is not a table raises `json.encode: options must be a table, got {type}`.
+- A [weak table](#weak-tables) raises `json.encode: options must not be a weak table, one whose metatable sets __mode: the entries the collector leaves in it are not the same in two runs`, before any of its keys is read.
 - Any other key raises `json.encode: unknown option {key}`, as in `json.encode: unknown option pretty`. A key that is neither a string nor an integer is named by its type, as in `unknown option boolean`, so a float key reads `unknown option number`.
 - A `debug` value that is not a boolean raises `json.encode: option debug must be a boolean, got {type}`.
 
@@ -1535,7 +1704,7 @@ The run result is:
 Debug mode encodes every value that stays within the [size budget](#size-and-nesting-limits). It follows the same rules as a strict encode, but writes a string in place of each failure:
 
 - A function becomes `"[function]"`, a thread becomes `"[thread]"`, and every userdata other than `json.null` becomes `"[userdata]"`, whether or not it defines `__tostring`.
-- A table that contains itself becomes `"[cycle]"`, and a table more than 127 levels deep becomes `"[too deep]"`.
+- A table that contains itself becomes `"[cycle]"`, a table more than 127 levels deep becomes `"[too deep]"`, a weak table becomes `"[weak table]"`, and a table whose metatable is a weak table becomes `"[weak metatable]"`.
 - NaN becomes `"NaN"`, infinity becomes `"Infinity"`, and negative infinity becomes `"-Infinity"`.
 - Bytes that are not valid UTF-8, in strings and in keys, are replaced with replacement characters.
 - A sealed view that cannot be read becomes `"[cannot read: {label}]"`, as in `"[cannot read: sys is sealed]"`, or `"[cannot read]"` when its `__metatable` is not a string.
@@ -1587,7 +1756,7 @@ The run result is:
 - `json.encode_lines expects a list, got a table with a {type} key`, for an unmarked table that has keys but no list items, naming the first key in visiting order. An object such as `{ a = 1 }` reports `got a table with a string key`.
 - The table rules of `json.encode` with the `json.encode_lines:` prefix, for a table that has list items but is still not a list, as in `json.encode_lines: value mixes list items and named keys` or `json.encode_lines: value is missing list item [2]`.
 - `json.encode_lines: value cannot be read (sys is sealed); copy the fields you need into a plain table`, for a sealed view that cannot be read, such as `sys`.
-- The three options errors, with the `json.encode_lines:` prefix, as in `json.encode_lines: unknown option pretty`.
+- The four options errors, with the `json.encode_lines:` prefix, as in `json.encode_lines: unknown option pretty`.
 - `json.encode_lines: value is too large to encode`, when the items of one call together spend more than the size budget. The items share one budget, so the refusal can come from any item or from the list as a whole.
 
 An error inside an item names the item by its path under the list, as in `json.encode_lines: value[2].name must be JSON data, got function`. The list stays on the cycle path while its items are encoded, so a list that contains itself raises `json.encode_lines: value[1] contains itself`. In debug mode the argument errors above and the size refusal still raise, and only the other failures inside items become placeholders.
@@ -1601,7 +1770,7 @@ Nesting is limited to 127 levels in both directions, so `json.decode` accepts th
 - `json.decode` accepts 127 arrays and objects nested inside each other and rejects the 128th with the parser's own message, as in `json.decode: recursion limit exceeded at line 1 column 128` for text that opens with 128 brackets.
 - `json.encode` counts the value you pass as level 1 and raises `json.encode: {path} is nested more than 127 levels deep` for a table at level 128. The path names that table, such as `value` followed by 127 steps of `[1]` for lists nested in lists. In debug mode the table becomes `"[too deep]"` instead.
 
-A sealed view and the data it stands for count as one level, so a `var` value nested 127 levels deep still encodes. At each table, `json.encode` checks for a cycle before it checks the depth, so a loop of 127 tables or fewer reports `contains itself`, even when the repeated table falls at level 128. A longer loop reaches the depth limit before it repeats, so it reports the depth.
+A sealed view and the data it stands for count as one level, so `json.encode(var)` writes a `var` that is at its own limit of 127 levels. At each table, `json.encode` checks for a cycle before it checks the depth, so a loop of 127 tables or fewer reports `contains itself`, even when the repeated table falls at level 128. A longer loop reaches the depth limit before it repeats, so it reports the depth.
 
 `json.encode` and `json.encode_lines` also bound the work of one call, because a table can be reachable from many places while the Lua heap holds it once. After `local t = {} for i = 1, 40 do t = { t, t } end`, the heap holds 41 small tables, but `json.encode(t)` would write about 2^41 values. Each call therefore spends a budget while it walks, and a call that runs the budget out stops and raises this error, or the same message with the `json.encode_lines:` prefix, with no path:
 
@@ -1614,6 +1783,8 @@ The budget comes from the Lua memory limit of the section VM, `lua_memory_bytes`
 - One value for each value the walk visits, up to one eighth of the memory limit, which is 8,388,608 values at the default. A table counts once for every place it appears, and each sealed view the walk reads through counts too. At the default limit this is enough for any text that `json.decode` accepts, so a value decoded from text within the 8,388,608-byte cap encodes again.
 - One byte for each byte of every string value and every string key the walk visits, up to the memory limit itself, which is 67,108,864 bytes at the default. A string that appears in many places counts at each place.
 - At most 100,000 keys that are not numbers or booleans on one path, counting the keys of the table being encoded and of every table above it on the way down. Integer keys stay out of this count, so a list of a million strings still encodes, while an object with more than 100,000 string keys on one path raises the same error.
+
+The budget bounds the values and the text of one call. It does not bound the memory that the data takes while the call builds it, which is outside the Lua heap. That memory is up to about 670 bytes for each value, most for a table of one key, so a table that many places share can take up to about 84 times the memory limit, 5.2 GiB at the default, for one `json.encode` call, one `var` write, or one table that becomes data.
 
 Debug mode raises this error too. A `var` write spends the same value and byte budgets before it converts the value, as [When `var` rejects a write](#when-var-rejects-a-write) describes.
 
@@ -2070,7 +2241,7 @@ Passing on the text, or the name of a store file, and parsing it where it is nee
 
 `line` always counts lines of the text that was parsed, never lines of a part of it, so `markdown.section(guide.blocks, '/Templates', 'fence', 3).line` is still `30`. A new parse counts from 1: `markdown.parse(templates.blocks[3].text)[1].line` is `1`, and `markdown.parse(prompt.section(path))` counts from the first line of that section's text. The selector forms of `prompt.section` count lines of the prompt file instead.
 
-The lookups read only the fields they need, `kind`, `title`, `blocks`, `lang`, and `line`, and a block whose `kind` they do not know matches the selector `'*'` alone. A list nested more than 127 levels deep, or a list that contains itself, raises.
+The lookups read only the fields they need, `kind`, `title`, `blocks`, `lang`, and `line`, and a block whose `kind` they do not know matches the selector `'*'` alone. A list nested more than 127 levels deep, or a list that contains itself, raises. So does a list or a block that is a [weak table](#weak-tables), as in `markdown.render: blocks is a weak table, one whose metatable sets __mode: the entries the collector leaves in it are not the same in two runs`.
 
 ### Errors from the lookups
 
@@ -3250,7 +3421,7 @@ Apart from an argument error the Engine's own Lua raises, whose message is its t
 
 The `pcall` and `xpcall` globals you call are the Engine's own versions, which make this conversion, and they replace the standard library's.
 
-`pcall` rewrites only a failure raised directly by an Engine function. Any other raised value comes back unchanged as its second result: a string, a number, a boolean, `nil`, your own table, or an error value already built. A string or table you raise with `error`, as in `error('plain', 0)` or `error(tbl)`, comes back from `pcall` or `xpcall` exactly as raised, and a table keeps its identity, so `err == tbl`. A runtime error from your own Lua code, such as calling a nil value, reaches `pcall` as Lua's plain string error, not as an error value. In every case, `tostring(err)` gives the message text.
+`pcall` rewrites only a failure raised directly by an Engine function. Any other raised value comes back unchanged as its second result: a string, a number, a boolean, `nil`, your own table, or an error value already built. A string or table you raise with `error`, as in `error('plain', 0)` or `error(tbl)`, comes back from `pcall` or `xpcall` exactly as raised, and a table keeps its identity, so `err == tbl`. The one exception is a string that starts with `?:?: ` or with the position of an Engine file: it loses that start, as it does in the run's failure. A runtime error from your own Lua code, such as calling a nil value, reaches `pcall` as Lua's plain string error, not as an error value. In every case, `tostring(err)` gives the message text.
 
 ### Raising errors with `error` and `assert`
 
@@ -3284,15 +3455,21 @@ The run fails with code `lua_runtime`, the run error's text contains `the answer
 
 `error` also accepts a table as the raised value, such as a caught error value or one you build, as in `error({ kind = 'custom', message = 'handler exploded' })`. `pcall` returns your table unchanged, and left uncaught it fails the block as an ordinary Lua runtime error, because only the Engine's own error values bring a kind into the run (see [Re-raising a caught error value](#re-raising-a-caught-error-value)).
 
+The message of that failure names the raised value without its memory address, so that the failure reads the same on every run. An uncaught `error({ kind = 'custom' })` reads `error object is a table value`. A table whose metatable has a string `__name` puts that name in place of `table`, and a table with a `__tostring` metamethod reads as the text the metamethod returns.
+
+The Engine finds such a value by the text Lua makes of it, a name, then `: `, then an address, and it cannot tell that text from a string of your own that ends the same way. So an uncaught error string that ends in `: ` and a hexadecimal address changes too: on Linux and macOS, `error('size: 0x1f', 0)` reads `error object is a size value`, and `error('bad byte: 0x1f')` ends in `bad byte: (address)`. On Windows an address is 16 uppercase hexadecimal digits with no `0x` in front, so there those two strings stay as written and `error('size: 000000000000001F', 0)` changes. A string with text after the number, such as `error('see 0x1f: fine')`, stays as written everywhere, and a string that `pcall` returns keeps its address. End an error message with something other than a bare hexadecimal number when the number must reach the run's failure.
+
+The Engine also takes the position of its own code off the front of an error string. Lua puts the position of the function that raised an error in front of the message, and for an error that Lua raises inside one of Runvil's functions that position names an Engine file, or reads `?:?:` for a function that has no line. A `stack overflow` under `tostring` is such an error. So an error string that starts with `?:?: `, or with `crates/runvil-internal/lua/src/`, a file name, `:`, a line number, and `: `, loses that start, in the run's failure and in the string that `pcall` returns or an `xpcall` handler receives: `error('?:?: boom', 0)` reads `boom`. The Engine reads the text, so it cannot tell such a start from one that your own string has. Only that start goes, and the same text anywhere else in a string stays as written. A `__close` metamethod of a `<close>` variable runs before `pcall` returns, so the error it receives as its second argument still has that start: for a `table.concat` of a list whose `__index` is a number it reads `?:?: attempt to index a number value`, and the `pcall` around it returns `attempt to index a number value`. Start an error message with something else when the whole of it must reach the run's failure.
+
 A spawned section that fails with `error('message')` reports its failure to its caller, such as in a `tasks.join` result, as an error value of kind `lua` whose `tostring` contains the message text.
 
 An uncaught raise inside library code, during its load or from a library function called later, fails the block that made the call (see [Sharing code with `require`](03-blocks-and-prose.md#sharing-code-with-require)). A `require` failure that the section does not catch ends the run with code `lua_runtime`, and the run error's text contains the raised message. Caught, the error from a failed `require` converts with `tostring` to a message that contains the text the library block raised, though not necessarily at the start, so a library that raises `fault: bad text` is found with an unanchored pattern such as `tostring(err):match('fault: .*$')`.
 
-Engine functions raise errors and name value types the same way after your code rebinds `error` or `math`.
+Engine functions raise errors and name value types the same way after your code rebinds `error`, `type`, `tostring`, or `math`.
 
 ### What an uncaught error ends
 
-An uncaught Lua runtime error ends the block with an error instead of a return value. An uncaught Lua failure, a runtime error in your code or an error you raise on purpose, then ends the run with code `lua_runtime`, holding the failure's message, wherever it happens: the preamble, any other walked section, a `call` [chain](04-how-a-prompt-runs.md#the-section-walk), a prompt run with `execute`, a task, a fanout arm, or a library's load. The run's message is the failure's text, its causes included, followed by where it happened: ` (at {file}:{line})` for a failure on a line of the prompt file, after the stack traceback when the failure has one (see [Where an error points](16-limits-and-errors.md#where-an-error-points)).
+An uncaught Lua runtime error ends the block with an error instead of a return value. An uncaught Lua failure, a runtime error in your code or an error you raise on purpose, then ends the run with code `lua_runtime`, holding the failure's message, wherever it happens: the preamble, any other walked section, a `call` [chain](04-how-a-prompt-runs.md#the-section-walk), a prompt run with `execute`, a task, a fanout arm, or a library's load. The run's message is the failure's text, its causes included, followed by where it happened: ` (at {file}:{line})` for a failure on a line of the prompt file, after the stack traceback when the failure has one (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). Bytes of the failure's message or of its traceback that are not valid UTF-8 become the Unicode replacement character U+FFFD, as in the name of a function held under a key such as `'\xff'`.
 
 When an Engine operation fails and the block does not catch the failure, the block fails with the error the operation returned. The run ends with that call's own specific error, placed on the line of the call, such as a `context_exhausted` failure from `models.infer`, rather than a plain string or a generic Lua runtime error. An uncaught error from a built-in Lua function ends the run with code `lua_runtime`, and its message names the calling function, as in `tools.offer: ...`. The exception is a `context_exhausted` raise: an uncaught `compactors.fail` call ends the run with code `context_exhausted`. An uncaught `models.loop` error ends the run with its own code: `tool_loop_exhausted`, `context_exhausted`, or, for an `empty_model_reply` error, `empty_reply`. A `lua`-kind loop error, such as a call with the wrong arguments or a loop started while another runs, fails the run as a Lua runtime error with code `lua_runtime`, and its message keeps the loop's own text.
 
@@ -3347,7 +3524,7 @@ local ok, handled = xpcall(error, function(e) return 'handled ' .. tostring(e) e
 return tostring(ok) .. '|' .. tostring(handled)
 ````
 
-This block returns `false|handled boom`. Arguments after the handler go on to the function, so this `xpcall` calls `error('boom')`. Outside cancellation, the handler receives the same error value `pcall` would return, so a failing built-in or Engine call reaches it as an error value whose `e.kind` and other fields are readable, and the handler's return value becomes the second result of `xpcall` after `false`. The handler is a function, as in standard Lua, and a handler of any other type gets standard Lua's own `xpcall` argument error unchanged.
+This block returns `false|handled boom`. Arguments after the handler go on to the function, so this `xpcall` calls `error('boom')`. Outside cancellation, the handler receives the same error value `pcall` would return, so a failing built-in or Engine call reaches it as an error value whose `e.kind` and other fields are readable, and the handler's return value becomes the second result of `xpcall` after `false`. The handler is a function, as in standard Lua, and a handler of any other type gets standard Lua's own `xpcall` argument error on the line of your call, as in `bad argument #2 to 'xpcall' (function expected, got number)` for `xpcall(f, 5)`. `pcall()` with no argument raises `bad argument #1 to 'pcall' (value expected)` the same way. Each error names the function as you write the call, as standard Lua does, so a call through a local variable gives the name of the variable. When the call is the whole of a `return` inside a function, as in `return xpcall(f, 5)`, Lua makes it a tail call, so the error names the line that called your function, or no line when a `pcall` called it, where standard Lua names the line of the `return`. Such an error names the function `xpcall` or `pcall` whatever variable you call it through.
 
 ### Cancellation passes through `pcall`
 
@@ -3568,6 +3745,8 @@ return missing_name
 
 This block returns `fallback missing_name`.
 
+An `__index` or `__newindex` that Lua cannot index, such as a number, fails at the first global access that reaches it, with Lua's own text, as in `attempt to index a number value`, and the run's failure names the line of that access. A `pcall` around the access returns the text with no position in front, where standard Lua puts the line there. The same holds for `error(msg, 2)` in an `__index` function of a table that you give as `__index`: the message gets no position, because the Engine's guard is a function between your line and that table.
+
 `__index` and `__newindex` are read from your metatable at every lookup, so a change takes effect at the next global access, and your handlers run once per lookup however many blocks have run. An edit through `getmetatable(_G)` therefore works at once, so after the `defaults` library has run, this block returns `live tone`:
 
 ````lua
@@ -3629,7 +3808,7 @@ These fields are copied at each `setmetatable(_G, mt)` call, so a later edit to 
 
 `setmetatable(_G, mt)` returns `_G`, just as `setmetatable(t, mt)` returns `t` for any other table, and after it `getmetatable(_G)` returns your own table `mt`. `getmetatable(_G)` never returns the Engine guard: it gives `nil` while your metatable is unset, even though the guard is in place, and it gives a required library's table after that library calls `setmetatable(_G, mt)`.
 
-`setmetatable(_G, nil)` removes your metatable. Afterward `getmetatable(_G)` is `nil` and plain global assignments land in `_G` directly. Every metamethod copied from your metatable stops applying too, so a copied `__tostring` and `__call` are dropped: `tostring(_G)` reads `table: ...` and calling `_G` fails.
+`setmetatable(_G, nil)` removes your metatable. Afterward `getmetatable(_G)` is `nil` and plain global assignments land in `_G` directly. Every metamethod copied from your metatable stops applying too, so a copied `__tostring` and `__call` are dropped: `tostring(_G)` reads `table` and calling `_G` fails.
 
 This handling of `setmetatable` and `getmetatable` applies only to the global table itself, compared by raw identity.
 
@@ -3646,19 +3825,19 @@ This block returns `locked|friendly`. Once your metatable has a `__metatable` fi
 
 The second argument of `setmetatable(_G, mt)` must be present and be a table or `nil`. Anything else raises Lua's standard `bad argument #2 to 'setmetatable' (nil or table expected, got {type})`, where `{type}` reads `no value` when the argument is missing.
 
-`_G` never becomes a weak table: the Engine keeps the `__mode` field out of its metatable. A `mt` with a `__mode` field makes `setmetatable(_G, mt)` raise a Lua error whose message ends with `setmetatable: weak tables (__mode) are not available for _G`, while every other table can still be made weak with a `__mode` field. Finalizers are not available in the sandbox at all: `setmetatable(t, mt)` with a `__gc` field in `mt` raises a Lua error with the message `setmetatable: finalizers (__gc) are not available in the sandbox`, whatever `t` is. A rejected `setmetatable(_G, ...)` call is dropped whole, so `_G` keeps the author metatable it had, if it had one.
+`_G` never becomes a weak table: the Engine keeps the `__mode` field out of its metatable. A `mt` with a `__mode` field makes `setmetatable(_G, mt)` raise a Lua error whose message ends with `setmetatable: weak tables (__mode) are not available for _G`, while every other table can still be made weak with a `__mode` field. A weak table reads and writes by key, and `pairs` and `next` refuse to walk it (see [Weak tables](#weak-tables)). Finalizers are not available in the sandbox at all: `setmetatable(t, mt)` with a `__gc` field in `mt` raises a Lua error with the message `setmetatable: finalizers (__gc) are not available in the sandbox`, whatever `t` is. A rejected `setmetatable(_G, ...)` call is dropped whole, so `_G` keeps the author metatable it had, if it had one.
 
 ### `setmetatable` and `getmetatable` on other values
 
 On every value other than `_G`, `setmetatable` and `getmetatable` behave exactly as the standard Lua 5.5 base functions, including their return values, their argument errors, and `__metatable` protection:
 
 - `setmetatable(t, mt)` returns `t`, and `getmetatable(t)` then returns `mt`. An `__index` function on an ordinary table supplies values for missing keys, so `setmetatable({}, { __index = function(_, k) return k .. '!' end }).x` is `x!`.
-- `setmetatable` takes a table and a metatable that is a table or `nil`, and other arguments raise Lua's stock bad-argument error. Argument errors from either function name it, as in `bad argument #1 to 'setmetatable'` or `bad argument #1 to 'getmetatable'`, and include the position of your calling line, as the standard functions' own errors do.
+- `setmetatable` takes a table and a metatable that is a table or `nil`, and other arguments raise Lua's stock bad-argument error. Argument errors from either function name it as you write the call, as in `bad argument #1 to 'setmetatable'` or `bad argument #1 to 'getmetatable'`, and include the position of your calling line, as the standard functions' own errors do.
 - `setmetatable` returns exactly one value, and `getmetatable` on a table without a metatable returns exactly one value, `nil`. `getmetatable` on a number returns `nil`.
 - A metatable with a `__metatable` field is protected: `getmetatable` on its table returns that field's value instead of the metatable, even when the value is `false`, and `setmetatable` on that table raises the Lua error `cannot change a protected metatable`, whether the new metatable is a table or `nil`. Lists from `json.decode`, `json.array`, and structured tool results are a case of this: their metatable's `__metatable` field is `false`, so `getmetatable` on one returns `false` (see [Keeping empty lists with `json.array`](#keeping-empty-lists-with-jsonarray)).
 - `getmetatable(var)` gives the guard string `var is guarded`, and `getmetatable(sys)` gives `sys is sealed`.
 
-`getmetatable` in a prompt is the sandbox's replacement for the base function, and `table.concat` uses that same replacement when it checks an element for `__tostring`.
+`getmetatable` in a prompt is the sandbox's replacement for the base function. `tostring`, `string.format`, and `table.concat` do not use it: each finds `__tostring` as Lua does, so a `__metatable` field never hides one from them.
 
 ### Listing globals
 
