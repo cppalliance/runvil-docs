@@ -940,6 +940,7 @@ Each broken merge rule has its own `tool_sets_invalid` message, where `{tool}` r
 - Two tools that share a wire name give `the tools {tool} and {tool} share the wire name "{name}", and a wire name names one tool across a section's Static Set and Dynamic Set; offer only one of them`.
 - A Pack's render that returns a tool under another Pack's id gives `the {pack} Pack's render returned {tool}; a Pack renders only tools whose id starts with its own Pack id`.
 - A Pack's render that returns a run catalog tool the section did not offer in that set gives `the render returned {tool}, a run catalog tool the section did not offer in that set; a render returns a catalog tool only into a set the section offered it in`.
+- A Pack's render that returns a catalog tool with other parameters than the section offered it with gives `the {pack} Pack's render returned {tool} with other parameters than the section offered it with; a render keeps a catalog tool's parameters, so it returns other parameters as a tool under a name of its own`.
 - A render answer with tools for a set the section did not offer the Pack into gives `the {pack} Pack's render returned {tool}, a set the section did not offer the {pack} Pack into; a render returns tools only for the sets the section offered its Pack into`.
 - A render answer that names other Packs, or the offered Packs in another order, gives `the render answered the Packs {answered} where the section offered the Packs {asked}; a render answers each offered Pack once, in offer order`, with each list of Pack ids in brackets, such as `[web, gh]`.
 
@@ -954,7 +955,7 @@ A run fails with one of the other tool codes when a tool call goes wrong and the
 A tool marked `model_only_call` is one only a model may call (see [Model-only tools](12-tools.md#model-only-tools)), so a script's `tools.call` of it is refused, whether the script names it by id or passes its Tool object. The tool stays in the catalog, a section can still offer it with `tools.offer`, and the model's own call of it goes through. The refusal raises an error value of kind `model_only_tool` whose `name` field holds the name the script passed, and `pcall` catches it like any other error value. Left uncaught, it ends the run with code `model_only_tool` and this message, where `{name}` is the id the script passed, `{id}` is the catalog tool's own id, and the location is the line of the `tools.call`:
 
 ````text
-tool "{name}" ({id}) is model-only: a render shapes its arguments for the model that receives them, so a script cannot call it; offer it with tools.offer and let the model call it (at {file}:{line})
+tool "{name}" ({id}) is model-only: only a model may call it, so a script cannot; offer it with tools.offer and let the model call it (at {file}:{line})
 ````
 
 ### Store codes

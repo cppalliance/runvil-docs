@@ -441,13 +441,13 @@ The first loop round in a section entry that builds its tools freezes the Static
 
 A section entry whose scope is empty leaves the tool list out of its `models.loop` rounds, since a defined adhoc tool joins the list only when `tools.offer` offers it, and such a round completes normally. A first loop round over an empty scope still freezes the entry's tool list, an empty one, so an offer after that round raises.
 
-Each frozen tool reaches the model under its wire name, with the description and parameter schema its Pack's render returns, which for a Pack that does not render are the tool's own, and the tool keeps its tool id as its identity.
+Each frozen tool reaches the model under its wire name, with the description its Pack's render returns, which for a Pack that does not render is the tool's own, and the tool keeps its tool id as its identity. A catalog tool's parameter schema is always the catalog's, and a tool only the model sees has the schema its render gave it (see [What a Pack's render can change](#what-a-packs-render-can-change)).
 
 ### What a Pack's render can change
 
 At a section entry's first loop round, each Pack the entry offered catalog tools from renders them, once for each set the entry offered it into, for that entry and the model of that round. Each render returns the tools the model sees for its set, and the entry's freeze builds both sets from what the Packs return, together with the entry's adhoc tools. The run's record keeps each render's request and the tools each Pack returned (see [The five kinds of Harness work](01-what-a-prompt-is.md#the-five-kinds-of-harness-work)).
 
-A render may rename the tools the section offered from its Pack, reshape their descriptions and parameter schemas, drop some of them, and add tools only the model sees, under the Pack's own id. Every catalog tool a render returns is one the section offered from that Pack in that set, so the offer stays the upper bound on the catalog tools the model sees. A catalog tool also keeps its catalog flags whatever the render sets, such as whether a stop spares its calls or whether only a model may call it (see [Model-only tools](#model-only-tools)), while a tool only the model sees takes the flags its render gives it. A render that breaks these rules, such as one that returns a catalog tool the section did not offer in that set, or a tool under another Pack's id, fails the round as a wire-name clash does, and left uncaught the run ends with the error code `tool_sets_invalid` (see [Tool codes](16-limits-and-errors.md#tool-codes) for each message).
+A render may rename the tools the section offered from its Pack, rewrite their descriptions, drop some of them, and add tools only the model sees, under the Pack's own id. Every catalog tool a render returns is one the section offered from that Pack in that set, so the offer stays the upper bound on the catalog tools the model sees. A catalog tool keeps the parameters it was offered with, so one tool id always has one parameter schema: your Lua can call it with the arguments the catalog documents, and the model's calls fit the same schema. A render that needs other parameters for a model, such as a patch tool in place of a string-replace tool, adds a tool only the model sees under a name of its own. A catalog tool also keeps its catalog flags whatever the render sets, such as whether a stop spares its calls or whether only a model may call it (see [Model-only tools](#model-only-tools)), while a tool only the model sees takes the flags its render gives it. A render that breaks these rules, such as one that returns a catalog tool the section did not offer in that set, a catalog tool with other parameters than it was offered with, or a tool under another Pack's id, fails the round as a wire-name clash does, and left uncaught the run ends with the error code `tool_sets_invalid` (see [Tool codes](16-limits-and-errors.md#tool-codes) for each message).
 
 A tool only the model sees is out of reach of your Lua. `tools.get` reads `nil` for its id, and `tools.call` refuses the id with the `unbound_tool` error, whose message lists the run's catalog tools, which never include it (see [The `unbound_tool` error](#the-unbound_tool-error)). The model calls it by its wire name, through `CallDynamicTool` when the render put it in the Dynamic Set, and the call goes to the Pack its id names, as a catalog tool's call does. `tools.stats.packs` counts the call under that Pack, and `tools.stats.tools` never holds the tool's id (see [Counting calls with `tools.stats`](#counting-calls-with-toolsstats)).
 
@@ -828,7 +828,7 @@ The section entry's first loop round freezes the Static Set from the remembered 
 
 1. It walks the offers made with `tools.offer` in the order they were made.
 2. A tool offer adds that tool, and a Pack offer adds the Pack's tools in tool id order, read at the freeze. The adhoc Pack adds every adhoc tool the section defined before the freeze.
-3. When those tools include a catalog tool, each offered Pack renders the tools the entry offered from it for the section entry and the round's model, and the steps below run on what the Packs return and the offered adhoc tools. A render may rename, reshape, or drop the Pack's tools and add tools only the model sees (see [What a Pack's render can change](#what-a-packs-render-can-change)), and a Pack that does not render returns them as offered.
+3. When those tools include a catalog tool, each offered Pack renders the tools the entry offered from it for the section entry and the round's model, and the steps below run on what the Packs return and the offered adhoc tools. A render may rename the Pack's tools, rewrite their descriptions, or drop some, and add tools only the model sees (see [What a Pack's render can change](#what-a-packs-render-can-change)), and a Pack that does not render returns them as offered.
 4. A tool already in the set is skipped, so each tool appears once, at the place of its first offer.
 5. Each Pack's tools then sit together as one block, at the place of that Pack's first tool, in the order the earlier steps gave them. An adhoc tool keeps its own place.
 6. A Pack's tool whose wire name equals an offered adhoc tool's wire name is dropped, whatever its place in the set, and that includes a tool only the model sees (see [An adhoc tool that shadows a catalog tool](#an-adhoc-tool-that-shadows-a-catalog-tool)).
@@ -1215,7 +1215,7 @@ A call made from Lua is a script call wherever the code sits. A Pack prelude hel
 
 ### Model-only tools
 
-A model-only tool is a catalog tool that only a model may call: a script's `tools.call` refuses it. A Pack marks a tool model-only when a render gives the tool arguments that a script cannot know but the model that receives the render can. A Pack sets the flag; the Packs that ship with Runvil do not set it, so you meet a model-only tool only on a Host whose own Pack sets it.
+A model-only tool is a catalog tool that only a model may call: a script's `tools.call` refuses it. A Pack marks a tool model-only when a script has no business making its calls. A Pack sets the flag; the Packs that ship with Runvil do not set it, so you meet a model-only tool only on a Host whose own Pack sets it.
 
 The flag takes the tool out of script calls, and everything else about the tool stays the same:
 
@@ -1253,7 +1253,7 @@ true|false|model_only_tool|kit/edit
 The refusal is a Lua error that `pcall` catches. Its value has `kind` set to `model_only_tool` and a `name` field that holds the id the call named, and `tostring(err)` gives this message, which points at the `tools.call` line:
 
 ````text
-edit-check.md:12: tool "kit/edit" (kit/edit) is model-only: a render shapes its arguments for the model that receives them, so a script cannot call it; offer it with tools.offer and let the model call it
+edit-check.md:12: tool "kit/edit" (kit/edit) is model-only: only a model may call it, so a script cannot; offer it with tools.offer and let the model call it
 ````
 
 The message quotes the id the call named and then repeats the tool's id in parentheses, so the two read the same. A call refused this way stops in the Engine before it reaches the Harness, and it stays out of every `tools.stats` counter, so as a section entry's first tool call it leaves `tools.stats` and `sys.model` for a later tool call to create. Uncaught, the refusal ends the run with the error code `model_only_tool` and the same refusal text, followed by ` (at {file}:{line})` for the `tools.call` line.
@@ -2284,7 +2284,7 @@ the tools dup/a/b of the dup Pack in the Static Set and dup/a.b of the dup Pack 
 
 Left uncaught, a schema that did not build fails the run with the error code `tool_schema_invalid`, and a shared wire name fails it with `tool_sets_invalid`. Only a section that offers the tool, or both tools of a clash, fails this way, so a section that offers only `dup/a.b` advertises it as `dup_a_b`. The tool stays in the run's tool catalog, so `tools.get` finds it, and a block can still call it by its id (see [Naming the tool to call](#naming-the-tool-to-call)).
 
-From a Pack that does not render, offering one tool advertises exactly that one tool, so a section that offers only `web/search` sends the model a list of one tool, and the parameter schema the model receives is the one Lua reads as the Tool object's `parameters` field (see [Tool objects](#tool-objects)). A Pack that renders can add tools only the model sees and reshape a schema, so the model's list and schemas can then differ from what Lua reads.
+From a Pack that does not render, offering one tool advertises exactly that one tool, so a section that offers only `web/search` sends the model a list of one tool, and the parameter schema the model receives is the one Lua reads as the Tool object's `parameters` field (see [Tool objects](#tool-objects)). A Pack that renders can add tools only the model sees, rename a tool, and rewrite its description, so the model's list and descriptions can then differ from what Lua reads. A catalog tool keeps its parameter schema, so the schema of a tool Lua can name is the one Lua reads.
 
 Your prompt never sets a catalog tool's wire name, which comes from its Pack, through its tool list or its render, or else from its tool id, and a render can change the names and the tools the model sees from one section entry and model to the next, so prompt prose that tells the model which tools to use describes each tool by what it does. The shipped `research-person` prompt, which offers `web/search` and `web/fetch`, says "Search the web with several targeted queries" and "Fetch the few best results".
 
@@ -2320,7 +2320,7 @@ As [How tool calls are recorded](#how-tool-calls-are-recorded) explains, a model
 
 ### The arguments the model sends
 
-A tool's arguments must match the JSON Schema `object` the model is shown for it under its wire name, which is the schema the tool declares unless its Pack's render reshapes it. The model calls an offered tool with a JSON arguments object shaped by that schema, such as `{"query":"lua"}`, which supplies the string `query` that the schema of `web/search` marks as required.
+A tool's arguments must match the JSON Schema `object` the model is shown for it under its wire name, which is the schema the tool declares. The model calls an offered tool with a JSON arguments object shaped by that schema, such as `{"query":"lua"}`, which supplies the string `query` that the schema of `web/search` marks as required.
 
 The arguments are always a JSON object, never a bare string, array, or null. A call whose arguments are `[1, 2, 3]`, `"{}"`, or `null` is refused with:
 
@@ -2642,7 +2642,7 @@ Five uncaught failures end the run with a tool code. A dispatched tool's failure
 | A dispatched tool fails | `tool call failure: {message} (at {file}:{line})` |
 | The model calls a tool outside the round's scope | `tool {name:?} is not in this section's scope; aliases this section offers: {static_aliases:?}`, followed by the not-offered hint when it applies, then `; a Dynamic Set tool is reached through GetDynamicTools and CallDynamicTool` when the section's Dynamic Set holds a tool, then ` (at {file}:{line})` |
 | A script call names an id not bound in the run | `tool {name:?} is not a tool in this run; catalog tools: {ids:?} (at {file}:{line})`, listing every tool id in the run's tool catalog |
-| A script call names a model-only tool | `tool {name:?} ({id}) is model-only: a render shapes its arguments for the model that receives them, so a script cannot call it; offer it with tools.offer and let the model call it (at {file}:{line})`, where `{id}` is the catalog tool's id (see [Model-only tools](#model-only-tools)) |
+| A script call names a model-only tool | `tool {name:?} ({id}) is model-only: only a model may call it, so a script cannot; offer it with tools.offer and let the model call it (at {file}:{line})`, where `{id}` is the catalog tool's id (see [Model-only tools](#model-only-tools)) |
 
 Each run message ends with the prompt file and the line of the call that failed, the `tools.call` for a script call and the `models.loop` for the model's call (see [Where an error points](16-limits-and-errors.md#where-an-error-points)). In these messages, each `:?` placeholder, such as `{name:?}`, shows the value in double quotes with escapes, so a name renders as `"rogue"` and the offered list as `["echo"]`.
 
